@@ -95,7 +95,7 @@ def word_optimized_environment(app: Any) -> Iterator[None]:
             ("DisplayAlerts", lambda v: setattr(app, "DisplayAlerts", v)),
         ]:
             if label in states:
-                _try_set(f"restore.{label}", lambda r=restore, l=label: r(states[l]))
+                _try_set(f"restore.{label}", lambda r=restore, lbl=label: r(states[lbl]))
 
         # 屏幕亮屏必须独立保证执行 —— 任何前面的失败都不能影响这条
         _try_set("restore.ScreenUpdating", lambda: setattr(app, "ScreenUpdating", True))

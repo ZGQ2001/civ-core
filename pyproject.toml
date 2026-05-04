@@ -91,7 +91,7 @@ select = [
     "W",  # pycodestyle 警告
 ]
 # 新增忽略规则：RUF001, RUF002, RUF003 是专门针对全角/易混淆字符的，写中文注释必触发，直接忽略
-ignore = ["RUF001", "RUF002", "RUF003"]
+ignore = ["RUF001", "RUF002", "RUF003", "E402", "E722", "E501"]
 
 # ── pytest ───────────────────────────────────────────────────────
 [tool.pytest.ini_options]

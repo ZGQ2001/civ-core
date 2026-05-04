@@ -254,7 +254,6 @@ def process_document_body(app, doc, params):
                 clean_t = text.strip()
 
                 is_basis_header = classifier.re_basis_title.match(clean_t)
-                is_suggest_header = classifier.re_suggest_title.match(clean_t.replace(" ", ""))
 
                 has_image = False
                 try:

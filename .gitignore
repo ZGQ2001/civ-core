@@ -31,6 +31,7 @@
 .claude/
 *.egg-info/
 .eggs/
+.pytest_cache/
 # .idea/  # 如果使用 JetBrains 系列 IDE，可以取消注释
 !handwrite_config.json
 !pyproject.toml

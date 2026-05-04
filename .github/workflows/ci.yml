@@ -1,0 +1,39 @@
+# .github/workflows/ci.yml
+name: CI 流水线
+
+# 触发条件：当你向 main 分支 push 代码，或者发起合并请求时执行
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-and-lint:
+    # 操作系统：GitHub 提供的一台最新的 Ubuntu Linux 虚拟机
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第 1 步：把你的代码拉取到虚拟机里
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 第 2 步：极其快速地安装 uv 工具（带缓存机制）
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true 
+
+      # 第 3 步：让 uv 根据项目配置安装 Python 和所有依赖包
+      - name: 还原环境与依赖
+        run: uv sync
+
+      # 第 4 步：执行 Ruff 静态检查（格式检查 + 逻辑红线检查）
+      - name: 代码规范检查 (Ruff)
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+
+      # 第 5 步：执行所有的单元测试
+      - name: 运行单元测试 (Pytest)
+        run: uv run pytest

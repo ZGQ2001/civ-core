@@ -1,10 +1,10 @@
 import threading
 
 # 引入我们刚才改好的引擎
-from auto_filler_core import run_generator
+from civil_auto.core.auto_filler_core import run_generator
 
 # 把需要的 UI 组件全部引入进来
-from ui_components import (
+from civil_auto.ui.components import (
     ModernHandwriteDialog,
     ModernInfoDialog,
     ModernMappingDialog,

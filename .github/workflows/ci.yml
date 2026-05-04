@@ -11,7 +11,7 @@ on:
 jobs:
   test-and-lint:
     # 操作系统：GitHub 提供的一台最新的 Ubuntu Linux 虚拟机
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       # 第 1 步：把你的代码拉取到虚拟机里

@@ -6,13 +6,13 @@
   ✓ 异常带上下文，禁止 except: pass
   ✓ 文件对话框已剥离到 io/file_dialogs.py（避免 PySide6 与命令行业务混耦合）
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 from civil_auto.utils.logger import get_logger
 
@@ -37,7 +37,7 @@ def enable_line_buffered_stdout() -> None:
 # ──────────────────────────────────────────────────────────────────
 # Excel sheet 读取（轻量元信息）
 # ──────────────────────────────────────────────────────────────────
-def read_sheet_names(excel_path: Path | str) -> List[str]:
+def read_sheet_names(excel_path: Path | str) -> list[str]:
     """读取 Excel 的 sheet 列表。失败返回空列表（调用方判空决定后续）。"""
     path = Path(excel_path)
     if not path.is_file():
@@ -77,7 +77,10 @@ def kill_winword_processes(reason: str = "") -> None:
     try:
         result = subprocess.run(
             ["taskkill", "/F", "/IM", "WINWORD.EXE", "/T"],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         log.warning("taskkill 超时（10s），可能有进程被锁定")
@@ -92,8 +95,7 @@ def kill_winword_processes(reason: str = "") -> None:
         # taskkill 在「无匹配进程」时返回 1（中文 Windows）或 128
         log.info("没有发现需要清理的 Word 进程")
     else:
-        log.warning("taskkill 返回 %s: stderr=%s", result.returncode,
-                    (result.stderr or "").strip())
+        log.warning("taskkill 返回 %s: stderr=%s", result.returncode, (result.stderr or "").strip())
 
 
 def unblock_file(file_path: Path | str) -> None:
@@ -110,9 +112,11 @@ def unblock_file(file_path: Path | str) -> None:
 
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"Unblock-File -LiteralPath \"{abs_path}\""],
-            capture_output=True, text=True, timeout=10, check=False,
+            ["powershell", "-NoProfile", "-Command", f'Unblock-File -LiteralPath "{abs_path}"'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         log.warning("Unblock-File 超时 (%s)", abs_path)
@@ -125,15 +129,13 @@ def unblock_file(file_path: Path | str) -> None:
         log.info("已解除文件网络标记: %s", Path(abs_path).name)
     else:
         # 通常是「文件本来就没标记」，warn 即可
-        log.debug("Unblock-File 返回 %s: %s",
-                  result.returncode, (result.stderr or "").strip())
+        log.debug("Unblock-File 返回 %s: %s", result.returncode, (result.stderr or "").strip())
 
 
 # ──────────────────────────────────────────────────────────────────
 # 杂工
 # ──────────────────────────────────────────────────────────────────
-def ensure_extension(filename: str, allowed: tuple[str, ...],
-                     default: Optional[str] = None) -> str:
+def ensure_extension(filename: str, allowed: tuple[str, ...], default: str | None = None) -> str:
     """如果文件名后缀不在允许列表里，补上 default（或 allowed[0]）。"""
     if filename.lower().endswith(allowed):
         return filename

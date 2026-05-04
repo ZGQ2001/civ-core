@@ -1,4 +1,4 @@
-"""
+r"""
 ===============================================================================
 脚本名称：修复交叉引用格式 (fix_cross_ref.py)
 作者: ZGQ
@@ -14,6 +14,7 @@
     5. 对于缺失该开关的交叉引用，自动追加 \* MERGEFORMAT 开关以确保格式稳定。
 ===============================================================================
 """
+
 import os
 import sys
 
@@ -22,21 +23,21 @@ if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
 import win32com.client
-
 from common.file_utils import backup_current_document
 from ui_components import ModernConfirmDialog, ModernInfoDialog
+
 
 def update_cross_references(app, target_doc):
     """
     修复锁定文档中的交叉引用格式。
     """
     doc_name = target_doc.Name
-    
+
     # 1. 启动确认与防呆
     dialog = ModernConfirmDialog(
-        title="交叉引用修复引擎启动", 
-        message=f"当前文件：{doc_name}", 
-        sub_message="是否为所有交叉引用追加保留格式开关 (\* MERGEFORMAT) ？\n\n确认后将调用静默备份并开始执行。"
+        title="交叉引用修复引擎启动",
+        message=f"当前文件：{doc_name}",
+        sub_message="是否为所有交叉引用追加保留格式开关 (\\* MERGEFORMAT) ？\n\n确认后将调用静默备份并开始执行。",
     )
     if not dialog.show():
         return False
@@ -50,10 +51,10 @@ def update_cross_references(app, target_doc):
     try:
         # 关闭屏幕更新以提高处理速度
         app.ScreenUpdating = False
-        
+
         # 3. 锁定死锁的文档对象进行遍历
         fields = target_doc.Fields
-        count = 0 
+        count = 0
 
         for i in range(1, fields.Count + 1):
             f = fields.Item(i)
@@ -64,15 +65,17 @@ def update_cross_references(app, target_doc):
                 if "\\* MERGEFORMAT" not in code_text.upper():
                     f.Code.Text = code_text + " \\* MERGEFORMAT"
                     count += 1
-                    
+
         # 4. 成功反馈
-        ModernInfoDialog("执行完毕", f"✅ 交叉引用修复完毕！\n\n共为 {count} 个交叉引用追加了保留格式开关。").show()
+        ModernInfoDialog(
+            "执行完毕", f"✅ 交叉引用修复完毕！\n\n共为 {count} 个交叉引用追加了保留格式开关。"
+        ).show()
         return True
 
     except Exception as e:
         ModernInfoDialog("运行期错误", f"执行过程中出错:\n{e}").show()
         return False
-        
+
     finally:
         app.ScreenUpdating = True
 
@@ -87,11 +90,16 @@ if __name__ == "__main__":
             app = None
 
     if not app:
-        ModernInfoDialog("运行阻断", "未检测到运行中的 WPS 或 Word 程序。\n\n请先打开需要修复的报告文档！").show()
+        ModernInfoDialog(
+            "运行阻断", "未检测到运行中的 WPS 或 Word 程序。\n\n请先打开需要修复的报告文档！"
+        ).show()
     else:
         # 隐患拦截：防止未保存的新建文档导致备份异常
         if app.ActiveDocument.Path == "":
-            ModernInfoDialog("操作阻断", "该文档尚未保存到本地硬盘。\n请先手动保存一次（Ctrl+S）后再执行修复程序！").show()
+            ModernInfoDialog(
+                "操作阻断",
+                "该文档尚未保存到本地硬盘。\n请先手动保存一次（Ctrl+S）后再执行修复程序！",
+            ).show()
         else:
             # 【核心护城河】：获取目标文档并死锁内存指针，贯穿全局
             target_doc = app.ActiveDocument

@@ -8,10 +8,10 @@
     内部比较  = 两端都带时区即可，无需转 UTC
     审计日志  = ISO-8601 格式（含时区偏移）：2026-01-02T15:04:05+08:00
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # 项目标准时区（全模块复用，不要各处自造 ZoneInfo("Asia/Shanghai")）
@@ -20,6 +20,7 @@ try:
 except ZoneInfoNotFoundError:
     # Windows 无 tzdata 时 fallback 到固定偏移 UTC+8（功能等价，不含 DST 信息）
     from datetime import timedelta
+
     _TZ_SHANGHAI = timezone(timedelta(hours=8))  # type: ignore[assignment]
 
 
@@ -33,7 +34,7 @@ def now_shanghai() -> datetime:
 
 def now_utc() -> datetime:
     """返回当前 UTC 时间（带时区）。"""
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def to_iso8601(dt: datetime) -> str:
@@ -51,7 +52,7 @@ def to_iso8601(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
 
-def timestamp_tag(dt: Optional[datetime] = None) -> str:
+def timestamp_tag(dt: datetime | None = None) -> str:
     """生成适合嵌入文件名的时间戳（不含冒号和时区偏移）。
 
     示例：``20260504_1530``（年月日_时分）
@@ -62,7 +63,7 @@ def timestamp_tag(dt: Optional[datetime] = None) -> str:
     return t.strftime("%Y%m%d_%H%M")
 
 
-def timestamp_tag_with_seconds(dt: Optional[datetime] = None) -> str:
+def timestamp_tag_with_seconds(dt: datetime | None = None) -> str:
     """带秒的文件名时间戳：``20260504_153005``。"""
     t = dt or now_shanghai()
     return t.strftime("%Y%m%d_%H%M%S")

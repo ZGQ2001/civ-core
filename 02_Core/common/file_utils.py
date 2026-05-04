@@ -3,6 +3,7 @@
 为传入的 Word/WPS 或 Excel/ET 内存对象提供安全备份功能。
 通过 Application.Name 显式鉴别宿主类型，避免误用接口。
 """
+
 import os
 import time
 
@@ -56,7 +57,7 @@ def backup_current_document(target_obj) -> bool:
         error_log_path = os.path.join(os.path.dirname(__file__), "backup_error_log.txt")
         try:
             with open(error_log_path, "w", encoding="utf-8") as f:
-                f.write(f"备份底层崩溃详情:\n{str(e)}")
+                f.write(f"备份底层崩溃详情:\n{e!s}")
         except Exception:
             pass
 

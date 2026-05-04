@@ -7,24 +7,26 @@
 
 业务逻辑（load_template / build_jobs / run_plot_curves）纯参数；UI 在 _main()。
 """
+
 import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
 from common.io_helpers import (
-    enable_line_buffered_stdout, pick_excel_file, read_sheet_names,
+    enable_line_buffered_stdout,
+    pick_excel_file,
+    read_sheet_names,
 )
 from common.plot_helpers import render_plot
 from common.types import AxisSpec, CurveSeries, PlotJob
-from common.ui_helpers import field_dir, field_sheet_select, field_text
+from common.ui_helpers import field_dir, field_sheet_select
 from ui_components import ModernConfirmDialog, ModernDynamicFormDialog, ModernInfoDialog
-
 
 DEFAULT_TEMPLATES_PATH = os.path.abspath(
     os.path.join(_THIS_DIR, "..", "04_Config", "curve_templates.json")
@@ -34,20 +36,20 @@ DEFAULT_TEMPLATES_PATH = os.path.abspath(
 # ==========================================
 # 模块 1：核心业务（纯参数，可被其他工具复用）
 # ==========================================
-def load_templates(path: str = DEFAULT_TEMPLATES_PATH) -> Dict[str, Any]:
+def load_templates(path: str = DEFAULT_TEMPLATES_PATH) -> dict[str, Any]:
     """读取曲线模板库 JSON。失败抛异常。"""
     if not os.path.exists(path):
         raise FileNotFoundError(f"曲线模板库不存在: {path}")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def get_template_names(templates: Dict[str, Any]) -> List[str]:
+def get_template_names(templates: dict[str, Any]) -> list[str]:
     """筛掉以 _ 开头的注释字段。"""
     return [k for k in templates.keys() if not k.startswith("_")]
 
 
-def _axis_spec_from_dict(d: Dict[str, Any]) -> AxisSpec:
+def _axis_spec_from_dict(d: dict[str, Any]) -> AxisSpec:
     """JSON 的 {label, range} → AxisSpec。range 兼容 list 和 null。"""
     rng = d.get("range")
     if rng is None:
@@ -61,10 +63,12 @@ def _normalize_col(name: str) -> str:
     Excel 多行表头经常出现 "15.0kN(0.1Nd)位移读数" vs "15.0kN (0.1Nd) 位移读数" 这种细微差，
     肉眼一致但字符串不等。把空白全部抹掉再比就稳了。
     """
-    return re.sub(r'[\s　]+', '', str(name)).lower()
+    return re.sub(r"[\s　]+", "", str(name)).lower()
 
 
-def resolve_columns(template: Dict[str, Any], available_cols: List[str]) -> Tuple[Dict[str, str], List[str]]:
+def resolve_columns(
+    template: dict[str, Any], available_cols: list[str]
+) -> tuple[dict[str, str], list[str]]:
     """把模板里的所有 var_column / id_column 映射到 Excel 实际列名。
 
     返回 (resolved, missing)：
@@ -72,16 +76,16 @@ def resolve_columns(template: Dict[str, Any], available_cols: List[str]) -> Tupl
         missing  = 模板需要但 Excel 里没有的列名列表
     支持精确匹配、空白容差匹配、大小写不敏感。
     """
-    norm_to_actual: Dict[str, str] = {_normalize_col(c): c for c in available_cols}
+    norm_to_actual: dict[str, str] = {_normalize_col(c): c for c in available_cols}
 
-    needed: List[str] = [template["id_column"]]
+    needed: list[str] = [template["id_column"]]
     for curve in template.get("curves", []):
         for pt in curve.get("points", []):
             if pt.get("var_column") and pt["var_column"] not in needed:
                 needed.append(pt["var_column"])
 
-    resolved: Dict[str, str] = {}
-    missing: List[str] = []
+    resolved: dict[str, str] = {}
+    missing: list[str] = []
     for col in needed:
         if col in available_cols:
             resolved[col] = col
@@ -95,18 +99,18 @@ def resolve_columns(template: Dict[str, Any], available_cols: List[str]) -> Tupl
 
 
 def _series_from_template(
-    curve_def: Dict[str, Any],
-    row: Dict[str, Any],
-    col_map: Dict[str, str],
-) -> Optional[CurveSeries]:
+    curve_def: dict[str, Any],
+    row: dict[str, Any],
+    col_map: dict[str, str],
+) -> CurveSeries | None:
     """把模板的曲线定义 + 一行 Excel 数据 → CurveSeries。
 
     col_map 把模板里的 var_column 映射到 Excel 实际列名（resolve_columns 产出）。
     fixed_axis='y' 表示 y 是给定常量、x 从 Excel 列读；'x' 反之。
     任何一个点缺数据则整条曲线返回 None。
     """
-    xs: List[float] = []
-    ys: List[float] = []
+    xs: list[float] = []
+    ys: list[float] = []
     for pt in curve_def["points"]:
         template_col = pt["var_column"]
         actual_col = col_map.get(template_col, template_col)
@@ -131,7 +135,8 @@ def _series_from_template(
 
     return CurveSeries(
         name=curve_def["name"],
-        xs=xs, ys=ys,
+        xs=xs,
+        ys=ys,
         color=curve_def.get("color", "#1F4FE0"),
         marker=curve_def.get("marker", "s"),
         linewidth=curve_def.get("linewidth", 2.0),
@@ -139,7 +144,9 @@ def _series_from_template(
     )
 
 
-def build_jobs(template: Dict[str, Any], rows: List[Dict[str, Any]], output_dir: str) -> List[PlotJob]:
+def build_jobs(
+    template: dict[str, Any], rows: list[dict[str, Any]], output_dir: str
+) -> list[PlotJob]:
     """把模板 + 数据行 → 一组 PlotJob（每行一个）。
 
     会先解析列名映射；如果模板需要的列在 Excel 表头里完全找不到，整体返回空列表
@@ -163,7 +170,7 @@ def build_jobs(template: Dict[str, Any], rows: List[Dict[str, Any]], output_dir:
     x_axis = _axis_spec_from_dict(template["x_axis"])
     y_axis = _axis_spec_from_dict(template["y_axis"])
 
-    jobs: List[PlotJob] = []
+    jobs: list[PlotJob] = []
     for idx, row in enumerate(rows, start=1):
         raw_id = row.get(id_col_actual)
         if raw_id is None or (isinstance(raw_id, float) and raw_id != raw_id):  # NaN
@@ -174,7 +181,7 @@ def build_jobs(template: Dict[str, Any], rows: List[Dict[str, Any]], output_dir:
         else:
             id_str = str(raw_id).strip()
 
-        series_list: List[CurveSeries] = []
+        series_list: list[CurveSeries] = []
         skip_row = False
         for curve_def in template["curves"]:
             s = _series_from_template(curve_def, row, col_map)
@@ -186,17 +193,19 @@ def build_jobs(template: Dict[str, Any], rows: List[Dict[str, Any]], output_dir:
         if skip_row:
             continue
 
-        jobs.append(PlotJob(
-            title=title_tpl.format(id=id_str),
-            output_path=os.path.join(output_dir, fname_tpl.format(id=id_str)),
-            x_axis=x_axis,
-            y_axis=y_axis,
-            series=series_list,
-        ))
+        jobs.append(
+            PlotJob(
+                title=title_tpl.format(id=id_str),
+                output_path=os.path.join(output_dir, fname_tpl.format(id=id_str)),
+                x_axis=x_axis,
+                y_axis=y_axis,
+                series=series_list,
+            )
+        )
     return jobs
 
 
-def preflight_check(template: Dict[str, Any], excel_columns: List[str]) -> Tuple[bool, str]:
+def preflight_check(template: dict[str, Any], excel_columns: list[str]) -> tuple[bool, str]:
     """在跑批量前做体检：检查 Excel 表头是否覆盖模板需要的所有列。
 
     返回 (是否通过, 给用户看的诊断文本)。
@@ -206,8 +215,10 @@ def preflight_check(template: Dict[str, Any], excel_columns: List[str]) -> Tuple
     n_total = len(needed)
     n_ok = len(col_map)
 
-    lines: List[str] = []
-    lines.append(f"📋 模板 '{template.get('id_column', '?')}' 共需 {n_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n")
+    lines: list[str] = []
+    lines.append(
+        f"📋 模板 '{template.get('id_column', '?')}' 共需 {n_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n"
+    )
 
     if col_map:
         lines.append("✅ 已匹配的列（左=模板，右=Excel 实际）:")
@@ -231,7 +242,7 @@ def preflight_check(template: Dict[str, Any], excel_columns: List[str]) -> Tuple
     return ok, "\n".join(lines)
 
 
-def generate_example_excel(template: Dict[str, Any], output_path: str, n_rows: int = 3) -> str:
+def generate_example_excel(template: dict[str, Any], output_path: str, n_rows: int = 3) -> str:
     """根据模板生成一份示例 Excel —— 列名与模板完全一致，里面填几行假数据。
 
     给新人用：点一下就有标准格式的"模板答卷"，把自己的数据粘进去就能跑。
@@ -239,7 +250,7 @@ def generate_example_excel(template: Dict[str, Any], output_path: str, n_rows: i
     import pandas as pd
 
     # 收集模板需要的所有列：标识列 + 各曲线的 var_column
-    cols: List[str] = [template["id_column"]]
+    cols: list[str] = [template["id_column"]]
     for curve in template.get("curves", []):
         for pt in curve.get("points", []):
             c = pt.get("var_column")
@@ -249,7 +260,7 @@ def generate_example_excel(template: Dict[str, Any], output_path: str, n_rows: i
     # 假数据：标识列填 1..n_rows，其他列填一组合理的递增数字
     sample_rows = []
     for i in range(1, n_rows + 1):
-        row: Dict[str, Any] = {template["id_column"]: i}
+        row: dict[str, Any] = {template["id_column"]: i}
         # 用每个 var_column 的 fixed_value 比例做一个示意值
         for j, col in enumerate(cols[1:], start=1):
             row[col] = round(0.3 * j + i * 0.05, 2)
@@ -261,13 +272,16 @@ def generate_example_excel(template: Dict[str, Any], output_path: str, n_rows: i
     return output_path
 
 
-def read_rows(excel_path: str, sheet_name: Optional[str], header_row_index: int = 0) -> List[Dict[str, Any]]:
+def read_rows(
+    excel_path: str, sheet_name: str | None, header_row_index: int = 0
+) -> list[dict[str, Any]]:
     """读 Excel 一个 Sheet，返回每行的字典（key=表头）。
 
     header_row_index=0 表示第 1 行是表头（pandas 的 0-based）。
     去掉表头列名两端空白。
     """
     import pandas as pd
+
     df = pd.read_excel(excel_path, sheet_name=sheet_name, header=header_row_index)
     df.columns = [str(c).strip() for c in df.columns]
     return df.to_dict(orient="records")
@@ -275,11 +289,11 @@ def read_rows(excel_path: str, sheet_name: Optional[str], header_row_index: int 
 
 def run_plot_curves(
     excel_path: str,
-    sheet_name: Optional[str],
+    sheet_name: str | None,
     template_name: str,
     output_dir: str,
     templates_path: str = DEFAULT_TEMPLATES_PATH,
-) -> List[str]:
+) -> list[str]:
     """工具入口：读 Excel → 套模板 → 批量出 PNG，返回写出的文件路径列表。"""
     print(f"📂 读取模板库: {templates_path}")
     templates = load_templates(templates_path)
@@ -295,11 +309,11 @@ def run_plot_curves(
     os.makedirs(output_dir, exist_ok=True)
     print(f"📁 输出目录: {output_dir}")
 
-    print(f"🔨 构建绘图任务...")
+    print("🔨 构建绘图任务...")
     jobs = build_jobs(template, rows, output_dir)
     print(f"   ↳ 有效任务 {len(jobs)} 个（已跳过空行/缺数据行）")
 
-    written: List[str] = []
+    written: list[str] = []
     for i, job in enumerate(jobs, start=1):
         try:
             render_plot(job)
@@ -316,7 +330,9 @@ def run_plot_curves(
 # ==========================================
 # 模块 2：UI 流程
 # ==========================================
-def _request_params(excel_path: str, sheet_names: List[str], template_names: List[str]) -> Optional[dict]:
+def _request_params(
+    excel_path: str, sheet_names: list[str], template_names: list[str]
+) -> dict | None:
     default_dir = os.path.join(os.path.dirname(excel_path) or os.getcwd(), "曲线图")
     schema = [
         field_sheet_select(sheet_names),
@@ -330,22 +346,31 @@ def _request_params(excel_path: str, sheet_names: List[str], template_names: Lis
         field_dir(default=default_dir),
     ]
     return ModernDynamicFormDialog(
-        title="批量绘图 - 参数配置", form_schema=schema, width=620,
+        title="批量绘图 - 参数配置",
+        form_schema=schema,
+        width=620,
     ).show()
 
 
-def _generate_example_flow(templates: Dict[str, Any]) -> None:
+def _generate_example_flow(templates: dict[str, Any]) -> None:
     """走一遍"生成示例 Excel"的小流程：选模板 → 选输出位置 → 写文件。"""
     from tkinter import filedialog
+
     template_names = get_template_names(templates)
 
-    schema = [{
-        "key": "template_name", "label": "用哪个模板生成示例:",
-        "type": "select", "options": template_names,
-        "default": template_names[0],
-    }]
+    schema = [
+        {
+            "key": "template_name",
+            "label": "用哪个模板生成示例:",
+            "type": "select",
+            "options": template_names,
+            "default": template_names[0],
+        }
+    ]
     params = ModernDynamicFormDialog(
-        title="📋 生成示例 Excel - 选模板", form_schema=schema, width=520,
+        title="📋 生成示例 Excel - 选模板",
+        form_schema=schema,
+        width=520,
     ).show()
     if not params:
         return

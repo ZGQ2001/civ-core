@@ -6,11 +6,12 @@
   ✓ 返回 ExcelReplaceResult dataclass
   ✓ 异常带上下文，抛 IOReadError 让 UI 友好提示
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, List, Optional
 
 from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
@@ -30,13 +31,12 @@ log = get_logger(__name__)
 def get_excel_sort_order(
     excel_path: Path | str,
     col_name: str,
-    sheet_name: Optional[str] = None,
-) -> List[int]:
+    sheet_name: str | None = None,
+) -> list[int]:
     """读 Excel 指定列，把每行的「图 N」提成数字列表，作为排序顺序。"""
     path = Path(excel_path)
     if not path.is_file():
-        raise IOReadError(f"Excel 文件不存在: {path}",
-                          hint=f"请检查路径：{path}")
+        raise IOReadError(f"Excel 文件不存在: {path}", hint=f"请检查路径：{path}")
 
     try:
         import pandas as pd
@@ -44,8 +44,7 @@ def get_excel_sort_order(
         raise IOReadError(f"缺失 pandas: {e}") from e
 
     try:
-        df = pd.read_excel(path, sheet_name=sheet_name) if sheet_name \
-            else pd.read_excel(path)
+        df = pd.read_excel(path, sheet_name=sheet_name) if sheet_name else pd.read_excel(path)
     except Exception as e:
         raise IOReadError(
             f"读取 Excel 失败 ({path.name}, sheet={sheet_name}): {e}",
@@ -58,7 +57,7 @@ def get_excel_sort_order(
             hint=f"实际可用列：{list(df.columns)}",
         )
 
-    order: List[int] = []
+    order: list[int] = []
     for item in df[col_name].dropna().astype(str).tolist():
         m = FIG_PATTERN.search(item)
         if m:
@@ -67,8 +66,7 @@ def get_excel_sort_order(
     return order
 
 
-def find_column_index(ws: Worksheet, col_name: str,
-                      header_row: int = 1) -> Optional[int]:
+def find_column_index(ws: Worksheet, col_name: str, header_row: int = 1) -> int | None:
     """在指定 sheet 的表头行里找列名对应的列号（1-indexed），找不到返回 None。"""
     for cell in ws[header_row]:
         if cell.value is not None and str(cell.value).strip() == col_name:
@@ -109,7 +107,7 @@ def open_workbook(path: Path | str, *, read_only: bool = False) -> Iterator[Work
 # ──────────────────────────────────────────────────────────────────
 def replace_in_excel_column(
     excel_path: Path | str,
-    sheet_name: Optional[str],
+    sheet_name: str | None,
     col_name: str,
     mapping: dict[int, int],
     output_path: Path | str,
@@ -121,8 +119,9 @@ def replace_in_excel_column(
     out.parent.mkdir(parents=True, exist_ok=True)
 
     with open_workbook(src) as wb:
-        target_sheet = sheet_name if sheet_name and sheet_name in wb.sheetnames \
-            else wb.sheetnames[0]
+        target_sheet = (
+            sheet_name if sheet_name and sheet_name in wb.sheetnames else wb.sheetnames[0]
+        )
         ws = wb[target_sheet]
 
         col_idx = find_column_index(ws, col_name, header_row)
@@ -135,8 +134,7 @@ def replace_in_excel_column(
         apply, unmatched = make_caption_substitutor(mapping)
 
         replaced = 0
-        for row in ws.iter_rows(min_row=header_row + 1,
-                                min_col=col_idx, max_col=col_idx):
+        for row in ws.iter_rows(min_row=header_row + 1, min_col=col_idx, max_col=col_idx):
             cell = row[0]
             if cell.value is None:
                 continue
@@ -152,7 +150,11 @@ def replace_in_excel_column(
 
     log.info(
         "Excel 列替换完成: sheet=%s, col=%s, 替换 %d 单元格, 未匹配 %d → %s",
-        target_sheet, col_name, replaced, len(unmatched), out.name,
+        target_sheet,
+        col_name,
+        replaced,
+        len(unmatched),
+        out.name,
     )
     return ExcelReplaceResult(
         output_path=out,

@@ -19,11 +19,11 @@
   ✓ 业务异常 (WordNotRunningError / DocumentNotSavedError)，UI 可 InfoBar 友好提示
   ✓ logger 记录关键节点（attach 成功/失败、host 类型识别）
 """
+
 from __future__ import annotations
 
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Optional
 
 from civil_auto.models.schema import (
     DocumentNotSavedError,
@@ -41,8 +41,8 @@ log = get_logger(__name__)
 # ──────────────────────────────────────────────────────────────────
 _HOST_CANDIDATES = [
     ("Word.Application", "Word"),
-    ("KWPS.Application", "WPS"),     # WPS 兼容模式
-    ("Wps.Application", "WPS"),      # WPS 经典模式
+    ("KWPS.Application", "WPS"),  # WPS 兼容模式
+    ("Wps.Application", "WPS"),  # WPS 经典模式
 ]
 
 
@@ -59,7 +59,7 @@ def _attach_running_app() -> tuple[object, str]:
             hint="请运行：pip install pywin32",
         ) from e
 
-    last_error: Optional[Exception] = None
+    last_error: Exception | None = None
     for prog_id, kind in _HOST_CANDIDATES:
         try:
             app = win32com.client.GetActiveObject(prog_id)
@@ -69,9 +69,7 @@ def _attach_running_app() -> tuple[object, str]:
             log.debug("GetActiveObject(%s) 失败: %s", prog_id, e)
             last_error = e
 
-    raise WordNotRunningError(
-        f"未检测到运行中的 Word/WPS 进程（最后一次尝试失败：{last_error}）"
-    )
+    raise WordNotRunningError(f"未检测到运行中的 Word/WPS 进程（最后一次尝试失败：{last_error}）")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -96,7 +94,7 @@ class WordApp:
         self._require_saved = require_saved
         self._optimize_env = optimize_env
         self._stack = ExitStack()
-        self._ctx: Optional[WordContext] = None
+        self._ctx: WordContext | None = None
 
     def __enter__(self) -> WordContext:
         app, host_kind = _attach_running_app()

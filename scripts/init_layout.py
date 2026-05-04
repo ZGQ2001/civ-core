@@ -5,6 +5,7 @@
 
 不指定参数时，以脚本所在文件的上一级作为项目根。
 """
+
 from __future__ import annotations
 
 import sys
@@ -57,7 +58,9 @@ def main() -> int:
     except Exception:
         pass
 
-    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
+    root = (
+        Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
+    )
 
     print(f"[ROOT] {root}")
 

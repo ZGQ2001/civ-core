@@ -13,12 +13,12 @@
 
 无论哪种方式，左侧导航始终可见，用户随时可以切换查看说明 / 切到配置编辑器修配置。
 """
+
 import os
 import queue
 import subprocess
 import sys
 import threading
-from typing import Callable, Dict, List, Optional, Tuple
 
 import customtkinter as ctk
 
@@ -28,84 +28,109 @@ if _THIS_DIR not in sys.path:
 
 from common.help_tooltip import attach_help
 
-
 # ============================================================
 # 工具菜单 —— 按工作流分组
 # 每个工具：(显示名, 标识符, 简介, 启动方式)
 # 启动方式: ("subprocess", "脚本文件名.py")  或  ("embed", "面板工厂函数路径")
 # ============================================================
-ToolEntry = Tuple[str, str, str, Tuple[str, str]]
+ToolEntry = tuple[str, str, str, tuple[str, str]]
 
-WORKFLOW_GROUPS: List[Tuple[str, List[ToolEntry]]] = [
-    ("📊 数据 / 图表", [
-        (
-            "批量绘图（Excel→PNG）", "plot_curves",
-            "把 Excel 一个 Sheet 的每一行套用模板批量画 PNG。\n"
-            "运行前会先做列名预检，告诉你哪一列对不上。",
-            ("subprocess", "plot_curves.py"),
-        ),
-    ]),
-    ("📝 报告排版", [
-        (
-            "正文排版引擎", "body_format",
-            "扫描 Word 当前活动文档，按 04_Config/report_style_config.json 自动套用字体、间距、缩进、大纲级别。\n"
-            "运行前会自动备份当前文档。",
-            ("subprocess", "body_format.py"),
-        ),
-        (
-            "表格排版引擎", "table_format",
-            "对 Word 文档里所有表格统一字号、行高、表名样式，并把空单元格高亮。",
-            ("subprocess", "table_format.py"),
-        ),
-        (
-            "括号半全角纠偏", "bracket_format",
-            "通过 Word 通配符引擎全局规范括号：技术参数转半角、国标代号锁全角、第N回半角。",
-            ("subprocess", "bracket_format.py"),
-        ),
-        (
-            "交叉引用修复", "fix_cross_ref",
-            "为所有 REF 域追加 \\* MERGEFORMAT 开关，避免后续编辑丢字号字体。",
-            ("subprocess", "fix_cross_ref.py"),
-        ),
-    ]),
-    ("📷 照片附录", [
-        (
-            "照片流水线（排序+重编号）", "pipeline_sort_renumber",
-            "一键完成：按 Excel 缺陷清单顺序重排 Word 表格里的图片+题注 → 题注重编号 → 同步改 Excel 引用。",
-            ("subprocess", "pipeline_sort_renumber.py"),
-        ),
-    ]),
-    ("📄 转换 / 工具", [
-        (
-            "Word ↔ PDF 转换", "word2pdf",
-            "Word → PDF 与 PDF → Word 双向转换。",
-            ("subprocess", "word2pdf.py"),
-        ),
-        (
-            "PNG 坐标拾取器", "coord_picker",
-            "在 PNG 底图上拖拽框选，输出 100% 像素坐标 JSON，给手写模拟工具用。",
-            ("subprocess", "coord_picker.py"),
-        ),
-        (
-            "手写模拟生成器", "auto_filler",
-            "读 Excel 数据 + PNG 底图 + JSON 坐标 → 仿生手写体填表，导出 PDF。",
-            ("subprocess", "auto_filler.py"),
-        ),
-    ]),
-    ("⚙ 配置编辑", [
-        (
-            "报告样式配置（字体/间距）", "config_editor",
-            "可视化编辑 04_Config/report_style_config.json。\n"
-            "本工具直接在主窗口右侧打开，修改完保存即生效，无需切换。",
-            ("embed", "config_editor:ConfigEditorPanel"),
-        ),
-        (
-            "曲线模板（绘图）", "curve_template_editor",
-            "可视化编辑 04_Config/curve_templates.json。\n"
-            "强烈建议先点'挂载参考 Excel'，让所有列名变成下拉选择，避免手输错。",
-            ("embed", "curve_template_editor:CurveTemplateEditorPanel"),
-        ),
-    ]),
+WORKFLOW_GROUPS: list[tuple[str, list[ToolEntry]]] = [
+    (
+        "📊 数据 / 图表",
+        [
+            (
+                "批量绘图（Excel→PNG）",
+                "plot_curves",
+                "把 Excel 一个 Sheet 的每一行套用模板批量画 PNG。\n"
+                "运行前会先做列名预检，告诉你哪一列对不上。",
+                ("subprocess", "plot_curves.py"),
+            ),
+        ],
+    ),
+    (
+        "📝 报告排版",
+        [
+            (
+                "正文排版引擎",
+                "body_format",
+                "扫描 Word 当前活动文档，按 04_Config/report_style_config.json 自动套用字体、间距、缩进、大纲级别。\n"
+                "运行前会自动备份当前文档。",
+                ("subprocess", "body_format.py"),
+            ),
+            (
+                "表格排版引擎",
+                "table_format",
+                "对 Word 文档里所有表格统一字号、行高、表名样式，并把空单元格高亮。",
+                ("subprocess", "table_format.py"),
+            ),
+            (
+                "括号半全角纠偏",
+                "bracket_format",
+                "通过 Word 通配符引擎全局规范括号：技术参数转半角、国标代号锁全角、第N回半角。",
+                ("subprocess", "bracket_format.py"),
+            ),
+            (
+                "交叉引用修复",
+                "fix_cross_ref",
+                "为所有 REF 域追加 \\* MERGEFORMAT 开关，避免后续编辑丢字号字体。",
+                ("subprocess", "fix_cross_ref.py"),
+            ),
+        ],
+    ),
+    (
+        "📷 照片附录",
+        [
+            (
+                "照片流水线（排序+重编号）",
+                "pipeline_sort_renumber",
+                "一键完成：按 Excel 缺陷清单顺序重排 Word 表格里的图片+题注 → 题注重编号 → 同步改 Excel 引用。",
+                ("subprocess", "pipeline_sort_renumber.py"),
+            ),
+        ],
+    ),
+    (
+        "📄 转换 / 工具",
+        [
+            (
+                "Word ↔ PDF 转换",
+                "word2pdf",
+                "Word → PDF 与 PDF → Word 双向转换。",
+                ("subprocess", "word2pdf.py"),
+            ),
+            (
+                "PNG 坐标拾取器",
+                "coord_picker",
+                "在 PNG 底图上拖拽框选，输出 100% 像素坐标 JSON，给手写模拟工具用。",
+                ("subprocess", "coord_picker.py"),
+            ),
+            (
+                "手写模拟生成器",
+                "auto_filler",
+                "读 Excel 数据 + PNG 底图 + JSON 坐标 → 仿生手写体填表，导出 PDF。",
+                ("subprocess", "auto_filler.py"),
+            ),
+        ],
+    ),
+    (
+        "⚙ 配置编辑",
+        [
+            (
+                "报告样式配置（字体/间距）",
+                "config_editor",
+                "可视化编辑 04_Config/report_style_config.json。\n"
+                "本工具直接在主窗口右侧打开，修改完保存即生效，无需切换。",
+                ("embed", "config_editor:ConfigEditorPanel"),
+            ),
+            (
+                "曲线模板（绘图）",
+                "curve_template_editor",
+                "可视化编辑 04_Config/curve_templates.json。\n"
+                "强烈建议先点'挂载参考 Excel'，让所有列名变成下拉选择，避免手输错。",
+                ("embed", "curve_template_editor:CurveTemplateEditorPanel"),
+            ),
+        ],
+    ),
 ]
 
 
@@ -120,15 +145,15 @@ class MainDashboard:
         self.root.minsize(1024, 640)
 
         # 当前选中的工具
-        self.current_tool: Optional[ToolEntry] = None
+        self.current_tool: ToolEntry | None = None
 
         # subprocess 状态
-        self.proc: Optional[subprocess.Popen] = None
+        self.proc: subprocess.Popen | None = None
         self.log_queue: queue.Queue = queue.Queue()
 
         # 内嵌面板：缓存已经构造好的 Panel 实例（避免每次切换重建）
-        self._embedded_panels: Dict[str, ctk.CTkFrame] = {}
-        self._current_embedded: Optional[ctk.CTkFrame] = None
+        self._embedded_panels: dict[str, ctk.CTkFrame] = {}
+        self._current_embedded: ctk.CTkFrame | None = None
 
         self._build_layout()
         # 默认选第一个工具
@@ -140,35 +165,42 @@ class MainDashboard:
     # ============================================================
     def _build_layout(self) -> None:
         # 顶栏
-        header = ctk.CTkFrame(self.root, height=60, corner_radius=0,
-                              fg_color=("#0078d4", "#1f3a5f"))
+        header = ctk.CTkFrame(
+            self.root, height=60, corner_radius=0, fg_color=("#0078d4", "#1f3a5f")
+        )
         header.pack(fill="x")
         header.pack_propagate(False)
-        ctk.CTkLabel(header, text="工程自动化主控制台",
-                     font=("微软雅黑", 18, "bold"), text_color="white"
-                     ).pack(side="left", padx=24, pady=14)
-        ctk.CTkLabel(header, text="V3 · 嵌入式面板 + 实时日志",
-                     font=("Consolas", 11), text_color=("#cce4ff", "#aac5e0")
-                     ).pack(side="left", pady=18)
+        ctk.CTkLabel(
+            header, text="工程自动化主控制台", font=("微软雅黑", 18, "bold"), text_color="white"
+        ).pack(side="left", padx=24, pady=14)
+        ctk.CTkLabel(
+            header,
+            text="V3 · 嵌入式面板 + 实时日志",
+            font=("Consolas", 11),
+            text_color=("#cce4ff", "#aac5e0"),
+        ).pack(side="left", pady=18)
 
         # 主体：左右分栏
         body = ctk.CTkFrame(self.root, fg_color="transparent")
         body.pack(fill="both", expand=True)
 
         # ===== 左侧：分组侧边栏 =====
-        sidebar = ctk.CTkFrame(body, width=270, corner_radius=0,
-                               fg_color=("gray92", "gray18"))
+        sidebar = ctk.CTkFrame(body, width=270, corner_radius=0, fg_color=("gray92", "gray18"))
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        ctk.CTkLabel(sidebar, text="按工作流选择工具",
-                     font=("微软雅黑", 12, "bold"), text_color="gray55", anchor="w"
-                     ).pack(fill="x", padx=20, pady=(16, 6))
+        ctk.CTkLabel(
+            sidebar,
+            text="按工作流选择工具",
+            font=("微软雅黑", 12, "bold"),
+            text_color="gray55",
+            anchor="w",
+        ).pack(fill="x", padx=20, pady=(16, 6))
 
         self.sidebar_scroll = ctk.CTkScrollableFrame(sidebar, fg_color="transparent")
         self.sidebar_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        self._tool_buttons: Dict[str, ctk.CTkButton] = {}
+        self._tool_buttons: dict[str, ctk.CTkButton] = {}
         self._build_sidebar()
 
         # ===== 右侧：内容区 =====
@@ -184,19 +216,29 @@ class MainDashboard:
 
         title_row = ctk.CTkFrame(info_inner, fg_color="transparent")
         title_row.pack(fill="x")
-        self.info_title = ctk.CTkLabel(title_row, text="—",
-                                       font=("微软雅黑", 17, "bold"), anchor="w")
+        self.info_title = ctk.CTkLabel(
+            title_row, text="—", font=("微软雅黑", 17, "bold"), anchor="w"
+        )
         self.info_title.pack(side="left")
         self.info_kind_badge = ctk.CTkLabel(
-            title_row, text="", font=("微软雅黑", 10, "bold"),
-            corner_radius=6, fg_color="transparent", text_color="white",
-            width=80, height=22,
+            title_row,
+            text="",
+            font=("微软雅黑", 10, "bold"),
+            corner_radius=6,
+            fg_color="transparent",
+            text_color="white",
+            width=80,
+            height=22,
         )
         self.info_kind_badge.pack(side="left", padx=10)
 
         self.info_desc = ctk.CTkLabel(
-            info_inner, text="", font=("微软雅黑", 12),
-            text_color=("gray25", "gray85"), anchor="w", justify="left",
+            info_inner,
+            text="",
+            font=("微软雅黑", 12),
+            text_color=("gray25", "gray85"),
+            anchor="w",
+            justify="left",
             wraplength=820,
         )
         self.info_desc.pack(fill="x", anchor="w", pady=(8, 0))
@@ -206,30 +248,50 @@ class MainDashboard:
         self.action_row.pack(fill="x", pady=(12, 0))
 
         self.btn_run = ctk.CTkButton(
-            self.action_row, text="▶ 启动该工具", height=36, width=150,
-            font=("微软雅黑", 12, "bold"), command=self._launch_current,
+            self.action_row,
+            text="▶ 启动该工具",
+            height=36,
+            width=150,
+            font=("微软雅黑", 12, "bold"),
+            command=self._launch_current,
         )
         self.btn_run.pack(side="left", padx=(0, 8))
         attach_help(self.btn_run, "启动该工具的子进程；执行过程中的输出会实时显示在下方日志面板。")
 
         self.btn_stop = ctk.CTkButton(
-            self.action_row, text="■ 停止运行", height=36, width=110,
-            font=("微软雅黑", 12), fg_color="#aa3333", hover_color="#cc4444",
-            command=self._stop_current, state="disabled",
+            self.action_row,
+            text="■ 停止运行",
+            height=36,
+            width=110,
+            font=("微软雅黑", 12),
+            fg_color="#aa3333",
+            hover_color="#cc4444",
+            command=self._stop_current,
+            state="disabled",
         )
         self.btn_stop.pack(side="left", padx=4)
-        attach_help(self.btn_stop, "向子进程发 terminate 信号。\n如果工具正在改 Word 文档，可能会保留半成品。")
+        attach_help(
+            self.btn_stop,
+            "向子进程发 terminate 信号。\n如果工具正在改 Word 文档，可能会保留半成品。",
+        )
 
         self.btn_clear = ctk.CTkButton(
-            self.action_row, text="🧹 清空日志", height=36, width=100,
-            font=("微软雅黑", 12), fg_color="gray45", hover_color="gray55",
+            self.action_row,
+            text="🧹 清空日志",
+            height=36,
+            width=100,
+            font=("微软雅黑", 12),
+            fg_color="gray45",
+            hover_color="gray55",
             command=self._clear_log,
         )
         self.btn_clear.pack(side="left", padx=4)
 
         self.run_status = ctk.CTkLabel(
-            self.action_row, text="● 空闲",
-            font=("微软雅黑", 12, "bold"), text_color="gray60",
+            self.action_row,
+            text="● 空闲",
+            font=("微软雅黑", 12, "bold"),
+            text_color="gray60",
         )
         self.run_status.pack(side="right", padx=8)
 
@@ -244,13 +306,16 @@ class MainDashboard:
         log_header = ctk.CTkFrame(parent, fg_color="transparent", height=34)
         log_header.pack(fill="x", padx=18, pady=(10, 0))
         log_header.pack_propagate(False)
-        ctk.CTkLabel(log_header, text="📡 实时日志",
-                     font=("微软雅黑", 13, "bold"), anchor="w"
-                     ).pack(side="left")
+        ctk.CTkLabel(
+            log_header, text="📡 实时日志", font=("微软雅黑", 13, "bold"), anchor="w"
+        ).pack(side="left")
 
         self.log_text = ctk.CTkTextbox(
-            parent, font=("Consolas", 11), wrap="word",
-            fg_color=("gray97", "gray12"), text_color=("gray10", "gray88"),
+            parent,
+            font=("Consolas", 11),
+            wrap="word",
+            fg_color=("gray97", "gray12"),
+            text_color=("gray10", "gray88"),
         )
         self.log_text.pack(fill="both", expand=True, padx=14, pady=10)
         self.log_text.insert("end", "就绪。在左侧选择一个工具开始。\n")
@@ -259,8 +324,10 @@ class MainDashboard:
     def _build_sidebar(self) -> None:
         for group_name, tools in WORKFLOW_GROUPS:
             cat = ctk.CTkLabel(
-                self.sidebar_scroll, text=group_name,
-                font=("微软雅黑", 12, "bold"), anchor="w",
+                self.sidebar_scroll,
+                text=group_name,
+                font=("微软雅黑", 12, "bold"),
+                anchor="w",
                 text_color=("gray35", "gray70"),
             )
             cat.pack(fill="x", padx=8, pady=(12, 4))
@@ -270,9 +337,14 @@ class MainDashboard:
                 # 嵌入式工具加个小标记
                 label = display_name if kind == "subprocess" else f"⚙ {display_name}"
                 btn = ctk.CTkButton(
-                    self.sidebar_scroll, text=label, anchor="w",
-                    font=("微软雅黑", 12), height=34, corner_radius=6,
-                    fg_color="transparent", text_color=("gray10", "gray90"),
+                    self.sidebar_scroll,
+                    text=label,
+                    anchor="w",
+                    font=("微软雅黑", 12),
+                    height=34,
+                    corner_radius=6,
+                    fg_color="transparent",
+                    text_color=("gray10", "gray90"),
                     hover_color=("gray85", "gray28"),
                     command=lambda e=entry: self._select_tool(e),
                 )
@@ -285,7 +357,9 @@ class MainDashboard:
     def _select_tool(self, entry: ToolEntry) -> None:
         # 如果当前正跑着 subprocess，不让切到另一个工具的运行视图
         if self.proc is not None and self.proc.poll() is None:
-            self._append_log(f"\n⚠️ 当前有工具在运行（{self.current_tool[0] if self.current_tool else '?'}），仅切换说明。\n")
+            self._append_log(
+                f"\n⚠️ 当前有工具在运行（{self.current_tool[0] if self.current_tool else '?'}），仅切换说明。\n"
+            )
 
         self.current_tool = entry
         display_name, key, desc, (kind, target) = entry
@@ -293,11 +367,9 @@ class MainDashboard:
         # 高亮当前
         for k, btn in self._tool_buttons.items():
             if k == key:
-                btn.configure(fg_color=("#cce4ff", "#1f3a5f"),
-                              text_color=("#003a73", "#cce4ff"))
+                btn.configure(fg_color=("#cce4ff", "#1f3a5f"), text_color=("#003a73", "#cce4ff"))
             else:
-                btn.configure(fg_color="transparent",
-                              text_color=("gray10", "gray90"))
+                btn.configure(fg_color="transparent", text_color=("gray10", "gray90"))
 
         # 更新说明卡
         self.info_title.configure(text=display_name)
@@ -305,18 +377,15 @@ class MainDashboard:
 
         # 根据 kind 切换内容区 + 操作按钮的显隐
         if kind == "embed":
-            self.info_kind_badge.configure(text=" 内嵌 ",
-                                           fg_color="#1aaa55")
+            self.info_kind_badge.configure(text=" 内嵌 ", fg_color="#1aaa55")
             self._show_embed_panel(key, target)
             # 嵌入工具不需要"启动/停止"
             self.btn_run.pack_forget()
             self.btn_stop.pack_forget()
             self.btn_clear.pack_forget()
-            self.run_status.configure(text="● 内嵌模式 - 直接编辑",
-                                      text_color="#1aaa55")
+            self.run_status.configure(text="● 内嵌模式 - 直接编辑", text_color="#1aaa55")
         else:  # subprocess
-            self.info_kind_badge.configure(text=" 启动 ",
-                                           fg_color="#0078d4")
+            self.info_kind_badge.configure(text=" 启动 ", fg_color="#0078d4")
             self._show_log_panel()
             # 恢复按钮（顺序）
             self.btn_run.pack(side="left", padx=(0, 8))
@@ -358,7 +427,8 @@ class MainDashboard:
                 err = ctk.CTkLabel(
                     self.content_holder,
                     text=f"⚠ 无法加载内嵌面板 {target}:\n{e}",
-                    font=("微软雅黑", 12), text_color="#aa3333",
+                    font=("微软雅黑", 12),
+                    text_color="#aa3333",
                 )
                 err.pack(pady=20)
                 return
@@ -399,8 +469,11 @@ class MainDashboard:
         try:
             self.proc = subprocess.Popen(
                 [sys.executable, "-u", script_path],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                cwd=_THIS_DIR, env=env, creationflags=creationflags,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=_THIS_DIR,
+                env=env,
+                creationflags=creationflags,
             )
         except Exception as e:
             self._append_log(f"❌ 启动失败：{e}\n")
@@ -411,8 +484,7 @@ class MainDashboard:
         self.btn_stop.configure(state="normal")
         self.run_status.configure(text="● 运行中", text_color="#1aaa55")
 
-        threading.Thread(target=self._reader_worker, args=(self.proc,),
-                         daemon=True).start()
+        threading.Thread(target=self._reader_worker, args=(self.proc,), daemon=True).start()
 
     def _reader_worker(self, proc: subprocess.Popen) -> None:
         assert proc.stdout is not None
@@ -421,7 +493,9 @@ class MainDashboard:
                 chunk = proc.stdout.readline()
                 if not chunk:
                     break
-                line = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+                line = (
+                    chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+                )
                 self.log_queue.put(line)
         finally:
             proc.stdout.close()
@@ -459,8 +533,9 @@ class MainDashboard:
             if returncode == 0:
                 self.run_status.configure(text="● 已完成", text_color="#1aaa55")
             else:
-                self.run_status.configure(text=f"● 异常退出 (rc={returncode})",
-                                          text_color="#aa3333")
+                self.run_status.configure(
+                    text=f"● 异常退出 (rc={returncode})", text_color="#aa3333"
+                )
 
     def _append_log(self, text: str) -> None:
         # log_text 在嵌入模式下已被销毁；只在它存在时写

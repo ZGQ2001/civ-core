@@ -1,16 +1,16 @@
 """core/cross_ref_fix.py 的单元测试（不依赖真 Word，全用 mock）。"""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import List, Optional
 
 import pytest
 
 from civil_auto.core.cross_ref_fix import (
-    CrossRefFixParams,
-    fix_cross_references,
     DEFAULT_SWITCH,
     WD_FIELD_REF,
+    CrossRefFixParams,
+    fix_cross_references,
 )
 from civil_auto.models.schema import (
     AppException,
@@ -24,6 +24,7 @@ from civil_auto.models.schema import (
 # ──────────────────────────────────────────────────────────────────
 class FakeCode:
     """模拟 field.Code，可读可写 .Text。"""
+
     def __init__(self, text: str):
         self.Text = text
 
@@ -36,16 +37,19 @@ class FakeField:
 
 class FakeFields:
     """模拟 Word.Document.Fields 集合 (1-indexed)。"""
-    def __init__(self, fields: List[FakeField]):
+
+    def __init__(self, fields: list[FakeField]):
         self._fields = fields
+
     @property
     def Count(self) -> int:
         return len(self._fields)
+
     def Item(self, i: int) -> FakeField:
         return self._fields[i - 1]
 
 
-def _make_doc(fields: List[FakeField]) -> SimpleNamespace:
+def _make_doc(fields: list[FakeField]) -> SimpleNamespace:
     return SimpleNamespace(Fields=FakeFields(fields))
 
 
@@ -60,11 +64,13 @@ def test_no_fields() -> None:
 
 def test_skips_non_ref_fields() -> None:
     """只处理 Type == 3 的；其他域类型完全跳过。"""
-    doc = _make_doc([
-        FakeField(ftype=1, code_text="DATE"),                     # 非 REF
-        FakeField(ftype=WD_FIELD_REF, code_text="REF _Ref1 \\h"), # REF, 缺开关
-        FakeField(ftype=88, code_text="HYPERLINK ..."),           # 非 REF
-    ])
+    doc = _make_doc(
+        [
+            FakeField(ftype=1, code_text="DATE"),  # 非 REF
+            FakeField(ftype=WD_FIELD_REF, code_text="REF _Ref1 \\h"),  # REF, 缺开关
+            FakeField(ftype=88, code_text="HYPERLINK ..."),  # 非 REF
+        ]
+    )
     stats = fix_cross_references(doc)
     assert stats.refs_processed == 1
     assert stats.refs_updated == 1
@@ -73,10 +79,11 @@ def test_skips_non_ref_fields() -> None:
 
 def test_already_has_switch_is_noop() -> None:
     """已含 \\* MERGEFORMAT 的不再追加。"""
-    doc = _make_doc([
-        FakeField(ftype=WD_FIELD_REF,
-                  code_text=f"REF _Ref1 \\h {DEFAULT_SWITCH}"),
-    ])
+    doc = _make_doc(
+        [
+            FakeField(ftype=WD_FIELD_REF, code_text=f"REF _Ref1 \\h {DEFAULT_SWITCH}"),
+        ]
+    )
     original = doc.Fields.Item(1).Code.Text
     stats = fix_cross_references(doc)
     assert stats.refs_processed == 1
@@ -86,10 +93,11 @@ def test_already_has_switch_is_noop() -> None:
 
 def test_case_insensitive_switch_check() -> None:
     """开关检查应大小写不敏感。"""
-    doc = _make_doc([
-        FakeField(ftype=WD_FIELD_REF,
-                  code_text=r"REF _Ref1 \h \* mergeformat"),  # 小写
-    ])
+    doc = _make_doc(
+        [
+            FakeField(ftype=WD_FIELD_REF, code_text=r"REF _Ref1 \h \* mergeformat"),  # 小写
+        ]
+    )
     stats = fix_cross_references(doc)
     assert stats.refs_updated == 0  # 不重复追加
 
@@ -100,8 +108,8 @@ def test_dry_run_does_not_mutate() -> None:
     doc = _make_doc([f])
     stats = fix_cross_references(doc, params=CrossRefFixParams(dry_run=True))
     assert stats.refs_processed == 1
-    assert stats.refs_updated == 1            # 统计算"待更新"
-    assert f.Code.Text == "REF _Ref1 \\h"     # 但实际未改
+    assert stats.refs_updated == 1  # 统计算"待更新"
+    assert f.Code.Text == "REF _Ref1 \\h"  # 但实际未改
 
 
 def test_progress_callback_called() -> None:
@@ -109,7 +117,7 @@ def test_progress_callback_called() -> None:
     fields = [FakeField(WD_FIELD_REF, "REF _R \\h") for _ in range(5)]
     doc = _make_doc(fields)
 
-    received: List[ProgressUpdate] = []
+    received: list[ProgressUpdate] = []
     fix_cross_references(doc, progress=received.append)
 
     assert len(received) == 5
@@ -120,17 +128,21 @@ def test_progress_callback_called() -> None:
 
 def test_single_field_failure_does_not_abort() -> None:
     """中间某个 field 抛异常不应熔断整个扫描。"""
+
     class ExplodingField:
         Type = WD_FIELD_REF
+
         @property
         def Code(self):
             raise RuntimeError("boom")
 
-    doc = _make_doc([
-        FakeField(WD_FIELD_REF, "REF a \\h"),
-        ExplodingField(),                              # type: ignore
-        FakeField(WD_FIELD_REF, "REF b \\h"),
-    ])
+    doc = _make_doc(
+        [
+            FakeField(WD_FIELD_REF, "REF a \\h"),
+            ExplodingField(),  # type: ignore
+            FakeField(WD_FIELD_REF, "REF b \\h"),
+        ]
+    )
     stats = fix_cross_references(doc)
     # 第 1、3 个成功，第 2 个跳过
     assert stats.refs_processed == 2

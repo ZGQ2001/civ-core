@@ -12,11 +12,11 @@
   ✓ logger 记录用户取消 / 选中路径
   ✓ 不返回空字符串歧义 —— 取消时返回 None，类型清晰
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from PySide6.QtWidgets import QApplication, QFileDialog
 
@@ -42,9 +42,9 @@ def ensure_app() -> QApplication:
 # ──────────────────────────────────────────────────────────────────
 def pick_open_file(
     title: str = "选择文件",
-    filters: Optional[List[Tuple[str, str]]] = None,
+    filters: list[tuple[str, str]] | None = None,
     start_dir: Path | str = "",
-) -> Optional[Path]:
+) -> Path | None:
     """打开「打开文件」对话框。用户取消返回 None。
 
     filters 形如 [("Excel 文件", "*.xlsx *.xlsm"), ("所有文件", "*.*")]
@@ -61,10 +61,10 @@ def pick_open_file(
 
 def pick_save_file(
     title: str = "保存为",
-    filters: Optional[List[Tuple[str, str]]] = None,
+    filters: list[tuple[str, str]] | None = None,
     start_dir: Path | str = "",
     default_name: str = "",
-) -> Optional[Path]:
+) -> Path | None:
     """打开「保存文件」对话框。用户取消返回 None。"""
     ensure_app()
     filter_str = _build_filter_string(filters)
@@ -80,7 +80,7 @@ def pick_save_file(
 def pick_directory(
     title: str = "选择目录",
     start_dir: Path | str = "",
-) -> Optional[Path]:
+) -> Path | None:
     """打开「选择目录」对话框。用户取消返回 None。"""
     ensure_app()
     path = QFileDialog.getExistingDirectory(None, title, str(start_dir))
@@ -91,28 +91,26 @@ def pick_directory(
     return Path(path)
 
 
-def pick_excel_file(title: str = "选择 Excel 文件") -> Optional[Path]:
+def pick_excel_file(title: str = "选择 Excel 文件") -> Path | None:
     """便捷封装：选 Excel。"""
     return pick_open_file(
         title=title,
-        filters=[("Excel 文件", "*.xlsx *.xlsm *.xls"),
-                 ("所有文件", "*.*")],
+        filters=[("Excel 文件", "*.xlsx *.xlsm *.xls"), ("所有文件", "*.*")],
     )
 
 
-def pick_word_file(title: str = "选择 Word 文档") -> Optional[Path]:
+def pick_word_file(title: str = "选择 Word 文档") -> Path | None:
     """便捷封装：选 Word。"""
     return pick_open_file(
         title=title,
-        filters=[("Word 文档", "*.docx *.doc"),
-                 ("所有文件", "*.*")],
+        filters=[("Word 文档", "*.docx *.doc"), ("所有文件", "*.*")],
     )
 
 
 # ──────────────────────────────────────────────────────────────────
 # 内部工具
 # ──────────────────────────────────────────────────────────────────
-def _build_filter_string(filters: Optional[List[Tuple[str, str]]]) -> str:
+def _build_filter_string(filters: list[tuple[str, str]] | None) -> str:
     """[("Excel 文件", "*.xlsx"), ...] → "Excel 文件 (*.xlsx);;..." """
     if not filters:
         return "所有文件 (*.*)"

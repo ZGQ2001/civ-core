@@ -3,31 +3,43 @@
 
 业务逻辑全部在 common/ 里，本文件只负责调度（run_renumber）+ UI 流程（__main__）。
 """
+
 import os
 import sys
-from typing import List, Optional
 
 # 让脚本方式启动时也能找到 common/
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+from common.excel_helpers import replace_in_excel_column
 from common.io_helpers import (
-    enable_line_buffered_stdout, ensure_extension, pick_excel_file, read_sheet_names,
+    enable_line_buffered_stdout,
+    ensure_extension,
+    pick_excel_file,
+    read_sheet_names,
+)
+from common.ui_helpers import (
+    field_dir,
+    field_sheet_select,
+    field_text,
+    field_word_file,
 )
 from common.word_helpers import build_caption_renumber_mapping, replace_in_caption_rows
-from common.excel_helpers import replace_in_excel_column
-from common.ui_helpers import (
-    field_dir, field_sheet_select, field_text, field_word_file,
-)
 from ui_components import ModernDynamicFormDialog
 
 
 # ==========================================
 # 模块 1：核心业务（可被其他工具复用）
 # ==========================================
-def run_renumber(excel_path: str, sheet_name: Optional[str], col_name: str,
-                 word_path: str, output_word_path: str, output_excel_path: str) -> None:
+def run_renumber(
+    excel_path: str,
+    sheet_name: str | None,
+    col_name: str,
+    word_path: str,
+    output_word_path: str,
+    output_excel_path: str,
+) -> None:
     """工具入口：扫 Word 建映射 → 改 Word 题注 → 改 Excel 引用。"""
     print("—— 阶段 A：扫描 Word 构建编号映射 ——")
     mapping = build_caption_renumber_mapping(word_path)
@@ -37,7 +49,9 @@ def run_renumber(excel_path: str, sheet_name: Optional[str], col_name: str,
 
     print("—— 阶段 B：改写 Word 题注 ——")
     run_count, fallback_count, word_unmatched = replace_in_caption_rows(
-        word_path, mapping, output_word_path,
+        word_path,
+        mapping,
+        output_word_path,
     )
     print(f"   ↳ run 级替换 {run_count} 处，段落级回退 {fallback_count} 处")
     if word_unmatched:
@@ -46,12 +60,18 @@ def run_renumber(excel_path: str, sheet_name: Optional[str], col_name: str,
 
     print("—— 阶段 C：同步改写 Excel 引用 ——")
     replaced, excel_unmatched = replace_in_excel_column(
-        excel_path, sheet_name, col_name, mapping, output_excel_path,
+        excel_path,
+        sheet_name,
+        col_name,
+        mapping,
+        output_excel_path,
     )
     print(f"   ↳ 已更新 {replaced} 个单元格")
     if excel_unmatched:
         uniq = sorted(set(excel_unmatched))
-        print(f"   ⚠️ Excel 中 {len(uniq)} 个编号无映射: {uniq[:10]}{' …' if len(uniq) > 10 else ''}")
+        print(
+            f"   ⚠️ Excel 中 {len(uniq)} 个编号无映射: {uniq[:10]}{' …' if len(uniq) > 10 else ''}"
+        )
 
     print("\n🎉 全部完成！")
     print(f"   📄 Word: {output_word_path}")
@@ -61,7 +81,7 @@ def run_renumber(excel_path: str, sheet_name: Optional[str], col_name: str,
 # ==========================================
 # 模块 2：UI 流程
 # ==========================================
-def _request_params(excel_path: str, sheet_names: List[str]) -> Optional[dict]:
+def _request_params(excel_path: str, sheet_names: list[str]) -> dict | None:
     default_dir = os.path.dirname(excel_path) or os.getcwd()
     schema = [
         field_sheet_select(sheet_names),
@@ -71,7 +91,9 @@ def _request_params(excel_path: str, sheet_names: List[str]) -> Optional[dict]:
         field_text("output_word_name", "输出 Word 文件名:", default="已重编号_附录1.docx"),
         field_text("output_excel_name", "输出 Excel 文件名:", default="已重编号_缺陷清单.xlsx"),
     ]
-    return ModernDynamicFormDialog(title="照片重编号 - 参数配置", form_schema=schema, width=620).show()
+    return ModernDynamicFormDialog(
+        title="照片重编号 - 参数配置", form_schema=schema, width=620
+    ).show()
 
 
 def _main():
@@ -94,10 +116,13 @@ def _main():
 
     word_path = params["word_path"]
     output_dir = params.get("output_dir") or os.path.dirname(word_path)
-    output_word = ensure_extension(params.get("output_word_name") or "已重编号_附录1.docx", (".docx",))
+    output_word = ensure_extension(
+        params.get("output_word_name") or "已重编号_附录1.docx", (".docx",)
+    )
     output_excel = ensure_extension(
         params.get("output_excel_name") or "已重编号_缺陷清单.xlsx",
-        (".xlsx", ".xlsm"), default=".xlsx",
+        (".xlsx", ".xlsm"),
+        default=".xlsx",
     )
 
     run_renumber(

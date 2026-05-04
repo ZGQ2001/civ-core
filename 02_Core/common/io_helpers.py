@@ -2,10 +2,10 @@
 
 每个函数纯靠参数工作，不依赖全局配置。
 """
+
 import os
-import sys
 import subprocess
-from typing import List, Optional
+import sys
 from tkinter import filedialog
 
 
@@ -33,10 +33,11 @@ def pick_excel_file(title: str = "选择 Excel 文件") -> str:
     )
 
 
-def read_sheet_names(excel_path: str) -> List[str]:
+def read_sheet_names(excel_path: str) -> list[str]:
     """读取 Excel 的 sheet 列表。失败返回空列表（调用方判空决定是否中止）。"""
     # 延迟导入：避免在不需要 pandas 的工具里也强制加载它
     import pandas as pd
+
     try:
         sheet_names = pd.ExcelFile(excel_path).sheet_names
         return [str(name) for name in sheet_names]
@@ -55,7 +56,9 @@ def kill_winword_processes(reason: str = "") -> None:
     try:
         result = subprocess.run(
             ["taskkill", "/F", "/IM", "WINWORD.EXE", "/T"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             print("   ↳ 已结束残留 Word 进程")
@@ -74,8 +77,10 @@ def unblock_file(file_path: str) -> None:
     abs_path = os.path.abspath(file_path)
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", f"Unblock-File -LiteralPath \"{abs_path}\""],
-            capture_output=True, text=True, timeout=10,
+            ["powershell", "-NoProfile", "-Command", f'Unblock-File -LiteralPath "{abs_path}"'],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             print(f"🔓 已解除文件网络标记: {os.path.basename(abs_path)}")
@@ -85,7 +90,7 @@ def unblock_file(file_path: str) -> None:
         print(f"   ⚠️ Unblock-File 调用失败（忽略，继续）: {e}")
 
 
-def ensure_extension(filename: str, allowed: tuple, default: Optional[str] = None) -> str:
+def ensure_extension(filename: str, allowed: tuple, default: str | None = None) -> str:
     """如果文件名后缀不在允许列表里，补上 default（或 allowed[0]）。"""
     if filename.lower().endswith(allowed):
         return filename

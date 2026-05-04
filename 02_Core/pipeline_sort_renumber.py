@@ -4,22 +4,28 @@
 等价于手动依次运行 sort_photos.py 和 renumber_photos.py，
 但只需配置一次参数、中间临时文件自动清理。
 """
+
 import os
 import sys
-from typing import List, Optional
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
 from common.io_helpers import (
-    enable_line_buffered_stdout, ensure_extension, pick_excel_file, read_sheet_names,
+    enable_line_buffered_stdout,
+    ensure_extension,
+    pick_excel_file,
+    read_sheet_names,
 )
 from common.ui_helpers import (
-    field_dir, field_sheet_select, field_text, field_word_file,
+    field_dir,
+    field_sheet_select,
+    field_text,
+    field_word_file,
 )
-from sort_photos import run_sort
 from renumber_photos import run_renumber
+from sort_photos import run_sort
 from ui_components import ModernDynamicFormDialog, ModernInfoDialog
 
 
@@ -28,7 +34,7 @@ from ui_components import ModernDynamicFormDialog, ModernInfoDialog
 # ==========================================
 def run_pipeline(
     excel_path: str,
-    sheet_name: Optional[str],
+    sheet_name: str | None,
     col_name: str,
     word_path: str,
     output_word_path: str,
@@ -85,7 +91,7 @@ def run_pipeline(
 # ==========================================
 # 模块 2：UI 流程
 # ==========================================
-def _request_params(excel_path: str, sheet_names: List[str]) -> Optional[dict]:
+def _request_params(excel_path: str, sheet_names: list[str]) -> dict | None:
     default_dir = os.path.dirname(excel_path) or os.getcwd()
     schema = [
         field_sheet_select(sheet_names),
@@ -127,7 +133,8 @@ def _main() -> None:
     )
     output_excel = ensure_extension(
         params.get("output_excel_name") or "已完成_缺陷清单.xlsx",
-        (".xlsx", ".xlsm"), default=".xlsx",
+        (".xlsx", ".xlsm"),
+        default=".xlsx",
     )
 
     try:
@@ -141,9 +148,7 @@ def _main() -> None:
         )
         ModernInfoDialog(
             "流水线完成",
-            f"✅ 排序 + 重编号全部完成！\n\n"
-            f"📄 Word: {output_word}\n"
-            f"📊 Excel: {output_excel}",
+            f"✅ 排序 + 重编号全部完成！\n\n📄 Word: {output_word}\n📊 Excel: {output_excel}",
         ).show()
     except Exception as e:
         ModernInfoDialog("流水线异常", f"❌ 执行过程中出错:\n\n{e}").show()

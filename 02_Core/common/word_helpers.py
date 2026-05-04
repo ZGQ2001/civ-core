@@ -2,8 +2,9 @@
 
 只放纯函数 / 纯逻辑，不启动 Word 应用、不弹窗。
 """
+
 import re
-from typing import Callable, Dict, List, Tuple
+from collections.abc import Callable
 
 from docx import Document
 
@@ -19,7 +20,9 @@ def open_first_table(doc_path: str):
     return doc, doc.tables[0]
 
 
-def scan_photo_pairs(doc_path: str, valid_nums: set | None = None) -> Tuple[Dict[int, PhotoPair], List[PhotoPair]]:
+def scan_photo_pairs(
+    doc_path: str, valid_nums: set | None = None
+) -> tuple[dict[int, PhotoPair], list[PhotoPair]]:
     """扫描"上图下注"风格的表格，返回 ({num: PhotoPair}, [未匹配的 PhotoPair])。
 
     表格结构假设：偶数行（0、2、4…）放图，奇数行（1、3、5…）放对应题注。
@@ -30,8 +33,8 @@ def scan_photo_pairs(doc_path: str, valid_nums: set | None = None) -> Tuple[Dict
     total_rows = len(table.rows)
     print(f"📑 表格共 {total_rows} 行，开始解析...")
 
-    matched: Dict[int, PhotoPair] = {}
-    unmatched: List[PhotoPair] = []
+    matched: dict[int, PhotoPair] = {}
+    unmatched: list[PhotoPair] = []
 
     for i in range(0, total_rows, 2):
         if i + 1 >= total_rows:
@@ -50,8 +53,9 @@ def scan_photo_pairs(doc_path: str, valid_nums: set | None = None) -> Tuple[Dict
             if not m:
                 continue
             num = int(m.group(1))
-            pair = PhotoPair(num=num, img_row_idx=i, txt_row_idx=i + 1,
-                             img_col_idx=j, txt_col_idx=j)
+            pair = PhotoPair(
+                num=num, img_row_idx=i, txt_row_idx=i + 1, img_col_idx=j, txt_col_idx=j
+            )
             if valid_nums is None or num in valid_nums:
                 matched[num] = pair
             else:
@@ -61,13 +65,13 @@ def scan_photo_pairs(doc_path: str, valid_nums: set | None = None) -> Tuple[Dict
     return matched, unmatched
 
 
-def build_caption_renumber_mapping(doc_path: str) -> Dict[int, int]:
+def build_caption_renumber_mapping(doc_path: str) -> dict[int, int]:
     """按"行优先"扫描已排序文档的题注行，生成 {旧编号: 新编号}（新编号从 1 起）。
 
     专门给 renumber 工具用 —— sort_photos 输出的表格题注行是 1、3、5…（0-indexed）。
     """
     _, table = open_first_table(doc_path)
-    mapping: Dict[int, int] = {}
+    mapping: dict[int, int] = {}
     new_num = 1
 
     for row_idx in range(1, len(table.rows), 2):
@@ -97,12 +101,12 @@ def build_caption_renumber_mapping(doc_path: str) -> Dict[int, int]:
     return mapping
 
 
-def make_caption_substitutor(mapping: Dict[int, int]) -> Tuple[Callable[[str], str], List[int]]:
+def make_caption_substitutor(mapping: dict[int, int]) -> tuple[Callable[[str], str], list[int]]:
     """生成一个"图 N → 图 mapping[N]"的字符串替换函数；保留原始空格前缀。
 
     返回 (apply, unmatched_log)：unmatched_log 在每次 apply 调用后会追加遇到但没有映射的旧编号。
     """
-    unmatched: List[int] = []
+    unmatched: list[int] = []
 
     def sub(m: re.Match) -> str:
         old = int(m.group(1))
@@ -120,7 +124,9 @@ def make_caption_substitutor(mapping: Dict[int, int]) -> Tuple[Callable[[str], s
     return apply, unmatched
 
 
-def replace_in_caption_rows(doc_path: str, mapping: Dict[int, int], output_path: str) -> Tuple[int, int, List[int]]:
+def replace_in_caption_rows(
+    doc_path: str, mapping: dict[int, int], output_path: str
+) -> tuple[int, int, list[int]]:
     """改写第一个表格的题注行，保存到 output_path。
 
     返回 (run_级替换数, 段落级回退数, 找不到映射的旧编号列表)。

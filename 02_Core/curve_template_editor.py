@@ -9,28 +9,28 @@
 
 业务函数（load_templates / save_templates / read_excel_columns）纯参数，可被复用。
 """
+
 import json
 import os
 import sys
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
-import customtkinter as ctk
 from tkinter import filedialog, messagebox, simpledialog
 
+import customtkinter as ctk
 from common.io_helpers import enable_line_buffered_stdout, read_sheet_names
-
 
 DEFAULT_TEMPLATES_PATH = os.path.abspath(
     os.path.join(_THIS_DIR, "..", "04_Config", "curve_templates.json")
 )
 
 # 给一些常用默认值，新模板/新曲线/新点直接套上即可
-EMPTY_TEMPLATE: Dict[str, Any] = {
+EMPTY_TEMPLATE: dict[str, Any] = {
     "id_column": "锚杆编号",
     "filename_template": "锚杆{id}_曲线.png",
     "title_template": "锚杆{id}：曲线",
@@ -38,7 +38,7 @@ EMPTY_TEMPLATE: Dict[str, Any] = {
     "y_axis": {"label": "荷载 (KN)", "range": [0, 200, 20]},
     "curves": [],
 }
-EMPTY_CURVE: Dict[str, Any] = {
+EMPTY_CURVE: dict[str, Any] = {
     "name": "曲线",
     "color": "#1F4FE0",
     "marker": "s",
@@ -46,7 +46,7 @@ EMPTY_CURVE: Dict[str, Any] = {
     "markersize": 7.0,
     "points": [],
 }
-EMPTY_POINT: Dict[str, Any] = {
+EMPTY_POINT: dict[str, Any] = {
     "fixed_axis": "y",
     "fixed_value": 0.0,
     "var_column": "",
@@ -59,24 +59,25 @@ COMMON_MARKERS = ["s", "o", "^", "v", "D", "x", "*", "+"]
 # ==========================================
 # 模块 1：核心业务（纯函数）
 # ==========================================
-def load_templates(path: str = DEFAULT_TEMPLATES_PATH) -> Dict[str, Any]:
+def load_templates(path: str = DEFAULT_TEMPLATES_PATH) -> dict[str, Any]:
     """读取模板库；文件不存在时返回空 dict（首次使用时不报错）。"""
     if not os.path.exists(path):
         return {}
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_templates(templates: Dict[str, Any], path: str = DEFAULT_TEMPLATES_PATH) -> None:
+def save_templates(templates: dict[str, Any], path: str = DEFAULT_TEMPLATES_PATH) -> None:
     """写回 JSON：utf-8 + 4 空格缩进 + 中文不转义。"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(templates, f, ensure_ascii=False, indent=4)
 
 
-def read_excel_columns(excel_path: str, sheet_name: Optional[str] = None) -> List[str]:
+def read_excel_columns(excel_path: str, sheet_name: str | None = None) -> list[str]:
     """读取指定 Sheet 的表头列名（已 strip）。"""
     import pandas as pd
+
     df = pd.read_excel(excel_path, sheet_name=sheet_name, nrows=0)
     return [str(c).strip() for c in df.columns]
 
@@ -92,10 +93,10 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         super().__init__(master, **kwargs)
 
         self.path = path
-        self.templates: Dict[str, Any] = load_templates(path)
-        self.current_name: Optional[str] = None
+        self.templates: dict[str, Any] = load_templates(path)
+        self.current_name: str | None = None
         self.dirty: bool = False
-        self.excel_columns: List[str] = []  # 用户挂载 Excel 后填充
+        self.excel_columns: list[str] = []  # 用户挂载 Excel 后填充
 
         self._build_layout()
         self._refresh_template_list()
@@ -105,22 +106,36 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         # 顶栏：路径 + Excel 挂载 + 保存
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.pack(fill="x", padx=15, pady=(15, 5))
-        ctk.CTkLabel(top, text=f"模板库：{self.path}", font=("微软雅黑", 11), text_color="gray50").pack(side="left")
-        ctk.CTkButton(top, text="💾 保存", width=80, height=30, command=self._save).pack(side="right", padx=4)
+        ctk.CTkLabel(
+            top, text=f"模板库：{self.path}", font=("微软雅黑", 11), text_color="gray50"
+        ).pack(side="left")
+        ctk.CTkButton(top, text="💾 保存", width=80, height=30, command=self._save).pack(
+            side="right", padx=4
+        )
         ctk.CTkButton(
-            top, text="🔄 重新加载", width=90, height=30,
-            fg_color="gray40", command=self._reload,
+            top,
+            text="🔄 重新加载",
+            width=90,
+            height=30,
+            fg_color="gray40",
+            command=self._reload,
         ).pack(side="right", padx=4)
 
         # Excel 挂载条
         excel_bar = ctk.CTkFrame(self)
         excel_bar.pack(fill="x", padx=15, pady=5)
         ctk.CTkButton(
-            excel_bar, text="📂 挂载参考 Excel（让列名变下拉选择）",
-            command=self._mount_excel, width=300, height=30,
+            excel_bar,
+            text="📂 挂载参考 Excel（让列名变下拉选择）",
+            command=self._mount_excel,
+            width=300,
+            height=30,
         ).pack(side="left", padx=10, pady=5)
         self.excel_status = ctk.CTkLabel(
-            excel_bar, text="未挂载 - 列名需要手工输入", text_color="gray60", font=("微软雅黑", 11),
+            excel_bar,
+            text="未挂载 - 列名需要手工输入",
+            text_color="gray60",
+            font=("微软雅黑", 11),
         )
         self.excel_status.pack(side="left", padx=10)
 
@@ -136,24 +151,44 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         ctk.CTkLabel(left, text="模板列表", font=("微软雅黑", 13, "bold")).pack(pady=(15, 5))
         self.template_listbox = ctk.CTkScrollableFrame(left, width=210, height=520)
         self.template_listbox.pack(fill="both", expand=True, padx=15)
-        self._tpl_buttons: List[ctk.CTkButton] = []
+        self._tpl_buttons: list[ctk.CTkButton] = []
 
         btn_bar = ctk.CTkFrame(left, fg_color="transparent")
         btn_bar.pack(fill="x", padx=15, pady=10)
-        ctk.CTkButton(btn_bar, text="+ 新建", width=60, height=28, command=self._new_template).pack(side="left", padx=2)
-        ctk.CTkButton(btn_bar, text="复制", width=60, height=28, command=self._duplicate_template, fg_color="gray45").pack(side="left", padx=2)
-        ctk.CTkButton(btn_bar, text="删除", width=60, height=28, command=self._delete_template, fg_color="#aa3333").pack(side="left", padx=2)
+        ctk.CTkButton(btn_bar, text="+ 新建", width=60, height=28, command=self._new_template).pack(
+            side="left", padx=2
+        )
+        ctk.CTkButton(
+            btn_bar,
+            text="复制",
+            width=60,
+            height=28,
+            command=self._duplicate_template,
+            fg_color="gray45",
+        ).pack(side="left", padx=2)
+        ctk.CTkButton(
+            btn_bar,
+            text="删除",
+            width=60,
+            height=28,
+            command=self._delete_template,
+            fg_color="#aa3333",
+        ).pack(side="left", padx=2)
 
         # === 右侧：表单 ===
         right = ctk.CTkFrame(body, corner_radius=10)
         right.pack(side="left", fill="both", expand=True)
-        self.form_title = ctk.CTkLabel(right, text="（请在左侧选择或新建模板）", font=("微软雅黑", 14, "bold"))
+        self.form_title = ctk.CTkLabel(
+            right, text="（请在左侧选择或新建模板）", font=("微软雅黑", 14, "bold")
+        )
         self.form_title.pack(pady=(15, 10))
         self.form_frame = ctk.CTkScrollableFrame(right)
         self.form_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
         # 状态栏
-        self.status_bar = ctk.CTkLabel(self, text="就绪", font=("微软雅黑", 11), text_color="gray60", anchor="w")
+        self.status_bar = ctk.CTkLabel(
+            self, text="就绪", font=("微软雅黑", 11), text_color="gray60", anchor="w"
+        )
         self.status_bar.pack(fill="x", padx=15, pady=(0, 10))
 
     # ============== 模板列表 ==============
@@ -165,8 +200,12 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         names = [k for k in self.templates.keys() if not k.startswith("_")]
         for name in names:
             btn = ctk.CTkButton(
-                self.template_listbox, text=name, anchor="w",
-                font=("微软雅黑", 12), height=32, fg_color="transparent",
+                self.template_listbox,
+                text=name,
+                anchor="w",
+                font=("微软雅黑", 12),
+                height=32,
+                fg_color="transparent",
                 text_color=("gray10", "gray90"),
                 command=lambda n=name: self._select_template(n),
             )
@@ -186,11 +225,15 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         # 切换前不主动收集表单，因为表单上的修改是即时挂回 dict 的
         self.current_name = name
         for btn in self._tpl_buttons:
-            btn.configure(fg_color=("gray75", "gray30") if btn.cget("text") == name else "transparent")
+            btn.configure(
+                fg_color=("gray75", "gray30") if btn.cget("text") == name else "transparent"
+            )
         self._render_form()
 
     def _new_template(self) -> None:
-        name = simpledialog.askstring("新建模板", "请输入新模板名称：", parent=self.winfo_toplevel())
+        name = simpledialog.askstring(
+            "新建模板", "请输入新模板名称：", parent=self.winfo_toplevel()
+        )
         if not name:
             return
         if name in self.templates:
@@ -206,8 +249,10 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         if not self.current_name:
             return
         name = simpledialog.askstring(
-            "复制模板", f"基于 '{self.current_name}' 复制一份，新名称：",
-            parent=self.winfo_toplevel(), initialvalue=f"{self.current_name}_副本",
+            "复制模板",
+            f"基于 '{self.current_name}' 复制一份，新名称：",
+            parent=self.winfo_toplevel(),
+            initialvalue=f"{self.current_name}_副本",
         )
         if not name:
             return
@@ -263,7 +308,9 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
             self._curve_subform(tpl["curves"], i)
 
         ctk.CTkButton(
-            self.form_frame, text="+ 添加曲线", height=32,
+            self.form_frame,
+            text="+ 添加曲线",
+            height=32,
             command=lambda: self._add_curve(tpl),
         ).pack(fill="x", pady=8, padx=4)
 
@@ -277,9 +324,11 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         row.pack(fill="x", pady=3)
         return row
 
-    def _text_field(self, holder: Dict[str, Any], key: str, label: str, parent=None) -> None:
+    def _text_field(self, holder: dict[str, Any], key: str, label: str, parent=None) -> None:
         row = self._row(parent)
-        ctk.CTkLabel(row, text=label, font=("微软雅黑", 12), width=170, anchor="w").pack(side="left")
+        ctk.CTkLabel(row, text=label, font=("微软雅黑", 12), width=170, anchor="w").pack(
+            side="left"
+        )
         var = ctk.StringVar(value=str(holder.get(key, "")))
         entry = ctk.CTkEntry(row, textvariable=var, width=420)
         entry.pack(side="left", fill="x", expand=True)
@@ -287,11 +336,16 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         def _on_change(*_):
             holder[key] = var.get()
             self.dirty = True
+
         var.trace_add("write", _on_change)
 
-    def _float_field(self, holder: Dict[str, Any], key: str, label: str, parent=None, width: int = 120) -> None:
+    def _float_field(
+        self, holder: dict[str, Any], key: str, label: str, parent=None, width: int = 120
+    ) -> None:
         row = self._row(parent)
-        ctk.CTkLabel(row, text=label, font=("微软雅黑", 12), width=120, anchor="w").pack(side="left")
+        ctk.CTkLabel(row, text=label, font=("微软雅黑", 12), width=120, anchor="w").pack(
+            side="left"
+        )
         var = ctk.StringVar(value=str(holder.get(key, 0)))
         entry = ctk.CTkEntry(row, textvariable=var, width=width)
         entry.pack(side="left", padx=4)
@@ -302,13 +356,16 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
                 self.dirty = True
             except ValueError:
                 pass
+
         var.trace_add("write", _on_change)
 
-    def _axis_subform(self, axis: Dict[str, Any]) -> None:
+    def _axis_subform(self, axis: dict[str, Any]) -> None:
         self._text_field(axis, "label", "轴标签:")
 
         row = self._row()
-        ctk.CTkLabel(row, text="范围:", font=("微软雅黑", 12), width=170, anchor="w").pack(side="left")
+        ctk.CTkLabel(row, text="范围:", font=("微软雅黑", 12), width=170, anchor="w").pack(
+            side="left"
+        )
 
         use_range_var = ctk.BooleanVar(value=axis.get("range") is not None)
         switch = ctk.CTkSwitch(row, text="启用固定范围", variable=use_range_var)
@@ -335,11 +392,17 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
                     try:
                         rng_holder[key] = float(var.get())
                         if use_range_var.get():
-                            axis["range"] = [rng_holder["min"], rng_holder["max"], rng_holder["step"]]
+                            axis["range"] = [
+                                rng_holder["min"],
+                                rng_holder["max"],
+                                rng_holder["step"],
+                            ]
                             self.dirty = True
                     except ValueError:
                         pass
+
                 return _on
+
             v.trace_add("write", _make_setter())
 
         def _toggle(*_):
@@ -348,9 +411,10 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
             else:
                 axis["range"] = None
             self.dirty = True
+
         use_range_var.trace_add("write", _toggle)
 
-    def _curve_subform(self, curves: List[Dict[str, Any]], idx: int) -> None:
+    def _curve_subform(self, curves: list[dict[str, Any]], idx: int) -> None:
         curve = curves[idx]
         wrap = ctk.CTkFrame(self.form_frame, corner_radius=8, fg_color=("gray92", "gray22"))
         wrap.pack(fill="x", pady=8, padx=2)
@@ -358,9 +422,13 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         # 标题栏：名称 + 删除
         top = ctk.CTkFrame(wrap, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(8, 4))
-        ctk.CTkLabel(top, text=f"曲线 #{idx+1}", font=("微软雅黑", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(top, text=f"曲线 #{idx + 1}", font=("微软雅黑", 12, "bold")).pack(side="left")
         ctk.CTkButton(
-            top, text="× 删除曲线", width=90, height=24, fg_color="#aa3333",
+            top,
+            text="× 删除曲线",
+            width=90,
+            height=24,
+            fg_color="#aa3333",
             command=lambda: self._remove_curve(curves, idx),
         ).pack(side="right")
 
@@ -372,7 +440,9 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         # color 用 ComboBox
         row = ctk.CTkFrame(body, fg_color="transparent")
         row.pack(fill="x", pady=3)
-        ctk.CTkLabel(row, text="颜色 (hex):", font=("微软雅黑", 12), width=170, anchor="w").pack(side="left")
+        ctk.CTkLabel(row, text="颜色 (hex):", font=("微软雅黑", 12), width=170, anchor="w").pack(
+            side="left"
+        )
         cv = ctk.StringVar(value=curve.get("color", "#1F4FE0"))
         cb = ctk.CTkComboBox(row, values=COMMON_COLORS, variable=cv, width=150)
         cb.pack(side="left", padx=4)
@@ -380,12 +450,15 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         def _set_color(*_):
             curve["color"] = cv.get()
             self.dirty = True
+
         cv.trace_add("write", _set_color)
 
         # marker 用 ComboBox
         row = ctk.CTkFrame(body, fg_color="transparent")
         row.pack(fill="x", pady=3)
-        ctk.CTkLabel(row, text="标记 (matplotlib):", font=("微软雅黑", 12), width=170, anchor="w").pack(side="left")
+        ctk.CTkLabel(
+            row, text="标记 (matplotlib):", font=("微软雅黑", 12), width=170, anchor="w"
+        ).pack(side="left")
         mv = ctk.StringVar(value=curve.get("marker", "s"))
         mb = ctk.CTkComboBox(row, values=COMMON_MARKERS, variable=mv, width=80)
         mb.pack(side="left", padx=4)
@@ -393,29 +466,36 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         def _set_marker(*_):
             curve["marker"] = mv.get()
             self.dirty = True
+
         mv.trace_add("write", _set_marker)
 
         self._float_field(curve, "linewidth", "线宽:", parent=body, width=80)
         self._float_field(curve, "markersize", "标记尺寸:", parent=body, width=80)
 
         # 数据点列表
-        pts_label = ctk.CTkLabel(body, text=f"数据点 ({len(curve['points'])} 个)", font=("微软雅黑", 12, "bold"))
+        pts_label = ctk.CTkLabel(
+            body, text=f"数据点 ({len(curve['points'])} 个)", font=("微软雅黑", 12, "bold")
+        )
         pts_label.pack(anchor="w", pady=(8, 4))
 
         for pidx, pt in enumerate(curve["points"]):
             self._point_subform(curve["points"], pidx, parent=body)
 
         ctk.CTkButton(
-            body, text="+ 添加点", height=28,
+            body,
+            text="+ 添加点",
+            height=28,
             command=lambda: self._add_point(curve),
         ).pack(fill="x", pady=4)
 
-    def _point_subform(self, points: List[Dict[str, Any]], pidx: int, parent) -> None:
+    def _point_subform(self, points: list[dict[str, Any]], pidx: int, parent) -> None:
         pt = points[pidx]
         row = ctk.CTkFrame(parent, fg_color=("gray86", "gray26"), corner_radius=6)
         row.pack(fill="x", pady=2)
 
-        ctk.CTkLabel(row, text=f"#{pidx+1}", font=("微软雅黑", 11), width=30).pack(side="left", padx=(8, 4))
+        ctk.CTkLabel(row, text=f"#{pidx + 1}", font=("微软雅黑", 11), width=30).pack(
+            side="left", padx=(8, 4)
+        )
 
         # fixed_axis 选 x/y
         ax_var = ctk.StringVar(value=pt.get("fixed_axis", "y"))
@@ -441,7 +521,11 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
 
         # 删除按钮
         ctk.CTkButton(
-            row, text="×", width=28, height=24, fg_color="#aa3333",
+            row,
+            text="×",
+            width=28,
+            height=24,
+            fg_color="#aa3333",
             command=lambda: self._remove_point(points, pidx),
         ).pack(side="right", padx=4)
 
@@ -449,6 +533,7 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
         def _save_axis(*_):
             pt["fixed_axis"] = ax_var.get()
             self.dirty = True
+
         ax_var.trace_add("write", _save_axis)
 
         def _save_value(*_):
@@ -457,32 +542,34 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
                 self.dirty = True
             except ValueError:
                 pass
+
         fv_var.trace_add("write", _save_value)
 
         def _save_col(*_):
             pt["var_column"] = cv_var.get()
             self.dirty = True
+
         cv_var.trace_add("write", _save_col)
 
     # ============== 曲线/点 增删 ==============
-    def _add_curve(self, tpl: Dict[str, Any]) -> None:
+    def _add_curve(self, tpl: dict[str, Any]) -> None:
         tpl["curves"].append(deepcopy(EMPTY_CURVE))
         self.dirty = True
         self._render_form()
 
-    def _remove_curve(self, curves: List[Dict[str, Any]], idx: int) -> None:
-        if not messagebox.askyesno("确认", f"删除曲线 #{idx+1}？"):
+    def _remove_curve(self, curves: list[dict[str, Any]], idx: int) -> None:
+        if not messagebox.askyesno("确认", f"删除曲线 #{idx + 1}？"):
             return
         del curves[idx]
         self.dirty = True
         self._render_form()
 
-    def _add_point(self, curve: Dict[str, Any]) -> None:
+    def _add_point(self, curve: dict[str, Any]) -> None:
         curve["points"].append(deepcopy(EMPTY_POINT))
         self.dirty = True
         self._render_form()
 
-    def _remove_point(self, points: List[Dict[str, Any]], idx: int) -> None:
+    def _remove_point(self, points: list[dict[str, Any]], idx: int) -> None:
         del points[idx]
         self.dirty = True
         self._render_form()
@@ -505,8 +592,10 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
             sheet = sheets[0]
         else:
             sheet = simpledialog.askstring(
-                "选择工作表", f"可用 Sheet：{sheets}\n\n请输入要使用的 Sheet 名:",
-                parent=self.winfo_toplevel(), initialvalue=sheets[0],
+                "选择工作表",
+                f"可用 Sheet：{sheets}\n\n请输入要使用的 Sheet 名:",
+                parent=self.winfo_toplevel(),
+                initialvalue=sheets[0],
             )
             if sheet not in sheets:
                 messagebox.showerror("Sheet 不存在", f"'{sheet}' 不在 {sheets} 中。")
@@ -522,7 +611,7 @@ class CurveTemplateEditorPanel(ctk.CTkFrame):
             text=f"✅ {os.path.basename(excel)} / {sheet} - {len(self.excel_columns)} 列已挂载",
             text_color="green",
         )
-        self._set_status(f"已挂载 Excel，列名将以下拉方式呈现")
+        self._set_status("已挂载 Excel，列名将以下拉方式呈现")
         self._render_form()  # 重渲染让 var_column 字段变成 ComboBox
 
     # ============== 保存 / 重载 / 退出 ==============

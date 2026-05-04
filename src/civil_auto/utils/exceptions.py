@@ -26,9 +26,8 @@
   本文件取代 models/schema.py 里散落的 AppException 体系。新代码必须 import
   这里的类；models/schema.py 里的旧类保留给「迁移过渡期」内的旧业务模块用。
 """
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 
 class CivilAutoError(Exception):
@@ -45,8 +44,8 @@ class CivilAutoError(Exception):
         self,
         cause: str,
         *,
-        location: Optional[str] = None,
-        hint: Optional[str] = None,
+        location: str | None = None,
+        hint: str | None = None,
     ) -> None:
         self.cause = cause
         self.location = location
@@ -70,7 +69,7 @@ class CivilAutoError(Exception):
     # 子类可覆盖此 prop 用于 UI 决定 InfoBar 颜色
     @property
     def severity(self) -> str:
-        """ "info" | "warning" | "error" | "critical"  """
+        """ "info" | "warning" | "error" | "critical" """
         return "error"
 
 
@@ -82,16 +81,19 @@ class ConfigError(CivilAutoError):
 
     通常发生在 `app/bootstrap.py` 启动阶段；用户层面提示「请检查 config.toml」。
     """
+
     default_hint = "请检查 config.toml 是否存在、字段是否完整、类型是否正确。"
 
 
 class ConfigSchemaError(ConfigError):
     """字段类型错、超出允许范围、枚举值非法。"""
+
     default_hint = "请按 docs/dev_guide/ 中的 config.toml 模板核对该字段的类型与取值范围。"
 
 
 class ConfigMissingError(ConfigError):
     """必填字段缺失或文件本身找不到。"""
+
     default_hint = "请确认 config.toml 在项目根目录，且包含所有必填段落。"
 
 
@@ -103,21 +105,25 @@ class InputError(CivilAutoError):
 
     通常发生在 `infra_io/excel_reader.py` 等读取 + 清洗阶段。
     """
+
     default_hint = "请检查输入文件的结构是否符合工具要求。"
 
 
 class ColumnNotFoundError(InputError):
     """Excel 中找不到指定列名。"""
+
     default_hint = "请确认列名拼写正确，或参照模板调整源文件表头。"
 
 
 class EmptyDataError(InputError):
     """读到的有效行数为 0。"""
+
     default_hint = "请确认源文件不为空、过滤条件不会把全部行删除。"
 
 
 class InvalidFieldError(InputError):
     """字段类型/格式不符（如必填数字列里出现文本）。"""
+
     default_hint = "请清洗源数据：把异常单元格修正为期望的类型。"
 
 
@@ -126,26 +132,31 @@ class InvalidFieldError(InputError):
 # ══════════════════════════════════════════════════════════════════
 class BusinessError(CivilAutoError):
     """业务规则不满足，与基础设施无关。"""
+
     default_hint = "请按提示调整操作步骤后重试。"
 
 
 class WordHostNotRunning(BusinessError):
     """Word / WPS 应用程序未启动，COM 附着失败。"""
+
     default_hint = "请先打开 Word 或 WPS 并打开目标文档（保存到本地）后重试。"
 
 
 class DocumentUnsaved(BusinessError):
     """ActiveDocument 尚未保存到本地，备份/SaveAs 等流程被阻断。"""
+
     default_hint = "请先按 Ctrl+S 把文档保存到本地磁盘后再运行该工具。"
 
 
 class TemplateMissing(BusinessError):
     """templates/ 目录下找不到对应的 docx/xlsx 模板。"""
+
     default_hint = "请确认 templates/ 下存在该模板文件，或在 config.toml 中调整模板路径。"
 
 
 class RuleViolation(BusinessError):
     """业务规则校验失败（字段间约束、阈值检查等）。"""
+
     default_hint = "请按报错提示中的字段名调整源数据后重试。"
 
 
@@ -154,21 +165,25 @@ class RuleViolation(BusinessError):
 # ══════════════════════════════════════════════════════════════════
 class InfraIOError(CivilAutoError):
     """文件 / 进程 / COM 等基础设施失败。"""
+
     default_hint = "请检查文件是否被其他程序占用，或确认 Office 已正确安装。"
 
 
 class FileLockedError(InfraIOError):
     """目标文件被其他进程占用 (P0-4)。"""
+
     default_hint = "请关闭占用该文件的程序（通常是 Word / Excel）后重试。"
 
 
 class FileWriteError(InfraIOError):
     """文件写入失败（权限、磁盘满、临时文件移动失败等）。"""
+
     default_hint = "请确认目标目录有写权限，且磁盘空间充足。"
 
 
 class ComUnavailable(InfraIOError):
     """pywin32 / COM 调用失败（Office 未装、COM 崩溃、Quit 失败等）。"""
+
     default_hint = "请确认本机已安装 Microsoft Office；若问题持续，重启 Office 进程后重试。"
 
 

@@ -9,8 +9,8 @@
     # 方式 B：用现成的 [?] 图标小控件，专门放在表单字段旁边
     HelpIcon(parent, text="这个字段填 Excel 中的列名（带空格也行，工具会容差匹配）").pack(side="left")
 """
+
 import tkinter as tk
-from typing import Optional
 
 import customtkinter as ctk
 
@@ -26,8 +26,8 @@ class _Tooltip:
     def __init__(self, widget, text: str):
         self.widget = widget
         self.text = text
-        self._tip: Optional[tk.Toplevel] = None
-        self._after_id: Optional[str] = None
+        self._tip: tk.Toplevel | None = None
+        self._after_id: str | None = None
         widget.bind("<Enter>", self._on_enter, add="+")
         widget.bind("<Leave>", self._on_leave, add="+")
         widget.bind("<ButtonPress>", self._on_leave, add="+")
@@ -67,13 +67,24 @@ class _Tooltip:
         bg = "#2a2a2a" if appearance == "dark" else "#fffce8"
         fg = "#f5f5f5" if appearance == "dark" else "#222222"
 
-        frame = tk.Frame(tip, background=bg, borderwidth=1, relief="solid",
-                         highlightbackground="#666", highlightthickness=1)
+        frame = tk.Frame(
+            tip,
+            background=bg,
+            borderwidth=1,
+            relief="solid",
+            highlightbackground="#666",
+            highlightthickness=1,
+        )
         frame.pack()
         label = tk.Label(
-            frame, text=self.text, justify="left",
-            background=bg, foreground=fg,
-            font=("微软雅黑", 10), padx=10, pady=6,
+            frame,
+            text=self.text,
+            justify="left",
+            background=bg,
+            foreground=fg,
+            font=("微软雅黑", 10),
+            padx=10,
+            pady=6,
             wraplength=self.WRAP_LEN,
         )
         label.pack()

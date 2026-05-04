@@ -7,13 +7,13 @@
   3. 任何配置错误都抛 `ConfigError`（继承自 RuntimeError），UI 层用 InfoBar 友好提示。
   4. 旧的 04_Config/*.json 加载逻辑放在 `legacy.py` —— 这里只管 config.yaml 主轴。
 """
+
 from __future__ import annotations
 
 import json
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -38,16 +38,18 @@ class AppMeta(BaseModel):
 class PathsConfig(BaseModel):
     """所有路径字段。validate 阶段保持原样字符串/相对路径；
     在 load_config() 末尾由 _resolve_paths 统一解析为绝对路径并 mkdir。"""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     templates: Path
     data_raw: Path
     data_output: Path
     logs: Path
-    legacy_config_dir: Optional[Path] = None
+    legacy_config_dir: Path | None = None
 
-    @field_validator("templates", "data_raw", "data_output", "logs",
-                     "legacy_config_dir", mode="before")
+    @field_validator(
+        "templates", "data_raw", "data_output", "logs", "legacy_config_dir", mode="before"
+    )
     @classmethod
     def _to_path(cls, v: Any) -> Any:
         return None if v is None else Path(str(v))
@@ -58,7 +60,7 @@ class UIConfig(BaseModel):
     theme: Literal["auto", "light", "dark"] = "auto"
     language: str = "zh_CN"
     accent_color: str = "#0078D4"
-    startup_size: List[int] = Field(default_factory=lambda: [1320, 840], min_length=2, max_length=2)
+    startup_size: list[int] = Field(default_factory=lambda: [1320, 840], min_length=2, max_length=2)
     sidebar_width: int = Field(default=280, ge=200, le=480)
 
 
@@ -93,6 +95,7 @@ class Thresholds(BaseModel):
 
 class AppConfig(BaseModel):
     """根配置对象。业务代码统一通过 `load_config()` 拿到这个类型。"""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     app: AppMeta = Field(default_factory=AppMeta)
@@ -107,7 +110,7 @@ class AppConfig(BaseModel):
 # ──────────────────────────────────────────────────────────────────
 # 3. 加载入口
 # ──────────────────────────────────────────────────────────────────
-def find_project_root(start: Optional[Path] = None) -> Path:
+def find_project_root(start: Path | None = None) -> Path:
     """从起点向上找 pyproject.toml，返回项目根。失败返回 start。"""
     here = Path(start or __file__).resolve()
     for cand in [here, *here.parents]:
@@ -117,7 +120,7 @@ def find_project_root(start: Optional[Path] = None) -> Path:
 
 
 @lru_cache(maxsize=1)
-def load_config(config_path: Optional[Path] = None) -> AppConfig:
+def load_config(config_path: Path | None = None) -> AppConfig:
     """读 config.yaml → 校验 → 解析路径 → 返回 frozen AppConfig。
 
     config_path 不传时自动定位项目根下的 config.yaml。
@@ -127,8 +130,7 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
 
     if not cfg_path.is_file():
         raise ConfigError(
-            f"找不到配置文件：{cfg_path}\n"
-            f"请把 config.yaml 放到项目根，或从仓库示例复制一份。"
+            f"找不到配置文件：{cfg_path}\n请把 config.yaml 放到项目根，或从仓库示例复制一份。"
         )
 
     try:
@@ -159,18 +161,21 @@ def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
 
     返回新的 AppConfig（frozen=True 不允许就地改）。
     """
-    def _abs(p: Optional[Path]) -> Optional[Path]:
+
+    def _abs(p: Path | None) -> Path | None:
         if p is None:
             return None
         return p if p.is_absolute() else (project_root / p).resolve()
 
-    new_paths = cfg.paths.model_copy(update={
-        "templates":         _abs(cfg.paths.templates),
-        "data_raw":          _abs(cfg.paths.data_raw),
-        "data_output":       _abs(cfg.paths.data_output),
-        "logs":              _abs(cfg.paths.logs),
-        "legacy_config_dir": _abs(cfg.paths.legacy_config_dir),
-    })
+    new_paths = cfg.paths.model_copy(
+        update={
+            "templates": _abs(cfg.paths.templates),
+            "data_raw": _abs(cfg.paths.data_raw),
+            "data_output": _abs(cfg.paths.data_output),
+            "logs": _abs(cfg.paths.logs),
+            "legacy_config_dir": _abs(cfg.paths.legacy_config_dir),
+        }
+    )
 
     # 确保必要目录存在
     for f in ("templates", "data_raw", "data_output", "logs"):

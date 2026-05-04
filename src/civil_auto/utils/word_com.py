@@ -5,10 +5,12 @@
   • word_optimized_environment 在进入时挂起耗时选项、退出时安全恢复
   • 任何「恢复失败」走 logger.warning 而不是 except: pass —— 这样下次发生时能看到
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any
 
 from civil_auto.utils.logger import get_logger
 
@@ -42,8 +44,9 @@ def word_optimized_environment(app: Any) -> Iterator[None]:
     states: dict[str, Any] = {}
 
     # ── 进入：保存当前态、关闭耗时选项 ──
-    def _capture(label: str, getter: Callable[[], Any], setter: Callable[[Any], None],
-                 disabled_value: Any) -> None:
+    def _capture(
+        label: str, getter: Callable[[], Any], setter: Callable[[Any], None], disabled_value: Any
+    ) -> None:
         try:
             states[label] = getter()
         except Exception as e:
@@ -51,26 +54,33 @@ def word_optimized_environment(app: Any) -> Iterator[None]:
             return
         _try_set(label, lambda: setter(disabled_value))
 
-    _capture("ScreenUpdating",
-             lambda: app.ScreenUpdating,
-             lambda v: setattr(app, "ScreenUpdating", v),
-             False)
-    _capture("DisplayAlerts",
-             lambda: app.DisplayAlerts,
-             lambda v: setattr(app, "DisplayAlerts", v),
-             0)  # wdAlertsNone
-    _capture("Pagination",
-             lambda: app.Options.Pagination,
-             lambda v: setattr(app.Options, "Pagination", v),
-             False)
-    _capture("CheckSpelling",
-             lambda: app.Options.CheckSpellingAsYouType,
-             lambda v: setattr(app.Options, "CheckSpellingAsYouType", v),
-             False)
-    _capture("CheckGrammar",
-             lambda: app.Options.CheckGrammarAsYouType,
-             lambda v: setattr(app.Options, "CheckGrammarAsYouType", v),
-             False)
+    _capture(
+        "ScreenUpdating",
+        lambda: app.ScreenUpdating,
+        lambda v: setattr(app, "ScreenUpdating", v),
+        False,
+    )
+    _capture(
+        "DisplayAlerts", lambda: app.DisplayAlerts, lambda v: setattr(app, "DisplayAlerts", v), 0
+    )  # wdAlertsNone
+    _capture(
+        "Pagination",
+        lambda: app.Options.Pagination,
+        lambda v: setattr(app.Options, "Pagination", v),
+        False,
+    )
+    _capture(
+        "CheckSpelling",
+        lambda: app.Options.CheckSpellingAsYouType,
+        lambda v: setattr(app.Options, "CheckSpellingAsYouType", v),
+        False,
+    )
+    _capture(
+        "CheckGrammar",
+        lambda: app.Options.CheckGrammarAsYouType,
+        lambda v: setattr(app.Options, "CheckGrammarAsYouType", v),
+        False,
+    )
 
     log.debug("Word optimized env entered (captured %d states)", len(states))
 
@@ -79,20 +89,15 @@ def word_optimized_environment(app: Any) -> Iterator[None]:
     finally:
         # ── 退出：按反向顺序恢复 ──
         for label, restore in [
-            ("CheckGrammar",
-             lambda v: setattr(app.Options, "CheckGrammarAsYouType", v)),
-            ("CheckSpelling",
-             lambda v: setattr(app.Options, "CheckSpellingAsYouType", v)),
-            ("Pagination",
-             lambda v: setattr(app.Options, "Pagination", v)),
-            ("DisplayAlerts",
-             lambda v: setattr(app, "DisplayAlerts", v)),
+            ("CheckGrammar", lambda v: setattr(app.Options, "CheckGrammarAsYouType", v)),
+            ("CheckSpelling", lambda v: setattr(app.Options, "CheckSpellingAsYouType", v)),
+            ("Pagination", lambda v: setattr(app.Options, "Pagination", v)),
+            ("DisplayAlerts", lambda v: setattr(app, "DisplayAlerts", v)),
         ]:
             if label in states:
                 _try_set(f"restore.{label}", lambda r=restore, l=label: r(states[l]))
 
         # 屏幕亮屏必须独立保证执行 —— 任何前面的失败都不能影响这条
-        _try_set("restore.ScreenUpdating",
-                 lambda: setattr(app, "ScreenUpdating", True))
+        _try_set("restore.ScreenUpdating", lambda: setattr(app, "ScreenUpdating", True))
 
         log.debug("Word optimized env exited (restored)")

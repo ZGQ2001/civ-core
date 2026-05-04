@@ -6,6 +6,7 @@
   ✓ 返回 BackupResult dataclass（不再返回裸 bool）
   ✓ 异常带上下文（不再 except: pass 吞）
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -44,8 +45,7 @@ def backup_current_document(target_obj: Any) -> BackupResult:
     if not doc_path or doc_fullname == doc_name:
         msg = "源文件尚未保存到本地磁盘 — 无 Path 信息可推导备份位置"
         log.warning("%s (Name=%s)", msg, doc_name)
-        return BackupResult(success=False, source_name=doc_name,
-                            reason=msg, created_at=now)
+        return BackupResult(success=False, source_name=doc_name, reason=msg, created_at=now)
 
     # ── ② 先把源文件本身存一次（避免备份的是脏拷贝）──
     try:
@@ -53,8 +53,10 @@ def backup_current_document(target_obj: Any) -> BackupResult:
     except Exception as e:
         log.exception("源文档 Save() 失败：%s", doc_name)
         return BackupResult(
-            success=False, source_name=doc_name,
-            reason=f"源文档 Save() 失败：{e}", created_at=now,
+            success=False,
+            source_name=doc_name,
+            reason=f"源文档 Save() 失败：{e}",
+            created_at=now,
         )
 
     # ── ③ 推导备份路径 + 鉴别 host (Word/Excel/WPS) ──
@@ -84,8 +86,10 @@ def backup_current_document(target_obj: Any) -> BackupResult:
     except Exception as e:
         log.exception("备份执行失败 (%s → %s)", doc_name, backup.name)
         return BackupResult(
-            success=False, source_name=doc_name,
-            reason=f"备份执行失败：{e}", created_at=now,
+            success=False,
+            source_name=doc_name,
+            reason=f"备份执行失败：{e}",
+            created_at=now,
         )
 
     log.info("备份完成: %s → %s", doc_name, backup.name)

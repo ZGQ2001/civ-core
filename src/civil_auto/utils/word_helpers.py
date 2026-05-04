@@ -6,12 +6,12 @@
   ✓ print → logger
   ✓ raise IOReadError 取代 raise ValueError，UI 层可捕获后用 InfoBar 提示
 """
+
 from __future__ import annotations
 
 import re
-from contextlib import contextmanager
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 from docx import Document
 from docx.document import Document as DocxDocument
@@ -33,12 +33,11 @@ log = get_logger(__name__)
 # ──────────────────────────────────────────────────────────────────
 # 1. 文档 / 表格打开
 # ──────────────────────────────────────────────────────────────────
-def open_first_table(doc_path: Path | str) -> Tuple[DocxDocument, Table]:
+def open_first_table(doc_path: Path | str) -> tuple[DocxDocument, Table]:
     """打开 Word 文档，返回 (Document, first_table)。没有表格时抛 IOReadError。"""
     path = Path(doc_path)
     if not path.is_file():
-        raise IOReadError(f"Word 文档不存在: {path}",
-                          hint=f"请确认路径正确：{path}")
+        raise IOReadError(f"Word 文档不存在: {path}", hint=f"请确认路径正确：{path}")
 
     try:
         doc = Document(str(path))
@@ -46,8 +45,10 @@ def open_first_table(doc_path: Path | str) -> Tuple[DocxDocument, Table]:
         raise IOReadError(f"无法打开 Word 文档 {path.name}: {e}") from e
 
     if not doc.tables:
-        raise IOReadError(f"Word 文档没有任何表格: {path.name}",
-                          hint="请确认文档里至少包含一个表格再来运行该工具。")
+        raise IOReadError(
+            f"Word 文档没有任何表格: {path.name}",
+            hint="请确认文档里至少包含一个表格再来运行该工具。",
+        )
     return doc, doc.tables[0]
 
 
@@ -56,7 +57,7 @@ def open_first_table(doc_path: Path | str) -> Tuple[DocxDocument, Table]:
 # ──────────────────────────────────────────────────────────────────
 def scan_photo_pairs(
     doc_path: Path | str,
-    valid_nums: Optional[set[int]] = None,
+    valid_nums: set[int] | None = None,
 ) -> PhotoScanResult:
     """扫描「上图下注」风格的表格。
 
@@ -69,8 +70,8 @@ def scan_photo_pairs(
     total_rows = len(table.rows)
     log.info("表格共 %d 行，开始解析...", total_rows)
 
-    matched: Dict[int, PhotoPair] = {}
-    unmatched: List[PhotoPair] = []
+    matched: dict[int, PhotoPair] = {}
+    unmatched: list[PhotoPair] = []
 
     for i in range(0, total_rows, 2):
         if i + 1 >= total_rows:
@@ -114,8 +115,8 @@ def build_caption_renumber_mapping(doc_path: Path | str) -> CaptionRenumberMappi
     专门给 renumber 工具用 —— sort_photos 输出的表格题注行是 1、3、5...（0-indexed）。
     """
     _, table = open_first_table(doc_path)
-    mapping: Dict[int, int] = {}
-    duplicates: List[int] = []
+    mapping: dict[int, int] = {}
+    duplicates: list[int] = []
     new_num = 1
 
     for row_idx in range(1, len(table.rows), 2):
@@ -143,8 +144,7 @@ def build_caption_renumber_mapping(doc_path: Path | str) -> CaptionRenumberMappi
     log.info("已构建 %d 条编号映射 (1 → %d)", len(mapping), new_num - 1)
     if mapping:
         preview = list(mapping.items())[:8]
-        log.debug("映射预览（前 8 条 旧→新）: %s",
-                  "  ".join(f"{o}→{n}" for o, n in preview))
+        log.debug("映射预览（前 8 条 旧→新）: %s", "  ".join(f"{o}→{n}" for o, n in preview))
     return CaptionRenumberMapping(mapping=mapping, duplicates=duplicates)
 
 
@@ -152,14 +152,14 @@ def build_caption_renumber_mapping(doc_path: Path | str) -> CaptionRenumberMappi
 # 4. 题注字符串替换器（生成 closure）
 # ──────────────────────────────────────────────────────────────────
 def make_caption_substitutor(
-    mapping: Dict[int, int],
-) -> Tuple[Callable[[str], str], List[int]]:
+    mapping: dict[int, int],
+) -> tuple[Callable[[str], str], list[int]]:
     """生成「图 N → 图 mapping[N]」的字符串替换函数；保留原始空格前缀。
 
     返回 (apply, unmatched_log)：unmatched_log 在每次 apply 调用后会追加
     遇到但没有映射的旧编号 —— 同一份 list，调用方观察即可。
     """
-    unmatched: List[int] = []
+    unmatched: list[int] = []
 
     def _sub(m: re.Match) -> str:
         old = int(m.group(1))
@@ -181,7 +181,7 @@ def make_caption_substitutor(
 # ──────────────────────────────────────────────────────────────────
 def replace_in_caption_rows(
     doc_path: Path | str,
-    mapping: Dict[int, int],
+    mapping: dict[int, int],
     output_path: Path | str,
 ) -> CaptionReplaceResult:
     """改写第一个表格的题注行，保存到 output_path。
@@ -220,7 +220,10 @@ def replace_in_caption_rows(
 
     log.info(
         "题注替换完成: run-level=%d, paragraph-fallback=%d, unmatched=%d → %s",
-        run_count, fallback_count, len(unmatched), out.name,
+        run_count,
+        fallback_count,
+        len(unmatched),
+        out.name,
     )
     return CaptionReplaceResult(
         output_path=out,

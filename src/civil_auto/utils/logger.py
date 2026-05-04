@@ -7,13 +7,14 @@
      按 logger 名称过滤、点击跳源码。
   4. setup_logging() 幂等 —— 重复调用不会叠加 handler。
 """
+
 from __future__ import annotations
 
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
@@ -26,11 +27,11 @@ if TYPE_CHECKING:
 # ──────────────────────────────────────────────────────────────────
 class _AnsiColorFormatter(logging.Formatter):
     _COLORS = {
-        logging.DEBUG: "\x1b[37m",      # gray
-        logging.INFO: "\x1b[36m",       # cyan
-        logging.WARNING: "\x1b[33m",    # yellow
-        logging.ERROR: "\x1b[31m",      # red
-        logging.CRITICAL: "\x1b[1;91m", # bold bright red
+        logging.DEBUG: "\x1b[37m",  # gray
+        logging.INFO: "\x1b[36m",  # cyan
+        logging.WARNING: "\x1b[33m",  # yellow
+        logging.ERROR: "\x1b[31m",  # red
+        logging.CRITICAL: "\x1b[1;91m",  # bold bright red
     }
     _RESET = "\x1b[0m"
 
@@ -49,6 +50,7 @@ class QtLogBridge(QObject):
     发射的是 LogRecord 对象本身，UI 端可拆出 levelno / msg / module / lineno
     / created（时间戳）来分别处理 —— 不只是一根字符串。
     """
+
     record_emitted = Signal(object)  # logging.LogRecord
 
 
@@ -68,7 +70,7 @@ class _QtSignalHandler(logging.Handler):
 # 3. 顶层 API
 # ──────────────────────────────────────────────────────────────────
 _INSTALLED = False
-_BRIDGE: Optional[QtLogBridge] = None
+_BRIDGE: QtLogBridge | None = None
 
 DEFAULT_FMT = "[%(asctime)s] %(levelname)-5s  %(name)-22s — %(message)s"
 DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
@@ -130,12 +132,14 @@ def setup_logging(
     _INSTALLED = True
     logging.getLogger(__name__).info(
         "Logging initialized. dir=%s console=%s file=%s",
-        log_dir, console_level, file_level,
+        log_dir,
+        console_level,
+        file_level,
     )
     return _BRIDGE
 
 
-def setup_from_config(cfg: "LoggingConfig", log_dir: Path | str) -> QtLogBridge:
+def setup_from_config(cfg: LoggingConfig, log_dir: Path | str) -> QtLogBridge:
     """从 LoggingConfig (Pydantic) 直接初始化。"""
     return setup_logging(
         log_dir=log_dir,
@@ -147,7 +151,7 @@ def setup_from_config(cfg: "LoggingConfig", log_dir: Path | str) -> QtLogBridge:
     )
 
 
-def get_qt_bridge() -> Optional[QtLogBridge]:
+def get_qt_bridge() -> QtLogBridge | None:
     """UI 启动后取信号桥；setup_logging 未调用前返回 None。"""
     return _BRIDGE
 

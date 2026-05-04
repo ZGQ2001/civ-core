@@ -1,9 +1,9 @@
 """琐碎工具函数（时间转换、路径清洗等）。"""
+
 import os
-from typing import Optional
 
 
-def ensure_extension(filename: str, allowed: tuple, default: Optional[str] = None) -> str:
+def ensure_extension(filename: str, allowed: tuple, default: str | None = None) -> str:
     """如果文件名后缀不在允许列表里，补上 default（或 allowed[0]）。"""
     if filename.lower().endswith(allowed):
         return filename
@@ -20,4 +20,8 @@ def safe_filename(name: str) -> str:
 
 def resolve_root() -> str:
     """返回项目根目录（src 的上级）。"""
-    return str(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+    return str(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    )

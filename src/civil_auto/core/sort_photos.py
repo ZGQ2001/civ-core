@@ -5,37 +5,47 @@
     - 调度（run_sort）
     - UI 流程（__main__ 入口）
 """
+
 import os
 import sys
-from typing import Dict, List, Optional
 
 # 确保以"脚本"方式被 main.py / 终端启动时也能找到 common/
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
-import win32com.client
 import pythoncom
-
-from common.io_helpers import (
-    enable_line_buffered_stdout, ensure_extension, kill_winword_processes,
-    pick_excel_file, read_sheet_names, unblock_file,
-)
+import win32com.client
 from common.excel_helpers import get_excel_sort_order
-from common.word_helpers import scan_photo_pairs
-from common.ui_helpers import (
-    field_dir, field_sheet_select, field_text, field_word_file,
+from common.io_helpers import (
+    enable_line_buffered_stdout,
+    ensure_extension,
+    kill_winword_processes,
+    pick_excel_file,
+    read_sheet_names,
+    unblock_file,
 )
 from common.types import PhotoPair
+from common.ui_helpers import (
+    field_dir,
+    field_sheet_select,
+    field_text,
+    field_word_file,
+)
+from common.word_helpers import scan_photo_pairs
 from ui_components import ModernDynamicFormDialog
 
 
 # ==========================================
 # 模块 1：核心业务（纯参数，不依赖 UI / 全局态，可被其他工具复用）
 # ==========================================
-def rebuild_word_by_order(src_doc_path: str, output_path: str,
-                          pairs: Dict[int, PhotoPair], unmatched: List[PhotoPair],
-                          excel_order: List[int]) -> None:
+def rebuild_word_by_order(
+    src_doc_path: str,
+    output_path: str,
+    pairs: dict[int, PhotoPair],
+    unmatched: list[PhotoPair],
+    excel_order: list[int],
+) -> None:
     """通过 Word COM 重建文档：按 excel_order 排好图 + 题注，保留图片。
 
     pairs: {图号: 该配对在源表中的位置}
@@ -49,7 +59,7 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
     try:
         print("📋 启动 Word 应用 (DispatchEx 强制新进程)...")
         word_app = win32com.client.DispatchEx("Word.Application")
-        word_app.Visible = True   # 调试期间可见；问题定位后改回 False
+        word_app.Visible = True  # 调试期间可见；问题定位后改回 False
         word_app.DisplayAlerts = 0
         try:
             word_app.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
@@ -59,8 +69,13 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
         print("📂 打开源文档...")
         src_doc = word_app.Documents.Open(
             FileName=os.path.abspath(src_doc_path),
-            ConfirmConversions=False, ReadOnly=False, AddToRecentFiles=False,
-            Revert=False, Format=0, Visible=True, OpenAndRepair=False,
+            ConfirmConversions=False,
+            ReadOnly=False,
+            AddToRecentFiles=False,
+            Revert=False,
+            Format=0,
+            Visible=True,
+            OpenAndRepair=False,
             NoEncodingDialog=True,
         )
         print("✅ 源文档已打开")
@@ -74,7 +89,7 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
         print(f"📊 源表格 {src_table.Rows.Count} 行 × {src_cols} 列")
 
         # 拼最终顺序：Excel 顺序里能匹配的优先，剩下的追加
-        final_list: List[PhotoPair] = [pairs[n] for n in excel_order if n in pairs]
+        final_list: list[PhotoPair] = [pairs[n] for n in excel_order if n in pairs]
         final_list.extend(unmatched)
         print(f"📋 共 {len(final_list)} 个配对待重排")
 
@@ -86,7 +101,8 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
         print(f"🔨 创建新表格 ({total_new_rows} 行 × {src_cols} 列)...")
         new_table = new_doc.Tables.Add(
             Range=new_doc.Range(0, 0),
-            NumRows=total_new_rows, NumColumns=src_cols,
+            NumRows=total_new_rows,
+            NumColumns=src_cols,
             DefaultTableBehavior=1,  # wdWord9TableBehavior
         )
         new_table.Borders.Enable = True
@@ -100,10 +116,26 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
             img_row = group_idx * 2 + 1
             txt_row = group_idx * 2 + 2
 
-            _copy_cell(src_table, item.img_row_idx + 1, item.img_col_idx + 1,
-                       new_table, img_row, col_in_new, fallback_text="[图片]", tag=f"图片[{idx}]")
-            _copy_cell(src_table, item.txt_row_idx + 1, item.txt_col_idx + 1,
-                       new_table, txt_row, col_in_new, fallback_text=None, tag=f"文字[{idx}]")
+            _copy_cell(
+                src_table,
+                item.img_row_idx + 1,
+                item.img_col_idx + 1,
+                new_table,
+                img_row,
+                col_in_new,
+                fallback_text="[图片]",
+                tag=f"图片[{idx}]",
+            )
+            _copy_cell(
+                src_table,
+                item.txt_row_idx + 1,
+                item.txt_col_idx + 1,
+                new_table,
+                txt_row,
+                col_in_new,
+                fallback_text=None,
+                tag=f"文字[{idx}]",
+            )
 
         print("💾 保存新文档...")
         new_doc.SaveAs(os.path.abspath(output_path))
@@ -124,9 +156,16 @@ def rebuild_word_by_order(src_doc_path: str, output_path: str,
         kill_winword_processes(reason="退出兜底")
 
 
-def _copy_cell(src_table, src_row: int, src_col: int,
-               dst_table, dst_row: int, dst_col: int,
-               fallback_text: Optional[str], tag: str) -> None:
+def _copy_cell(
+    src_table,
+    src_row: int,
+    src_col: int,
+    dst_table,
+    dst_row: int,
+    dst_col: int,
+    fallback_text: str | None,
+    tag: str,
+) -> None:
     """COM 单元格拷贝；失败时设兜底文本。"""
     src_cell = src_table.Cell(Row=src_row, Column=src_col)
     dst_cell = dst_table.Cell(Row=dst_row, Column=dst_col)
@@ -138,8 +177,9 @@ def _copy_cell(src_table, src_row: int, src_col: int,
         dst_cell.Range.Text = fallback_text if fallback_text is not None else src_cell.Range.Text
 
 
-def run_sort(excel_path: str, sheet_name: Optional[str], col_name: str,
-             word_path: str, output_path: str) -> None:
+def run_sort(
+    excel_path: str, sheet_name: str | None, col_name: str, word_path: str, output_path: str
+) -> None:
     """工具入口：组合"读 Excel 顺序 → 扫 Word 表格 → COM 重建"。
 
     被 __main__ 调用，也可被其他脚本（比如 batch / pipeline 工具）直接 import 调用。
@@ -161,7 +201,7 @@ def run_sort(excel_path: str, sheet_name: Optional[str], col_name: str,
 # ==========================================
 # 模块 2：UI 流程（独立脚本入口）
 # ==========================================
-def _request_params(excel_path: str, sheet_names: List[str]) -> Optional[dict]:
+def _request_params(excel_path: str, sheet_names: list[str]) -> dict | None:
     default_dir = os.path.dirname(excel_path) or os.getcwd()
     schema = [
         field_sheet_select(sheet_names),
@@ -170,7 +210,9 @@ def _request_params(excel_path: str, sheet_names: List[str]) -> Optional[dict]:
         field_dir(default=default_dir),
         field_text("output_name", "输出文件名:", default="已排序_附录1.docx"),
     ]
-    return ModernDynamicFormDialog(title="照片排序 - 参数配置", form_schema=schema, width=620).show()
+    return ModernDynamicFormDialog(
+        title="照片排序 - 参数配置", form_schema=schema, width=620
+    ).show()
 
 
 def _main():

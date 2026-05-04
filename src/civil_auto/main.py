@@ -1,4 +1,5 @@
 """程序唯一入口点。"""
+
 import sys
 from pathlib import Path
 

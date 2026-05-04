@@ -2,11 +2,12 @@
 
 具体的对话框还是用 ui_components.ModernDynamicFormDialog —— 这里只生成它的入参。
 """
+
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
-def field_sheet_select(sheet_names: List[str], default: Optional[str] = None) -> Dict[str, Any]:
+def field_sheet_select(sheet_names: list[str], default: str | None = None) -> dict[str, Any]:
     return {
         "key": "sheet_name",
         "label": "Excel 工作表:",
@@ -16,11 +17,13 @@ def field_sheet_select(sheet_names: List[str], default: Optional[str] = None) ->
     }
 
 
-def field_text(key: str, label: str, default: str = "") -> Dict[str, Any]:
+def field_text(key: str, label: str, default: str = "") -> dict[str, Any]:
     return {"key": key, "label": label, "type": "text", "default": default}
 
 
-def field_word_file(key: str = "word_path", label: str = "Word 文件:", default: str = "") -> Dict[str, Any]:
+def field_word_file(
+    key: str = "word_path", label: str = "Word 文件:", default: str = ""
+) -> dict[str, Any]:
     return {
         "key": key,
         "label": label,
@@ -30,7 +33,9 @@ def field_word_file(key: str = "word_path", label: str = "Word 文件:", default
     }
 
 
-def field_dir(key: str = "output_dir", label: str = "输出目录:", default: str = "") -> Dict[str, Any]:
+def field_dir(
+    key: str = "output_dir", label: str = "输出目录:", default: str = ""
+) -> dict[str, Any]:
     return {
         "key": key,
         "label": label,

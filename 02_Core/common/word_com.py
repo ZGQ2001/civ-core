@@ -3,6 +3,7 @@
 与 word_helpers.py 区分：本文件依赖运行中的 Word/WPS 应用对象（COM）；
 word_helpers.py 只用 python-docx 离线读写文档。
 """
+
 from contextlib import contextmanager
 
 

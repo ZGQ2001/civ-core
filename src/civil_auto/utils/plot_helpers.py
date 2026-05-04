@@ -5,32 +5,33 @@
   ✓ 全开类型注解
   ✓ figure 用 with-style 资源管理（plt.subplots 后 try/finally close）
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, List, Tuple
 
 import matplotlib
 
 # 必须在 import pyplot 之前切到无 GUI 后端，避免与 PySide6 主循环冲突
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
-from civil_auto.models.schema import PlotJob  # noqa: E402
-from civil_auto.utils.logger import get_logger  # noqa: E402
+from civil_auto.models.schema import PlotJob
+from civil_auto.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-_CHINESE_FONT_CANDIDATES: List[str] = [
-    "Microsoft YaHei",   # Windows 自带
-    "SimHei",            # Windows 黑体
-    "DengXian",          # Windows 等线
-    "FangSong",          # 仿宋
+_CHINESE_FONT_CANDIDATES: list[str] = [
+    "Microsoft YaHei",  # Windows 自带
+    "SimHei",  # Windows 黑体
+    "DengXian",  # Windows 等线
+    "FangSong",  # 仿宋
     "Noto Sans CJK SC",  # Linux
-    "PingFang SC",       # macOS
-    "Heiti SC",          # macOS 黑体
+    "PingFang SC",  # macOS
+    "Heiti SC",  # macOS 黑体
 ]
 
 
@@ -40,12 +41,12 @@ def _configure_chinese_font() -> None:
         return
     plt.rcParams["font.sans-serif"] = _CHINESE_FONT_CANDIDATES + ["sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False
-    setattr(_configure_chinese_font, "_done", True)
+    _configure_chinese_font._done = True
     log.debug("matplotlib 中文字体配置已注入")
 
 
 @contextmanager
-def _managed_figure(figsize: Tuple[float, float], dpi: int) -> Iterator[Tuple]:
+def _managed_figure(figsize: tuple[float, float], dpi: int) -> Iterator[tuple]:
     """plt.subplots 的 with-style 包装：确保异常时也能 plt.close()。
 
     matplotlib 的 figure 是有限资源；忘记 close 会泄漏。
@@ -59,7 +60,7 @@ def _managed_figure(figsize: Tuple[float, float], dpi: int) -> Iterator[Tuple]:
 
 def render_plot(
     job: PlotJob,
-    figsize: Tuple[float, float] = (7.0, 4.0),
+    figsize: tuple[float, float] = (7.0, 4.0),
     dpi: int = 150,
     show_grid: bool = True,
     show_legend: bool = False,
@@ -72,11 +73,15 @@ def render_plot(
     with _managed_figure(figsize, dpi) as (fig, ax):
         for s in job.series:
             ax.plot(
-                s.xs, s.ys,
-                color=s.color, linewidth=s.linewidth,
-                marker=s.marker, markersize=s.markersize,
+                s.xs,
+                s.ys,
+                color=s.color,
+                linewidth=s.linewidth,
+                marker=s.marker,
+                markersize=s.markersize,
                 markerfacecolor="white",
-                markeredgecolor=s.color, markeredgewidth=1.5,
+                markeredgecolor=s.color,
+                markeredgewidth=1.5,
                 label=s.name,
             )
 
@@ -113,9 +118,9 @@ def render_plot(
     return out
 
 
-def _arange_inclusive(start: float, stop: float, step: float) -> List[float]:
+def _arange_inclusive(start: float, stop: float, step: float) -> list[float]:
     """像 numpy.arange 但包含 stop（避免浮点漂移）。"""
-    out: List[float] = []
+    out: list[float] = []
     n_steps = int(round((stop - start) / step))
     for i in range(n_steps + 1):
         out.append(start + i * step)

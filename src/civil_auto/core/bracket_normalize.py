@@ -20,10 +20,11 @@
   ✓ 单条规则失败不熔断，logger.warning 记下继续
   ✓ 关键节点 logging
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 from civil_auto.io.word_app import WordApp
 from civil_auto.models.schema import (
@@ -53,19 +54,19 @@ WD_FIND_STOP: int = 0
 @dataclass(slots=True, frozen=True)
 class BracketRule:
     """单条 Word Find/Replace 规则。"""
+
     find_pattern: str
     replace_pattern: str
     use_wildcards: bool
 
     @classmethod
-    def from_tuple(cls, t: Tuple[str, str, bool]) -> "BracketRule":
+    def from_tuple(cls, t: tuple[str, str, bool]) -> BracketRule:
         return cls(find_pattern=t[0], replace_pattern=t[1], use_wildcards=t[2])
 
 
-def default_rules() -> List[BracketRule]:
+def default_rules() -> list[BracketRule]:
     """从 utils.patterns 提取默认规则集，转 dataclass。"""
-    return [BracketRule.from_tuple(t)
-            for t in WordWildcards.bracket_normalize_rules()]
+    return [BracketRule.from_tuple(t) for t in WordWildcards.bracket_normalize_rules()]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -80,9 +81,10 @@ class BracketNormalizeParams:
                           （需要先以 wdReplaceNone 扫一遍计数再 wdReplaceAll）
     • rules: None 表示用默认规则集；测试 / 高级用户可传自定义列表
     """
+
     dry_run: bool = False
     count_replacements: bool = False
-    rules: Optional[Tuple[BracketRule, ...]] = None  # tuple 才能 frozen
+    rules: tuple[BracketRule, ...] | None = None  # tuple 才能 frozen
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -108,18 +110,20 @@ def _count_matches(target_doc: Any, rule: BracketRule) -> int:
     safety_limit = 100_000
     while count < safety_limit:
         try:
-            found = bool(fnd.Execute(
-                FindText=rule.find_pattern,
-                MatchCase=False,
-                MatchWholeWord=False,
-                MatchWildcards=rule.use_wildcards,
-                MatchSoundsLike=False,
-                MatchAllWordForms=False,
-                Forward=True,
-                Wrap=WD_FIND_STOP,                # 不要循环回开头，否则永远 True
-                Format=False,
-                Replace=WD_REPLACE_NONE,
-            ))
+            found = bool(
+                fnd.Execute(
+                    FindText=rule.find_pattern,
+                    MatchCase=False,
+                    MatchWholeWord=False,
+                    MatchWildcards=rule.use_wildcards,
+                    MatchSoundsLike=False,
+                    MatchAllWordForms=False,
+                    Forward=True,
+                    Wrap=WD_FIND_STOP,  # 不要循环回开头，否则永远 True
+                    Format=False,
+                    Replace=WD_REPLACE_NONE,
+                )
+            )
         except Exception as e:
             log.warning("计数 Execute 失败 (规则=%s): %s", rule.find_pattern, e)
             break
@@ -170,17 +174,19 @@ def _apply_rule_replace_all(target_doc: Any, rule: BracketRule) -> None:
 def normalize_brackets(
     target_doc: Any,
     params: BracketNormalizeParams = BracketNormalizeParams(),
-    progress: Optional[ProgressCallback] = None,
+    progress: ProgressCallback | None = None,
 ) -> BracketFixStats:
     """对全文按规则序列执行括号纠偏，返回统计 dataclass。
 
     无 UI、无弹窗、无 print；进度通过 ProgressCallback 回调。
     """
-    rules: List[BracketRule] = list(params.rules) if params.rules else default_rules()
+    rules: list[BracketRule] = list(params.rules) if params.rules else default_rules()
     total = len(rules)
     log.info(
         "开始括号纠偏：%d 条规则, dry_run=%s, count=%s",
-        total, params.dry_run, params.count_replacements,
+        total,
+        params.dry_run,
+        params.count_replacements,
     )
 
     stats = BracketFixStats(rules_applied=0, total_replacements=0)
@@ -188,10 +194,13 @@ def normalize_brackets(
 
     for i, rule in enumerate(rules, start=1):
         if progress is not None:
-            progress(ProgressUpdate(
-                current=i, total=total,
-                message=f"应用括号规则 {i}/{total}",
-            ))
+            progress(
+                ProgressUpdate(
+                    current=i,
+                    total=total,
+                    message=f"应用括号规则 {i}/{total}",
+                )
+            )
 
         try:
             n_hits = 0
@@ -205,18 +214,17 @@ def normalize_brackets(
             stats.total_replacements += n_hits
 
             if must_count:
-                log.debug("规则 %d/%d 命中 %d 次: %s",
-                          i, total, n_hits, rule.find_pattern)
+                log.debug("规则 %d/%d 命中 %d 次: %s", i, total, n_hits, rule.find_pattern)
 
         except Exception as e:
             # 单条规则失败不熔断
-            log.warning("规则 %d/%d 执行失败 (跳过): %s | rule=%s",
-                        i, total, e, rule.find_pattern)
+            log.warning("规则 %d/%d 执行失败 (跳过): %s | rule=%s", i, total, e, rule.find_pattern)
             continue
 
     log.info(
         "括号纠偏完成：%d/%d 条规则成功，total_replacements=%s",
-        stats.rules_applied, total,
+        stats.rules_applied,
+        total,
         stats.total_replacements if must_count else "(未启用计数)",
     )
     return stats
@@ -228,9 +236,9 @@ def normalize_brackets(
 def run_bracket_normalize(
     *,
     backup_first: bool = True,
-    params: Optional[BracketNormalizeParams] = None,
-    progress: Optional[ProgressCallback] = None,
-) -> tuple[BracketFixStats, Optional[BackupResult]]:
+    params: BracketNormalizeParams | None = None,
+    progress: ProgressCallback | None = None,
+) -> tuple[BracketFixStats, BackupResult | None]:
     """编排函数：attach Word/WPS → 可选备份 → 跑核心算法 → 返回 (stats, backup)。
 
     业务异常以 AppException 子类抛出，UI 用 InfoBar 友好提示。
@@ -238,7 +246,7 @@ def run_bracket_normalize(
     params = params or BracketNormalizeParams()
 
     with WordApp(require_saved=True, optimize_env=True) as wctx:
-        backup: Optional[BackupResult] = None
+        backup: BackupResult | None = None
         if backup_first:
             log.info("执行备份: %s", wctx.doc_name)
             backup = backup_current_document(wctx.active_doc)

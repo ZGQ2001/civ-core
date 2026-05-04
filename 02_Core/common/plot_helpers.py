@@ -3,30 +3,27 @@
 只放纯函数：接收 PlotJob → 写出 PNG。
 中文字体回退顺序：微软雅黑 / 黑体 / SimHei / Noto Sans CJK SC，最后兜底 sans-serif。
 """
-from typing import List, Optional
 
 import matplotlib
 
 # 必须在 import pyplot 之前切到无 GUI 后端，避免 customtkinter 的 Tk 主循环冲突
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.font_manager import FontProperties  # noqa: E402
+import matplotlib.pyplot as plt
 
 from common.types import PlotJob
-
 
 # ============================================================
 # 中文字体配置：matplotlib 默认 sans-serif 渲染中文会出方框，必须显式指定
 # ============================================================
-_CHINESE_FONT_CANDIDATES: List[str] = [
-    "Microsoft YaHei",   # Windows 自带
-    "SimHei",            # Windows 黑体
-    "DengXian",          # Windows 等线
-    "FangSong",          # 仿宋
+_CHINESE_FONT_CANDIDATES: list[str] = [
+    "Microsoft YaHei",  # Windows 自带
+    "SimHei",  # Windows 黑体
+    "DengXian",  # Windows 等线
+    "FangSong",  # 仿宋
     "Noto Sans CJK SC",  # Linux
-    "PingFang SC",       # macOS
-    "Heiti SC",          # macOS 黑体
+    "PingFang SC",  # macOS
+    "Heiti SC",  # macOS 黑体
 ]
 
 
@@ -37,7 +34,7 @@ def _configure_chinese_font() -> None:
 
     plt.rcParams["font.sans-serif"] = _CHINESE_FONT_CANDIDATES + ["sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False  # 负号能正确显示
-    setattr(_configure_chinese_font, "_done", True)
+    _configure_chinese_font._done = True
 
 
 # ============================================================
@@ -62,10 +59,15 @@ def render_plot(
 
     for s in job.series:
         ax.plot(
-            s.xs, s.ys,
-            color=s.color, linewidth=s.linewidth,
-            marker=s.marker, markersize=s.markersize,
-            markerfacecolor="white", markeredgecolor=s.color, markeredgewidth=1.5,
+            s.xs,
+            s.ys,
+            color=s.color,
+            linewidth=s.linewidth,
+            marker=s.marker,
+            markersize=s.markersize,
+            markerfacecolor="white",
+            markeredgecolor=s.color,
+            markeredgewidth=1.5,
             label=s.name,
         )
 
@@ -100,9 +102,9 @@ def render_plot(
     return job.output_path
 
 
-def _arange_inclusive(start: float, stop: float, step: float) -> List[float]:
+def _arange_inclusive(start: float, stop: float, step: float) -> list[float]:
     """像 numpy.arange 但包含 stop（避免浮点漂移）。"""
-    out: List[float] = []
+    out: list[float] = []
     n_steps = int(round((stop - start) / step))
     for i in range(n_steps + 1):
         out.append(start + i * step)

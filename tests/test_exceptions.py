@@ -1,4 +1,5 @@
 """utils/exceptions.py 的单元测试 —— 验证四档分类、三段式渲染、继承关系。"""
+
 from __future__ import annotations
 
 import pytest
@@ -28,20 +29,23 @@ from civil_auto.utils.exceptions import (
 # ──────────────────────────────────────────────────────────────────
 # 1. 四档继承关系
 # ──────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("cls,base", [
-    (ConfigSchemaError, ConfigError),
-    (ConfigMissingError, ConfigError),
-    (ColumnNotFoundError, InputError),
-    (EmptyDataError, InputError),
-    (InvalidFieldError, InputError),
-    (WordHostNotRunning, BusinessError),
-    (DocumentUnsaved, BusinessError),
-    (TemplateMissing, BusinessError),
-    (RuleViolation, BusinessError),
-    (FileLockedError, InfraIOError),
-    (FileWriteError, InfraIOError),
-    (ComUnavailable, InfraIOError),
-])
+@pytest.mark.parametrize(
+    "cls,base",
+    [
+        (ConfigSchemaError, ConfigError),
+        (ConfigMissingError, ConfigError),
+        (ColumnNotFoundError, InputError),
+        (EmptyDataError, InputError),
+        (InvalidFieldError, InputError),
+        (WordHostNotRunning, BusinessError),
+        (DocumentUnsaved, BusinessError),
+        (TemplateMissing, BusinessError),
+        (RuleViolation, BusinessError),
+        (FileLockedError, InfraIOError),
+        (FileWriteError, InfraIOError),
+        (ComUnavailable, InfraIOError),
+    ],
+)
 def test_subclass_in_correct_tier(cls: type, base: type) -> None:
     assert issubclass(cls, base)
     assert issubclass(cls, CivilAutoError)
@@ -71,7 +75,7 @@ def test_render_without_location() -> None:
     """没传 location 时，第一行直接是 cause（不含 location 前缀）。"""
     e = ConfigError(cause="缺 [paths] 段")  # cause 里允许含方括号（例：toml 段名）
     first_line = str(e).split("\n")[0]
-    assert not first_line.startswith("[")    # location 渲染会以 [ 起头
+    assert not first_line.startswith("[")  # location 渲染会以 [ 起头
     assert first_line.startswith("缺 [paths] 段")
 
 
@@ -113,7 +117,7 @@ def test_top_level_catch_all() -> None:
             raise cls(cause="x")
         except CivilAutoError:
             pass  # OK
-        except Exception:  # noqa: BLE001
+        except Exception:
             pytest.fail(f"{cls.__name__} 未被 CivilAutoError 兜底捕获")
 
 

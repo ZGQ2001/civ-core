@@ -17,10 +17,11 @@
   ✓ 异常带上下文，禁止 except: pass
   ✓ 关键节点 logging
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from civil_auto.io.word_app import WordApp
 from civil_auto.models.schema import (
@@ -29,7 +30,6 @@ from civil_auto.models.schema import (
     CrossRefFixStats,
     ProgressCallback,
     ProgressUpdate,
-    WordContext,
 )
 from civil_auto.utils.file_utils import backup_current_document
 from civil_auto.utils.logger import get_logger
@@ -40,7 +40,7 @@ log = get_logger(__name__)
 # ──────────────────────────────────────────────────────────────────
 # 参数契约（per-tool dataclass，与 fix 函数同模块）
 # ──────────────────────────────────────────────────────────────────
-WD_FIELD_REF: int = 3                  # Word: wdFieldRef
+WD_FIELD_REF: int = 3  # Word: wdFieldRef
 DEFAULT_SWITCH: str = r"\* MERGEFORMAT"
 
 
@@ -52,6 +52,7 @@ class CrossRefFixParams:
     • target_field_type: 默认只处理 REF (3)；高级用户可改成其他 wdField* 常量
     • switch: 待追加的开关字符串。默认 r"\\* MERGEFORMAT"
     """
+
     dry_run: bool = False
     target_field_type: int = WD_FIELD_REF
     switch: str = DEFAULT_SWITCH
@@ -63,7 +64,7 @@ class CrossRefFixParams:
 def fix_cross_references(
     target_doc: Any,
     params: CrossRefFixParams = CrossRefFixParams(),
-    progress: Optional[ProgressCallback] = None,
+    progress: ProgressCallback | None = None,
 ) -> CrossRefFixStats:
     """遍历文档 Fields，给缺 switch 的 REF 域追加 switch。
 
@@ -89,8 +90,7 @@ def fix_cross_references(
     # COM Fields 集合是 1-indexed
     for i in range(1, total + 1):
         if progress is not None:
-            progress(ProgressUpdate(current=i, total=total,
-                                    message=f"扫描域 {i}/{total}"))
+            progress(ProgressUpdate(current=i, total=total, message=f"扫描域 {i}/{total}"))
 
         try:
             f = fields.Item(i)
@@ -128,9 +128,9 @@ def fix_cross_references(
 def run_cross_ref_fix(
     *,
     backup_first: bool = True,
-    params: Optional[CrossRefFixParams] = None,
-    progress: Optional[ProgressCallback] = None,
-) -> tuple[CrossRefFixStats, Optional[BackupResult]]:
+    params: CrossRefFixParams | None = None,
+    progress: ProgressCallback | None = None,
+) -> tuple[CrossRefFixStats, BackupResult | None]:
     """编排函数：attach Word/WPS → 可选备份 → 跑核心算法 → 返回 (stats, backup)。
 
     UI worker thread 直接调它；任何业务异常都会以 AppException 子类抛出，
@@ -139,7 +139,7 @@ def run_cross_ref_fix(
     params = params or CrossRefFixParams()
 
     with WordApp(require_saved=True, optimize_env=True) as wctx:
-        backup: Optional[BackupResult] = None
+        backup: BackupResult | None = None
         if backup_first:
             log.info("执行备份: %s", wctx.doc_name)
             backup = backup_current_document(wctx.active_doc)
@@ -149,7 +149,6 @@ def run_cross_ref_fix(
                     hint="请确保文档已存盘到本地硬盘，并有写权限。",
                 )
 
-        stats = fix_cross_references(wctx.active_doc, params=params,
-                                     progress=progress)
+        stats = fix_cross_references(wctx.active_doc, params=params, progress=progress)
 
     return stats, backup

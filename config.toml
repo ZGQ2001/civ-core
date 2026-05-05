@@ -4,47 +4,47 @@
 #  路径如无特殊说明，均为「相对项目根」。
 # ════════════════════════════════════════════════════════════════════
 
-app:
-  name: "工程自动化主控制台"
-  version: "1.0.0"
+[app]
+name = "工程自动化主控制台"
+version = "1.0.0"
 
 # ── 路径 ─────────────────────────────────────────────────────────
-paths:
-  templates: "./templates"          # 模板中心（docx / xlsx）
-  data_raw: "./data/raw"            # 原始输入文件
-  data_output: "./data/output"      # 程序产出
-  logs: "./logs"                    # 应用日志
-  legacy_config_dir: "./04_Config"  # 旧 JSON 配置目录（report_style_config.json 等）
+[paths]
+templates = "./templates"           # 模板中心（docx / xlsx）
+data_raw = "./data/raw"             # 原始输入文件
+data_output = "./data/output"       # 程序产出
+logs = "./logs"                     # 应用日志
+legacy_config_dir = "./04_Config"   # 旧 JSON 配置目录（report_style_config.json 等）
 
 # ── UI ───────────────────────────────────────────────────────────
-ui:
-  theme: "auto"                     # auto | light | dark
-  language: "zh_CN"
-  accent_color: "#0078D4"
-  startup_size: [1320, 840]
-  sidebar_width: 280
+[ui]
+theme = "auto"                      # auto | light | dark
+language = "zh_CN"
+accent_color = "#0078D4"
+startup_size = [1320, 840]
+sidebar_width = 280
 
 # ── 日志 ─────────────────────────────────────────────────────────
-logging:
-  level: "INFO"                     # 全局最低级别
-  console_level: "INFO"
-  file_level: "DEBUG"
-  max_file_mb: 10
-  backup_count: 5
+[logging]
+level = "INFO"                      # 全局最低级别
+console_level = "INFO"
+file_level = "DEBUG"
+max_file_mb = 10
+backup_count = 5
 
 # ── 批量队列 ─────────────────────────────────────────────────────
-batch_queue:
-  max_concurrent: 1                 # Word COM 串行运行避免争抢
-  retry_on_fail: false
-  pause_on_error: true
+[batch_queue]
+max_concurrent = 1                  # Word COM 串行运行避免争抢
+retry_on_fail = false
+pause_on_error = true
 
 # ── Word / WPS 自动化 ────────────────────────────────────────────
-word:
-  kill_residual_on_start: true      # 启动时清理僵尸 WINWORD.EXE
-  unblock_files: true               # 自动解除「来自互联网」标记
-  backup_before_format: true        # 排版前自动备份当前文档
+[word]
+kill_residual_on_start = true       # 启动时清理僵尸 WINWORD.EXE
+unblock_files = true                # 自动解除「来自互联网」标记
+backup_before_format = true         # 排版前自动备份当前文档
 
 # ── 业务阈值 ─────────────────────────────────────────────────────
-thresholds:
-  max_undo_steps: 50                # QUndoStack 最多保留多少步
-  log_panel_lines: 5000             # 日志面板最大保留行数
+[thresholds]
+max_undo_steps = 50                 # QUndoStack 最多保留多少步
+log_panel_lines = 5000              # 日志面板最大保留行数

@@ -31,36 +31,11 @@ class PhotoPair:
     txt_col_idx: int
 
 
-@dataclass(slots=True)
-class CurveSeries:
-    """一条待绘制的曲线（已经把 Excel 数据展开成 (x, y) 序列）。"""
-
-    name: str
-    xs: list[float]
-    ys: list[float]
-    color: str = "#1F4FE0"
-    marker: str = "s"
-    linewidth: float = 2.0
-    markersize: float = 7.0
-
-
-@dataclass(slots=True)
-class AxisSpec:
-    """坐标轴：标签 + 可选的固定范围 (min, max, tick_step)。"""
-
-    label: str
-    range: tuple[float, float, float] | None = None
-
-
-@dataclass(slots=True)
-class PlotJob:
-    """一张待输出的图所需的全部信息。"""
-
-    title: str
-    output_path: str
-    x_axis: AxisSpec
-    y_axis: AxisSpec
-    series: list[CurveSeries] = field(default_factory=list)
+# ── AxisSpec / CurveSeries / PlotJob 已迁移到 civil_auto.domain.schema ──
+# 这里仅再导出，让仍引用旧路径的遗留代码（如 utils/plot_helpers.py、
+# 本文件下方的 PlotJobResult）继续工作。新代码请直接：
+#   from civil_auto.domain.schema import PlotJob, CurveSeries, AxisSpec
+from civil_auto.domain.schema import AxisSpec, CurveSeries, PlotJob  # noqa: E402, F401
 
 
 # ══════════════════════════════════════════════════════════════════

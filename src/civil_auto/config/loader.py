@@ -1,22 +1,22 @@
-"""配置加载层：读 config.yaml → Pydantic 校验 → 暴露 typed AppConfig 单例。
+"""配置加载层：读 config.toml → dataclass 校验 → 暴露 typed AppConfig 单例。
 
 设计要点：
   1. 单一入口 `load_config()` 走 lru_cache，进程内只解析一次。
-  2. 所有路径字段在 validator 阶段就解析为「绝对 Path」并 mkdir，业务代码拿到的
-     永远是可直接 open() 的真实路径。
+  2. 所有路径字段在加载末尾由 `_resolve_paths` 统一解析为「绝对 Path」并 mkdir，
+     业务代码拿到的永远是可直接 open() 的真实路径。
   3. 任何配置错误都抛 `ConfigError`（继承自 RuntimeError），UI 层用 InfoBar 友好提示。
-  4. 旧的 04_Config/*.json 加载逻辑放在 `legacy.py` —— 这里只管 config.yaml 主轴。
+  4. 旧的 04_Config/*.json 加载逻辑放在文件末尾——这里只管 config.toml 主轴。
+  5. 校验放在每个 dataclass 的 __post_init__，与 v2.3 总纲一致：禁止 pydantic。
 """
 
 from __future__ import annotations
 
 import json
+import tomllib
+from dataclasses import dataclass, field, fields, replace
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal
-
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Any
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -26,20 +26,28 @@ class ConfigError(RuntimeError):
     """配置加载/校验失败。UI 层应捕获并用 InfoBar 提示用户。"""
 
 
+_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+_THEMES = ("auto", "light", "dark")
+
+
+def _require(condition: bool, msg: str) -> None:
+    if not condition:
+        raise ConfigError(msg)
+
+
 # ──────────────────────────────────────────────────────────────────
-# 2. Schema (Pydantic)
+# 2. Schema (frozen dataclass)
 # ──────────────────────────────────────────────────────────────────
-class AppMeta(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+@dataclass(frozen=True)
+class AppMeta:
     name: str = "工程自动化主控制台"
     version: str = "1.0.0"
 
 
-class PathsConfig(BaseModel):
-    """所有路径字段。validate 阶段保持原样字符串/相对路径；
+@dataclass(frozen=True)
+class PathsConfig:
+    """所有路径字段。构造时保留原样（可能是相对路径）；
     在 load_config() 末尾由 _resolve_paths 统一解析为绝对路径并 mkdir。"""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
     templates: Path
     data_raw: Path
@@ -47,64 +55,94 @@ class PathsConfig(BaseModel):
     logs: Path
     legacy_config_dir: Path | None = None
 
-    @field_validator(
-        "templates", "data_raw", "data_output", "logs", "legacy_config_dir", mode="before"
-    )
-    @classmethod
-    def _to_path(cls, v: Any) -> Any:
-        return None if v is None else Path(str(v))
 
-
-class UIConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    theme: Literal["auto", "light", "dark"] = "auto"
+@dataclass(frozen=True)
+class UIConfig:
+    theme: str = "auto"
     language: str = "zh_CN"
     accent_color: str = "#0078D4"
-    startup_size: list[int] = Field(default_factory=lambda: [1320, 840], min_length=2, max_length=2)
-    sidebar_width: int = Field(default=280, ge=200, le=480)
+    # 用 tuple 而不是 list：dataclass(frozen=True) 默认值不能用可变对象
+    startup_size: tuple[int, int] = (1320, 840)
+    sidebar_width: int = 280
+
+    def __post_init__(self) -> None:
+        _require(
+            self.theme in _THEMES,
+            f"ui.theme 必须是 {_THEMES} 之一，得到 {self.theme!r}",
+        )
+        _require(len(self.startup_size) == 2, "ui.startup_size 必须长度为 2")
+        _require(
+            200 <= self.sidebar_width <= 480,
+            f"ui.sidebar_width 必须在 [200, 480]，得到 {self.sidebar_width}",
+        )
 
 
-class LoggingConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    console_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    file_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG"
-    max_file_mb: int = Field(default=10, ge=1, le=500)
-    backup_count: int = Field(default=5, ge=0, le=50)
+@dataclass(frozen=True)
+class LoggingConfig:
+    level: str = "INFO"
+    console_level: str = "INFO"
+    file_level: str = "DEBUG"
+    max_file_mb: int = 10
+    backup_count: int = 5
+
+    def __post_init__(self) -> None:
+        for fname in ("level", "console_level", "file_level"):
+            value = getattr(self, fname)
+            _require(
+                value in _LOG_LEVELS,
+                f"logging.{fname} 必须是 {_LOG_LEVELS} 之一，得到 {value!r}",
+            )
+        _require(1 <= self.max_file_mb <= 500, "logging.max_file_mb 必须在 [1, 500]")
+        _require(0 <= self.backup_count <= 50, "logging.backup_count 必须在 [0, 50]")
 
 
-class BatchQueueConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    max_concurrent: int = Field(default=1, ge=1, le=8)
+@dataclass(frozen=True)
+class BatchQueueConfig:
+    max_concurrent: int = 1
     retry_on_fail: bool = False
     pause_on_error: bool = True
 
+    def __post_init__(self) -> None:
+        _require(
+            1 <= self.max_concurrent <= 8,
+            f"batch_queue.max_concurrent 必须在 [1, 8]，得到 {self.max_concurrent}",
+        )
 
-class WordConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+
+@dataclass(frozen=True)
+class WordConfig:
     kill_residual_on_start: bool = True
     unblock_files: bool = True
     backup_before_format: bool = True
 
 
-class Thresholds(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    max_undo_steps: int = Field(default=50, ge=0, le=1000)
-    log_panel_lines: int = Field(default=5000, ge=100, le=100_000)
+@dataclass(frozen=True)
+class Thresholds:
+    max_undo_steps: int = 50
+    log_panel_lines: int = 5000
+
+    def __post_init__(self) -> None:
+        _require(
+            0 <= self.max_undo_steps <= 1000,
+            f"thresholds.max_undo_steps 必须在 [0, 1000]，得到 {self.max_undo_steps}",
+        )
+        _require(
+            100 <= self.log_panel_lines <= 100_000,
+            f"thresholds.log_panel_lines 必须在 [100, 100000]，得到 {self.log_panel_lines}",
+        )
 
 
-class AppConfig(BaseModel):
+@dataclass(frozen=True)
+class AppConfig:
     """根配置对象。业务代码统一通过 `load_config()` 拿到这个类型。"""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    app: AppMeta = Field(default_factory=AppMeta)
     paths: PathsConfig
-    ui: UIConfig = Field(default_factory=UIConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    batch_queue: BatchQueueConfig = Field(default_factory=BatchQueueConfig)
-    word: WordConfig = Field(default_factory=WordConfig)
-    thresholds: Thresholds = Field(default_factory=Thresholds)
+    app: AppMeta = field(default_factory=AppMeta)
+    ui: UIConfig = field(default_factory=UIConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    batch_queue: BatchQueueConfig = field(default_factory=BatchQueueConfig)
+    word: WordConfig = field(default_factory=WordConfig)
+    thresholds: Thresholds = field(default_factory=Thresholds)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -119,36 +157,85 @@ def find_project_root(start: Path | None = None) -> Path:
     return here
 
 
+def _filter_kwargs(cls: type, raw: dict[str, Any]) -> dict[str, Any]:
+    """只保留 dataclass 已声明的字段，多余 key 报错（对应原 pydantic 的 extra='forbid'）。"""
+    valid = {f.name for f in fields(cls)}
+    extra = set(raw) - valid
+    if extra:
+        raise ConfigError(f"{cls.__name__} 出现未知字段：{sorted(extra)}")
+    return {k: v for k, v in raw.items() if k in valid}
+
+
+def _build_paths(raw: dict[str, Any]) -> PathsConfig:
+    """paths 段：四个必填路径 + 可选 legacy_config_dir。"""
+    kwargs = _filter_kwargs(PathsConfig, raw)
+    for key in ("templates", "data_raw", "data_output", "logs"):
+        if key not in kwargs:
+            raise ConfigError(f"paths.{key} 必填")
+        kwargs[key] = Path(str(kwargs[key]))
+    legacy = kwargs.get("legacy_config_dir")
+    if legacy is not None:
+        kwargs["legacy_config_dir"] = Path(str(legacy))
+    return PathsConfig(**kwargs)
+
+
+def _build_ui(raw: dict[str, Any]) -> UIConfig:
+    """ui 段：把 toml 的 list 转成 dataclass 要求的 tuple[int, int]。"""
+    kwargs = _filter_kwargs(UIConfig, raw)
+    if "startup_size" in kwargs:
+        size = list(kwargs["startup_size"])
+        if len(size) != 2:
+            raise ConfigError("ui.startup_size 必须长度为 2")
+        kwargs["startup_size"] = (int(size[0]), int(size[1]))
+    return UIConfig(**kwargs)
+
+
 @lru_cache(maxsize=1)
 def load_config(config_path: Path | None = None) -> AppConfig:
-    """读 config.yaml → 校验 → 解析路径 → 返回 frozen AppConfig。
+    """读 config.toml → 校验 → 解析路径 → 返回 frozen AppConfig。
 
-    config_path 不传时自动定位项目根下的 config.yaml。
+    config_path 不传时自动定位项目根下的 config.toml。
     """
     project_root = find_project_root()
-    cfg_path = Path(config_path) if config_path else project_root / "config.yaml"
+    cfg_path = Path(config_path) if config_path else project_root / "config.toml"
 
     if not cfg_path.is_file():
         raise ConfigError(
-            f"找不到配置文件：{cfg_path}\n请把 config.yaml 放到项目根，或从仓库示例复制一份。"
+            f"找不到配置文件：{cfg_path}\n请把 config.toml 放到项目根。"
         )
 
     try:
-        with cfg_path.open("r", encoding="utf-8") as f:
-            raw: dict = yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
-        raise ConfigError(f"YAML 语法错误（{cfg_path}）：{e}") from e
+        # tomllib 要求二进制模式，由库内部按 UTF-8 解析
+        with cfg_path.open("rb") as f:
+            raw = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"TOML 语法错误（{cfg_path}）：{e}") from e
+
+    if "paths" not in raw:
+        raise ConfigError("config.toml 缺少 [paths] 节")
 
     try:
-        cfg = AppConfig.model_validate(raw)
+        cfg = AppConfig(
+            paths=_build_paths(raw["paths"]),
+            app=AppMeta(**_filter_kwargs(AppMeta, raw.get("app", {}))),
+            ui=_build_ui(raw.get("ui", {})),
+            logging=LoggingConfig(**_filter_kwargs(LoggingConfig, raw.get("logging", {}))),
+            batch_queue=BatchQueueConfig(
+                **_filter_kwargs(BatchQueueConfig, raw.get("batch_queue", {}))
+            ),
+            word=WordConfig(**_filter_kwargs(WordConfig, raw.get("word", {}))),
+            thresholds=Thresholds(**_filter_kwargs(Thresholds, raw.get("thresholds", {}))),
+        )
+    except ConfigError:
+        raise
     except Exception as e:
-        raise ConfigError(f"配置校验失败：\n{e}") from e
+        raise ConfigError(f"配置校验失败：{e}") from e
 
     return _resolve_paths(cfg, project_root)
 
 
 def reload_config() -> AppConfig:
-    """强制重新加载（清缓存）。用户改完 config.yaml 想热更新时调。"""
+    """强制重新加载（清缓存）。用户改完 config.toml 想热更新时调。"""
     load_config.cache_clear()
     return load_config()
 
@@ -159,7 +246,7 @@ def reload_config() -> AppConfig:
 def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
     """把 cfg.paths 里所有相对路径转为绝对路径，并确保目录存在。
 
-    返回新的 AppConfig（frozen=True 不允许就地改）。
+    返回新的 AppConfig（frozen=True 不允许就地改，用 dataclasses.replace）。
     """
 
     def _abs(p: Path | None) -> Path | None:
@@ -167,32 +254,31 @@ def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
             return None
         return p if p.is_absolute() else (project_root / p).resolve()
 
-    new_paths = cfg.paths.model_copy(
-        update={
-            "templates": _abs(cfg.paths.templates),
-            "data_raw": _abs(cfg.paths.data_raw),
-            "data_output": _abs(cfg.paths.data_output),
-            "logs": _abs(cfg.paths.logs),
-            "legacy_config_dir": _abs(cfg.paths.legacy_config_dir),
-        }
+    new_paths = replace(
+        cfg.paths,
+        templates=_abs(cfg.paths.templates),
+        data_raw=_abs(cfg.paths.data_raw),
+        data_output=_abs(cfg.paths.data_output),
+        logs=_abs(cfg.paths.logs),
+        legacy_config_dir=_abs(cfg.paths.legacy_config_dir),
     )
 
-    # 确保必要目录存在
-    for f in ("templates", "data_raw", "data_output", "logs"):
-        path: Path = getattr(new_paths, f)
+    # 确保必要目录存在；legacy_config_dir 是历史目录，不主动创建
+    for fname in ("templates", "data_raw", "data_output", "logs"):
+        path: Path = getattr(new_paths, fname)
         path.mkdir(parents=True, exist_ok=True)
 
-    return cfg.model_copy(update={"paths": new_paths})
+    return replace(cfg, paths=new_paths)
 
 
 # ──────────────────────────────────────────────────────────────────
-# 4. 旧 JSON 配置兼容层
+# 4. 旧 JSON 配置兼容层（04_Config/*.json）
 # ──────────────────────────────────────────────────────────────────
 def load_legacy_json(filename: str) -> dict:
     """读 04_Config/<filename>.json（report_style_config.json 等）。"""
     cfg = load_config()
     if cfg.paths.legacy_config_dir is None:
-        raise ConfigError("config.yaml 未配置 paths.legacy_config_dir")
+        raise ConfigError("config.toml 未配置 paths.legacy_config_dir")
     full = cfg.paths.legacy_config_dir / filename
     if not full.is_file():
         raise ConfigError(f"旧配置文件不存在：{full}")
@@ -203,7 +289,7 @@ def load_legacy_json(filename: str) -> dict:
 def save_legacy_json(filename: str, data: dict) -> None:
     cfg = load_config()
     if cfg.paths.legacy_config_dir is None:
-        raise ConfigError("config.yaml 未配置 paths.legacy_config_dir")
+        raise ConfigError("config.toml 未配置 paths.legacy_config_dir")
     full = cfg.paths.legacy_config_dir / filename
     full.parent.mkdir(parents=True, exist_ok=True)
     with full.open("w", encoding="utf-8") as f:

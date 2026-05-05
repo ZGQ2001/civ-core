@@ -14,3 +14,47 @@
 [2026-05-02 21:32:06] ERROR  civil_auto.io.io_helpers — Excel 文件不存在: \no\such\file.xlsx
 [2026-05-02 21:32:06] INFO   stage1.smoke           — read_sheet_names on missing file -> [] (good)
 [2026-05-02 21:32:06] INFO   stage1.smoke           — open_workbook raised expected IOReadError: Excel 文件不存在: \nope.xlsx
+[2026-05-05 21:42:45] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:42:58] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-05 21:43:00] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-05 21:43:27] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-05 21:43:29] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-05 21:43:30] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:31] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:31] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-05 21:43:31] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\__no_such__.xlsx  Sheet: <默认第一个>
+[2026-05-05 21:43:32] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:50] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-05 21:43:52] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-05 21:43:53] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:54] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:54] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-05 21:43:54] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\__no_such__.xlsx  Sheet: <默认第一个>
+[2026-05-05 21:43:54] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:55] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-05 21:43:56] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-05 21:43:57] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG

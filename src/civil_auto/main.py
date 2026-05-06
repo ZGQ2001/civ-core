@@ -105,32 +105,20 @@ def main(argv: list[str] | None = None) -> int:
 # GUI 分支（懒导入）
 # ──────────────────────────────────────────────────────────────────
 def _launch_gui() -> int:
+    """启动 PySide6 主窗口。装配细节全部在 app.bootstrap 里。"""
     try:
-        from PySide6.QtCore import Qt
-        from PySide6.QtWidgets import QApplication
-
-        # 第二阶段（步骤 8）才会创建 ui/main_window.py；此前 ImportError 被下面捕获。
-        from civil_auto.ui.main_window import MainWindow  # pyright: ignore[reportMissingImports]
+        from civil_auto.app.bootstrap import run as run_gui
     except ImportError as e:
+        # 这里走到说明 PySide6 / qfluentwidgets 没装。提示用户切 CLI 跑工具。
         sys.stderr.write(
-            "GUI 入口尚未就绪（第二阶段步骤 8–13 才会建出 ui/）：\n"
-            f"  缺失：{e}\n\n"
-            "当前阶段请用 CLI 跑工具，例如：\n"
+            f"GUI 启动失败：{e}\n"
+            "请确认 PySide6 / qfluentwidgets 已安装，或改用 CLI 跑工具：\n"
             "  python -m civil_auto.main --list-templates\n"
-            "  python -m civil_auto.main --tool plot_curves --input data/raw/sample.xlsx\n"
+            "  python -m civil_auto.main --tool plot_curves --input <xlsx>\n"
         )
         return 2
 
-    QApplication.setHighDpiScaleFactorRoundingPolicy(
-        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-    )
-    app = QApplication(sys.argv)
-    app.setApplicationName("工程自动化主控制台")
-    app.setOrganizationName("CivilAuto")
-
-    window = MainWindow()
-    window.show()
-    return app.exec()
+    return run_gui(sys.argv)
 
 
 # ──────────────────────────────────────────────────────────────────

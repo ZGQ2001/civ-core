@@ -1,0 +1,104 @@
+"""主窗口骨架（FluentWindow + 顶层导航）。
+
+第二阶段渐进式填充：
+  Step 8（当前）：搭起骨架 + 注册导航项；每个工具页用 _PlaceholderPage 占位
+  Step 9         绘曲线图页换成 plot_curves_view.py（真三栏布局）
+  Step 10–13    模板列表 / 设置面板 / 异步执行 / InfoBar 异常提示
+
+为什么用 FluentWindow 而不是 MSFluentWindow：
+  • FluentWindow 是默认/通用样式，左侧导航条 + 顶部标题栏，跨 Win10/11 表现稳定
+  • MSFluentWindow 需要 Mica/Acrylic，对部分系统主题不友好
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
+
+from civil_auto.config.loader import AppConfig
+from civil_auto.ui.windows.plot_curves_view import PlotCurvesView
+from civil_auto.utils.logger import get_logger
+
+log = get_logger(__name__)
+
+
+class _PlaceholderPage(QWidget):
+    """占位页：居中标题 + 副标题，告诉开发者这里"谁来填、什么时候填"。
+
+    qfluentwidgets 的导航栈用每个 page 的 objectName 做 routing key —— 必须显式设，
+    否则 addSubInterface 会报 assertion 失败。
+    """
+
+    def __init__(self, object_name: str, title: str, subtitle: str = "") -> None:
+        super().__init__()
+        self.setObjectName(object_name)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(12)
+
+        big = QLabel(title, self)
+        big.setStyleSheet("font-size: 28px; font-weight: 600;")
+        big.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(big)
+
+        if subtitle:
+            small = QLabel(subtitle, self)
+            small.setStyleSheet("font-size: 14px; color: #888;")
+            small.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            small.setWordWrap(True)
+            layout.addWidget(small)
+
+
+class MainWindow(FluentWindow):
+    """应用主窗口。
+
+    持有 cfg 是为了让子页能读 paths.* / ui.* —— 子页通过构造参数拿到自己关心的字段，
+    不直接 import config，避免循环依赖。
+    """
+
+    def __init__(self, cfg: AppConfig) -> None:
+        super().__init__()
+        self._cfg = cfg
+
+        self._build_pages(cfg)
+        self._register_navigation()
+        self._apply_window_metrics(cfg)
+
+        # 默认落在首页
+        self.switchTo(self.home_page)
+        log.info("MainWindow ready (size=%dx%d)", *cfg.ui.startup_size)
+
+    # ── 构造 ──────────────────────────────────────────────────────
+    def _build_pages(self, cfg: AppConfig) -> None:
+        self.home_page = _PlaceholderPage(
+            "homePage",
+            "工程自动化主控制台",
+            f"v{cfg.app.version} · 首页占位（步骤 13 接入仪表盘 / 最近运行）",
+        )
+        # 绘曲线图页：三栏视图（步骤 9 已接入；子面板内容在 step 10/11/13 渐进填充）
+        self.plot_curves_page = PlotCurvesView(cfg)
+        self.settings_page = _PlaceholderPage(
+            "settingsPage",
+            "设置",
+            "config.toml 编辑器（待补）",
+        )
+
+    def _register_navigation(self) -> None:
+        # 顶部：工具页
+        self.addSubInterface(self.home_page, FluentIcon.HOME, "首页")
+        self.addSubInterface(self.plot_curves_page, FluentIcon.MARKET, "绘曲线图")
+        # 底部：辅助项
+        self.addSubInterface(
+            self.settings_page,
+            FluentIcon.SETTING,
+            "设置",
+            position=NavigationItemPosition.BOTTOM,
+        )
+
+    def _apply_window_metrics(self, cfg: AppConfig) -> None:
+        self.setWindowTitle(cfg.app.name)
+        w, h = cfg.ui.startup_size
+        self.resize(w, h)

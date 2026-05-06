@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -358,6 +359,7 @@ def run_plot_curves(
     *,
     templates_path: Path | str | None = None,
     header_row: int = 1,
+    progress_cb: Callable[[int, int], None] | None = None,
 ) -> RunResult:
     """工具入口：读 Excel → 套模板 → 批量出 PNG。
 
@@ -370,8 +372,11 @@ def run_plot_curves(
       sheet_name     None=取第一个 sheet
       template_name  curve_templates.json 里的模板键
       output_dir     PNG 输出目录（不存在会被 atomic_writer 自动 mkdir -p）
-      templates_path 自定义模板库 JSON 路径，None=走 config.loader.load_legacy_json
+      templates_path 自定义模板库 JSON 路径，None=读 cfg.paths.curve_templates
       header_row     表头所在行（1-based），缺省 1
+      progress_cb    可选回调 (done, total)，每张图渲染后调一次。
+                     UI 用它把进度信号发回主线程；CLI/脚本可不传，默认 no-op。
+                     回调内任何异常都会被吞，不打断批量。
     """
     excel = Path(excel_path)
     out_dir = Path(output_dir)
@@ -430,11 +435,12 @@ def run_plot_curves(
         written: list[Path] = []
         failed: list[tuple[PlotJob, Exception]] = []
 
+        total_jobs = len(jobs)
         for i, job in enumerate(jobs, start=1):
             try:
                 written.append(render_plot_to_png(job))
-                if i % 10 == 0 or i == len(jobs):
-                    log.info("   ↳ 进度 %d/%d: %s", i, len(jobs), job.output_path.name)
+                if i % 10 == 0 or i == total_jobs:
+                    log.info("   ↳ 进度 %d/%d: %s", i, total_jobs, job.output_path.name)
             except (FileBusyError, FileWriteError) as e:
                 log.error("   ❌ 第 %d 张失败（IO）: %s — %s", i, job.output_path.name, e)
                 failed.append((job, e))
@@ -444,6 +450,13 @@ def run_plot_curves(
                     exc_info=True,
                 )
                 failed.append((job, e))
+
+            # 进度回调：异常吞掉但留 warning，避免 UI bug 把整个批量带崩
+            if progress_cb is not None:
+                try:
+                    progress_cb(i, total_jobs)
+                except Exception:
+                    log.warning("progress_cb 抛异常（已忽略）", exc_info=True)
 
         log.info(
             "🎉 完成：成功 %d / 任务 %d / 失败 %d",

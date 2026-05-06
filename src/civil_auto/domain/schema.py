@@ -107,3 +107,35 @@ class PlotJob:
             raise ValueError(
                 f"PlotJob.output_path 必须带后缀（如 .png），得到 {self.output_path.name!r}"
             )
+
+
+@dataclass
+class PlotRunSettings:
+    """绘曲线图的"运行级"配置：UI 设置面板 ↔ 本类 ↔ run_plot_curves 入参。
+
+    与 PlotJob 的关系：
+      PlotRunSettings = 用户在 UI 上选好的"准备跑批量的参数"
+      PlotJob          = build_jobs 拿 PlotRunSettings + 模板 + 行数据后派生出的"一张图"
+      所以 UI 双向绑的是这个 PlotRunSettings，不是 PlotJob 本身。
+
+    所有字段允许为空：
+      • 用户刚打开页面时啥都没选，不能让 dataclass 抛异常
+      • 真正的"必填"校验放在点击"生成"按钮时（step 12 / 13），借 InfoBar 提示
+    """
+
+    input_path: Path | None = None
+    sheet_name: str | None = None
+    template_name: str | None = None  # 由左栏 TemplateListPane 推过来
+    output_dir: Path | None = None
+    header_row: int = 1
+
+    def __post_init__(self) -> None:
+        # 路径字段允许 str → Path 自动转，UI 取值方便
+        if self.input_path is not None and not isinstance(self.input_path, Path):
+            self.input_path = Path(self.input_path)
+        if self.output_dir is not None and not isinstance(self.output_dir, Path):
+            self.output_dir = Path(self.output_dir)
+        if self.header_row < 1:
+            raise ValueError(
+                f"PlotRunSettings.header_row 必须 >= 1，得到 {self.header_row}"
+            )

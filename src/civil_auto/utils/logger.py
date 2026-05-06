@@ -69,6 +69,12 @@ class _QtSignalHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             self._bridge.record_emitted.emit(record)
+        except RuntimeError:
+            # 典型场景：QApplication 关闭过程中，worker 线程仍在 log.info()。
+            # bridge 的 C++ 对象已被 Qt 销毁（PySide6 抛 "Signal source has been deleted"）。
+            # 静默丢弃这条记录 —— console/file handler 已经收到了，UI 也没人看了。
+            # 不走 self.handleError 是为了避免 stderr 上一坨噪音 traceback。
+            pass
         except Exception:
             self.handleError(record)
 

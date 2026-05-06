@@ -369,3 +369,19 @@ civil_auto.core.plot_curves.PlotCurvesError: 模板 '__不存在__' 不存在
 [2026-05-06 16:36:41] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
 [2026-05-06 16:36:41] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
 [2026-05-06 16:36:41] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-06 17:02:06] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 17:02:06] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 17:02:07] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 17:02:07] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 17:02:07] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 17:02:07] INFO   civil_auto.app.bootstrap — QtLogBridge 就绪（slot 待 step 13 接入日志面板）
+[2026-05-06 17:02:56] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 17:02:56] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 17:02:58] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 17:02:58] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 17:02:58] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 17:02:58] INFO   civil_auto.app.bootstrap — QtLogBridge 就绪（slot 待 step 13 接入日志面板）
+[2026-05-06 17:03:31] INFO   civil_auto.ui.components.plot_settings_panel — 已选输入 Excel：sample.xlsx（sheets=['Sheet']）
+[2026-05-06 17:03:35] INFO   civil_auto.ui.components.plot_settings_panel — 已选输出目录：D:\CodeProjects\Civil_Auto_Workspace\data\output
+[2026-05-06 17:03:59] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 17:03:59] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线

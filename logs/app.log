@@ -93,3 +93,55 @@
 [2026-05-06 10:14:12] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
 [2026-05-06 10:14:12] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
 [2026-05-06 10:14:12] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:40:31] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:40:31] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 11:40:31] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 11:40:32] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 11:41:15] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:41:16] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 11:41:16] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 11:41:16] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 11:41:16] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 11:41:58] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:41:58] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 11:41:59] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 11:41:59] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 11:41:59] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 11:41:59] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 11:41:59] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 11:43:01] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-06 11:43:02] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-06 11:47:51] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:47:53] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-06 11:47:54] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-06 11:47:55] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-06 11:47:55] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0
+[2026-05-06 11:48:16] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:48:16] INFO   civil_auto.app.bootstrap — QApplication ready | name=工程自动化主控制台 version=1.0.0 theme=auto
+[2026-05-06 11:48:16] INFO   civil_auto.ui.components.template_list — 模板列表已刷新：1 条
+[2026-05-06 11:48:16] INFO   civil_auto.ui.windows.plot_curves_view — 已选模板：锚杆荷载-位移曲线
+[2026-05-06 11:48:16] INFO   civil_auto.ui.windows.main_window — MainWindow ready (size=1320x840)
+[2026-05-06 11:48:26] INFO   civil_auto.utils.logger — Logging initialized. dir=D:\CodeProjects\Civil_Auto_Workspace\logs console=INFO file=DEBUG
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves — 📂 加载模板库
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves —    ↳ 选用模板: 锚杆荷载-位移曲线
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves — 📊 读取 Excel: data\raw\sample.xlsx  Sheet: <默认第一个>
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves —    ↳ 共 3 行数据
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves — 🔨 构建绘图任务...
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves —    ↳ 有效任务 3 个（跳过空行 0，跳过缺数据行 0）
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves — 📁 输出目录: data\raw\曲线图
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves —    ↳ 进度 3/3: 锚杆3_荷载位移曲线.png
+[2026-05-06 11:48:27] INFO   civil_auto.core.plot_curves — 🎉 完成：成功 3 / 任务 3 / 失败 0

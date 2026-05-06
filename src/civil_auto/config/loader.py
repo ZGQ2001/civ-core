@@ -5,7 +5,7 @@
   2. 所有路径字段在加载末尾由 `_resolve_paths` 统一解析为「绝对 Path」并 mkdir，
      业务代码拿到的永远是可直接 open() 的真实路径。
   3. 任何配置错误都抛 `ConfigError`（继承自 RuntimeError），UI 层用 InfoBar 友好提示。
-  4. 旧的 04_Config/*.json 加载逻辑放在文件末尾——这里只管 config.toml 主轴。
+  4. 旧的 04_Config/*.json 兼容层放在文件末尾，DEPRECATED，只为未迁移工具兜底。
   5. 校验放在每个 dataclass 的 __post_init__，与 v2.3 总纲一致：禁止 pydantic。
 """
 
@@ -47,9 +47,16 @@ class AppMeta:
 @dataclass(frozen=True)
 class PathsConfig:
     """所有路径字段。构造时保留原样（可能是相对路径）；
-    在 load_config() 末尾由 _resolve_paths 统一解析为绝对路径并 mkdir。"""
+    在 load_config() 末尾由 _resolve_paths 统一解析为绝对路径并 mkdir。
+
+    字段语义：
+      • 目录类（templates / data_raw / data_output / logs）→ mkdir(parents=True)
+      • 文件类（curve_templates）→ 只确保 parent 目录存在，不创建文件本身
+      • legacy_config_dir：DEPRECATED，仅为未迁移的旧工具兜底，不主动创建
+    """
 
     templates: Path
+    curve_templates: Path
     data_raw: Path
     data_output: Path
     logs: Path
@@ -167,9 +174,9 @@ def _filter_kwargs(cls: type, raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_paths(raw: dict[str, Any]) -> PathsConfig:
-    """paths 段：四个必填路径 + 可选 legacy_config_dir。"""
+    """paths 段：5 个必填路径 + 可选 legacy_config_dir。"""
     kwargs = _filter_kwargs(PathsConfig, raw)
-    for key in ("templates", "data_raw", "data_output", "logs"):
+    for key in ("templates", "curve_templates", "data_raw", "data_output", "logs"):
         if key not in kwargs:
             raise ConfigError(f"paths.{key} 必填")
         kwargs[key] = Path(str(kwargs[key]))
@@ -254,28 +261,42 @@ def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
             return None
         return p if p.is_absolute() else (project_root / p).resolve()
 
+    abs_curve_templates = _abs(cfg.paths.curve_templates)
+    assert abs_curve_templates is not None  # 必填字段，_abs 不会返 None
+
     new_paths = replace(
         cfg.paths,
         templates=_abs(cfg.paths.templates),
+        curve_templates=abs_curve_templates,
         data_raw=_abs(cfg.paths.data_raw),
         data_output=_abs(cfg.paths.data_output),
         logs=_abs(cfg.paths.logs),
         legacy_config_dir=_abs(cfg.paths.legacy_config_dir),
     )
 
-    # 确保必要目录存在；legacy_config_dir 是历史目录，不主动创建
+    # 目录类：确保存在
     for fname in ("templates", "data_raw", "data_output", "logs"):
         path: Path = getattr(new_paths, fname)
         path.mkdir(parents=True, exist_ok=True)
+    # 文件类：只 mkdir parent；文件本身由各工具按需创建/读取
+    new_paths.curve_templates.parent.mkdir(parents=True, exist_ok=True)
+    # legacy_config_dir：DEPRECATED，不主动创建（旧工具自带兜底）
 
     return replace(cfg, paths=new_paths)
 
 
 # ──────────────────────────────────────────────────────────────────
-# 4. 旧 JSON 配置兼容层（04_Config/*.json）
+# 4. 旧 JSON 配置兼容层（DEPRECATED · 仅给未迁移工具兜底）
 # ──────────────────────────────────────────────────────────────────
+# 历史背景：旧版把所有工具的 JSON 配置堆在 ./04_Config/ 下。
+# 新架构按工具子目录走 ./templates/<tool>/<file>.json，绘曲线图已迁移。
+# 这两个函数留着只为 body_format / table_format 还在读 report_style_config.json，
+# 那两个文件迁移到 src/ 后整段删除。
 def load_legacy_json(filename: str) -> dict:
-    """读 04_Config/<filename>.json（report_style_config.json 等）。"""
+    """[DEPRECATED] 读 04_Config/<filename>.json（report_style_config.json 等）。
+
+    新代码请直接用 cfg.paths.<新字段>，不要依赖本函数。
+    """
     cfg = load_config()
     if cfg.paths.legacy_config_dir is None:
         raise ConfigError("config.toml 未配置 paths.legacy_config_dir")
@@ -287,6 +308,7 @@ def load_legacy_json(filename: str) -> dict:
 
 
 def save_legacy_json(filename: str, data: dict) -> None:
+    """[DEPRECATED] 同 load_legacy_json，写入侧。"""
     cfg = load_config()
     if cfg.paths.legacy_config_dir is None:
         raise ConfigError("config.toml 未配置 paths.legacy_config_dir")

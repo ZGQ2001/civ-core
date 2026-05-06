@@ -16,7 +16,7 @@
 
 第二阶段渐进填充：
   Step 9（当前）：搭起 QSplitter + 3 个 _PanePlaceholder 占位
-  Step 10        左栏换 TemplateListPane（真模板列表，从 04_Config 读）
+  Step 10        左栏换 TemplateListPane（真模板列表，从 cfg.paths.curve_templates 读）
   Step 11        中栏换 PlotSettingsPanel（SettingCardGroup + PlotJob 双向绑定）
   Step 12        中栏底部加"生成"按钮 + 异步 worker
   Step 13        异常通过 InfoBar 三段式提示
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, SimpleCardWidget, StrongBodyLabel
 
 from civil_auto.config.loader import AppConfig
+from civil_auto.ui.components.template_list import TemplateListPane
 from civil_auto.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -66,12 +67,18 @@ class _PanePlaceholder(SimpleCardWidget):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
-        if subtitle:
-            sub_label = BodyLabel(subtitle, self)
-            sub_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            sub_label.setWordWrap(True)
-            sub_label.setStyleSheet("color: #888;")
-            layout.addWidget(sub_label)
+        # 副标题始终建出来，便于运行期 set_subtitle() 改写（即使首次为空）
+        self._subtitle_label = BodyLabel(subtitle, self)
+        self._subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._subtitle_label.setWordWrap(True)
+        self._subtitle_label.setStyleSheet("color: #888;")
+        self._subtitle_label.setVisible(bool(subtitle))
+        layout.addWidget(self._subtitle_label)
+
+    def set_subtitle(self, text: str) -> None:
+        """运行期更新副标题（临时提供给 step 10 的信号验证用）。"""
+        self._subtitle_label.setText(text)
+        self._subtitle_label.setVisible(bool(text))
 
 
 class PlotCurvesView(QWidget):
@@ -100,12 +107,13 @@ class PlotCurvesView(QWidget):
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(0)
 
-        # 三个占位面板（暴露成 self.* 供 Step 10/11 直接替换 children）
-        self.template_pane = _PanePlaceholder(
-            "templateListPane",
-            "模板列表",
-            "Step 10 接入：从 04_Config/curve_templates.json 读取，点击切换右侧设置",
-        )
+        # 左栏：真模板列表（Step 10 已接入）
+        # 注意：TemplateListPane.__init__ 不会自己 refresh —— 必须 build 完所有面板、
+        # connect 完所有信号之后再 refresh()，否则首次 setCurrentRow(0) 触发的
+        # template_selected slot 可能访问到尚未创建的 settings_pane / preview_pane。
+        self.template_pane = TemplateListPane(self)
+
+        # 中右两栏仍是占位（Step 11 / 后续步骤接入）
         self.settings_pane = _PanePlaceholder(
             "plotSettingsPane",
             "设置面板",
@@ -116,6 +124,9 @@ class PlotCurvesView(QWidget):
             "预览区",
             "后续步骤接入：缩略图列表 + 单击放大；生成进度也在这里展示",
         )
+
+        # 现在所有面板都就位了，连信号，再触发首次加载
+        self.template_pane.template_selected.connect(self._on_template_selected)
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -134,3 +145,18 @@ class PlotCurvesView(QWidget):
 
         outer.addWidget(splitter)
         self._splitter = splitter  # 测试 / 后续步骤可访问
+
+        # 所有结构都搭好了，触发首次加载（refresh 内部 setCurrentRow(0) 会触发
+        # template_selected → _on_template_selected，此时 settings_pane 已存在）
+        self.template_pane.refresh()
+
+    # ── slots ────────────────────────────────────────────────────
+    def _on_template_selected(self, name: str) -> None:
+        """临时 slot：用户在左栏切模板时触发。
+
+        Step 10 阶段中栏还是占位 —— 这里只把"已选模板"反映到副标题，
+        证明 TemplateListPane → PlotCurvesView 的信号通路真的接通了。
+        Step 11 会把这个 slot 改成驱动 SettingCardGroup 的真刷新。
+        """
+        log.info("已选模板：%s", name)
+        self.settings_pane.set_subtitle(f"已选模板：{name}\n（Step 11 会换成真设置面板）")

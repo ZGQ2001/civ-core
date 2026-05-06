@@ -6,7 +6,7 @@
     • Excel 读取：infra_io.excel_reader.read_rows / get_column_headers
     • PNG 落盘：infra_io.chart_writer.render_plot_to_png
               （内部走 file_manager.atomic_writer，自带占用预检 + 原子替换）
-    • 模板 JSON：默认走 config.loader.load_legacy_json("curve_templates.json")
+    • 模板 JSON：默认读 cfg.paths.curve_templates（即 ./templates/plot_curves/curve_templates.json）
                  也支持显式传 templates_path（测试 / 自定义模板库）
 
 旧版 plot_curves.py 里的 UI 流程（_main / _request_params / _generate_example_flow）
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from civil_auto.config.loader import load_legacy_json
+from civil_auto.config.loader import load_config
 from civil_auto.domain.schema import AxisSpec, CurveSeries, PlotJob
 from civil_auto.infra_io.chart_writer import render_plot_to_png
 from civil_auto.infra_io.excel_reader import read_rows
@@ -55,19 +55,26 @@ class PlotCurvesError(RuntimeError):
 def load_templates(templates_path: Path | str | None = None) -> dict[str, Any]:
     """加载曲线模板库 JSON。
 
-    templates_path=None 时走 config.loader.load_legacy_json，从 [paths].legacy_config_dir
-    读 curve_templates.json；显式传路径则直接读那个文件（便于测试）。
+    templates_path=None 时读 cfg.paths.curve_templates（即
+    ./templates/plot_curves/curve_templates.json）；显式传路径则直接读那个文件
+    （测试 / 自定义模板库）。
     """
     if templates_path is None:
-        return load_legacy_json("curve_templates.json")
+        cfg = load_config()
+        path = cfg.paths.curve_templates
+    else:
+        path = Path(templates_path)
 
-    path = Path(templates_path)
     if not path.is_file():
         raise PlotCurvesError(
             f"曲线模板库不存在：{path}",
-            hint="请检查路径或在 config.toml 配置 paths.legacy_config_dir。",
+            hint=(
+                "请检查 config.toml 的 paths.curve_templates 是否正确，"
+                "或将模板 JSON 放到该路径下。"
+            ),
         )
-    import json  # 延迟导入：仅自定义路径分支用得到
+
+    import json  # 延迟导入
 
     try:
         with path.open("r", encoding="utf-8") as f:

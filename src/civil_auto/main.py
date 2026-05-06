@@ -70,7 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--templates-path",
         type=Path,
         default=None,
-        help="自定义模板库 JSON 路径；省略则走 config.toml 的 paths.legacy_config_dir",
+        help="自定义模板库 JSON 路径；省略则读 config.toml 的 paths.curve_templates",
     )
     p.add_argument(
         "--header-row",
@@ -166,7 +166,9 @@ def _cmd_list_templates(args: argparse.Namespace) -> int:
 
     names = get_template_names(tpls)
     if not names:
-        sys.stderr.write("⚠️ 模板库为空。请先在 04_Config/curve_templates.json 添加模板。\n")
+        sys.stderr.write(
+            "⚠️ 模板库为空。请先在 templates/plot_curves/curve_templates.json 添加模板。\n"
+        )
         return 0
     for n in names:
         # 走 stdout，便于 `... | head -n 1` 之类的脚本组合

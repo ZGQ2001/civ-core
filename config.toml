@@ -10,11 +10,15 @@ version = "1.0.0"
 
 # ── 路径 ─────────────────────────────────────────────────────────
 [paths]
-templates = "./templates"           # 模板中心（docx / xlsx）
-data_raw = "./data/raw"             # 原始输入文件
-data_output = "./data/output"       # 程序产出
-logs = "./logs"                     # 应用日志
-legacy_config_dir = "./04_Config"   # 旧 JSON 配置目录（report_style_config.json 等）
+templates = "./templates"                                       # 模板中心（docx / xlsx / 工具子目录）
+curve_templates = "./templates/plot_curves/curve_templates.json"  # 绘曲线图模板库
+data_raw = "./data/raw"                                         # 原始输入文件
+data_output = "./data/output"                                   # 程序产出
+logs = "./logs"                                                 # 应用日志
+# DEPRECATED：00–05 旧目录将整体删除。此条仅给尚未迁移的工具
+# （body_format / table_format 读 report_style_config.json）继续兼容。
+# 这两个工具迁移到 src/ 后，本字段一并移除。
+legacy_config_dir = "./04_Config"
 
 # ── UI ───────────────────────────────────────────────────────────
 [ui]

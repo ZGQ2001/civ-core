@@ -5,17 +5,17 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from civil_auto.models.schema import (
+    AppException,
+    CrossRefFixStats,
+    ProgressUpdate,
+)
 
 from civil_auto.core.cross_ref_fix import (
     DEFAULT_SWITCH,
     WD_FIELD_REF,
     CrossRefFixParams,
     fix_cross_references,
-)
-from civil_auto.models.schema import (
-    AppException,
-    CrossRefFixStats,
-    ProgressUpdate,
 )
 
 

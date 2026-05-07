@@ -6,16 +6,17 @@
   • 每条列表项前缀图标显示来源：🔒 系统预设（只读） / ✏️ 我的预设（可编辑）
   • 用户点击某条 → 发 `preset_selected(str)` 信号，参数是预设名
   • 顶部小刷新按钮：用户在外部编辑器改完 JSON 不必重启程序
+  • 底部按钮组（T-4）：[+新建] [复制为我的预设] [删除]
+      - 复制 / 删除直接调 preset_manager 的写入 API，再 refresh
+      - 新建只发信号 `new_preset_requested()`，让 view 切到「预设设置」Tab 等用户填
 
 错误处理：
   • 系统预设缺失 / JSON 语法错：捕 PresetError，UI 上显示一行红字提示
   • 用户预设侧的问题：preset_manager 内部已兜底（log warning + 当空处理），
     UI 这里不会感知到，最多看到"我的预设没显示出来"
   • 合并后列表为空：列表禁用，提示去创建预设
-
-T-3 之后的预期：
-  • T-4 会重做这个面板（Pivot 双 Tab + 系统/用户分区显示），
-    本步骤只做最小可用的"图标前缀 + 来源 tooltip"，避免双重返工
+  • 写入失败（FileBusyError / 同名冲突等）：捕 PresetError → InfoBar 红字提示，
+    不影响列表本身的状态
 """
 
 from __future__ import annotations
@@ -28,8 +29,14 @@ from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
     FluentIcon,
+    LineEdit,
     ListWidget,
+    MessageBox,
+    MessageBoxBase,
+    PrimaryPushButton,
+    PushButton,
     StrongBodyLabel,
+    SubtitleLabel,
     TransparentToolButton,
 )
 
@@ -37,7 +44,13 @@ from civil_auto.infra_io.preset_manager import (
     PresetEntry,
     PresetError,
     PresetSource,
+    copy_system_to_user,
+    delete_user_preset,
     load_merged_presets,
+)
+from civil_auto.ui.components.error_infobar import (
+    show_error_infobar,
+    show_success_infobar,
 )
 from civil_auto.utils.logger import get_logger
 
@@ -59,15 +72,58 @@ _SOURCE_LABEL: dict[PresetSource, str] = {
 }
 
 
+class _NameInputDialog(MessageBoxBase):
+    """输入名字的小对话框。复制为我的预设时弹这个。
+
+    用 MessageBoxBase 而不是 QInputDialog，是为了视觉风格与 qfluentwidgets
+    的其他对话框一致（Mica 背景 + 圆角按钮）。
+    """
+
+    def __init__(
+        self,
+        title: str,
+        default_name: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+
+        self.titleLabel = SubtitleLabel(title, self)
+        self.viewLayout.addWidget(self.titleLabel)
+
+        self.nameEdit = LineEdit(self)
+        self.nameEdit.setPlaceholderText("输入预设名（必填）")
+        self.nameEdit.setText(default_name)
+        # 自动选中默认文本，方便用户直接打字覆盖
+        self.nameEdit.selectAll()
+        self.viewLayout.addWidget(self.nameEdit)
+
+        # qfluentwidgets 默认按钮叫 OK / Cancel，本地化一下
+        self.yesButton.setText("确定")
+        self.cancelButton.setText("取消")
+
+        # 把焦点显式给到输入框，回车直接提交
+        self.nameEdit.setFocus()
+
+        # 让宽度适合输入预设名（默认 MessageBoxBase 偏窄）
+        self.widget.setMinimumWidth(360)
+
+    def name(self) -> str:
+        return self.nameEdit.text().strip()
+
+
 class PresetListPane(QWidget):
     """预设列表面板。
 
     Signals:
       preset_selected(str) —— 用户切到某条预设时发出，参数是**预设名**（不带图标前缀）。
                               若需要 source / data，调 selected_preset_entry() 取整张 PresetEntry。
+      new_preset_requested() —— 用户点了「+新建」按钮。view 接到后切到「预设设置」Tab、
+                                清空表单、解锁只读。本组件不做任何写入，留给 view 在
+                                用户保存时统一处理。
     """
 
     preset_selected = Signal(str)
+    new_preset_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -119,9 +175,44 @@ class PresetListPane(QWidget):
         self._empty_label.hide()
         outer.addWidget(self._empty_label)
 
+        # ── 底部：操作按钮组 [+新建] [复制] [删除] ──
+        # 三按钮一行；窄栏宽度有限，按钮文字尽量短
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        btn_row.setContentsMargins(0, 6, 0, 0)
+
+        self._new_btn = PrimaryPushButton("+新建", self)
+        self._new_btn.setToolTip("新建一条空白预设（在「预设设置」里填好后保存到我的预设）")
+        self._new_btn.clicked.connect(self._on_new_clicked)
+        btn_row.addWidget(self._new_btn)
+
+        self._copy_btn = PushButton("复制", self)
+        self._copy_btn.setToolTip(
+            "把当前选中的预设复制为「我的预设」（系统预设不能直接改，要改先复制）"
+        )
+        self._copy_btn.clicked.connect(self._on_copy_clicked)
+        btn_row.addWidget(self._copy_btn)
+
+        self._delete_btn = PushButton("删除", self)
+        self._delete_btn.setToolTip("从我的预设里删除当前选中条目（系统预设不可删）")
+        self._delete_btn.clicked.connect(self._on_delete_clicked)
+        btn_row.addWidget(self._delete_btn)
+
+        outer.addLayout(btn_row)
+        # 初始按钮态：未选中 → 复制/删除都禁用
+        self._update_action_buttons(entry=None)
+
     # ── 公共 API ──────────────────────────────────────────────────
-    def refresh(self) -> None:
-        """重新加载并刷新列表。被刷新按钮 / 外部代码调用。"""
+    def refresh(self, *, select_name: str | None = None) -> None:
+        """重新加载并刷新列表。
+
+        Args:
+          select_name:
+            刷新后要选中哪条预设。
+            None  → 默认选第一个（用于初次加载）
+            ""    → 不选任何条目（按钮组全禁，配合"+新建"工作流）
+            其它  → 选中该名字对应的条目；找不到则回退默认行为
+        """
         self._list.clear()
         self._empty_label.hide()
         self._list.show()
@@ -144,7 +235,8 @@ class PresetListPane(QWidget):
 
         sys_count = 0
         user_count = 0
-        for entry in entries:
+        target_row: int | None = None  # select_name 命中的行号
+        for row, entry in enumerate(entries):
             icon = _SOURCE_ICON[entry.source]
             item = QListWidgetItem(f"{icon} {entry.name}", self._list)
             item.setData(_ROLE_PRESET_ENTRY, entry)
@@ -163,6 +255,9 @@ class PresetListPane(QWidget):
             else:
                 user_count += 1
 
+            if select_name and entry.name == select_name:
+                target_row = row
+
         self._status_label.setText(
             f"共 {len(entries)} 个预设（🔒 系统 {sys_count} ・ ✏️ 我的 {user_count}）"
         )
@@ -173,8 +268,20 @@ class PresetListPane(QWidget):
             user_count,
         )
 
-        # 默认选第一个，让右栏立刻有"已选"状态
-        self._list.setCurrentRow(0)
+        # 选中策略：
+        #   select_name == ""        → 不选任何项（"+新建"工作流会单独处理表单）
+        #   select_name is None      → 默认第一个
+        #   select_name 命中具体行   → 选该行
+        #   select_name 给了但没命中 → 回退到第一个（可能用户在其它进程改了文件）
+        if select_name == "":
+            self._list.setCurrentRow(-1)  # 清空选中
+            self._update_action_buttons(entry=None)
+        elif target_row is not None:
+            self._list.setCurrentRow(target_row)
+        else:
+            if select_name:
+                log.warning("refresh: 没找到要选中的预设 %r，回退到第一个", select_name)
+            self._list.setCurrentRow(0)
 
     def selected_preset_name(self) -> str | None:
         """返回当前选中的预设名；没选返回 None。"""
@@ -214,12 +321,137 @@ class PresetListPane(QWidget):
         _previous: QListWidgetItem | None,
     ) -> None:
         if current is None:
+            # 当前没有选中（refresh(select_name="") 或刷成空 list 走到）
+            self._update_action_buttons(entry=None)
             return
         # 注意：item.text() 是带图标前缀的显示文本，不是真预设名；
         # 必须从 PresetEntry 拿 name，避免把 "🔒 锚杆荷载-位移曲线" 当成名字传出去。
         entry = current.data(_ROLE_PRESET_ENTRY)
         if not isinstance(entry, PresetEntry):
             log.warning("列表项缺 PresetEntry data，跳过 selected 信号")
+            self._update_action_buttons(entry=None)
             return
         log.debug("preset selected: %s (source=%s)", entry.name, entry.source.value)
+        self._update_action_buttons(entry=entry)
         self.preset_selected.emit(entry.name)
+
+    # ── 按钮态联动 ──────────────────────────────────────────────
+    def _update_action_buttons(self, entry: PresetEntry | None) -> None:
+        """按当前选中项更新 [+新建] / [复制] / [删除] 三按钮的可用性。
+
+        规则（与 PROGRESS.md T-4 交互一致）：
+          | 当前选中 | +新建 | 复制 | 删除 |
+          |----------|-------|------|------|
+          | 无       | ✓    | ✗    | ✗    |
+          | 系统     | ✓    | ✓    | ✗    |
+          | 用户     | ✓    | ✓    | ✓    |
+        """
+        # +新建 任何时候都可点
+        self._new_btn.setEnabled(True)
+
+        # 复制：必须有选中项才能复制；系统 / 用户都允许（用户预设也能"再分一份")
+        has_selection = entry is not None
+        self._copy_btn.setEnabled(has_selection)
+
+        # 删除：仅对用户预设启用
+        is_user = entry is not None and entry.source is PresetSource.USER
+        self._delete_btn.setEnabled(is_user)
+
+    # ── 按钮 handler ──────────────────────────────────────────────
+    def _on_new_clicked(self) -> None:
+        """+新建：发信号给 view，由 view 切到「预设设置」Tab + 清空表单。
+
+        本组件**不写盘**——空白预设的 name 还得用户在表单里填，等用户点"保存修改"
+        时才落到 user JSON。所以这里只做信号通知，不调 preset_manager。
+
+        刷新前先取消列表选中（refresh(select_name="")），避免视觉上有"高亮一条
+        系统预设但右边表单是空的"这种自相矛盾的状态。
+        """
+        log.info("用户点了 [+新建]")
+        self.refresh(select_name="")  # 取消选中
+        self.new_preset_requested.emit()
+
+    def _on_copy_clicked(self) -> None:
+        """复制：弹对话框输入新名 → 调 copy_system_to_user → refresh + 选中新项。"""
+        entry = self.selected_preset_entry()
+        if entry is None:
+            log.warning("点了复制但没有选中项，忽略")
+            return
+
+        default_name = f"{entry.name} (副本)"
+        dlg = _NameInputDialog("复制为我的预设", default_name=default_name, parent=self)
+        if not dlg.exec():
+            return  # 用户取消
+
+        new_name = dlg.name()
+        if not new_name:
+            show_error_infobar(
+                self,
+                PresetError("预设名不能为空", hint="请输入新预设的名字"),
+                where="复制预设",
+            )
+            return
+
+        try:
+            copy_system_to_user(entry.name, new_name)
+        except PresetError as e:
+            log.warning("复制失败：%s", e)
+            show_error_infobar(self, e, where="复制预设")
+            return
+
+        log.info("已复制 %r → %r", entry.name, new_name)
+        show_success_infobar(
+            self,
+            title="已复制为我的预设",
+            content=f"{entry.name} → {new_name}（可在「预设设置」中编辑）",
+        )
+        # 刷新并选中新条目，让中栏 form 立刻显示新副本
+        self.refresh(select_name=new_name)
+
+    def _on_delete_clicked(self) -> None:
+        """删除：弹确认 → 调 delete_user_preset → refresh（选首项）。
+
+        删除前必再做一次 source 校验：极端时序下按钮态可能滞后于选中变化，
+        防御性地拦一下"用户点删除时实际选的是系统预设"。
+        """
+        entry = self.selected_preset_entry()
+        if entry is None:
+            log.warning("点了删除但没有选中项，忽略")
+            return
+        if entry.source is not PresetSource.USER:
+            log.warning("拒绝删除系统预设：%r", entry.name)
+            show_error_infobar(
+                self,
+                PresetError(
+                    f"系统预设不可删除：{entry.name}",
+                    hint="如需修改，请先「复制为我的预设」再编辑/删除副本。",
+                ),
+                where="删除预设",
+            )
+            return
+
+        # 确认对话框
+        confirm = MessageBox(
+            "确认删除？",
+            f"将永久删除「我的预设」中的 {entry.name!r}。\n该操作不可恢复。",
+            self,
+        )
+        confirm.yesButton.setText("删除")
+        confirm.cancelButton.setText("取消")
+        if not confirm.exec():
+            return
+
+        try:
+            delete_user_preset(entry.name)
+        except PresetError as e:
+            log.warning("删除失败：%s", e)
+            show_error_infobar(self, e, where="删除预设")
+            return
+
+        log.info("已删除用户预设：%r", entry.name)
+        show_success_infobar(
+            self,
+            title="已删除",
+            content=f"{entry.name} 已从我的预设中移除",
+        )
+        self.refresh()  # 默认选第一个

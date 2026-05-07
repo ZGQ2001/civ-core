@@ -251,10 +251,15 @@ class PlotSettingsPanel(ScrollArea):
         self._reflect_settings_to_ui()
         self.settings_changed.emit()
 
-    def set_preset_name(self, name: str) -> None:
-        """左栏 PresetListPane 切预设时调这个入口。"""
-        self._settings.preset_name = name
-        self._preset_label.setContent(name)
+    def set_preset_name(self, name: str | None) -> None:
+        """左栏 PresetListPane 切预设时调这个入口。
+
+        name=None 或空字符串 → 清空"当前预设"显示（"+新建"工作流走到这里：
+        预设还没起名字 / 还没保存）。
+        """
+        self._settings.preset_name = name or None
+        # 显示文本：空时回退到"（从左栏选择）"占位提示，与 _build_ui 的初始内容一致
+        self._preset_label.setContent(name or "（从左栏选择）")
         self.settings_changed.emit()
 
     # ── 内部：UI <- dataclass ────────────────────────────────────

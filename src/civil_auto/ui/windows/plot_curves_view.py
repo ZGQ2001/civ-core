@@ -152,6 +152,7 @@ class PlotCurvesView(QWidget):
 
         # 现在所有面板都就位了，连信号，再触发首次加载
         self.preset_pane.preset_selected.connect(self._on_preset_selected)
+        self.preset_pane.new_preset_requested.connect(self._on_new_preset_requested)
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -226,6 +227,20 @@ class PlotCurvesView(QWidget):
             form.set_read_only(entry.source is PresetSource.SYSTEM)
 
         # 切到「预设设置」Tab —— 让用户立即看到选中的预设字段
+        self.center_pane.show_form_tab()
+
+    def _on_new_preset_requested(self) -> None:
+        """用户在左栏点了「+新建」。
+
+        这里只动 UI 状态，不写盘——空白预设的 name 还得让用户在表单里填，
+        等用户点"保存修改"时（Step 5 实现）才落到 user JSON。
+        """
+        log.info("新建预设：清空表单 + 切到「预设设置」Tab")
+        # 绘图参数 Tab 的"当前预设"显示也清掉，避免用户看到旧名字
+        self.settings_pane.set_preset_name("")
+        form = self.center_pane.form_panel
+        form.set_entry(None)  # 清空所有字段
+        form.set_read_only(False)  # 新建的预设永远是用户预设，可编辑
         self.center_pane.show_form_tab()
 
     def _on_generate_clicked(self) -> None:

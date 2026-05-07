@@ -2,24 +2,23 @@
 
 布局：
   ┌─────────────┬───────────────────┬──────────────────────┐
-  │ 预设列表     │ 设置面板           │ 预览区                │
-  │ (Step 10)   │ (Step 11)         │ (后续步骤)             │
-  │             │                   │                      │
-  │             │                   │                      │
+  │ 预设列表     │ Pivot 双 Tab：    │ 预览区                │
+  │             │   绘图参数         │   大图查看            │
+  │ 🔒/✏️ 列表 │   预设设置         │   缩略图列表          │
+  │ [+新建]     │                   │                      │
+  │ [复制][删除]│                   │                      │
   └─────────────┴───────────────────┴──────────────────────┘
         左               中                  右
 
 为什么 QSplitter 而不是固定 QHBoxLayout：
   • 不同分辨率 / 不同长度的预设名 / 不同字段量的设置面板，宽度需求差异大
-  • 用户可以自己拖动分隔条，记忆习惯（持久化拖到何处是后续步骤的事）
+  • 用户可以自己拖动分隔条；P1 已加 QSettings 持久化记忆拖到的位置
   • setCollapsible(False) 防止误把某栏拖没
 
-第二阶段渐进填充：
-  Step 9（当前）：搭起 QSplitter + 3 个 _PanePlaceholder 占位
-  Step 10        左栏换 PresetListPane（真预设列表，从 cfg.paths.curve_presets 读）
-  Step 11        中栏换 PlotSettingsPanel（SettingCardGroup + PlotJob 双向绑定）
-  Step 12        中栏底部加"生成"按钮 + 异步 worker
-  Step 13        异常通过 InfoBar 三段式提示
+各栏组件来源：
+  • 左栏：ui/components/preset_list.py PresetListPane
+  • 中栏：ui/components/plot_center_pane.py PlotCenterPane（含 settings_panel + form_panel）
+  • 右栏：ui/components/preview_pane.py PreviewPane
 """
 
 from __future__ import annotations
@@ -30,8 +29,6 @@ from qfluentwidgets import (
     BodyLabel,
     PrimaryPushButton,
     ProgressBar,
-    SimpleCardWidget,
-    StrongBodyLabel,
 )
 
 from civil_auto.configs.loader import AppConfig
@@ -52,6 +49,7 @@ from civil_auto.ui.components.error_infobar import (
 )
 from civil_auto.ui.components.plot_center_pane import PlotCenterPane
 from civil_auto.ui.components.preset_list import PresetListPane
+from civil_auto.ui.components.preview_pane import PreviewPane
 from civil_auto.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -69,47 +67,6 @@ _INITIAL_SIZES = (220, 380, 440)
 _SETTINGS_ORG = "ZGQ"
 _SETTINGS_APP = "CivilAuto"
 _SETTINGS_KEY_SPLITTER = "plot_curves/splitter_sizes"
-
-
-class _PanePlaceholder(SimpleCardWidget):
-    """单个面板的统一占位皮：标题 + 副标题，居中。
-
-    用 SimpleCardWidget 而不是裸 QWidget，是为了在 QSplitter 中
-    每栏都有清晰的圆角卡片视觉边界，方便看出"三栏在哪里"。
-    Step 10/11 真组件接入时，会换掉子内容（保留 SimpleCardWidget 外壳）。
-    """
-
-    def __init__(
-        self,
-        object_name: str,
-        title: str,
-        subtitle: str = "",
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName(object_name)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        title_label = StrongBodyLabel(title, self)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
-
-        # 副标题始终建出来，便于运行期 set_subtitle() 改写（即使首次为空）
-        self._subtitle_label = BodyLabel(subtitle, self)
-        self._subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._subtitle_label.setWordWrap(True)
-        self._subtitle_label.setStyleSheet("color: #888;")
-        self._subtitle_label.setVisible(bool(subtitle))
-        layout.addWidget(self._subtitle_label)
-
-    def set_subtitle(self, text: str) -> None:
-        """运行期更新副标题（临时提供给 step 10 的信号验证用）。"""
-        self._subtitle_label.setText(text)
-        self._subtitle_label.setVisible(bool(text))
 
 
 class PlotCurvesView(QWidget):
@@ -156,12 +113,8 @@ class PlotCurvesView(QWidget):
         # settings_pane 别名：保持与原代码兼容（worker / 校验等仍叫这个名字）
         self.settings_pane = self.center_pane.settings_panel
 
-        # 右栏：预览区（仍是占位，后续步骤接入）
-        self.preview_pane = _PanePlaceholder(
-            "previewPane",
-            "预览区",
-            "后续步骤接入：缩略图列表 + 单击放大；生成进度也在这里展示",
-        )
+        # 右栏：预览区（缩略图列表 + 大图查看）
+        self.preview_pane = PreviewPane(self)
 
         # 现在所有面板都就位了，连信号，再触发首次加载
         self.preset_pane.preset_selected.connect(self._on_preset_selected)
@@ -504,6 +457,8 @@ class PlotCurvesView(QWidget):
         self._progress.setValue(0)
         self._progress.show()
         self._status_label.setText("⏳ 正在处理…")
+        # 预览区清空，让用户看到"开始新一轮"的视觉反馈
+        self.preview_pane.clear()
 
     def _on_worker_progress(self, done: int, total: int) -> None:
         if total <= 0:
@@ -518,6 +473,10 @@ class PlotCurvesView(QWidget):
         n_ok = len(result.written)
         n_fail = len(result.failed)
         log.info("worker 完成：成功 %d / 失败 %d", n_ok, n_fail)
+
+        # 预览区接收成功生成的图（result.written）
+        # 即使部分失败也展示成功的那些，让用户能立刻看到结果
+        self.preview_pane.set_results(result.written)
 
         if n_fail == 0:
             # 完全成功：状态行 + 右上角绿色 InfoBar 双重反馈

@@ -166,6 +166,53 @@ def _check_cli_list_presets() -> str:
         return _fail("CLI 出图模块异常", f"原因：{e}")
 
 
+def _check_preview_pane() -> str:
+    """预览区组件可构造、缩略图加载链路完整。"""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        import tempfile
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QColor, QPixmap
+        from PySide6.QtWidgets import QApplication
+
+        from civil_auto.ui.components.preview_pane import PreviewPane
+
+        app = QApplication.instance() or QApplication(sys.argv)
+        _ = app  # 持有引用免被 GC
+
+        pane = PreviewPane()
+
+        # 造一张 8×8 测试 PNG，跑一次 set_results round-trip
+        with tempfile.TemporaryDirectory() as td:
+            png = Path(td) / "probe.png"
+            pix = QPixmap(8, 8)
+            pix.fill(QColor(Qt.GlobalColor.green))
+            if not pix.save(str(png), "PNG"):
+                return _fail("预览区探针 PNG 写入失败")
+
+            pane.set_results([png])
+            if pane._thumb_list.count() != 1:
+                pane.deleteLater()
+                return _fail(
+                    "预览区缩略图未填充",
+                    "set_results 后列表为空",
+                )
+            if pane._current_pixmap is None or pane._current_pixmap.isNull():
+                pane.deleteLater()
+                return _fail(
+                    "预览区大图加载失败",
+                    "缩略图选中后大图区无 pixmap",
+                )
+
+        pane.deleteLater()
+        return _ok("预览区功能正常（缩略图加载 + 大图显示）")
+    except Exception as e:
+        return _fail("预览区功能异常", f"原因：{e}")
+
+
 def _check_splitter_persistence() -> str:
     """QSettings 持久化（GUI 三栏宽度记忆）能否完整 round-trip。
 
@@ -224,7 +271,7 @@ def _check_gui_constructible() -> str:
         cfg = load_config()
         view = PlotCurvesView(cfg)
 
-        # 验证关键子组件都已就位（防 T-4 重构遗漏）
+        # 验证关键子组件都已就位（防重构遗漏）
         missing = []
         if not hasattr(view, "preset_pane"):
             missing.append("预设列表")
@@ -236,6 +283,8 @@ def _check_gui_constructible() -> str:
             view.center_pane, "form_panel"
         ):
             missing.append("预设设置表单")
+        if not hasattr(view, "preview_pane"):
+            missing.append("预览区")
 
         view.deleteLater()
         del app  # 让 QApplication 实例 ref-count 不被本函数持续持有
@@ -243,9 +292,9 @@ def _check_gui_constructible() -> str:
         if missing:
             return _fail(
                 "GUI 子组件缺失",
-                f"未找到：{ '、'.join(missing) }（可能 T-4 接线未完成）",
+                f"未找到：{ '、'.join(missing) }（可能接线未完成）",
             )
-        return _ok("GUI 启动正常（含 Pivot 双 Tab + 预设设置表单）")
+        return _ok("GUI 启动正常（三栏：列表 + Pivot 双 Tab + 预览区）")
     except Exception as e:
         return _fail("GUI 启动失败", f"原因：{e}")
 
@@ -261,6 +310,7 @@ CHECKS: list[Callable[[], str]] = [
     _check_cli_list_presets,
     _check_gui_constructible,
     _check_splitter_persistence,
+    _check_preview_pane,
 ]
 
 

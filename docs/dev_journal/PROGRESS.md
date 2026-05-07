@@ -7,9 +7,9 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0~T-4 全部完成 + P1/QSplitter 宽度记忆完成；144 测试通过；healthcheck 6 项全 ✅。
+**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 完成；157 测试通过；healthcheck 7 项全 ✅。
 
-**当前任务：** 等下一轮指派（候选：P1 预览区实现 / P1 完整 curves 编辑器 / P1 日志面板接入 / P2 旧代码清理）
+**当前任务：** 等下一轮指派（候选：P1 完整 curves 编辑器 / P1 日志面板接入 / P2 旧代码清理）
 
 **下一步：** 与用户对齐下一轮任务范围
 
@@ -182,7 +182,7 @@ get_user_presets_path(tool="plot_curves") -> Path
 | Step | 改动 | Commit |
 | ---- | --- | ------- |
 | 1 | `plot_curves_view.py` 加 QSettings 持久化（`_make_settings` / `_restore_splitter_sizes` / `_on_splitter_moved`）；`splitter.splitterMoved` 信号触发即时写盘；非数字 / 长度 ≠ 3 / 含 0 都回退默认；新增 `tests/test_splitter_persistence.py` 8 用例 | `3646f72` |
-| 2 | `scripts/healthcheck.py` 加第 6 项「布局记忆功能正常」（独立探针 key，不污染用户保存的拖动状态）；更新 PROGRESS.md | （本次） |
+| 2 | `scripts/healthcheck.py` 加第 6 项「布局记忆功能正常」（独立探针 key，不污染用户保存的拖动状态）；更新 PROGRESS.md | `90f86b8` |
 
 **存储位置（Qt native，无需我们管理路径）：**
 - Windows  `HKCU\Software\ZGQ\CivilAuto`
@@ -191,13 +191,32 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 -----
 
+### P1/预览区 ✅ 已完成（2026-05-07）
+
+| Step | 改动 | Commit |
+| ---- | --- | ------- |
+| 1 | 新建 `ui/components/preview_pane.py`：QSplitter 垂直分割（大图区 + 缩略图列表）；ListWidget IconMode 96×96 缩略图；QLabel 大图等比缩放、resize 自动重缩放；同步加载 PNG，加载失败兜底；测试 +13 用例 | `2d00109` |
+| 2 | `plot_curves_view.py` 把右栏 `_PanePlaceholder` 换成 `PreviewPane`；接 worker `started`→`clear()` / `finished`→`set_results(written)`；删掉无用的 `_PanePlaceholder` 类；healthcheck 加第 7 项「预览区功能正常」+ 现有 GUI 检查项加预览区存在性断言；更新本文档 | （本次） |
+
+**用户体验：**
+- 出图开始时 → 缩略图列表清空，立刻反馈"开始新一轮"
+- 完成后 → 缩略图列出全部 PNG，默认选中第一张大图查看
+- 单击其它缩略图 → 大图自动切换；resize 窗口大图自动重缩放
+- 部分失败时仍展示成功的图（坏图不阻塞）
+
+**不在本轮范围（待后续）：**
+- 双击缩略图打开系统默认查看器（更高保真）
+- 历史出图记录（用户目前只能手工去 output 目录翻老图）
+
+-----
+
 ## 📦 待办积压
 
 ### P1：绘曲线图 GUI 收尾
 
-- ~~QSplitter 宽度记忆（QSettings 持久化）~~ ✅ 完成（commits `3646f72` + 本次）
+- ~~QSplitter 宽度记忆（QSettings 持久化）~~ ✅ 完成（`3646f72` + `90f86b8`）
+- ~~预览区实现（缩略图列表 + 单击放大）~~ ✅ 完成（`2d00109` + 本次）
 - 日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）
-- 预览区实现（缩略图列表 + 单击放大）
 - 预设编辑器迁移（`02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
 - pytest-qt 装到 `[dependency-groups].dev`（与 `[project.optional-dependencies].dev` 对齐），让 UI 单测能用 `qtbot` fixture
 

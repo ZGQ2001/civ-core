@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QSettings, Qt, QThreadPool, Signal
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -60,6 +60,15 @@ log = get_logger(__name__)
 # 主窗口 sidebar ≈ 280 → 视图区可用宽 ≈ 1040，三栏 220/380/440 比较舒展。
 # QSplitter.setSizes 会按比例缩放，所以这些数字只是相对权重。
 _INITIAL_SIZES = (220, 380, 440)
+
+# QSettings 标识：决定持久化文件落到哪里。
+# Windows  → HKEY_CURRENT_USER\Software\ZGQ\CivilAuto
+# Linux    → ~/.config/ZGQ/CivilAuto.conf
+# macOS    → ~/Library/Preferences/com.ZGQ.CivilAuto.plist
+# 也可以用 IniFormat 强制走文本 ini，但默认 native 方式更"系统"，权限/同步问题少。
+_SETTINGS_ORG = "ZGQ"
+_SETTINGS_APP = "CivilAuto"
+_SETTINGS_KEY_SPLITTER = "plot_curves/splitter_sizes"
 
 
 class _PanePlaceholder(SimpleCardWidget):
@@ -173,12 +182,18 @@ class PlotCurvesView(QWidget):
         splitter.addWidget(self.preset_pane)
         splitter.addWidget(self.center_pane)
         splitter.addWidget(self.preview_pane)
-        splitter.setSizes(list(_INITIAL_SIZES))
+        # 持久化 sizes：上次拖动后保存的值优先；没保存过 / 损坏 → 用默认
+        splitter.setSizes(self._restore_splitter_sizes())
 
         # 三栏的拉伸优先级：预设列表固定窄，设置面板和预览区可拉伸
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 2)
+
+        # 用户拖动 → 立即写盘。QSettings 的 setValue 是文件级别 IO，
+        # 一次拖动会触发若干次 splitterMoved（鼠标移动间隔），这点频率写盘代价低。
+        # 不监听 view.closeEvent —— 进程异常退出时也能保住最后的拖动结果。
+        splitter.splitterMoved.connect(self._on_splitter_moved)
 
         outer.addWidget(splitter, 1)
         self._splitter = splitter  # 测试 / 后续步骤可访问
@@ -190,6 +205,55 @@ class PlotCurvesView(QWidget):
         # 所有结构都搭好了，触发首次加载（refresh 内部 setCurrentRow(0) 会触发
         # preset_selected → _on_preset_selected，此时 settings_pane 已存在）
         self.preset_pane.refresh()
+
+    # ── splitter 持久化 ──────────────────────────────────────────
+    def _make_settings(self) -> QSettings:
+        """构造 QSettings 实例。
+
+        抽出工厂方法主要是为了让单测能 monkey patch 重定向到 tmp 文件，
+        避免污染开发机的真实 user-scope settings。
+        """
+        return QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+
+    def _restore_splitter_sizes(self) -> list[int]:
+        """读 QSettings 里上次保存的 splitter sizes；没有 / 损坏 → 默认值。
+
+        QSettings 的 native 后端会按平台决定值类型：
+          - Windows 注册表里 list[int] 存为 QStringList，读出来就是 list[str]
+          - Linux INI 文件同样
+        所以这里要再 int() 一遍并做长度 / 总和合法性校验。
+        """
+        settings = self._make_settings()
+        saved = settings.value(_SETTINGS_KEY_SPLITTER)
+        if saved is None:
+            return list(_INITIAL_SIZES)
+
+        try:
+            sizes = [int(x) for x in saved]
+        except (TypeError, ValueError):
+            log.warning("QSettings 中 splitter sizes 损坏（不是数字列表），回退到默认")
+            return list(_INITIAL_SIZES)
+
+        # 三栏布局依赖 3 个值；总和为 0 / 负数说明 sizes 全 0（minimised）
+        if len(sizes) != 3 or sum(sizes) <= 0:
+            log.warning(
+                "QSettings 中 splitter sizes 异常 (len=%d, sum=%d)，回退到默认",
+                len(sizes),
+                sum(sizes),
+            )
+            return list(_INITIAL_SIZES)
+
+        log.debug("已从 QSettings 恢复 splitter sizes: %s", sizes)
+        return sizes
+
+    def _on_splitter_moved(self, _pos: int, _index: int) -> None:
+        """splitterMoved 信号 → 立即把当前 sizes 写到 QSettings。"""
+        sizes = self._splitter.sizes()
+        # 防御：拖到边界时偶发 sizes 含 0（虽然 setChildrenCollapsible(False) 已挡过），
+        # 不要把这种"只剩两栏"的状态存下去
+        if any(s <= 0 for s in sizes):
+            return
+        self._make_settings().setValue(_SETTINGS_KEY_SPLITTER, sizes)
 
     def _build_action_bar(self) -> QHBoxLayout:
         """底部操作栏：状态 + 进度 + "生成"按钮。"""

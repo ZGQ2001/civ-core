@@ -7,11 +7,11 @@
 
 ## 概念定义
 
-| 术语            | 含义                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------- |
-| 配置（config）    | 运行时参数：Excel 路径、输出目录、表头行号等                                                                                 |
-| 预设（preset）    | 一组预先定义好的业务参数：曲线轴范围、颜色、阈值等，随程序发布的只读预设，存于 `presets/`，开发者维护，用户自定义的可写预设，存于 `~/.civil_auto_workspace/presets/` |                                                                                                         |
-| 模版（template） | 结构固定，内容待填充的文件                                                                          |
+| 术语           | 含义                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| 配置（config）   | 运行时参数：Excel 路径、输出目录、表头行号等                                                                                 |
+| 预设（preset）   | 一组预先定义好的业务参数：曲线轴范围、颜色、阈值等，随程序发布的只读预设，存于 `presets/`，开发者维护，用户自定义的可写预设，存于 `~/.civil_auto_workspace/presets/` |
+| 模版（template） | 结构固定，内容待填充的文件                                                                                             |
 
 ---
 
@@ -80,6 +80,9 @@ uv run pytest           # 测试
 | `presets/` 目录程序运行时写入                                | 运行时保持只读状态，修改预设只能修改用户预设                                                                                |
 | 模板变量替换、表格批量插入、图片插入使用 COM<br>                        | 用 docxtpl，域代码刷新、目录重建、Word 转 PDF、最终格式精修使用 COM，所有 COM 调用集中在 `infra_io/word_com.py`，`try/finally` 确保进程释放 |
 | 引入 `pandas`、`numpy` 、`pydantic` <br> 、`requests`库   | 统一用 dataclass + `__post_init__`，有 ，HTTP 需求时、matplotlib 传递依赖可引用                                        |
+| 大文件 / 大数据一次性读如 ： `data = f.read()` 把整个 10G 文件读进内存   | 用 generator / iterator / chunked read ，SQL 用 server-side cursor，pandas 用 chunksize                    |
+| Core 函数直接修改 UI 组件状态或弹出 QFileDialog                  | 使用信号（Signal）或回调函数传递进度；IO 路径由外部（UI 或 Config）传入 pathlib.Path 对象                                         |
+
 ### 禁止的写法
 
 ```python

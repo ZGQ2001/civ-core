@@ -10,8 +10,8 @@ version = "1.0.0"
 
 # ── 路径 ─────────────────────────────────────────────────────────
 [paths]
-templates = "./templates"                                       # 模板中心（docx / xlsx / 工具子目录）
-curve_templates = "./templates/plot_curves/curve_templates.json"  # 绘曲线图模板库
+templates = "./templates"                                       # 报告模板中心（docx / xlsx，与预设系统无关）
+curve_presets = "./presets/plot_curves/curve_presets.json"      # 绘曲线图系统预设库
 data_raw = "./data/raw"                                         # 原始输入文件
 data_output = "./data/output"                                   # 程序产出
 logs = "./logs"                                                 # 应用日志

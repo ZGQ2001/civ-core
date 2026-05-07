@@ -29,6 +29,8 @@ uv run python -m civil_auto.main --tool plot_curves \
     --preset 锚杆荷载-位移曲线 \
     --output data/output/曲线图                          # CLI 出图
 uv run python -m pytest                                 # 跑测试（pytest 配置已 ignore stale 测试）
+uv run ruff check .                                     # lint（每次 step 完成后必跑）
+uv run ruff check --fix .                               # lint 自动修
 uv run python scripts/healthcheck.py                    # 健康检查（每次验收后必跑）
 
 # 切换 DEV_MODE：编辑 config.toml [dev].enabled = true，

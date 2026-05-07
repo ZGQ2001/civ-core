@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from civil_auto.ui.windows.plot_curves_view import PlotCurvesView
 
 

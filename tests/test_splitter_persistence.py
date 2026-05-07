@@ -23,7 +23,6 @@ from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from civil_auto.configs.loader import load_config  # noqa: E402
-from civil_auto.ui.windows import plot_curves_view as view_mod  # noqa: E402
 from civil_auto.ui.windows.plot_curves_view import (  # noqa: E402
     _INITIAL_SIZES,
     _SETTINGS_KEY_SPLITTER,

@@ -7,42 +7,58 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** 第一阶段（核心层 7 步）+ 第二阶段（UI 层 6 步）全部完成，绘曲线图工具 CLI 和 GUI 双轨可用。
+**当前状态：** 第一阶段 + 第二阶段全部完成；T-0 命名统一已完成（template → preset）。
 
-**当前任务：** T-0 命名统一（template → preset），未开始
+**当前任务：** T-1 `preset_manager.py`（双路径加载 + 深合并），未开始
 
-**下一步：** 执行 T-0，将所有 `template` 命名改为 `preset`
+**下一步：** 执行 T-1，新建 `infra_io/preset_manager.py`，实现系统预设/用户预设双路径加载
 
-**遗留问题：** 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
+**遗留问题：**
+- `tests/test_cross_ref_fix.py` 引用旧的 `civil_auto.models.schema`，已知 stale，跑测试时用 `--ignore` 跳过
+- 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
 
 ---
 ### 可用指令（动态更新）
 
 ```bash
 uv run python -m civil_auto.main                        # 启动 GUI
-uv run python -m civil_auto.main --list-templates       # 列出所有预设（T-0 后改为 --list-presets）
+uv run python -m civil_auto.main --list-presets         # 列出所有预设（曾用 --list-templates）
 uv run python -m civil_auto.main --tool plot_curves \
     --input data/raw/sample.xlsx \
-    --template 锚杆荷载-位移曲线 \
+    --preset 锚杆荷载-位移曲线 \
     --output data/output/曲线图                          # CLI 出图
+uv run python -m pytest --ignore=tests/test_cross_ref_fix.py  # 跑测试（跳过 stale 旧测试）
 ```
 
 -----
 
 ## 📋 当前任务详情：预设系统完整实现
 
-### T-0：命名统一（先执行）
+### T-0：命名统一 ✅ 已完成（2026-05-07）
 
-| 操作    | 旧                                | 新                              |
-| ----- | -------------------------------- | ------------------------------ |
-| 目录    | `templates/plot_curves/`         | `presets/plot_curves/`         |
-| 文件    | `curve_templates.json`           | `curve_presets.json`           |
-| 组件    | `ui/components/template_list.py` | `ui/components/preset_list.py` |
-| 配置键   | `paths.curve_templates`          | `paths.curve_presets`          |
-| UI 文字 | “模板列表”、“当前模板”                    | “预设列表”、“当前预设”                  |
-| CLI   | `--list-templates`               | `--list-presets`               |
+按 11 步推进，每步一个 commit：
 
-**验收：** `grep -r "template" src/` 仅剩历史性注释，无代码引用。
+| Step | 改动                                                                       | Commit |
+| ---- | ------------------------------------------------------------------------ | ------- |
+| 1    | `git mv templates/plot_curves/curve_templates.json → presets/plot_curves/curve_presets.json`，建 `tests/fixtures/presets/.gitkeep` | `186b832` |
+| 2    | `config.toml`：`curve_templates` 键 → `curve_presets`                       | `42b4f36` |
+| 3    | `configs/loader.py`：`PathsConfig.curve_templates` → `curve_presets`      | `ebe55f6` |
+| 4    | `core/plot_curves.py`：`load_templates`/`get_template_names`/`_series_from_template` → `_presets`，参数 `template_name`/`templates_path` → `preset_name`/`presets_path` | `e9898d0` |
+| 5    | `domain/schema.py`：`PlotRunSettings.template_name` → `preset_name`        | `0c2ad04` |
+| 6    | `git mv template_list.py → preset_list.py`；`TemplateListPane` → `PresetListPane`，信号/方法/UI 文字同步 | `d9ae868` |
+| 7    | `plot_settings_panel.py`：`set_template_name` → `set_preset_name`，`_template_label` → `_preset_label`，"当前模板" → "当前预设" | `1f112fa` |
+| 8    | `plot_curves_view.py`：`template_pane` → `preset_pane`，`_on_template_selected` → `_on_preset_selected`，worker 改用 `preset_name` | `12c1276` |
+| 9    | `main.py` CLI：`--template`/`--templates-path`/`--list-templates` → `--preset`/`--presets-path`/`--list-presets` | `328a517` |
+| 10   | 验收：grep 通过；27 测试通过；`--list-presets` 输出正常；`--list-templates` 已弃用       | —         |
+| 11   | 更新本文档                                                                  | （本次提交）  |
+
+**保留 `template` 命名的位置（不属于"预设"概念）：**
+1. `paths.templates`（`./templates`，docx/xlsx 报告模板中心）
+2. `utils/exceptions.py: TemplateMissing`（docx/xlsx 报告模板缺失异常）
+3. `core/auto_filler_core.py: handright.Template`（第三方库类）
+4. JSON 字段 `filename_template` / `title_template`（含 `{id}` 占位的字面字符串模板）
+
+**验收结果：** `grep -i template src/` 仅剩上述 4 类预定保留项；`pytest`（除 stale 旧测试）27 通过；CLI `--list-presets` 工作正常。
 
 -----
 

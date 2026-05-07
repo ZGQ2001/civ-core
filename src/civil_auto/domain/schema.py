@@ -115,7 +115,7 @@ class PlotRunSettings:
 
     与 PlotJob 的关系：
       PlotRunSettings = 用户在 UI 上选好的"准备跑批量的参数"
-      PlotJob          = build_jobs 拿 PlotRunSettings + 模板 + 行数据后派生出的"一张图"
+      PlotJob          = build_jobs 拿 PlotRunSettings + 预设 + 行数据后派生出的"一张图"
       所以 UI 双向绑的是这个 PlotRunSettings，不是 PlotJob 本身。
 
     所有字段允许为空：
@@ -125,7 +125,7 @@ class PlotRunSettings:
 
     input_path: Path | None = None
     sheet_name: str | None = None
-    template_name: str | None = None  # 由左栏 TemplateListPane 推过来
+    preset_name: str | None = None  # 由左栏 PresetListPane 推过来
     output_dir: Path | None = None
     header_row: int = 1
 

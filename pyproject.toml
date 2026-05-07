@@ -103,5 +103,6 @@ addopts = "-q --strict-markers --ignore=tests/test_cross_ref_fix.py"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-qt>=4.4",
     "ruff>=0.15.12",
 ]

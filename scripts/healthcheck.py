@@ -166,6 +166,49 @@ def _check_cli_list_presets() -> str:
         return _fail("CLI 出图模块异常", f"原因：{e}")
 
 
+def _check_splitter_persistence() -> str:
+    """QSettings 持久化（GUI 三栏宽度记忆）能否完整 round-trip。
+
+    用专门的 healthcheck key 而不是真正的 splitter sizes key，避免
+    污染用户已保存的拖动状态。
+    """
+    try:
+        from PySide6.QtCore import QSettings
+
+        from civil_auto.ui.windows.plot_curves_view import (
+            _SETTINGS_APP,
+            _SETTINGS_ORG,
+        )
+
+        settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+        key = "_healthcheck/probe"
+        settings.setValue(key, [1, 2, 3])
+        settings.sync()  # 强制刷盘，避免读到旧 cache
+
+        readback = settings.value(key)
+        if readback is None:
+            return _fail(
+                "布局记忆写入后读不到",
+                "QSettings 配置写入异常（可能是权限问题）",
+            )
+        try:
+            vs = [int(x) for x in readback]
+        except (TypeError, ValueError):
+            return _fail("布局记忆数据类型异常", "QSettings 后端可能损坏")
+        if vs != [1, 2, 3]:
+            return _fail(
+                f"布局记忆 round-trip 不一致：{vs} != [1, 2, 3]",
+                "QSettings 后端可能损坏",
+            )
+
+        # 清掉探针 key，不在用户 settings 里留痕
+        settings.remove(key)
+        settings.sync()
+        return _ok("布局记忆功能正常（三栏宽度自动保存）")
+    except Exception as e:
+        return _fail("布局记忆功能异常", f"原因：{e}")
+
+
 def _check_gui_constructible() -> str:
     """GUI 主视图能否被构造（offscreen 平台，不真正显示）。"""
     import os
@@ -217,6 +260,7 @@ CHECKS: list[Callable[[], str]] = [
     _check_user_preset_writable,
     _check_cli_list_presets,
     _check_gui_constructible,
+    _check_splitter_persistence,
 ]
 
 

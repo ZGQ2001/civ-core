@@ -7,9 +7,9 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0~T-4 全部完成；136 测试通过；healthcheck 全 ✅。
+**当前状态：** T-0~T-4 全部完成 + P1/QSplitter 宽度记忆完成；144 测试通过；healthcheck 6 项全 ✅。
 
-**当前任务：** 等下一轮指派（候选：P1 预览区实现 / P1 QSplitter 宽度记忆 / P1 预设编辑器迁移 / P2 旧代码清理）
+**当前任务：** 等下一轮指派（候选：P1 预览区实现 / P1 完整 curves 编辑器 / P1 日志面板接入 / P2 旧代码清理）
 
 **下一步：** 与用户对齐下一轮任务范围
 
@@ -174,7 +174,20 @@ get_user_presets_path(tool="plot_curves") -> Path
 **不在本轮范围（已登记 P1 待办）：**
 - 完整可视化 curves 编辑器（迁 02_Core/curve_template_editor.py）
 - 预览区（缩略图列表 + 单击放大）
-- QSplitter 宽度记忆
+
+-----
+
+### P1/QSplitter 宽度记忆 ✅ 已完成（2026-05-07）
+
+| Step | 改动 | Commit |
+| ---- | --- | ------- |
+| 1 | `plot_curves_view.py` 加 QSettings 持久化（`_make_settings` / `_restore_splitter_sizes` / `_on_splitter_moved`）；`splitter.splitterMoved` 信号触发即时写盘；非数字 / 长度 ≠ 3 / 含 0 都回退默认；新增 `tests/test_splitter_persistence.py` 8 用例 | `3646f72` |
+| 2 | `scripts/healthcheck.py` 加第 6 项「布局记忆功能正常」（独立探针 key，不污染用户保存的拖动状态）；更新 PROGRESS.md | （本次） |
+
+**存储位置（Qt native，无需我们管理路径）：**
+- Windows  `HKCU\Software\ZGQ\CivilAuto`
+- Linux    `~/.config/ZGQ/CivilAuto.conf`
+- macOS    `~/Library/Preferences/com.ZGQ.CivilAuto.plist`
 
 -----
 
@@ -182,7 +195,7 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 ### P1：绘曲线图 GUI 收尾
 
-- QSplitter 宽度记忆（QSettings 持久化）
+- ~~QSplitter 宽度记忆（QSettings 持久化）~~ ✅ 完成（commits `3646f72` + 本次）
 - 日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）
 - 预览区实现（缩略图列表 + 单击放大）
 - 预设编辑器迁移（`02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器

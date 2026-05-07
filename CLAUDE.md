@@ -64,7 +64,7 @@ uv run pytest           # 测试
 
 1. 会话开始 `git add . && git commit -m "chore: 会话开始检查点"`读取 → `docs/dev_journal/PROGRESS.md` **顶部摘要部分**（需要细节时才读 PROGRESS.md 其余部分）→ 向我报告：当前状态 / 待处理任务 / 下一步具体动作→ 确认本次任务后再动手
 2. 单步骤执行 `git add . && git commit -m "feat: 完成 xxx"  # 描述实际内容`
-3. 核心业务逻辑的新增/修改 → 必须先编写并运行对应 pytest 拦截边界条件（此时必报错） → 再编写业务代码使其通过 → 运行 ruff check . 拦截规范错误 → 执行 scripts/healthcheck.py 冒烟自检。
+3. 文件的新增/修改 → 必须先编写并运行对应 pytest 拦截边界条件（此时必报错） → 再编写业务代码使其通过 → 运行 ruff check . 拦截规范错误 → 执行 scripts/healthcheck.py 冒烟自检。
 4. 会话结束（用户说”好了/结束/下次继续”）追加更新 `PROGRESS.md`
 ---
 ## 禁止必须对照表

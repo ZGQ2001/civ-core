@@ -7,16 +7,15 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 完成；157 测试通过；healthcheck 7 项全 ✅。
+**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 + P1/pytest-qt + P1/日志面板 完成；181 测试通过；healthcheck 8 项全 ✅。
 
-**当前任务：** 等下一轮指派（候选：P1 完整 curves 编辑器 / P1 日志面板接入 / P2 旧代码清理）
+**当前任务：** 等下一轮指派（候选：P1 完整 curves 编辑器 / P2 旧代码清理）
 
 **下一步：** 与用户对齐下一轮任务范围
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civil_auto.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
 - 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
-- `pyproject.toml` 的 `[project.optional-dependencies].dev` 与 `[dependency-groups].dev` 不一致（pytest-qt 未装到 uv 环境），目前 UI 测试用 QApplication+offscreen 绕开，登记后续修
 
 ---
 ### 可用指令（动态更新）
@@ -212,15 +211,38 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 -----
 
+### P1/pytest-qt + 日志面板 ✅ 已完成（2026-05-07）
+
+| Step | 改动 | Commit |
+| ---- | --- | ------- |
+| 1 | `[dependency-groups].dev` 加 `pytest-qt>=4.4`；`uv sync` 拉到 4.5.0 | `9a3d0a4` |
+| 2 | 新建 `ui/components/log_panel.py` LogPanel 折叠面板（QPlainTextEdit + appendHtml 上色 + setMaximumBlockCount(1000) 自动丢老 + 工具栏：折叠 / 级别筛选 / 自动滚动 / 清空）；测试 +24 用例（首次用 qtbot fixture） | `d467348` |
+| 3 | `plot_curves_view.py` 在 outer VBox 末尾接 LogPanel + 构造时通过 `get_qt_bridge()` 自取信号桥；`bootstrap.py` 更新 outdated comment；healthcheck 加第 8 项「日志面板功能正常」（QtLogBridge round-trip 探针）+ GUI 检查加 `log_panel` 存在断言；更新 PROGRESS.md | （本次） |
+
+**用户体验：**
+- 默认折叠：开屏看不到日志，工具栏占一行（约 36px 高）
+- 点 ▶ 展开：QPlainTextEdit 显示按级别上色的最近 1000 条
+- 默认 INFO 以上，DEBUG 噪音不出现；用户可改"全部"看 DEBUG
+- 自动滚动可关，便于回看历史；清空按钮一键归零
+- worker 线程 log.info() 也能出现在面板（QtLogBridge 跨线程队列连接）
+
+**架构闭环：**
+`logger.info(...)` → root logger
+  ├→ console handler  ─── 控制台彩色输出
+  ├→ RotatingFileHandler ─ logs/app.log 落盘
+  └→ _QtSignalHandler ─── QtLogBridge.record_emitted ─→ LogPanel.on_record
+
+-----
+
 ## 📦 待办积压
 
 ### P1：绘曲线图 GUI 收尾
 
 - ~~QSplitter 宽度记忆（QSettings 持久化）~~ ✅ 完成（`3646f72` + `90f86b8`）
-- ~~预览区实现（缩略图列表 + 单击放大）~~ ✅ 完成（`2d00109` + 本次）
-- 日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）
+- ~~预览区实现（缩略图列表 + 单击放大）~~ ✅ 完成（`2d00109` + `6c7e43d`）
+- ~~pytest-qt 装到 `[dependency-groups].dev`~~ ✅ 完成（`9a3d0a4`）
+- ~~日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）~~ ✅ 完成（`d467348` + 本次）
 - 预设编辑器迁移（`02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
-- pytest-qt 装到 `[dependency-groups].dev`（与 `[project.optional-dependencies].dev` 对齐），让 UI 单测能用 `qtbot` fixture
 
 ### P2：旧代码清理
 

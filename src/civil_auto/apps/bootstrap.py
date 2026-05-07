@@ -85,9 +85,9 @@ def run(argv: list[str] | None = None) -> int:
     window.show()
 
     # QtLogBridge 已经在 setup_from_config 里建好了；
-    # 这里只是确认它存在 —— 真正接到 UI 的日志面板是步骤 13 的事。
+    # PlotCurvesView 在构造时通过 get_qt_bridge() 自取并接到 LogPanel.on_record。
     bridge = get_qt_bridge()
     if bridge is not None:
-        log.info("QtLogBridge 就绪（slot 待 step 13 接入日志面板）")
+        log.info("QtLogBridge 就绪（已接到日志面板）")
 
     return app.exec()

@@ -47,10 +47,11 @@ from civil_auto.ui.components.error_infobar import (
     show_success_infobar,
     show_warning_infobar,
 )
+from civil_auto.ui.components.log_panel import LogPanel
 from civil_auto.ui.components.plot_center_pane import PlotCenterPane
 from civil_auto.ui.components.preset_list import PresetListPane
 from civil_auto.ui.components.preview_pane import PreviewPane
-from civil_auto.utils.logger import get_logger
+from civil_auto.utils.logger import get_logger, get_qt_bridge
 
 log = get_logger(__name__)
 
@@ -154,6 +155,16 @@ class PlotCurvesView(QWidget):
         # ── 底部操作栏：状态文字 / 进度条 / 生成按钮 ──
         bottom = self._build_action_bar()
         outer.addLayout(bottom)
+
+        # ── 最底部：可折叠日志面板（默认折叠，避免开屏一堆 INFO 干扰）──
+        # 接 QtLogBridge —— bridge 在 setup_logging() 后才存在；
+        # 测试场景未调用 setup_logging 时 bridge=None，跳过连接，面板仍可创建
+        self.log_panel = LogPanel(self)
+        bridge = get_qt_bridge()
+        if bridge is not None:
+            bridge.record_emitted.connect(self.log_panel.on_record)
+            log.debug("LogPanel 已连接到 QtLogBridge")
+        outer.addWidget(self.log_panel)
 
         # 所有结构都搭好了，触发首次加载（refresh 内部 setCurrentRow(0) 会触发
         # preset_selected → _on_preset_selected，此时 settings_pane 已存在）

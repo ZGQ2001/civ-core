@@ -166,6 +166,47 @@ def _check_cli_list_presets() -> str:
         return _fail("CLI 出图模块异常", f"原因：{e}")
 
 
+def _check_log_panel() -> str:
+    """日志面板能否构造、QtLogBridge round-trip 是否完整。"""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        import tempfile
+
+        from PySide6.QtWidgets import QApplication
+
+        from civil_auto.ui.components.log_panel import LogPanel
+        from civil_auto.utils.logger import get_logger, setup_logging
+
+        app = QApplication.instance() or QApplication(sys.argv)
+        _ = app
+
+        # 在临时目录初始化日志（避免污染 logs/app.log）
+        with tempfile.TemporaryDirectory() as td:
+            bridge = setup_logging(log_dir=td)
+            panel = LogPanel()
+            panel.set_collapsed(False)  # 展开才能 isVisibleTo 检测
+            bridge.record_emitted.connect(panel.on_record)
+
+            # 灌一条 INFO 看是否 round-trip 到面板文本里
+            probe = "healthcheck-probe-9f3a"
+            get_logger("civil_auto.healthcheck").info(probe)
+
+            text = panel._text.toPlainText()
+            panel.deleteLater()
+
+            if probe not in text:
+                return _fail(
+                    "日志面板 round-trip 失败",
+                    "QtLogBridge 信号未触达 LogPanel.on_record",
+                )
+
+        return _ok("日志面板功能正常（QtLogBridge → LogPanel 链路完整）")
+    except Exception as e:
+        return _fail("日志面板功能异常", f"原因：{e}")
+
+
 def _check_preview_pane() -> str:
     """预览区组件可构造、缩略图加载链路完整。"""
     import os
@@ -285,6 +326,8 @@ def _check_gui_constructible() -> str:
             missing.append("预设设置表单")
         if not hasattr(view, "preview_pane"):
             missing.append("预览区")
+        if not hasattr(view, "log_panel"):
+            missing.append("日志面板")
 
         view.deleteLater()
         del app  # 让 QApplication 实例 ref-count 不被本函数持续持有
@@ -294,7 +337,7 @@ def _check_gui_constructible() -> str:
                 "GUI 子组件缺失",
                 f"未找到：{ '、'.join(missing) }（可能接线未完成）",
             )
-        return _ok("GUI 启动正常（三栏：列表 + Pivot 双 Tab + 预览区）")
+        return _ok("GUI 启动正常（三栏 + 日志面板）")
     except Exception as e:
         return _fail("GUI 启动失败", f"原因：{e}")
 
@@ -311,6 +354,7 @@ CHECKS: list[Callable[[], str]] = [
     _check_gui_constructible,
     _check_splitter_persistence,
     _check_preview_pane,
+    _check_log_panel,
 ]
 
 

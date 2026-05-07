@@ -56,6 +56,8 @@ from qfluentwidgets import (
     DoubleSpinBox,
     LineEdit,
     PlainTextEdit,
+    PrimaryPushButton,
+    PushButton,
     ScrollArea,
     StrongBodyLabel,
     SubtitleLabel,
@@ -189,6 +191,17 @@ class PresetFormPanel(ScrollArea):
         当 dirty 状态翻转时 emit。dirty 的判定标准是
         "current_data + name 与 baseline 不一致"，所以用户改完又改回去
         会自动恢复 dirty=False。
+      copy_to_user_requested()
+        系统预设态下点击 [复制为我的预设] 按钮时 emit。view 接到后
+        转发给左栏 PresetListPane._on_copy_clicked() 流程。
+      save_requested()
+        用户预设态 / 新建态下点击 [保存修改] / [保存为我的预设] 时 emit。
+        view 接到后做字段校验 + 调 save_user_preset。
+      reset_requested()
+        用户预设态下点击 [重置] 时 emit。view 接到后回调 form.reset_to_baseline()。
+        （没让 form 自己处理是为了让"重置"语义集中在 view 层，便于扩展二次确认。）
+      cancel_new_requested()
+        新建态下点击 [取消] 时 emit。view 接到后让左栏选回首项 + 切回非新建态。
 
     Public API:
       .set_entry(entry: PresetEntry | None)
@@ -203,12 +216,19 @@ class PresetFormPanel(ScrollArea):
         curves PlainTextEdit 的原始文本。供保存校验时拿到准确报错位置。
       .set_read_only(read_only: bool)
         系统预设 → True；用户预设 / 新建 → False
+        切换时同步刷新底部按钮区显示（系统/用户/新建三态）。
       .is_dirty() -> bool
       .reset_to_baseline()
         把表单恢复到 baseline（最后一次 set_entry 时的快照），用于"重置"按钮
+      .baseline_name() -> str
+        最近一次 set_entry 时记录的 name；空字符串 = 新建态（baseline 没有起源条目）
     """
 
     dirty_changed = Signal(bool)
+    copy_to_user_requested = Signal()
+    save_requested = Signal()
+    reset_requested = Signal()
+    cancel_new_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -334,6 +354,44 @@ class PresetFormPanel(ScrollArea):
 
         outer.addStretch(1)
 
+        # ── 底部按钮区：按当前模式（系统/用户/新建）显示不同按钮 ──
+        # 三个按钮共存，靠 setVisible 切换；统一占一行，避免布局抖动
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.setContentsMargins(0, 8, 0, 0)
+        btn_row.addStretch(1)  # 按钮靠右
+
+        # 系统预设态
+        self._copy_btn = PrimaryPushButton("复制为我的预设", content)
+        self._copy_btn.setToolTip("系统预设不能直接修改；复制为我的预设后才能编辑")
+        self._copy_btn.clicked.connect(self.copy_to_user_requested)
+        btn_row.addWidget(self._copy_btn)
+
+        # 用户预设态 / 新建态共用 [保存修改 / 保存为我的预设]
+        # 文字按模式动态切换，按钮对象只一个
+        self._save_btn = PrimaryPushButton("保存修改", content)
+        self._save_btn.clicked.connect(self.save_requested)
+        btn_row.addWidget(self._save_btn)
+
+        # 用户预设态
+        self._reset_btn = PushButton("重置", content)
+        self._reset_btn.setToolTip("把字段恢复到加载时的原值")
+        self._reset_btn.clicked.connect(self.reset_requested)
+        btn_row.addWidget(self._reset_btn)
+
+        # 新建态
+        self._cancel_btn = PushButton("取消", content)
+        self._cancel_btn.setToolTip("放弃新建，回到默认预设")
+        self._cancel_btn.clicked.connect(self.cancel_new_requested)
+        btn_row.addWidget(self._cancel_btn)
+
+        outer.addLayout(btn_row)
+        # 初始：未 set_entry 之前，所有按钮都隐藏（"请从左栏选择"提示）
+        self._copy_btn.hide()
+        self._save_btn.hide()
+        self._reset_btn.hide()
+        self._cancel_btn.hide()
+
     def _wire_signals(self) -> None:
         # 任意字段变化 → 重新计算 dirty
         self.name_edit.textChanged.connect(self._recompute_dirty)
@@ -351,7 +409,7 @@ class PresetFormPanel(ScrollArea):
         """把一条预设推进表单。entry=None → 清空（"+新建"场景）。
 
         进来时整段 block 信号，避免逐字段写入触发 N 次 dirty 重算。
-        最后统一刷一次 baseline + dirty=False。
+        最后统一刷一次 baseline + dirty=False，再刷一次按钮可见性。
         """
         if entry is None:
             name = ""
@@ -369,11 +427,14 @@ class PresetFormPanel(ScrollArea):
 
         # 顶部 hint 文字根据是否有 entry 切换
         if entry is None:
-            self._hint_label.setText("（新建预设：填好字段后点「保存修改」落到我的预设）")
+            self._hint_label.setText("（新建预设：填好字段后点「保存为我的预设」落盘）")
         else:
             self._hint_label.setText(
                 f"当前预设：{entry.name}（{'系统预设（只读）' if entry.source.value == 'system' else '我的预设'}）"
             )
+
+        # 模式切换可能改了按钮区显示
+        self._update_button_visibility()
 
     def current_name(self) -> str:
         return self.name_edit.text().strip()
@@ -409,7 +470,10 @@ class PresetFormPanel(ScrollArea):
         return self.curves_edit.toPlainText()
 
     def set_read_only(self, read_only: bool) -> None:
-        """切换全表单的可编辑性。系统预设进来 → True；用户预设 → False。"""
+        """切换全表单的可编辑性。系统预设进来 → True；用户预设 → False。
+
+        切完同步刷一次按钮可见性（因为按钮态依赖 read_only）。
+        """
         self._read_only = read_only
         for w in (
             self.name_edit,
@@ -423,9 +487,14 @@ class PresetFormPanel(ScrollArea):
         self.curves_edit.setReadOnly(read_only)
         self.x_range_row.set_read_only(read_only)
         self.y_range_row.set_read_only(read_only)
+        self._update_button_visibility()
 
     def is_dirty(self) -> bool:
         return self._dirty
+
+    def baseline_name(self) -> str:
+        """最近一次 set_entry 落下的 name（空字符串 = 新建态）。"""
+        return self._baseline_name
 
     def reset_to_baseline(self) -> None:
         """把表单恢复到 baseline（"重置"按钮）。"""
@@ -506,3 +575,38 @@ class PresetFormPanel(ScrollArea):
         if value != self._dirty:
             self._dirty = value
             self.dirty_changed.emit(value)
+        # 不管翻不翻转，都刷一次"保存"按钮启用 —— 这样只有 dirty 时保存才能点
+        self._update_save_enabled()
+
+    def _update_button_visibility(self) -> None:
+        """按当前模式（系统/用户/新建）切换底部按钮区显示。
+
+        模式判定：
+          • read_only=True              → 系统预设态，单按钮 [复制为我的预设]
+          • read_only=False, baseline_name=""    → 新建态 [保存为我的预设] [取消]
+          • read_only=False, baseline_name 非空 → 用户预设态 [保存修改] [重置]
+        """
+        is_new_draft = (not self._read_only) and (self._baseline_name == "")
+        is_system = self._read_only
+        is_user_edit = (not self._read_only) and (self._baseline_name != "")
+
+        self._copy_btn.setVisible(is_system)
+        self._save_btn.setVisible(is_new_draft or is_user_edit)
+        self._reset_btn.setVisible(is_user_edit)
+        self._cancel_btn.setVisible(is_new_draft)
+
+        # 文字按模式切，让用户看清"是覆盖原条目还是新建一条"
+        if is_new_draft:
+            self._save_btn.setText("保存为我的预设")
+        else:
+            self._save_btn.setText("保存修改")
+
+        self._update_save_enabled()
+
+    def _update_save_enabled(self) -> None:
+        """保存按钮的启用：只有 dirty 状态下才能保存（避免无意义的写盘）。
+
+        新建态 baseline 是空，set_entry(None) 后任何输入都会让 dirty=True，
+        所以在新建态下 dirty=False 意味着用户什么都没填，自然不让保存。
+        """
+        self._save_btn.setEnabled(self._dirty)

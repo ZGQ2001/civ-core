@@ -40,7 +40,11 @@ from civil_auto.core.plot_curves import (
     run_plot_curves,
 )
 from civil_auto.domain.schema import PlotRunSettings
-from civil_auto.infra_io.preset_manager import PresetSource
+from civil_auto.infra_io.preset_manager import (
+    PresetError,
+    PresetSource,
+    save_user_preset,
+)
 from civil_auto.ui.components.error_infobar import (
     show_error_infobar,
     show_success_infobar,
@@ -154,6 +158,13 @@ class PlotCurvesView(QWidget):
         self.preset_pane.preset_selected.connect(self._on_preset_selected)
         self.preset_pane.new_preset_requested.connect(self._on_new_preset_requested)
 
+        # 「预设设置」表单的四个动作信号（系统/用户/新建三态）
+        form = self.center_pane.form_panel
+        form.copy_to_user_requested.connect(self._on_form_copy_clicked)
+        form.save_requested.connect(self._on_form_save_clicked)
+        form.reset_requested.connect(self._on_form_reset_clicked)
+        form.cancel_new_requested.connect(self._on_form_cancel_new_clicked)
+
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("plotCurvesSplitter")
@@ -232,8 +243,7 @@ class PlotCurvesView(QWidget):
     def _on_new_preset_requested(self) -> None:
         """用户在左栏点了「+新建」。
 
-        这里只动 UI 状态，不写盘——空白预设的 name 还得让用户在表单里填，
-        等用户点"保存修改"时（Step 5 实现）才落到 user JSON。
+        清空表单 + 切到「预设设置」Tab；写盘要等用户点「保存为我的预设」。
         """
         log.info("新建预设：清空表单 + 切到「预设设置」Tab")
         # 绘图参数 Tab 的"当前预设"显示也清掉，避免用户看到旧名字
@@ -242,6 +252,143 @@ class PlotCurvesView(QWidget):
         form.set_entry(None)  # 清空所有字段
         form.set_read_only(False)  # 新建的预设永远是用户预设，可编辑
         self.center_pane.show_form_tab()
+
+    # ── 表单按钮 → 写入流程 ─────────────────────────────────────
+    def _on_form_copy_clicked(self) -> None:
+        """系统预设态点 [复制为我的预设] —— 直接复用左栏的复制流程，
+
+        用户当前选中的就是这条系统预设，preset_pane._on_copy_clicked 会
+        弹同样的输名对话框 + 走 copy_system_to_user。这里不重复实现。
+        """
+        log.info("从表单底部触发复制流程")
+        self.preset_pane._on_copy_clicked()
+
+    def _on_form_reset_clicked(self) -> None:
+        """[重置] —— 把表单字段恢复到加载时的原值。
+
+        没让 form 自己处理是为了让"重置"语义集中在 view 层，
+        以后如果要加二次确认（"未保存的修改将丢失"）就只改这里。
+        """
+        log.info("用户点了 [重置]")
+        self.center_pane.form_panel.reset_to_baseline()
+
+    def _on_form_cancel_new_clicked(self) -> None:
+        """新建态点 [取消] —— refresh 选回首项，让 form 自动反映成"系统预设态"。"""
+        log.info("用户取消新建")
+        self.preset_pane.refresh()  # 默认选第一项 → 触发 _on_preset_selected
+
+    def _on_form_save_clicked(self) -> None:
+        """[保存修改] / [保存为我的预设] —— 校验 → 写盘 → refresh + InfoBar。"""
+        form = self.center_pane.form_panel
+        name = form.current_name()
+        data = form.current_data()
+
+        # 1) 字段校验
+        issues = self._validate_preset_form(name, data, form.current_curves_text())
+        if issues:
+            log.warning("保存被拒：%d 项校验未通过", len(issues))
+            show_warning_infobar(
+                self,
+                title="保存被拒：字段校验未通过",
+                reason=f"共 {len(issues)} 项问题需要先解决：",
+                hint="\n".join(f"• {x}" for x in issues),
+                duration=8000,
+            )
+            return
+
+        # 2) 落盘（preset_manager 的 save 是 upsert：同名覆盖）
+        try:
+            save_user_preset(name, data, tool="plot_curves")
+        except PresetError as e:
+            log.error("保存写盘失败：%s", e)
+            show_error_infobar(self, e, where="保存预设")
+            return
+
+        log.info("已保存用户预设：%s", name)
+        show_success_infobar(
+            self,
+            title="已保存到我的预设",
+            content=f"{name}（共 {len(data.get('curves', []))} 条曲线）",
+        )
+
+        # 3) 刷新左栏并选中刚保存的条目，让 form 进入"用户预设态"（含重置按钮）
+        self.preset_pane.refresh(select_name=name)
+
+    @staticmethod
+    def _validate_preset_form(
+        name: str,
+        data: dict,
+        curves_text: str,
+    ) -> list[str]:
+        """轻量字段校验。返回所有问题点的人类可读列表，空 = 通过。
+
+        本轮只做"最低门槛"校验：每个字段非空 + range 单调 + curves 是合法 list。
+        不做深度校验（curves[i].points / Excel 列名一致性等），避免误伤用户的
+        "在线编辑中"状态。深度校验由实际跑出图时再暴露。
+        """
+        issues: list[str] = []
+
+        # name
+        if not name:
+            issues.append("预设名称不能为空")
+        elif name.startswith("_"):
+            issues.append("预设名称不能以下划线开头（保留给注释）")
+
+        # 字符串字段非空
+        if not str(data.get("id_column", "")).strip():
+            issues.append("标识列不能为空")
+
+        fname = str(data.get("filename_template", ""))
+        if not fname.strip():
+            issues.append("文件名模板不能为空")
+        elif "{id}" not in fname:
+            issues.append("文件名模板必须包含 {id} 占位符")
+
+        if not str(data.get("title_template", "")).strip():
+            issues.append("图标题模板不能为空")
+
+        # 轴 label 非空 + range 校验
+        for axis_label, axis_key in [("X 轴", "x_axis"), ("Y 轴", "y_axis")]:
+            axis = data.get(axis_key) or {}
+            if not str(axis.get("label", "")).strip():
+                issues.append(f"{axis_label}标签不能为空")
+            r = axis.get("range")
+            if r is not None:
+                # _RangeRow 总是给出 [min, max, step]；防御性兜底
+                if not isinstance(r, list) or len(r) < 3:
+                    issues.append(f"{axis_label}范围数据格式异常")
+                else:
+                    if r[0] >= r[1]:
+                        issues.append(
+                            f"{axis_label}范围 min ({r[0]}) 必须小于 max ({r[1]})"
+                        )
+                    if r[2] <= 0:
+                        issues.append(f"{axis_label}范围 step ({r[2]}) 必须 > 0")
+
+        # curves
+        curves = data.get("curves")
+        if not isinstance(curves, list):
+            issues.append("曲线必须是 JSON 列表")
+        else:
+            # 检查 PresetFormPanel 塞的解析错误标记
+            for item in curves:
+                if isinstance(item, dict) and "_parse_error" in item:
+                    issues.append(
+                        f"曲线 JSON 解析失败：{item['_parse_error']}"
+                    )
+                    break  # 一条错就足够提示，不重复
+            else:
+                if curves_text.strip() and not curves:
+                    # 文本框非空但解析后为空（罕见）
+                    issues.append("曲线字段无法解析为 JSON 列表")
+                for i, c in enumerate(curves):
+                    if not isinstance(c, dict):
+                        issues.append(f"第 {i + 1} 条曲线必须是 JSON 对象")
+                        continue
+                    if not str(c.get("name", "")).strip():
+                        issues.append(f"第 {i + 1} 条曲线缺少 name 字段")
+
+        return issues
 
     def _on_generate_clicked(self) -> None:
         """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。"""

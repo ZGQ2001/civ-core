@@ -246,3 +246,112 @@ class TestCurvesParsing:
         panel.curves_edit.setPlainText('  [{"name": "a"}]  ')
         # 不去空白，原样返回，方便调用方拿到 JSON 错误位置
         assert panel.current_curves_text() == '  [{"name": "a"}]  '
+
+
+# ──────────────────────────────────────────────────────────────────
+# 底部按钮区三态可见性（Step 5）
+# ──────────────────────────────────────────────────────────────────
+class TestButtonVisibility:
+    """系统/用户/新建三态的按钮显示规则。
+
+    三态判定（与 _update_button_visibility 实现一致）：
+      • read_only=True              → 系统：[复制为我的预设]
+      • read_only=False, baseline="" → 新建：[保存为我的预设] [取消]
+      • read_only=False, baseline 非空 → 用户：[保存修改] [重置]
+
+    用 isVisibleTo(panel) 而非 isVisible() —— 后者要求 panel 自己也得显示，
+    在 offscreen 单元测试里不成立；isVisibleTo 只看父子链条上的本地 visible 标志。
+    """
+
+    def test_system_state_shows_only_copy(self, panel: PresetFormPanel) -> None:
+        panel.set_entry(_sample_entry(PresetSource.SYSTEM))
+        panel.set_read_only(True)
+        assert panel._copy_btn.isVisibleTo(panel) is True
+        assert panel._save_btn.isVisibleTo(panel) is False
+        assert panel._reset_btn.isVisibleTo(panel) is False
+        assert panel._cancel_btn.isVisibleTo(panel) is False
+
+    def test_user_state_shows_save_and_reset(self, panel: PresetFormPanel) -> None:
+        panel.set_entry(_sample_entry(PresetSource.USER))
+        panel.set_read_only(False)
+        assert panel._copy_btn.isVisibleTo(panel) is False
+        assert panel._save_btn.isVisibleTo(panel) is True
+        assert panel._reset_btn.isVisibleTo(panel) is True
+        assert panel._cancel_btn.isVisibleTo(panel) is False
+        assert panel._save_btn.text() == "保存修改"
+
+    def test_new_draft_state_shows_save_and_cancel(
+        self, panel: PresetFormPanel
+    ) -> None:
+        panel.set_entry(None)
+        panel.set_read_only(False)
+        assert panel._copy_btn.isVisibleTo(panel) is False
+        assert panel._save_btn.isVisibleTo(panel) is True
+        assert panel._reset_btn.isVisibleTo(panel) is False
+        assert panel._cancel_btn.isVisibleTo(panel) is True
+        assert panel._save_btn.text() == "保存为我的预设"
+
+    def test_save_button_disabled_when_clean(
+        self, panel: PresetFormPanel
+    ) -> None:
+        """非 dirty 时保存按钮禁用（避免无意义的写盘）。"""
+        panel.set_entry(_sample_entry(PresetSource.USER))
+        panel.set_read_only(False)
+        assert panel.is_dirty() is False
+        assert panel._save_btn.isEnabled() is False
+
+        panel.id_column_edit.setText("改了一下")
+        assert panel.is_dirty() is True
+        assert panel._save_btn.isEnabled() is True
+
+    def test_save_button_emits_signal(self, panel: PresetFormPanel) -> None:
+        emitted: list[None] = []
+        panel.save_requested.connect(lambda: emitted.append(None))
+        panel.set_entry(_sample_entry(PresetSource.USER))
+        panel.set_read_only(False)
+        panel.id_column_edit.setText("改了")  # 让按钮启用
+        panel._save_btn.click()
+        assert len(emitted) == 1
+
+    def test_reset_button_emits_signal(self, panel: PresetFormPanel) -> None:
+        emitted: list[None] = []
+        panel.reset_requested.connect(lambda: emitted.append(None))
+        panel.set_entry(_sample_entry(PresetSource.USER))
+        panel.set_read_only(False)
+        panel._reset_btn.click()
+        assert len(emitted) == 1
+
+    def test_copy_button_emits_signal(self, panel: PresetFormPanel) -> None:
+        emitted: list[None] = []
+        panel.copy_to_user_requested.connect(lambda: emitted.append(None))
+        panel.set_entry(_sample_entry(PresetSource.SYSTEM))
+        panel.set_read_only(True)
+        panel._copy_btn.click()
+        assert len(emitted) == 1
+
+    def test_cancel_new_button_emits_signal(self, panel: PresetFormPanel) -> None:
+        emitted: list[None] = []
+        panel.cancel_new_requested.connect(lambda: emitted.append(None))
+        panel.set_entry(None)
+        panel.set_read_only(False)
+        panel._cancel_btn.click()
+        assert len(emitted) == 1
+
+
+# ──────────────────────────────────────────────────────────────────
+# baseline_name() 公共 API
+# ──────────────────────────────────────────────────────────────────
+class TestBaselineName:
+    def test_returns_entry_name(self, panel: PresetFormPanel) -> None:
+        panel.set_entry(_sample_entry())
+        assert panel.baseline_name() == "锚杆荷载-位移曲线"
+
+    def test_empty_when_new_draft(self, panel: PresetFormPanel) -> None:
+        panel.set_entry(None)
+        assert panel.baseline_name() == ""
+
+    def test_unchanged_by_typing(self, panel: PresetFormPanel) -> None:
+        """用户改 name 字段不应影响 baseline_name —— baseline 只在 set_entry 时刷新。"""
+        panel.set_entry(_sample_entry())
+        panel.name_edit.setText("用户乱改的")
+        assert panel.baseline_name() == "锚杆荷载-位移曲线"

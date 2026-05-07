@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 from PySide6.QtCore import QObject, Signal
 
 if TYPE_CHECKING:
-    from civil_auto.config.loader import LoggingConfig
+    from civil_auto.configs.loader import LoggingConfig
 
 
 # ──────────────────────────────────────────────────────────────────

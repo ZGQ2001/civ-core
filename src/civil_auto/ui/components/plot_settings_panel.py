@@ -33,7 +33,7 @@ from qfluentwidgets import (
     SpinBox,
 )
 
-from civil_auto.config.loader import AppConfig
+from civil_auto.configs.loader import AppConfig
 from civil_auto.domain.schema import PlotRunSettings
 from civil_auto.infra_io.excel_reader import ExcelReadError, read_sheet_names
 from civil_auto.utils.logger import get_logger

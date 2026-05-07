@@ -128,7 +128,7 @@ def _run_cli(args: argparse.Namespace) -> int:
     """统一的 CLI 入口：先把日志和审计架起来，再分发到具体工具。"""
     # 启动日志：让控制台看到 INFO 级进度，并保证审计 logger 写到 logs/audit.jsonl
     try:
-        from civil_auto.config.loader import ConfigError, load_config
+        from civil_auto.configs.loader import ConfigError, load_config
         from civil_auto.utils.logger import setup_from_config
 
         cfg = load_config()

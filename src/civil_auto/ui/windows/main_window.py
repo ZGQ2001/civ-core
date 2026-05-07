@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
-from civil_auto.config.loader import AppConfig
+from civil_auto.configs.loader import AppConfig
 from civil_auto.ui.windows.plot_curves_view import PlotCurvesView
 from civil_auto.utils.logger import get_logger
 

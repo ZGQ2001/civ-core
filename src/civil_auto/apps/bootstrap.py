@@ -23,7 +23,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import Theme, setTheme
 
-from civil_auto.config.loader import AppConfig, load_config
+from civil_auto.configs.loader import AppConfig, load_config
 from civil_auto.utils.logger import get_logger, get_qt_bridge, setup_from_config
 
 log = get_logger(__name__)

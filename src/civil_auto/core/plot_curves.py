@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from civil_auto.config.loader import load_config
+from civil_auto.configs.loader import load_config
 from civil_auto.domain.schema import AxisSpec, CurveSeries, PlotJob
 from civil_auto.infra_io.chart_writer import render_plot_to_png
 from civil_auto.infra_io.excel_reader import read_rows

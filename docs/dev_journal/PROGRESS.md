@@ -51,9 +51,9 @@ uv run python -m civil_auto.main --tool plot_curves \
 新建 `infra_io/preset_manager.py`：
 
 ```
-系统预设（只读）              用户预设（可写）
-presets/plot_curves/         ~/.civil_auto_workspace/presets/
-└── curve_presets.json       └── curve_presets.json
+系统预设（只读）              用户设置（可写）
+presets/plot_curves/         ~/.civil_auto_workspace/configs/
+└── curve_presets.json       └── curve_configs.json
         ↓                            ↓
         └────── 深合并 ──────────────┘
                     ↓

@@ -20,8 +20,9 @@
       - 用户预设 JSON 语法错 → log warning + 当作空字典，**不让用户预设把整个工具搞挂**
       - 系统预设文件不存在 / 语法错 → 抛 `PresetError`（致命，必须修）
   • 写保护
-      - 本模块**只读**。写入用户预设由 T-4 的预设编辑器实现，
-        统一走 `infra_io.file_manager.atomic_writer` 防破损
+      - 写入只针对**用户预设**。`save_user_preset` / `delete_user_preset`
+        / `copy_system_to_user` 三个 API 全部走 `atomic_writer` 防破损。
+      - 系统预设路径在本模块里没有任何写入入口；硬性禁止运行时改 presets/。
 
 为什么不直接放 `core/plot_curves.py`
 ====================================
@@ -32,6 +33,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -39,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from civil_auto.configs.loader import load_config
+from civil_auto.infra_io.file_manager import atomic_writer
 from civil_auto.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -271,3 +274,151 @@ def _read_json_lenient(path: Path) -> dict[str, Any]:
         )
         return {}
     return data
+
+
+# ──────────────────────────────────────────────────────────────────
+# 写入 API（仅写用户预设；T-4 编辑器用）
+# ──────────────────────────────────────────────────────────────────
+# 设计取舍：
+#   • 写入粒度是"整张用户 JSON 文件原子替换"，不做条目级别 patch。
+#     用户预设文件本身就不大（顶多十几个预设），整张读改写比维护
+#     增量补丁简单得多，也避免 atomic_writer 半场介入的边界。
+#   • 系统预设永远不写。`get_system_presets_path` 只用来读，三个
+#     写入函数没有任何路径参数，全部强制落到 `get_user_presets_path` 上。
+#   • 写入前对用户文件用宽松读：如果用户文件是坏的（同 _read_json_lenient
+#     的兜底），我们当成空字典开始写——不会让"用户文件原本是坏的"导致
+#     新的写入再失败。坏文件被覆盖反而是修复。
+#
+# JSON 输出风格：indent=4 + ensure_ascii=False，与系统预设保持一致，
+# 让用户用任何编辑器都能直接看懂改一改（例如复制一份手工调字段）。
+
+_JSON_DUMP_KW = {"indent": 4, "ensure_ascii": False}
+
+
+def _write_user_raw(path: Path, raw: dict[str, Any]) -> None:
+    """把整张用户预设 dict 原子写到 path。
+
+    atomic_writer 已经替我们做了：
+      • 父目录自动 mkdir
+      • 临时文件同盘写入 + os.replace 原子替换
+      • 异常时清理临时文件
+      • 文件被占用时抛 FileBusyError（带 hint）
+    """
+    with atomic_writer(path) as tmp:
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(raw, f, **_JSON_DUMP_KW)
+            f.write("\n")  # 末尾留个换行，对 git diff 友好
+    log.info("用户预设已写入：%s", path)
+
+
+def save_user_preset(
+    name: str,
+    data: dict[str, Any],
+    *,
+    tool: str = "plot_curves",
+) -> None:
+    """保存（新增或覆盖）一条用户预设到用户目录。
+
+    语义：
+      • 用户文件不存在 → 自动创建一份只含本条的文件
+      • 用户文件存在 → 把本条 name 写进/覆盖原文件，其它条目保留原样
+      • name 即使与系统预设同名也允许：保存后用户预设会在合并时覆盖系统预设
+
+    注意：这个函数不会校验 data 的内部结构。校验由调用方（UI 层）在保存前做，
+    这里只负责"把字典原子落盘"。要校验放在这里，会让所有写入路径都得过一遍
+    schema，反而把简单的复制/重命名也卡住了。
+    """
+    if not name or name.startswith("_"):
+        # "_" 开头的 key 在合并时会被过滤掉，写进去也没意义；直接拒
+        raise PresetError(
+            f"非法预设名：{name!r}",
+            hint="预设名不能为空，也不能以下划线开头（保留给注释 key）",
+        )
+
+    path = get_user_presets_path(tool)
+    raw = _read_json_lenient(path)  # 现有用户预设，坏文件兜底为空
+    raw[name] = copy.deepcopy(data)  # 深拷贝，防外面改 dict 影响落盘内容
+    _write_user_raw(path, raw)
+    log.info("save_user_preset: name=%r tool=%r", name, tool)
+
+
+def delete_user_preset(name: str, *, tool: str = "plot_curves") -> None:
+    """从用户预设里删除一条。
+
+    语义：
+      • 该条不在用户文件里 → 抛 PresetError（多半是系统预设；系统预设不可删）
+      • 删后用户文件如果变成空 dict，仍写回（不删文件本身），保持
+        "用户文件存在 = 用户启用过自定义"的可观测语义
+
+    UI 应该在调这个函数前先判断 PresetEntry.source：
+      - SYSTEM → 按钮置灰，不让点
+      - USER  → 弹确认后再调
+    这里只是兜底防御，不依赖 UI 把关。
+    """
+    path = get_user_presets_path(tool)
+    raw = _read_json_lenient(path)
+    if name not in raw:
+        raise PresetError(
+            f"用户预设里找不到 {name!r}",
+            hint=(
+                "可能的原因：(1) 这是系统预设，系统预设不可删；"
+                "(2) 名字拼错；(3) 用户文件已被外部改动。"
+            ),
+        )
+    del raw[name]
+    _write_user_raw(path, raw)
+    log.info("delete_user_preset: name=%r tool=%r", name, tool)
+
+
+def copy_system_to_user(
+    source_name: str,
+    new_name: str,
+    *,
+    tool: str = "plot_curves",
+) -> None:
+    """把任一现存预设（系统或用户）复制为用户预设的新条目。
+
+    语义：
+      • 在合并后的列表里查 source_name —— 系统/用户都可作为复制源
+        （用户也常想"基于我现有的预设再分一份"）
+      • new_name 已经在用户预设里 → 抛 PresetError，防误覆盖
+        （要覆盖请直接调 save_user_preset；这里语义是"新增"）
+      • new_name 与系统预设同名也允许（结果是用户预设覆盖系统预设，
+        和手工编辑系统预设达到的效果一致）
+
+    用法（T-4 列表区"复制为我的预设"按钮）：
+        try:
+            copy_system_to_user("锚杆荷载-位移曲线", "我的锚杆 (副本)")
+        except PresetError as e:
+            show_error_infobar(self, e, where="复制预设")
+    """
+    if not new_name or new_name.startswith("_"):
+        raise PresetError(
+            f"非法新预设名：{new_name!r}",
+            hint="预设名不能为空，也不能以下划线开头",
+        )
+
+    # 找复制源：直接走合并后的列表，系统/用户都能命中
+    merged = {e.name: e for e in load_merged_presets(tool)}
+    if source_name not in merged:
+        raise PresetError(
+            f"找不到要复制的预设：{source_name!r}",
+            hint=f"已知预设：{list(merged.keys())}",
+        )
+
+    # 防误覆盖：new_name 不能已存在于用户预设（系统同名是允许的，覆盖系统是常见诉求）
+    user_raw = _read_json_lenient(get_user_presets_path(tool))
+    if new_name in user_raw:
+        raise PresetError(
+            f"用户预设里已经有 {new_name!r}，请改个名字",
+            hint="如果确实要覆盖，请直接编辑后保存，而不是复制。",
+        )
+
+    # 直接复用 save_user_preset 的写入路径，避免重复实现读改写
+    save_user_preset(new_name, merged[source_name].data, tool=tool)
+    log.info(
+        "copy_system_to_user: source=%r → new=%r tool=%r",
+        source_name,
+        new_name,
+        tool,
+    )

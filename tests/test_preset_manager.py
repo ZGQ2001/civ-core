@@ -385,3 +385,293 @@ class TestPathGetters:
             preset_manager.get_user_presets_path("not_a_tool")
         with pytest.raises(PresetError):
             preset_manager.get_system_presets_path("not_a_tool")
+
+
+# ──────────────────────────────────────────────────────────────────
+# 写入 API：save_user_preset / delete_user_preset / copy_system_to_user
+# ──────────────────────────────────────────────────────────────────
+# 这一组测试把系统预设路径 + 用户预设路径全 monkeypatch 到 tmp_path，
+# 写入只会落到 tmp_path 里，不动开发机真实文件系统。
+class TestWriteAPIs:
+    """覆盖 T-4 Step 1 新增的三个写入 API 的所有正常 + 异常路径。"""
+
+    @pytest.fixture
+    def patched_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> tuple[Path, Path]:
+        """把系统/用户预设路径 monkeypatch 到 tmp_path，并预置一份系统预设。
+
+        返回 (sys_file, user_file)。user_file 默认不存在，由各用例按需创建。
+        """
+        sys_file = tmp_path / "sys.json"
+        user_file = tmp_path / "user_dir" / "curve_presets.json"  # 父目录不存在，验证 mkdir
+        sys_file.write_text(
+            json.dumps(
+                {
+                    "_comment": "system file",
+                    "锚杆": {"id_column": "锚杆编号", "x_axis": {"label": "位移"}},
+                    "回弹": {"id_column": "构件编号"},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            preset_manager, "get_system_presets_path", lambda tool="plot_curves": sys_file
+        )
+        monkeypatch.setattr(
+            preset_manager, "get_user_presets_path", lambda tool="plot_curves": user_file
+        )
+        return sys_file, user_file
+
+    # ── save_user_preset ─────────────────────────────────────────
+    def test_save_creates_file_when_missing(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """用户文件不存在 → 自动创建（含父目录），只写本条。"""
+        _, user_file = patched_paths
+        assert not user_file.exists()
+
+        preset_manager.save_user_preset("我的锚杆", {"id_column": "X"})
+
+        assert user_file.is_file()
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {"我的锚杆": {"id_column": "X"}}
+
+    def test_save_appends_to_existing_file(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """用户文件已有其它预设 → 新增不破坏原有内容。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"已有": {"v": 1}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        preset_manager.save_user_preset("新增", {"v": 2})
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {"已有": {"v": 1}, "新增": {"v": 2}}
+
+    def test_save_overrides_same_name(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """同名保存 → 覆盖原值。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"X": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
+        )
+
+        preset_manager.save_user_preset("X", {"v": 999})
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {"X": {"v": 999}}
+
+    def test_save_deepcopies_input(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """落盘后修改入参 dict，不应影响磁盘内容。"""
+        _, user_file = patched_paths
+        data = {"v": [1, 2, 3]}
+        preset_manager.save_user_preset("A", data)
+        data["v"].append(999)  # 入参被外部改
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw["A"]["v"] == [1, 2, 3]  # 磁盘上不受影响
+
+    def test_save_recovers_from_broken_user_file(
+        self,
+        patched_paths: tuple[Path, Path],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """用户文件原本是坏的 → 当空字典处理，写入新条目（修复了坏文件）。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text("{not json", encoding="utf-8")
+
+        with caplog.at_level("WARNING"):
+            preset_manager.save_user_preset("修复后", {"v": 1})
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {"修复后": {"v": 1}}
+
+    def test_save_rejects_empty_name(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        with pytest.raises(PresetError) as ei:
+            preset_manager.save_user_preset("", {})
+        assert "非法预设名" in str(ei.value)
+
+    def test_save_rejects_underscore_name(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """下划线开头的 key 在合并时会被过滤，禁止保存。"""
+        with pytest.raises(PresetError):
+            preset_manager.save_user_preset("_comment", {"v": 1})
+
+    def test_save_writes_human_readable_json(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """落盘格式：indent + 中文不转义，让用户能直接编辑。"""
+        _, user_file = patched_paths
+        preset_manager.save_user_preset("锚杆", {"id_column": "锚杆编号"})
+        text = user_file.read_text(encoding="utf-8")
+        # 中文不应被转义成 \uXXXX
+        assert "锚杆编号" in text
+        # 应该有缩进（indent=4）
+        assert "    " in text
+
+    # ── delete_user_preset ───────────────────────────────────────
+    def test_delete_removes_entry(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"A": {"v": 1}, "B": {"v": 2}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        preset_manager.delete_user_preset("A")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {"B": {"v": 2}}
+
+    def test_delete_keeps_file_even_when_empty(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """删完最后一条 → 文件仍存在（保留"用户启用过自定义"的标记）。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"only": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
+        )
+
+        preset_manager.delete_user_preset("only")
+
+        assert user_file.is_file()
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw == {}
+
+    def test_delete_missing_name_raises(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """不在用户预设里（典型场景：误删系统预设）→ 抛 PresetError。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"A": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
+        )
+
+        with pytest.raises(PresetError) as ei:
+            preset_manager.delete_user_preset("锚杆")  # 系统预设名
+        assert "找不到" in str(ei.value)
+        assert ei.value.hint  # 必须带 hint 引导用户
+
+    def test_delete_when_user_file_missing(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """用户文件根本不存在 → 抛 PresetError（按"找不到"处理）。"""
+        with pytest.raises(PresetError):
+            preset_manager.delete_user_preset("任何名")
+
+    # ── copy_system_to_user ──────────────────────────────────────
+    def test_copy_system_preset_to_user(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """复制系统预设 → 落到用户文件，data 是深拷贝。"""
+        _, user_file = patched_paths
+
+        preset_manager.copy_system_to_user("锚杆", "我的锚杆 (副本)")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert "我的锚杆 (副本)" in raw
+        assert raw["我的锚杆 (副本)"] == {
+            "id_column": "锚杆编号",
+            "x_axis": {"label": "位移"},
+        }
+
+    def test_copy_user_preset_to_user(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """复制源也可以是已有的用户预设。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
+        )
+
+        preset_manager.copy_system_to_user("我的A", "我的A (再分一份)")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert raw["我的A (再分一份)"] == {"v": 1}
+
+    def test_copy_unknown_source_raises(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        with pytest.raises(PresetError) as ei:
+            preset_manager.copy_system_to_user("不存在的预设", "新名")
+        assert "找不到" in str(ei.value)
+
+    def test_copy_to_existing_user_name_raises(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """new_name 已经在用户预设里 → 拒绝（防误覆盖）。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"已有": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
+        )
+
+        with pytest.raises(PresetError) as ei:
+            preset_manager.copy_system_to_user("锚杆", "已有")
+        assert "已经有" in str(ei.value)
+
+    def test_copy_to_system_same_name_allowed(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """new_name 与系统预设同名是允许的（用户主动覆盖系统预设的常见做法）。"""
+        _, user_file = patched_paths
+
+        # 复制"锚杆"为同名 → 等价于"基于系统预设建一份用户副本"
+        preset_manager.copy_system_to_user("锚杆", "锚杆")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert "锚杆" in raw
+        # 复制出的内容与系统预设相同（深拷贝）
+        assert raw["锚杆"]["id_column"] == "锚杆编号"
+
+    def test_copy_rejects_empty_new_name(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        with pytest.raises(PresetError):
+            preset_manager.copy_system_to_user("锚杆", "")
+
+    def test_copy_rejects_underscore_new_name(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        with pytest.raises(PresetError):
+            preset_manager.copy_system_to_user("锚杆", "_注释")
+
+    def test_copy_does_not_share_reference_with_source(
+        self, patched_paths: tuple[Path, Path]
+    ) -> None:
+        """复制后修改用户副本不应影响原系统预设的内存对象。
+
+        这一条保护的是"先复制后立即修改"的工作流（T-4 列表"复制为我的"
+        紧跟着切到"预设设置"Tab 让用户改）。如果 data 是共享引用，
+        UI 改用户副本就会污染同一进程里别人持有的系统预设句柄。
+        """
+        sys_file, user_file = patched_paths
+        preset_manager.copy_system_to_user("锚杆", "我的锚杆")
+
+        # 直接读用户文件、改 axis label，再读系统文件确认未被改
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        raw["我的锚杆"]["x_axis"]["label"] = "改了的位移"
+        user_file.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+
+        sys_raw = json.loads(sys_file.read_text(encoding="utf-8"))
+        assert sys_raw["锚杆"]["x_axis"]["label"] == "位移"

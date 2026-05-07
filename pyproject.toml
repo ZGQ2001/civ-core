@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "civil-auto-workspace"
-version = "1.0.0"
-description = "桥梁/土建检测报告自动化工作台 — PySide6 + qfluentwidgets"
+version = "0.2.3-dev"
+description = "土木工程自动化工具箱"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }

@@ -26,7 +26,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from civil_auto.configs.loader import load_config
 from civil_auto.domain.schema import AxisSpec, CurveSeries, PlotJob
 from civil_auto.infra_io.chart_writer import render_plot_to_png
 from civil_auto.infra_io.excel_reader import read_rows
@@ -54,24 +53,46 @@ class PlotCurvesError(RuntimeError):
 # 模块 1：预设加载与列名解析（纯计算）
 # ──────────────────────────────────────────────────────────────────
 def load_presets(presets_path: Path | str | None = None) -> dict[str, Any]:
-    """加载曲线预设库 JSON。
+    """加载曲线预设库（合并系统 + 用户）。
 
-    presets_path=None 时读 cfg.paths.curve_presets（即
-    ./presets/plot_curves/curve_presets.json）；显式传路径则直接读那个文件
-    （测试 / 自定义预设库）。
+    两种调用模式：
+      • presets_path=None（生产路径）
+            走 preset_manager.load_merged_presets_as_dict("plot_curves")
+            返回的是"系统预设 + 用户预设"合并后的扁平字典 {预设名: data}
+            - 系统预设：cfg.paths.curve_presets
+            - 用户预设：cfg.paths.user_presets_dir / plot_curves/curve_presets.json
+            - 合并语义见 infra_io.preset_manager._merge
+      • presets_path 显式传入（测试 / CLI --presets-path）
+            直接读该文件，不走合并逻辑。这条路径是给"我就要用这个 JSON 跑一次"的
+            场景留的，比如单元测试用 fixtures，或者 CLI 调试自定义预设库。
+
+    异常：
+      • presets_path=None 时由 preset_manager 抛 PresetError；这里转成 PlotCurvesError
+        以保持 core 层异常面统一（UI / CLI 三段式提示用 PlotCurvesError 解析）
+      • presets_path 显式传入时，文件缺失 / JSON 错直接抛 PlotCurvesError
     """
+    # 模式一：默认路径 → 走合并管线
     if presets_path is None:
-        cfg = load_config()
-        path = cfg.paths.curve_presets
-    else:
-        path = Path(presets_path)
+        # 延迟 import：避免循环引用（preset_manager 也走 load_config）
+        from civil_auto.infra_io.preset_manager import (
+            PresetError,
+            load_merged_presets_as_dict,
+        )
 
+        try:
+            return load_merged_presets_as_dict("plot_curves")
+        except PresetError as e:
+            # 转成 PlotCurvesError 让上层（UI/CLI）统一三段式提示
+            raise PlotCurvesError(str(e), hint=e.hint) from e
+
+    # 模式二：显式路径 → 单文件直读（不合并用户预设）
+    path = Path(presets_path)
     if not path.is_file():
         raise PlotCurvesError(
             f"曲线预设库不存在：{path}",
             hint=(
-                "请检查 config.toml 的 paths.curve_presets 是否正确，"
-                "或将预设 JSON 放到该路径下。"
+                "请检查路径是否正确，或将预设 JSON 放到该路径下。"
+                "（如果想用默认路径 + 用户预设合并，去掉 --presets-path / presets_path 参数即可）"
             ),
         )
 

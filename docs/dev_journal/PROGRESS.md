@@ -7,15 +7,16 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0 命名统一 + T-1 preset_manager + T-2（已被 T-1 吸收）+ T-3 主流程接入 全部完成；50 测试通过。
+**当前状态：** T-0~T-4 全部完成；136 测试通过；healthcheck 全 ✅。
 
-**当前任务：** T-4 预设管理 UI 重设计（中间面板 Pivot 双 Tab：绘图参数 / 预设设置），未开始
+**当前任务：** 等下一轮指派（候选：P1 预览区实现 / P1 QSplitter 宽度记忆 / P1 预设编辑器迁移 / P2 旧代码清理）
 
-**下一步：** 与用户对齐 T-4 范围，开始实现"系统预设只读 + 我的预设可编辑 + 复制为我的预设"等交互
+**下一步：** 与用户对齐下一轮任务范围
 
 **遗留问题：**
-- `tests/test_cross_ref_fix.py` 引用旧的 `civil_auto.models.schema`，已知 stale，跑测试时用 `--ignore` 跳过（已登记到 P2）
+- `tests/test_cross_ref_fix.py` 引用旧的 `civil_auto.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
 - 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
+- `pyproject.toml` 的 `[project.optional-dependencies].dev` 与 `[dependency-groups].dev` 不一致（pytest-qt 未装到 uv 环境），目前 UI 测试用 QApplication+offscreen 绕开，登记后续修
 
 ---
 ### 可用指令（动态更新）
@@ -27,7 +28,8 @@ uv run python -m civil_auto.main --tool plot_curves \
     --input data/raw/sample.xlsx \
     --preset 锚杆荷载-位移曲线 \
     --output data/output/曲线图                          # CLI 出图
-uv run python -m pytest --ignore=tests/test_cross_ref_fix.py  # 跑测试（跳过 stale 旧测试）
+uv run python -m pytest                                 # 跑测试（pytest 配置已 ignore stale 测试）
+uv run python scripts/healthcheck.py                    # 健康检查（每次验收后必跑）
 
 # 切换 DEV_MODE：编辑 config.toml [dev].enabled = true，
 # 用户预设会改读 tests/fixtures/presets/plot_curves/curve_presets.json
@@ -135,39 +137,44 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 -----
 
-### T-4：预设管理 UI 重设计（中间面板 Pivot 双 Tab）
+### T-4：预设管理 UI 重设计 ✅ 已完成（2026-05-07）
 
-```
-┌──────────────┬──────────────────────────────────┬──────────────┐
-│ 预设列表      │  绘图参数  │  预设设置  ←Pivot   │   预览区     │
-│              │                                  │              │
-│ 📦 系统预设  │  绘图参数 tab：当前已有内容        │              │
-│ 🔒 锚杆荷载  │                                  │              │
-│ 🔒 回弹曲线  │  预设设置 tab：                   │              │
-│ ──────────── │    预设名称  [_______]            │              │
-│ ✏️ 我的预设  │    X 轴标签  [_______]            │              │
-│  自定义锚杆  │    Y 轴范围  [min] ~ [max]        │              │
-│              │    阈值线    ● 开 [_____]         │              │
-│ [+新建][复制]│    曲线颜色  [色块]               │              │
-│       [删除] │                                  │              │
-│              │  🔒系统预设：只读 [复制为我的预设] │              │
-│              │  ✏️我的预设：[保存修改] [重置]    │              │
-└──────────────┴──────────────────────────────────┴──────────────┘
-```
+按 6 步推进，每步一个 commit（含 Step 0 = CI 修复 + healthcheck 补漏）：
 
-**交互规则：**
+| Step | 改动                                                                                       | Commit       |
+| ---- | ----------------------------------------------------------------------------------------- | ------------ |
+| 0a   | `pyproject.toml addopts` 默认 `--ignore=tests/test_cross_ref_fix.py`，CI 不再因 stale 测试中断 | `55ee90e`    |
+| 1    | `infra_io/preset_manager.py` 加 3 个写入 API（`save_user_preset` / `delete_user_preset` / `copy_system_to_user`），全走 `atomic_writer`；测试 +20 用例 | `4c976db`    |
+| 2    | 新建 `ui/components/preset_form_panel.py`：「预设设置」表单，`set_entry` / `current_data` / `set_read_only` / `dirty_changed` 四件套；`_RangeRow` 处理 `[min,max,step]` ↔ `null`；curves 字段先用 JSON 文本框 | `dd170fc`    |
+| 3    | 新建 `ui/components/plot_center_pane.py`：Pivot + QStackedWidget 双 Tab；改 `plot_curves_view.py` 把中栏从 `PlotSettingsPanel` 换成 `PlotCenterPane`，选预设时联动 `form_panel.set_entry` + 切到「预设设置」Tab | `8b3488a`    |
+| 4    | `preset_list.py` 加底部按钮组 [+新建][复制][删除]；`_NameInputDialog`（MessageBoxBase 派生）；`refresh(select_name=...)`；按钮态按 source 联动；`+新建` 经 `new_preset_requested` 信号通知 view | `a20cf04`    |
+| 0b   | 新建 `scripts/healthcheck.py`（项目宪法补漏）：5 个检查项覆盖配置/系统预设读/用户预设写/CLI/GUI；输出纯中文 ✅/❌ | `9905520`    |
+| 5    | `preset_form_panel.py` 加底部按钮三态（系统 → [复制为我的]；用户 → [保存修改][重置]；新建 → [保存为我的预设][取消]）；非 dirty 时保存按钮禁用；`plot_curves_view.py` 加 4 个槽 + 静态 `_validate_preset_form`；测试 +30 用例 | `fcb052a`    |
+| 6    | 验收 + 更新本文档                                                                            | （本次提交）  |
 
-- 单击预设 → 自动切到”预设设置” tab，参数联动刷新
-- 系统预设 → 只读 + “复制为我的预设”按钮
-- 我的预设 → 可编辑 + “保存修改”和”重置”
-- `[+新建]` → 切到”预设设置” tab，字段清空，等待填写
+**交付的交互规则（与 T-4 设计稿一致）：**
 
------
+- 单击预设 → 自动切到「预设设置」Tab，所有字段联动刷新
+- 🔒 系统预设 → 表单只读 + 单按钮 [复制为我的预设]（与左栏底部「复制」按钮等价）
+- ✏️ 我的预设 → 表单可编辑 + [保存修改][重置]，dirty 检测控制保存按钮启用
+- [+新建] → 切「预设设置」Tab + 字段清空 + [保存为我的预设][取消]
 
-### T-5：测试
+**保存校验（一次性返回所有问题，黄色 InfoBar 列出）：**
+- name 非空 + 不以下划线开头
+- id_column / 文件名模板 / 标题模板 / 轴标签 非空
+- filename_template 必含 `{id}`
+- range 非 null 时 `min < max && step > 0`
+- curves 是 list；若 JSON 解析失败标记被识别就直接拒；每条至少有 name
 
-- `tests/fixtures/presets/curve_presets.json`（开发测试预设数据）
-- `tests/test_preset_manager.py`（覆盖兜底、同名覆盖、异名追加、DEV 路径切换）
+**保存语义：** `save_user_preset(name, data)` 是 upsert（同名覆盖）。
+- 用户预设态改 name 后保存 = 新增一条用户预设（旧的不动）= "另存为"
+- 用户预设态保持 name 保存 = 覆盖原条目
+- 新建态 name 与系统预设同名 = 用户预设覆盖系统预设（合并语义自动接管）
+
+**不在本轮范围（已登记 P1 待办）：**
+- 完整可视化 curves 编辑器（迁 02_Core/curve_template_editor.py）
+- 预览区（缩略图列表 + 单击放大）
+- QSplitter 宽度记忆
 
 -----
 
@@ -178,14 +185,15 @@ get_user_presets_path(tool="plot_curves") -> Path
 - QSplitter 宽度记忆（QSettings 持久化）
 - 日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）
 - 预览区实现（缩略图列表 + 单击放大）
-- 预设编辑器迁移（`02_Core/curve_template_editor.py`）
+- 预设编辑器迁移（`02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
+- pytest-qt 装到 `[dependency-groups].dev`（与 `[project.optional-dependencies].dev` 对齐），让 UI 单测能用 `qtbot` fixture
 
 ### P2：旧代码清理
 
 - `io/` → `infra_io/`
 - 消除 41 个 pyright 报错（`body_format.py`、`table_format.py`、`sort_photos.py`、`renumber_photos.py`）
 - 删除 `02_Core/`、`04_Config/`、`99_old_code/`
-- 清理 `tests/test_cross_ref_fix.py`（引用旧路径 `civil_auto.models.schema`，目前实际在 `civil_auto.domain.schema`，跑测试要 `--ignore` 跳过）
+- 删除 `tests/test_cross_ref_fix.py`（引用旧路径 `civil_auto.models.schema`，目前 pyproject.toml 已默认 ignore；02_Core 全迁完后整文件删除）
 
 ### P3：新工具接入（工具数 > 1 时启用）
 

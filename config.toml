@@ -52,3 +52,11 @@ backup_before_format = true         # 排版前自动备份当前文档
 [thresholds]
 max_undo_steps = 50                 # QUndoStack 最多保留多少步
 log_panel_lines = 5000              # 日志面板最大保留行数
+
+# ── 开发模式 ─────────────────────────────────────────────────────
+# enabled=true：用户预设写入下面 user_presets_dir（默认 tests/fixtures/presets/，进 git）
+# enabled=false：用户预设写入 ~/.civil_auto_workspace/presets/（不进 git，最终用户场景）
+# 普通用户保持 false；只有写测试 / 调试预设系统时才打开。
+[dev]
+enabled = false
+user_presets_dir = "tests/fixtures/presets"

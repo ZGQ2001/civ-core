@@ -7,11 +7,11 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0 命名统一 + T-1 preset_manager（双路径合并）已完成；50 测试通过。
+**当前状态：** T-0 命名统一 + T-1 preset_manager + T-2（已被 T-1 吸收）+ T-3 主流程接入 全部完成；50 测试通过。
 
-**当前任务：** T-2 `config/loader.py` 联动收尾（如有），或直接进 T-3 主流程接入
+**当前任务：** T-4 预设管理 UI 重设计（中间面板 Pivot 双 Tab：绘图参数 / 预设设置），未开始
 
-**下一步：** 检查 T-2 是否还有遗漏（loader.py 在 T-1 已加 DevConfig+user_presets_dir，可能 T-2 工作量已被吸收），与用户确认后进 T-3：让 `ui/components/preset_list.py` 改用 `load_merged_presets()` 显示 🔒/✏️ 来源图标
+**下一步：** 与用户对齐 T-4 范围，开始实现"系统预设只读 + 我的预设可编辑 + 复制为我的预设"等交互
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civil_auto.models.schema`，已知 stale，跑测试时用 `--ignore` 跳过（已登记到 P2）
@@ -121,9 +121,17 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 -----
 
-### T-3：主流程接入
+### T-3：主流程接入 ✅ 已完成（2026-05-07）
 
-`core/plot_curves.py` 和 `ui/components/preset_list.py` 改用 `load_merged_presets()`。
+| Step | 改动 | Commit |
+| ---- | --- | ------- |
+| 1-3  | `ui/components/preset_list.py` 改用 `load_merged_presets("plot_curves")`，列表项前缀 🔒/✏️ 图标，UserRole 改存整张 PresetEntry，新增 `selected_preset_entry()` API；状态行 `"系统 N ・ 我的 M"`；异常面切到 `PresetError` | `87a771f` |
+| 4    | 验收：50 测试通过、`--list-presets` 正常、模块 import 无误 | — |
+| 5    | 更新 PROGRESS.md | （本次） |
+
+**注意**：`core/plot_curves.py` 在 T-1/5 已经接入 `load_merged_presets_as_dict`，本步骤只需补 UI 侧。
+
+**`_on_current_changed` 的隐患修复**：原代码 `name = current.text()` 在加了图标前缀后会拿到 `"🔒 锚杆荷载-位移曲线"` 这种带前缀字符串，T-3 改成从 `PresetEntry.name` 读，保证发出的信号是真预设名。这个坑写完留个心眼是值得的。
 
 -----
 

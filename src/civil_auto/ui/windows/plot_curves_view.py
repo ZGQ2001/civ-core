@@ -2,7 +2,7 @@
 
 布局：
   ┌─────────────┬───────────────────┬──────────────────────┐
-  │ 模板列表     │ 设置面板           │ 预览区                │
+  │ 预设列表     │ 设置面板           │ 预览区                │
   │ (Step 10)   │ (Step 11)         │ (后续步骤)             │
   │             │                   │                      │
   │             │                   │                      │
@@ -10,13 +10,13 @@
         左               中                  右
 
 为什么 QSplitter 而不是固定 QHBoxLayout：
-  • 不同分辨率 / 不同长度的模板名 / 不同字段量的设置面板，宽度需求差异大
+  • 不同分辨率 / 不同长度的预设名 / 不同字段量的设置面板，宽度需求差异大
   • 用户可以自己拖动分隔条，记忆习惯（持久化拖到何处是后续步骤的事）
   • setCollapsible(False) 防止误把某栏拖没
 
 第二阶段渐进填充：
   Step 9（当前）：搭起 QSplitter + 3 个 _PanePlaceholder 占位
-  Step 10        左栏换 TemplateListPane（真模板列表，从 cfg.paths.curve_templates 读）
+  Step 10        左栏换 PresetListPane（真预设列表，从 cfg.paths.curve_presets 读）
   Step 11        中栏换 PlotSettingsPanel（SettingCardGroup + PlotJob 双向绑定）
   Step 12        中栏底部加"生成"按钮 + 异步 worker
   Step 13        异常通过 InfoBar 三段式提示
@@ -46,7 +46,7 @@ from civil_auto.ui.components.error_infobar import (
     show_warning_infobar,
 )
 from civil_auto.ui.components.plot_settings_panel import PlotSettingsPanel
-from civil_auto.ui.components.template_list import TemplateListPane
+from civil_auto.ui.components.preset_list import PresetListPane
 from civil_auto.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -129,11 +129,11 @@ class PlotCurvesView(QWidget):
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(0)
 
-        # 左栏：模板列表（step 10）
-        # 注意：TemplateListPane.__init__ 不会自己 refresh —— 必须 build 完所有面板、
+        # 左栏：预设列表（step 10）
+        # 注意：PresetListPane.__init__ 不会自己 refresh —— 必须 build 完所有面板、
         # connect 完所有信号之后再 refresh()，否则首次 setCurrentRow(0) 触发的
-        # template_selected slot 可能访问到尚未创建的 settings_pane / preview_pane。
-        self.template_pane = TemplateListPane(self)
+        # preset_selected slot 可能访问到尚未创建的 settings_pane / preview_pane。
+        self.preset_pane = PresetListPane(self)
 
         # 中栏：设置面板（step 11）
         self.settings_pane = PlotSettingsPanel(self._cfg, self)
@@ -146,19 +146,19 @@ class PlotCurvesView(QWidget):
         )
 
         # 现在所有面板都就位了，连信号，再触发首次加载
-        self.template_pane.template_selected.connect(self._on_template_selected)
+        self.preset_pane.preset_selected.connect(self._on_preset_selected)
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("plotCurvesSplitter")
         splitter.setChildrenCollapsible(False)  # 防止用户误把某栏拖没
         splitter.setHandleWidth(6)
-        splitter.addWidget(self.template_pane)
+        splitter.addWidget(self.preset_pane)
         splitter.addWidget(self.settings_pane)
         splitter.addWidget(self.preview_pane)
         splitter.setSizes(list(_INITIAL_SIZES))
 
-        # 三栏的拉伸优先级：模板列表固定窄，设置面板和预览区可拉伸
+        # 三栏的拉伸优先级：预设列表固定窄，设置面板和预览区可拉伸
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 2)
@@ -171,8 +171,8 @@ class PlotCurvesView(QWidget):
         outer.addLayout(bottom)
 
         # 所有结构都搭好了，触发首次加载（refresh 内部 setCurrentRow(0) 会触发
-        # template_selected → _on_template_selected，此时 settings_pane 已存在）
-        self.template_pane.refresh()
+        # preset_selected → _on_preset_selected，此时 settings_pane 已存在）
+        self.preset_pane.refresh()
 
     def _build_action_bar(self) -> QHBoxLayout:
         """底部操作栏：状态 + 进度 + "生成"按钮。"""
@@ -199,10 +199,10 @@ class PlotCurvesView(QWidget):
         return bar
 
     # ── slots ────────────────────────────────────────────────────
-    def _on_template_selected(self, name: str) -> None:
-        """用户在左栏切模板 → 把模板名推到中栏设置面板。"""
-        log.info("已选模板：%s", name)
-        self.settings_pane.set_template_name(name)
+    def _on_preset_selected(self, name: str) -> None:
+        """用户在左栏切预设 → 把预设名推到中栏设置面板。"""
+        log.info("已选预设：%s", name)
+        self.settings_pane.set_preset_name(name)
 
     def _on_generate_clicked(self) -> None:
         """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。"""
@@ -219,7 +219,7 @@ class PlotCurvesView(QWidget):
                 reason=f"还差这些必填项：{ ' / '.join(missing) }",
                 hint=(
                     "「输入 Excel」「输出目录」在中栏的设置面板里点按钮选；"
-                    "「模板」在左栏列表里选。"
+                    "「预设」在左栏列表里选。"
                 ),
             )
             return
@@ -240,8 +240,8 @@ class PlotCurvesView(QWidget):
         missing: list[str] = []
         if s.input_path is None:
             missing.append("输入 Excel")
-        if s.template_name is None:
-            missing.append("模板")
+        if s.preset_name is None:
+            missing.append("预设")
         if s.output_dir is None:
             missing.append("输出目录")
         return missing
@@ -356,16 +356,16 @@ class _PlotCurvesWorker(QRunnable):
     def run(self) -> None:  # noqa: D401 —— Qt 约定的入口名
         self._safe_emit("started")
         try:
-            # 这里 input_path / template_name / output_dir 已被 _missing_required_fields
+            # 这里 input_path / preset_name / output_dir 已被 _missing_required_fields
             # 拦过；为类型严密再 assert 一次，命中说明上游校验有 bug
             assert self._settings.input_path is not None
-            assert self._settings.template_name is not None
+            assert self._settings.preset_name is not None
             assert self._settings.output_dir is not None
 
             result = run_plot_curves(
                 excel_path=self._settings.input_path,
                 sheet_name=self._settings.sheet_name,
-                template_name=self._settings.template_name,
+                preset_name=self._settings.preset_name,
                 output_dir=self._settings.output_dir,
                 header_row=self._settings.header_row,
                 progress_cb=lambda d, t: self._safe_emit("progress", d, t),

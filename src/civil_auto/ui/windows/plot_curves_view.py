@@ -40,12 +40,13 @@ from civil_auto.core.plot_curves import (
     run_plot_curves,
 )
 from civil_auto.domain.schema import PlotRunSettings
+from civil_auto.infra_io.preset_manager import PresetSource
 from civil_auto.ui.components.error_infobar import (
     show_error_infobar,
     show_success_infobar,
     show_warning_infobar,
 )
-from civil_auto.ui.components.plot_settings_panel import PlotSettingsPanel
+from civil_auto.ui.components.plot_center_pane import PlotCenterPane
 from civil_auto.ui.components.preset_list import PresetListPane
 from civil_auto.utils.logger import get_logger
 
@@ -132,11 +133,15 @@ class PlotCurvesView(QWidget):
         # 左栏：预设列表（step 10）
         # 注意：PresetListPane.__init__ 不会自己 refresh —— 必须 build 完所有面板、
         # connect 完所有信号之后再 refresh()，否则首次 setCurrentRow(0) 触发的
-        # preset_selected slot 可能访问到尚未创建的 settings_pane / preview_pane。
+        # preset_selected slot 可能访问到尚未创建的 center_pane / preview_pane。
         self.preset_pane = PresetListPane(self)
 
-        # 中栏：设置面板（step 11）
-        self.settings_pane = PlotSettingsPanel(self._cfg, self)
+        # 中栏：Pivot 双 Tab（绘图参数 / 预设设置）—— T-4 重构
+        # PlotCenterPane 内部装着 PlotSettingsPanel + PresetFormPanel
+        # 通过 .settings_panel / .form_panel 暴露给本视图做联动
+        self.center_pane = PlotCenterPane(self._cfg, self)
+        # settings_pane 别名：保持与原代码兼容（worker / 校验等仍叫这个名字）
+        self.settings_pane = self.center_pane.settings_panel
 
         # 右栏：预览区（仍是占位，后续步骤接入）
         self.preview_pane = _PanePlaceholder(
@@ -154,7 +159,7 @@ class PlotCurvesView(QWidget):
         splitter.setChildrenCollapsible(False)  # 防止用户误把某栏拖没
         splitter.setHandleWidth(6)
         splitter.addWidget(self.preset_pane)
-        splitter.addWidget(self.settings_pane)
+        splitter.addWidget(self.center_pane)
         splitter.addWidget(self.preview_pane)
         splitter.setSizes(list(_INITIAL_SIZES))
 
@@ -200,9 +205,28 @@ class PlotCurvesView(QWidget):
 
     # ── slots ────────────────────────────────────────────────────
     def _on_preset_selected(self, name: str) -> None:
-        """用户在左栏切预设 → 把预设名推到中栏设置面板。"""
+        """用户在左栏切预设 → 同步两件事：
+
+        1) 「绘图参数」Tab 的 PlotSettingsPanel 显示当前预设名（worker 用）
+        2) 「预设设置」Tab 的 PresetFormPanel 字段铺成 entry 的内容；
+           系统预设 → 只读；用户预设 → 可编辑
+
+        按 PROGRESS.md T-4 交互规则，单击预设后自动切到「预设设置」Tab，
+        让用户能立即看到 / 改动当前预设字段，而不是停在绘图参数页里"看不见"。
+        """
         log.info("已选预设：%s", name)
         self.settings_pane.set_preset_name(name)
+
+        # 拉整张 PresetEntry，推到「预设设置」Tab；
+        # 选不到（理论上不会，refresh 后 list 必有值）按 entry=None 处理（清空）
+        entry = self.preset_pane.selected_preset_entry()
+        form = self.center_pane.form_panel
+        form.set_entry(entry)
+        if entry is not None:
+            form.set_read_only(entry.source is PresetSource.SYSTEM)
+
+        # 切到「预设设置」Tab —— 让用户立即看到选中的预设字段
+        self.center_pane.show_form_tab()
 
     def _on_generate_clicked(self) -> None:
         """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。"""

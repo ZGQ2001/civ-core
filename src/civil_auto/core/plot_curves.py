@@ -1,13 +1,13 @@
 """绘曲线图工具核心业务逻辑（纯参数 / 无 IO / 无 UI）。
 
 职责切分（v2.3 总纲）：
-  本模块只负责"模板 + 数据行 → PlotJob 列表"的纯计算，以及顶层 orchestrator
+  本模块只负责"预设 + 数据行 → PlotJob 列表"的纯计算，以及顶层 orchestrator
   把 IO 串起来。具体分工：
     • Excel 读取：infra_io.excel_reader.read_rows / get_column_headers
     • PNG 落盘：infra_io.chart_writer.render_plot_to_png
               （内部走 file_manager.atomic_writer，自带占用预检 + 原子替换）
-    • 模板 JSON：默认读 cfg.paths.curve_templates（即 ./templates/plot_curves/curve_templates.json）
-                 也支持显式传 templates_path（测试 / 自定义模板库）
+    • 预设 JSON：默认读 cfg.paths.curve_presets（即 ./presets/plot_curves/curve_presets.json）
+                 也支持显式传 presets_path（测试 / 自定义预设库）
 
 旧版 plot_curves.py 里的 UI 流程（_main / _request_params / _generate_example_flow）
 已剥离，将于第二阶段在 ui/windows/plot_curves_view.py 用 PySide6 重做。
@@ -51,27 +51,27 @@ class PlotCurvesError(RuntimeError):
 
 
 # ──────────────────────────────────────────────────────────────────
-# 模块 1：模板加载与列名解析（纯计算）
+# 模块 1：预设加载与列名解析（纯计算）
 # ──────────────────────────────────────────────────────────────────
-def load_templates(templates_path: Path | str | None = None) -> dict[str, Any]:
-    """加载曲线模板库 JSON。
+def load_presets(presets_path: Path | str | None = None) -> dict[str, Any]:
+    """加载曲线预设库 JSON。
 
-    templates_path=None 时读 cfg.paths.curve_templates（即
-    ./templates/plot_curves/curve_templates.json）；显式传路径则直接读那个文件
-    （测试 / 自定义模板库）。
+    presets_path=None 时读 cfg.paths.curve_presets（即
+    ./presets/plot_curves/curve_presets.json）；显式传路径则直接读那个文件
+    （测试 / 自定义预设库）。
     """
-    if templates_path is None:
+    if presets_path is None:
         cfg = load_config()
-        path = cfg.paths.curve_templates
+        path = cfg.paths.curve_presets
     else:
-        path = Path(templates_path)
+        path = Path(presets_path)
 
     if not path.is_file():
         raise PlotCurvesError(
-            f"曲线模板库不存在：{path}",
+            f"曲线预设库不存在：{path}",
             hint=(
-                "请检查 config.toml 的 paths.curve_templates 是否正确，"
-                "或将模板 JSON 放到该路径下。"
+                "请检查 config.toml 的 paths.curve_presets 是否正确，"
+                "或将预设 JSON 放到该路径下。"
             ),
         )
 
@@ -82,14 +82,14 @@ def load_templates(templates_path: Path | str | None = None) -> dict[str, Any]:
             return json.load(f)
     except json.JSONDecodeError as e:
         raise PlotCurvesError(
-            f"模板库 JSON 解析失败（{path.name}）：{e}",
+            f"预设库 JSON 解析失败（{path.name}）：{e}",
             hint=f"路径：{path}，请检查 JSON 语法。",
         ) from e
 
 
-def get_template_names(templates: dict[str, Any]) -> list[str]:
-    """筛掉以 _ 开头的注释字段，返回真实模板名列表。"""
-    return [k for k in templates.keys() if not k.startswith("_")]
+def get_preset_names(presets: dict[str, Any]) -> list[str]:
+    """筛掉以 _ 开头的注释字段，返回真实预设名列表。"""
+    return [k for k in presets.keys() if not k.startswith("_")]
 
 
 def _axis_spec_from_dict(d: dict[str, Any]) -> AxisSpec:
@@ -113,19 +113,19 @@ def _normalize_col(name: str) -> str:
 
 
 def resolve_columns(
-    template: dict[str, Any], available_cols: list[str]
+    preset: dict[str, Any], available_cols: list[str]
 ) -> tuple[dict[str, str], list[str]]:
-    """把模板里的所有 var_column / id_column 映射到 Excel 实际列名。
+    """把预设里的所有 var_column / id_column 映射到 Excel 实际列名。
 
     返回 (resolved, missing)：
-        resolved = {模板列名: Excel 实际列名}
-        missing  = 模板需要但 Excel 表头里找不到的列名列表
+        resolved = {预设列名: Excel 实际列名}
+        missing  = 预设需要但 Excel 表头里找不到的列名列表
     匹配策略：精确匹配优先 → 退化到「去空白 + 小写」容差匹配。
     """
     norm_to_actual: dict[str, str] = {_normalize_col(c): c for c in available_cols}
 
-    needed: list[str] = [template["id_column"]]
-    for curve in template.get("curves", []):
+    needed: list[str] = [preset["id_column"]]
+    for curve in preset.get("curves", []):
         for pt in curve.get("points", []):
             if pt.get("var_column") and pt["var_column"] not in needed:
                 needed.append(pt["var_column"])
@@ -159,24 +159,25 @@ class BuildSummary:
     skipped_bad_data: list[tuple[int, str]]  # (1-based 行号, 标识值)
 
 
-def _series_from_template(
+def _series_from_preset(
     curve_def: dict[str, Any],
     row: dict[str, Any],
     col_map: dict[str, str],
 ) -> CurveSeries | None:
-    """模板曲线定义 + 一行 Excel → CurveSeries。
+    """预设曲线定义 + 一行 Excel → CurveSeries。
 
     任一点缺数据则整条曲线返回 None；调用方据此跳过该行。
-    fixed_axis='y' 表示 y 是模板写死的常量（如载荷 60kN），x 从 Excel 列读；
+    fixed_axis='y' 表示 y 是预设写死的常量（如载荷 60kN），x 从 Excel 列读；
     'x' 反之。
     """
     xs: list[float] = []
     ys: list[float] = []
     for pt in curve_def["points"]:
-        template_col = pt["var_column"]
-        actual_col = col_map.get(template_col, template_col)
+        # preset_col 是预设里写的列名引用，actual_col 是 Excel 实际表头（容差匹配后的结果）
+        preset_col = pt["var_column"]
+        actual_col = col_map.get(preset_col, preset_col)
         if actual_col not in row:
-            log.warning("列 %r 在 Excel 中找不到（已尝试空白容差匹配）", template_col)
+            log.warning("列 %r 在 Excel 中找不到（已尝试空白容差匹配）", preset_col)
             return None
         raw = row[actual_col]
         try:
@@ -193,8 +194,8 @@ def _series_from_template(
             ys.append(var_value)
         else:
             raise PlotCurvesError(
-                f"模板 fixed_axis 必须是 'x' 或 'y'，得到 {pt['fixed_axis']!r}",
-                hint="检查 curve_templates.json 里对应曲线点的 fixed_axis 字段。",
+                f"预设 fixed_axis 必须是 'x' 或 'y'，得到 {pt['fixed_axis']!r}",
+                hint="检查 curve_presets.json 里对应曲线点的 fixed_axis 字段。",
             )
 
     return CurveSeries(
@@ -209,36 +210,39 @@ def _series_from_template(
 
 
 def build_jobs(
-    template: dict[str, Any],
+    preset: dict[str, Any],
     rows: list[dict[str, Any]],
     output_dir: Path | str,
 ) -> tuple[list[PlotJob], BuildSummary]:
-    """模板 + 数据行 → (PlotJob 列表, BuildSummary)。
+    """预设 + 数据行 → (PlotJob 列表, BuildSummary)。
 
     与旧版差异：
       • 缺列时直接抛 PlotCurvesError（带 hint），不再静默返回空列表
         —— 调用方应在 build_jobs 之前调 preflight_check 拦下
       • 跳过的行汇总到 BuildSummary，由调用方决定提示方式
       • output_dir 用 Path 拼接（不再用 os.path.join）
+
+    注意：JSON 字段名 filename_template / title_template 是字面意义的"字符串模板"
+    （含 {id} 占位符），与"预设"概念无关，因此保留 template 命名。
     """
     out_dir = Path(output_dir)
     available_cols = list(rows[0].keys()) if rows else []
 
-    col_map, missing = resolve_columns(template, available_cols)
+    col_map, missing = resolve_columns(preset, available_cols)
     if missing:
         raise PlotCurvesError(
-            f"模板需要的 {len(missing)} 个列在 Excel 表头中找不到：{missing}",
+            f"预设需要的 {len(missing)} 个列在 Excel 表头中找不到：{missing}",
             hint=(
                 "请先调 preflight_check 拿详细诊断；"
-                "或用[曲线模板编辑器]修正列名后重试。"
+                "或用[曲线预设编辑器]修正列名后重试。"
             ),
         )
 
-    id_col_actual = col_map[template["id_column"]]
-    fname_tpl = template["filename_template"]
-    title_tpl = template["title_template"]
-    x_axis = _axis_spec_from_dict(template["x_axis"])
-    y_axis = _axis_spec_from_dict(template["y_axis"])
+    id_col_actual = col_map[preset["id_column"]]
+    fname_tpl = preset["filename_template"]  # 字面字符串模板，保留 template 命名
+    title_tpl = preset["title_template"]     # 同上
+    x_axis = _axis_spec_from_dict(preset["x_axis"])
+    y_axis = _axis_spec_from_dict(preset["y_axis"])
 
     jobs: list[PlotJob] = []
     skipped_empty_id: list[int] = []
@@ -259,13 +263,13 @@ def build_jobs(
 
         series_list: list[CurveSeries] = []
         skip_row = False
-        for curve_def in template["curves"]:
-            s = _series_from_template(curve_def, row, col_map)
+        for curve_def in preset["curves"]:
+            s = _series_from_preset(curve_def, row, col_map)
             if s is None:
                 log.warning(
                     "第 %d 行 (%s=%s) 数据不完整，跳过此行。",
                     idx,
-                    template["id_column"],
+                    preset["id_column"],
                     id_str,
                 )
                 skipped_bad_data.append((idx, id_str))
@@ -297,30 +301,30 @@ def build_jobs(
 # 模块 3：预检（纯计算，给 UI / CLI 出"对用户友好"的诊断报告）
 # ──────────────────────────────────────────────────────────────────
 def preflight_check(
-    template: dict[str, Any], excel_columns: list[str]
+    preset: dict[str, Any], excel_columns: list[str]
 ) -> tuple[bool, str]:
-    """跑批量前体检：检查 Excel 表头是否覆盖模板需要的所有列。
+    """跑批量前体检：检查 Excel 表头是否覆盖预设需要的所有列。
 
     返回 (是否通过, 多行诊断文本)。文本可直接喂给 UI 的 InfoBar 详情区或 CLI 输出。
     """
-    col_map, missing = resolve_columns(template, excel_columns)
+    col_map, missing = resolve_columns(preset, excel_columns)
     needed_total = len(col_map) + len(missing)
     n_ok = len(col_map)
 
     lines: list[str] = []
     lines.append(
-        f"📋 模板需 {needed_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n"
+        f"📋 预设需 {needed_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n"
     )
 
     if col_map:
-        lines.append("✅ 已匹配的列（左=模板，右=Excel 实际）:")
-        for tpl_col, actual in col_map.items():
-            tag = "  (容差匹配)" if tpl_col != actual else ""
-            lines.append(f"   • {tpl_col!r:50s} → {actual!r}{tag}")
+        lines.append("✅ 已匹配的列（左=预设，右=Excel 实际）:")
+        for preset_col, actual in col_map.items():
+            tag = "  (容差匹配)" if preset_col != actual else ""
+            lines.append(f"   • {preset_col!r:50s} → {actual!r}{tag}")
         lines.append("")
 
     if missing:
-        lines.append("❌ 模板需要但 Excel 找不到的列:")
+        lines.append("❌ 预设需要但 Excel 找不到的列:")
         for m in missing:
             lines.append(f"   • {m!r}")
         lines.append("")
@@ -328,7 +332,7 @@ def preflight_check(
         for c in excel_columns:
             lines.append(f"   - {c!r}")
         lines.append("")
-        lines.append("→ 请打开 [曲线模板编辑器] 把这些列名改成与 Excel 一致。")
+        lines.append("→ 请打开 [曲线预设编辑器] 把这些列名改成与 Excel 一致。")
 
     ok = len(missing) == 0
     return ok, "\n".join(lines)
@@ -354,14 +358,14 @@ class RunResult:
 def run_plot_curves(
     excel_path: Path | str,
     sheet_name: str | None,
-    template_name: str,
+    preset_name: str,
     output_dir: Path | str,
     *,
-    templates_path: Path | str | None = None,
+    presets_path: Path | str | None = None,
     header_row: int = 1,
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> RunResult:
-    """工具入口：读 Excel → 套模板 → 批量出 PNG。
+    """工具入口：读 Excel → 套预设 → 批量出 PNG。
 
     本函数本身不调用任何 open/read/write，全部 IO 委派给 infra_io：
       excel_reader.read_rows  —— 读 Excel
@@ -370,9 +374,9 @@ def run_plot_curves(
     参数：
       excel_path     数据 Excel 路径
       sheet_name     None=取第一个 sheet
-      template_name  curve_templates.json 里的模板键
+      preset_name    curve_presets.json 里的预设键
       output_dir     PNG 输出目录（不存在会被 atomic_writer 自动 mkdir -p）
-      templates_path 自定义模板库 JSON 路径，None=读 cfg.paths.curve_templates
+      presets_path   自定义预设库 JSON 路径，None=读 cfg.paths.curve_presets
       header_row     表头所在行（1-based），缺省 1
       progress_cb    可选回调 (done, total)，每张图渲染后调一次。
                      UI 用它把进度信号发回主线程；CLI/脚本可不传，默认 no-op。
@@ -388,25 +392,25 @@ def run_plot_curves(
     input_sha: str | None = None
     audit_extra: dict[str, Any] = {
         "sheet": sheet_name,
-        "template": template_name,
+        "preset": preset_name,
         "header_row": header_row,
     }
 
     try:
-        # 先算 SHA256：尽量早算，让任何分支（含模板缺失等业务异常）的 failed 审计都能带上指纹。
+        # 先算 SHA256：尽量早算，让任何分支（含预设缺失等业务异常）的 failed 审计都能带上指纹。
         # 文件不存在 / 不可读时跳过；下游 read_rows 会以 ExcelReadError 给用户准确提示。
         if excel.is_file():
             input_sha = compute_file_sha256(excel)
 
-        log.info("📂 加载模板库")
-        templates = load_templates(templates_path)
-        if template_name not in templates:
+        log.info("📂 加载预设库")
+        presets = load_presets(presets_path)
+        if preset_name not in presets:
             raise PlotCurvesError(
-                f"模板 {template_name!r} 不存在",
-                hint=f"可用模板：{get_template_names(templates)}",
+                f"预设 {preset_name!r} 不存在",
+                hint=f"可用预设：{get_preset_names(presets)}",
             )
-        template = templates[template_name]
-        log.info("   ↳ 选用模板: %s", template_name)
+        preset = presets[preset_name]
+        log.info("   ↳ 选用预设: %s", preset_name)
 
         log.info("📊 读取 Excel: %s  Sheet: %s", excel, sheet_name or "<默认第一个>")
         rows = read_rows(excel, sheet_name, header_row=header_row)
@@ -423,7 +427,7 @@ def run_plot_curves(
             )
 
         log.info("🔨 构建绘图任务...")
-        jobs, summary = build_jobs(template, rows, out_dir)
+        jobs, summary = build_jobs(preset, rows, out_dir)
         log.info(
             "   ↳ 有效任务 %d 个（跳过空行 %d，跳过缺数据行 %d）",
             len(jobs),
@@ -490,7 +494,7 @@ def run_plot_curves(
         return RunResult(written=written, failed=failed, summary=summary)
 
     except Exception as e:
-        # 审计：整批失败（找不到模板 / Excel 读取失败 / Sheet 空 / build_jobs 缺列等）
+        # 审计：整批失败（找不到预设 / Excel 读取失败 / Sheet 空 / build_jobs 缺列等）
         write_audit_entry(
             _TOOL_NAME,
             status="failed",

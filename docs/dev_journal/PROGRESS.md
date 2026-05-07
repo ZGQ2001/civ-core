@@ -246,6 +246,7 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 ### P2：旧代码清理
 
+- 项目更名 `civil-auto-workspace` → `civ-core`（中文名：`筑核`）
 - `io/` → `infra_io/`
 - 消除 41 个 pyright 报错（`body_format.py`、`table_format.py`、`sort_photos.py`、`renumber_photos.py`）
 - 删除 `02_Core/`、`04_Config/`、`99_old_code/`

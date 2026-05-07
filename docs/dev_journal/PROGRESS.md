@@ -159,6 +159,7 @@ user_presets_dir = "tests/fixtures/presets"
 - `io/` → `infra_io/`
 - 消除 41 个 pyright 报错（`body_format.py`、`table_format.py`、`sort_photos.py`、`renumber_photos.py`）
 - 删除 `02_Core/`、`04_Config/`、`99_old_code/`
+- 清理 `tests/test_cross_ref_fix.py`（引用旧路径 `civil_auto.models.schema`，目前实际在 `civil_auto.domain.schema`，跑测试要 `--ignore` 跳过）
 
 ### P3：新工具接入（工具数 > 1 时启用）
 

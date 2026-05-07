@@ -3,7 +3,7 @@
 调用方式：
   • 不带参数         → 启动 PySide6 主窗口（第二阶段才完整可用）
   • --tool plot_curves → 走轻量 CLI，跑批量绘图（第一阶段最终验收）
-  • --list-templates  → 列出可用曲线模板后退出
+  • --list-presets    → 列出可用曲线预设后退出
 
 为什么把 CLI 和 UI 合一个 main：
   • 与 pyproject.toml [project.scripts] 入口 `civil-auto` 一致，避免双入口
@@ -62,15 +62,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Sheet 名；省略则用第一个 sheet",
     )
     p.add_argument(
-        "--template",
+        "--preset",
         default=None,
-        help="曲线模板名；省略则用模板库里的第一个，并在 stderr 提示",
+        help="曲线预设名；省略则用预设库里的第一个，并在 stderr 提示",
     )
     p.add_argument(
-        "--templates-path",
+        "--presets-path",
         type=Path,
         default=None,
-        help="自定义模板库 JSON 路径；省略则读 config.toml 的 paths.curve_templates",
+        help="自定义预设库 JSON 路径；省略则读 config.toml 的 paths.curve_presets",
     )
     p.add_argument(
         "--header-row",
@@ -79,9 +79,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="表头所在行（1-based），默认 1",
     )
     p.add_argument(
-        "--list-templates",
+        "--list-presets",
         action="store_true",
-        help="列出模板库里所有可用模板名后退出",
+        help="列出预设库里所有可用预设名后退出",
     )
     return p
 
@@ -93,8 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     """主入口。argv=None 时从 sys.argv 取（pytest 调用时可显式传）。"""
     args = _build_parser().parse_args(argv)
 
-    # CLI 分支：列模板 / 跑工具
-    if args.list_templates or args.tool is not None:
+    # CLI 分支：列预设 / 跑工具
+    if args.list_presets or args.tool is not None:
         return _run_cli(args)
 
     # 默认分支：启动 GUI（第二阶段任务，未就绪时给清晰提示）
@@ -113,7 +113,7 @@ def _launch_gui() -> int:
         sys.stderr.write(
             f"GUI 启动失败：{e}\n"
             "请确认 PySide6 / qfluentwidgets 已安装，或改用 CLI 跑工具：\n"
-            "  python -m civil_auto.main --list-templates\n"
+            "  python -m civil_auto.main --list-presets\n"
             "  python -m civil_auto.main --tool plot_curves --input <xlsx>\n"
         )
         return 2
@@ -137,8 +137,8 @@ def _run_cli(args: argparse.Namespace) -> int:
         sys.stderr.write(f"❌ 配置加载失败：{e}\n")
         return 2
 
-    if args.list_templates:
-        return _cmd_list_templates(args)
+    if args.list_presets:
+        return _cmd_list_presets(args)
 
     if args.tool == "plot_curves":
         return _cmd_plot_curves(args)
@@ -148,26 +148,26 @@ def _run_cli(args: argparse.Namespace) -> int:
     return 2
 
 
-def _cmd_list_templates(args: argparse.Namespace) -> int:
-    """列出曲线模板库里的所有模板名（一行一个，便于 shell 管道）。"""
+def _cmd_list_presets(args: argparse.Namespace) -> int:
+    """列出曲线预设库里的所有预设名（一行一个，便于 shell 管道）。"""
     from civil_auto.core.plot_curves import (
         PlotCurvesError,
-        get_template_names,
-        load_templates,
+        get_preset_names,
+        load_presets,
     )
 
     try:
-        tpls = load_templates(args.templates_path)
+        presets = load_presets(args.presets_path)
     except PlotCurvesError as e:
-        sys.stderr.write(f"❌ 模板库加载失败：{e}\n")
+        sys.stderr.write(f"❌ 预设库加载失败：{e}\n")
         if e.hint:
             sys.stderr.write(f"建议：{e.hint}\n")
         return 2
 
-    names = get_template_names(tpls)
+    names = get_preset_names(presets)
     if not names:
         sys.stderr.write(
-            "⚠️ 模板库为空。请先在 templates/plot_curves/curve_templates.json 添加模板。\n"
+            "⚠️ 预设库为空。请先在 presets/plot_curves/curve_presets.json 添加预设。\n"
         )
         return 0
     for n in names:
@@ -177,36 +177,36 @@ def _cmd_list_templates(args: argparse.Namespace) -> int:
 
 
 def _cmd_plot_curves(args: argparse.Namespace) -> int:
-    """plot_curves 子命令：读 Excel → 套模板 → 批量出 PNG。"""
+    """plot_curves 子命令：读 Excel → 套预设 → 批量出 PNG。"""
     if args.input is None:
         sys.stderr.write("❌ --tool plot_curves 必须配合 --input <xlsx 路径>\n")
         return 2
 
     from civil_auto.core.plot_curves import (
         PlotCurvesError,
-        get_template_names,
-        load_templates,
+        get_preset_names,
+        load_presets,
         run_plot_curves,
     )
     from civil_auto.infra_io.excel_reader import ExcelReadError
     from civil_auto.infra_io.file_manager import FileBusyError, FileWriteError
 
-    # 模板默认值：模板库的第一个
-    template_name = args.template
-    if template_name is None:
+    # 预设默认值：预设库的第一个
+    preset_name = args.preset
+    if preset_name is None:
         try:
-            tpls = load_templates(args.templates_path)
+            presets = load_presets(args.presets_path)
         except PlotCurvesError as e:
-            sys.stderr.write(f"❌ 模板库加载失败：{e}\n")
+            sys.stderr.write(f"❌ 预设库加载失败：{e}\n")
             if e.hint:
                 sys.stderr.write(f"建议：{e.hint}\n")
             return 2
-        names = get_template_names(tpls)
+        names = get_preset_names(presets)
         if not names:
-            sys.stderr.write("❌ 模板库为空，无法选默认模板。\n")
+            sys.stderr.write("❌ 预设库为空，无法选默认预设。\n")
             return 2
-        template_name = names[0]
-        sys.stderr.write(f"ℹ️ 未指定 --template，默认使用：{template_name}\n")
+        preset_name = names[0]
+        sys.stderr.write(f"ℹ️ 未指定 --preset，默认使用：{preset_name}\n")
 
     # 输出目录默认值：input 同级 / 曲线图/
     output_dir = args.output if args.output is not None else args.input.parent / "曲线图"
@@ -215,9 +215,9 @@ def _cmd_plot_curves(args: argparse.Namespace) -> int:
         result = run_plot_curves(
             excel_path=args.input,
             sheet_name=args.sheet,
-            template_name=template_name,
+            preset_name=preset_name,
             output_dir=output_dir,
-            templates_path=args.templates_path,
+            presets_path=args.presets_path,
             header_row=args.header_row,
         )
     except (PlotCurvesError, ExcelReadError, FileBusyError, FileWriteError) as e:

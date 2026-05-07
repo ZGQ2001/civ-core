@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
 def _launch_gui() -> int:
     """启动 PySide6 主窗口。装配细节全部在 app.bootstrap 里。"""
     try:
-        from civil_auto.app.bootstrap import run as run_gui
+        from civil_auto.apps.bootstrap import run as run_gui
     except ImportError as e:
         # 这里走到说明 PySide6 / qfluentwidgets 没装。提示用户切 CLI 跑工具。
         sys.stderr.write(

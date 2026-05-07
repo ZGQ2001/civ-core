@@ -50,9 +50,10 @@ class PathsConfig:
     在 load_config() 末尾由 _resolve_paths 统一解析为绝对路径并 mkdir。
 
     字段语义：
-      • 目录类（templates / data_raw / data_output / logs）→ mkdir(parents=True)
+      • 目录类（templates / data_raw / data_output / logs / user_presets_dir）→ mkdir(parents=True)
       • 文件类（curve_presets）→ 只确保 parent 目录存在，不创建文件本身
       • legacy_config_dir：DEPRECATED，仅为未迁移的旧工具兜底，不主动创建
+      • user_presets_dir：派生字段（由 [dev] 段决定），不在 config.toml 直填，_resolve_paths 计算
     """
 
     templates: Path
@@ -60,6 +61,7 @@ class PathsConfig:
     data_raw: Path
     data_output: Path
     logs: Path
+    user_presets_dir: Path  # 派生字段：dev.enabled=true 时走仓库内 fixtures，否则走用户家目录
     legacy_config_dir: Path | None = None
 
 
@@ -124,6 +126,22 @@ class WordConfig:
 
 
 @dataclass(frozen=True)
+class DevConfig:
+    """开发模式配置。
+
+    enabled=true：用户预设走仓库内 user_presets_dir（默认 tests/fixtures/presets/），
+                  方便测试用例和调试时把预设数据纳入 git。
+    enabled=false：用户预设走 ~/.civil_auto_workspace/presets/，是最终用户场景。
+
+    user_presets_dir 仅在 enabled=true 时使用；enabled=false 时此字段不参与路径计算。
+    """
+
+    enabled: bool = False
+    # 仓库内的相对路径；enabled=false 时被忽略
+    user_presets_dir: str = "tests/fixtures/presets"
+
+
+@dataclass(frozen=True)
 class Thresholds:
     max_undo_steps: int = 50
     log_panel_lines: int = 5000
@@ -150,6 +168,7 @@ class AppConfig:
     batch_queue: BatchQueueConfig = field(default_factory=BatchQueueConfig)
     word: WordConfig = field(default_factory=WordConfig)
     thresholds: Thresholds = field(default_factory=Thresholds)
+    dev: DevConfig = field(default_factory=DevConfig)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -174,7 +193,11 @@ def _filter_kwargs(cls: type, raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_paths(raw: dict[str, Any]) -> PathsConfig:
-    """paths 段：5 个必填路径 + 可选 legacy_config_dir。"""
+    """paths 段：5 个必填路径 + 可选 legacy_config_dir。
+
+    user_presets_dir 是派生字段，不从 toml 读；这里先填占位 Path，
+    由 _resolve_paths 拿到 dev 配置后替换为实际路径。
+    """
     kwargs = _filter_kwargs(PathsConfig, raw)
     for key in ("templates", "curve_presets", "data_raw", "data_output", "logs"):
         if key not in kwargs:
@@ -183,6 +206,8 @@ def _build_paths(raw: dict[str, Any]) -> PathsConfig:
     legacy = kwargs.get("legacy_config_dir")
     if legacy is not None:
         kwargs["legacy_config_dir"] = Path(str(legacy))
+    # user_presets_dir 占位：_resolve_paths 会替换。这里给一个明显非法的占位避免误用
+    kwargs["user_presets_dir"] = Path("__user_presets_placeholder__")
     return PathsConfig(**kwargs)
 
 
@@ -232,6 +257,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             ),
             word=WordConfig(**_filter_kwargs(WordConfig, raw.get("word", {}))),
             thresholds=Thresholds(**_filter_kwargs(Thresholds, raw.get("thresholds", {}))),
+            dev=DevConfig(**_filter_kwargs(DevConfig, raw.get("dev", {}))),
         )
     except ConfigError:
         raise
@@ -264,6 +290,14 @@ def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
     abs_curve_presets = _abs(cfg.paths.curve_presets)
     assert abs_curve_presets is not None  # 必填字段，_abs 不会返 None
 
+    # 计算 user_presets_dir：派生字段，按 dev.enabled 决定路径
+    #   • enabled=true  → project_root / cfg.dev.user_presets_dir（仓库内 fixtures）
+    #   • enabled=false → ~/.civil_auto_workspace/presets/（用户家目录）
+    if cfg.dev.enabled:
+        user_presets_dir = (project_root / cfg.dev.user_presets_dir).resolve()
+    else:
+        user_presets_dir = (Path.home() / ".civil_auto_workspace" / "presets").resolve()
+
     new_paths = replace(
         cfg.paths,
         templates=_abs(cfg.paths.templates),
@@ -271,11 +305,12 @@ def _resolve_paths(cfg: AppConfig, project_root: Path) -> AppConfig:
         data_raw=_abs(cfg.paths.data_raw),
         data_output=_abs(cfg.paths.data_output),
         logs=_abs(cfg.paths.logs),
+        user_presets_dir=user_presets_dir,
         legacy_config_dir=_abs(cfg.paths.legacy_config_dir),
     )
 
-    # 目录类：确保存在
-    for fname in ("templates", "data_raw", "data_output", "logs"):
+    # 目录类：确保存在（含 user_presets_dir 自动 mkdir，硬性要求"用户目录不存在 → 静默创建"）
+    for fname in ("templates", "data_raw", "data_output", "logs", "user_presets_dir"):
         path: Path = getattr(new_paths, fname)
         path.mkdir(parents=True, exist_ok=True)
     # 文件类：只 mkdir parent；文件本身由各工具按需创建/读取

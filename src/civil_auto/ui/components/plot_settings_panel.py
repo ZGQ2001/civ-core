@@ -133,7 +133,7 @@ class PlotSettingsPanel(ScrollArea):
     Public API:
       .settings          property，返回当前 PlotRunSettings 浅拷贝（防外部误改）
       .set_settings(rs)  把外部 dataclass 推进面板，UI 反映之
-      .set_template_name(name)  专用入口：左栏 TemplateListPane 切模板时调
+      .set_preset_name(name)  专用入口：左栏 PresetListPane 切预设时调
     """
 
     settings_changed = Signal()
@@ -208,15 +208,15 @@ class PlotSettingsPanel(ScrollArea):
 
         outer.addWidget(group)
 
-        # 当前模板名展示（只读 —— 由左栏 TemplateListPane 推过来）
+        # 当前预设名展示（只读 —— 由左栏 PresetListPane 推过来）
         # 单独一张卡而不是塞进上面的 group：视觉上区分"用户调的参数" vs "外部推来的状态"
-        self._template_label = SettingCard(
+        self._preset_label = SettingCard(
             FluentIcon.PALETTE,
-            "当前模板",
+            "当前预设",
             "（从左栏选择）",
             content,
         )
-        outer.addWidget(self._template_label)
+        outer.addWidget(self._preset_label)
 
         outer.addStretch(1)  # 卡片不要被拉伸；底部留空
 
@@ -234,7 +234,7 @@ class PlotSettingsPanel(ScrollArea):
         return PlotRunSettings(
             input_path=s.input_path,
             sheet_name=s.sheet_name,
-            template_name=s.template_name,
+            preset_name=s.preset_name,
             output_dir=s.output_dir,
             header_row=s.header_row,
         )
@@ -244,17 +244,17 @@ class PlotSettingsPanel(ScrollArea):
         self._settings = PlotRunSettings(
             input_path=rs.input_path,
             sheet_name=rs.sheet_name,
-            template_name=rs.template_name,
+            preset_name=rs.preset_name,
             output_dir=rs.output_dir,
             header_row=rs.header_row,
         )
         self._reflect_settings_to_ui()
         self.settings_changed.emit()
 
-    def set_template_name(self, name: str) -> None:
-        """左栏 TemplateListPane 切模板时调这个入口。"""
-        self._settings.template_name = name
-        self._template_label.setContent(name)
+    def set_preset_name(self, name: str) -> None:
+        """左栏 PresetListPane 切预设时调这个入口。"""
+        self._settings.preset_name = name
+        self._preset_label.setContent(name)
         self.settings_changed.emit()
 
     # ── 内部：UI <- dataclass ────────────────────────────────────
@@ -267,9 +267,9 @@ class PlotSettingsPanel(ScrollArea):
             str(s.output_dir) if s.output_dir else "尚未选择"
         )
         self.header_card.set_value(s.header_row)
-        # template_name 由 set_template_name 单独管，这里不动
-        if s.template_name:
-            self._template_label.setContent(s.template_name)
+        # preset_name 由 set_preset_name 单独管，这里不动
+        if s.preset_name:
+            self._preset_label.setContent(s.preset_name)
 
     # ── 内部：dataclass <- UI（信号槽）──────────────────────────
     def _pick_input_file(self) -> None:

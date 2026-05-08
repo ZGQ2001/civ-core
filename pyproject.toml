@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "civ-core"
 version = "0.2.3-dev"
-description = "土木工程自动化工具箱"
+description = "筑核"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }

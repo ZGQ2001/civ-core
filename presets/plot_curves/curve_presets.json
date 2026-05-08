@@ -12,8 +12,8 @@
     },
     "荷载-位移曲线": {
         "id_column": "构件编号",
-        "filename_template": "锚杆{id}_荷载位移曲线.png",
-        "title_template": "锚杆{id}：荷载-位移曲线",
+        "filename_template": "{id}_荷载位移曲线.png",
+        "title_template": "{id}：荷载-位移曲线",
         "x_axis": {
             "label": "位移 (mm)",
             "range": null

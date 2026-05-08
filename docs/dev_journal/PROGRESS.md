@@ -245,7 +245,62 @@ get_user_presets_path(tool="plot_curves") -> Path
 - ~~预览区实现（缩略图列表 + 单击放大）~~ ✅ 完成（`2d00109` + `6c7e43d`）
 - ~~pytest-qt 装到 `[dependency-groups].dev`~~ ✅ 完成（`9a3d0a4`）
 - ~~日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）~~ ✅ 完成（`d467348` + 本次）
-- 预设编辑器迁移（`02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
+- 预设编辑器迁移（`old_code_02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
+- **P1/UI 重构：双栏布局 + 实时预览 + 数据源 Tab（完成 plot_curves 模块可用性交付）**
+
+  **目标**：把当前"三栏 + 切 Tab"的形态改成"左图右控 + 底栏多 Tab"，参数改完即时看到曲线变化，土木使用者直接照业务流程从上到下填表即可出图。
+
+  **L-1：布局重构（三栏 → 两栏）**
+  - 删除 `plot_center_pane.py` 的 Pivot+QStackedWidget 双 Tab 结构
+  - 主视图改为 QSplitter 水平两栏：
+    - **左栏（实时预览区）**：单图大图渲染，参数变化后自动重绘当前选中预设的代表数据；保留缩略图（多数据/批量出图时）
+    - **右栏（参数面板）**：风琴式折叠（QToolBox 或 qfluentwidgets `ExpandLayout`+`SettingCardGroup`）
+  - QSettings 持久化键名沿用现有 `splitter_sizes`，但维度从 3 → 2；首次启动给安全默认值（如 `[600, 400]`）
+  - 涉及文件：`ui/views/plot_curves_view.py`、`ui/components/plot_center_pane.py`（删除或改造）
+
+  **L-2：实时渲染管线（防抖 + DataFrame 缓存）**
+  - 新建 `ui/components/live_preview_pane.py`：`set_preset(entry)` / `set_data_source(path)` / `request_redraw()`，内部用 `QTimer.singleShot(300ms)` 做防抖，多次 `valueChanged` 合并成一次重绘
+  - 新建 `core/data_cache.py`：`ExcelDataCache` 单例，按 `(path, mtime)` 缓存 DataFrame（实际用 `dict[str, list[dict]]`，遵守 CLAUDE.md 禁 pandas 约定，存 openpyxl 读出的纯 dict 列表）；切预设时只重读映射规则不重读 Excel
+  - 参数面板每个控件的 `valueChanged` / `editingFinished` → 发 `preset_param_changed(field, value)` → view 层节流后调 `live_preview_pane.request_redraw()`
+  - 渲染走 worker 线程（沿用现有 `core.plot_curves`），但出图改成"渲到内存 BytesIO → QPixmap"，避免反复落盘
+  - 多数据/批量出图按钮单独保留（沿用旧的 worker→PNG 流程）
+
+  **L-3：参数面板风琴式重排**
+  - 新建 `ui/components/preset_accordion_panel.py`，按土木出图业务流程分组（自上而下）：
+    1. **预设选择**（永远置顶不可折叠）：QComboBox 下拉列表 + 「最近使用」的 3 个置顶项（QSettings 存 `recent_presets` 字符串列表）+ 列表底部 `[+新建] [复制] [删除]` 三按钮
+    2. **数据源**：Excel 路径 + 表头行号 + ID 列名
+    3. **曲线定义**（curves）：每条曲线 X/Y 列、颜色、标签
+    4. **坐标轴**：X/Y 轴范围（min/max/step）、轴标签、刻度
+    5. **样式**：图例位置、网格、线宽
+    6. **输出**：文件名模板、标题模板、DPI
+  - 数值类参数（轴范围、DPI、线宽等）一律「滑块 + QSpinBox/QLineEdit」联动组合（封装成 `_SliderInputRow` 复用控件）
+  - 删除按钮二次确认：用 `qfluentwidgets.MessageBox`（不要原生 QMessageBox）；按钮文案明确写要删的预设名
+  - 系统预设可编辑：保存时走 `copy_system_to_user(name)`（preset_manager.py 已有 API），下次启动用户预设自动覆盖；UI 不再显示 🔒/✏️ 区分，但状态行显示「来源：系统/我的，保存后将存为我的预设」
+
+  **L-4：底栏新增「数据源」Tab + 与曲线双向高亮**
+  - 改造 `ui/components/log_panel.py` 为 `BottomTabPanel`（折叠面板内嵌 QTabWidget）
+    - Tab 1：日志（沿用现有 LogPanel 内容）
+    - Tab 2：数据源（新增）
+  - 新建 `ui/components/data_source_pane.py`：QTableView + QStandardItemModel；`set_preset_and_data(entry, rows)` 时按 `entry` 的 `id_column` + `curves[*].x_column` + `curves[*].y_column` 过滤出"关键映射列"，其它列隐藏
+  - 双向高亮联动：
+    - 点击表格行 → 发 `row_highlighted(int)` → live_preview 在曲线上画标记点
+    - 鼠标悬停曲线点 → live_preview 发 `curve_point_hovered(row_index)` → 表格滚动到该行并高亮
+  - 折叠/展开状态写入 QSettings（沿用现有 LogPanel 的持久化键）
+
+  **L-5：测试 + healthcheck 补漏**
+  - `tests/test_data_cache.py`：相同 (path, mtime) 命中缓存，mtime 变更触发重读
+  - `tests/test_live_preview_pane.py`：300ms 内连发 5 次 valueChanged 只触发 1 次重绘（用 `qtbot.wait`）
+  - `tests/test_preset_accordion_panel.py`：滑块⇄输入框双向联动；删除按钮弹二次确认对话框；系统预设保存后落到用户预设目录
+  - `tests/test_data_source_pane.py`：列过滤正确、双向高亮信号连通
+  - `scripts/healthcheck.py` 加第 9 项「实时预览 + 数据源 Tab 功能正常」
+
+  **拆分推进建议**（按 T-x 模式逐步交付，每步一个 commit）：
+  - L-1 布局骨架 → L-2 渲染管线 → L-3 参数面板 → L-4 数据源 Tab → L-5 测试收尾
+
+  **不在本轮范围（登记 P1.5）**：
+  - 完整可视化 curves 编辑器（仍走 T-4 遗留任务）
+  - 实时预览的"撤销/重做"
+  - 数据源 Tab 的列编辑（只读展示已够用）
 
 ### P2：旧代码清理
 

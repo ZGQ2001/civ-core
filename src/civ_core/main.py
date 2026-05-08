@@ -36,7 +36,7 @@ if str(_SRC) not in sys.path:
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="civ-core",
-        description="土木检测内业自动化工作台。无参数启动 GUI；带 --tool 走 CLI。",
+        description="筑核",
     )
     p.add_argument(
         "--tool",

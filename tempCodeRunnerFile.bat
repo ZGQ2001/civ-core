@@ -3,4 +3,4 @@
 call .venv\Scripts\activate
 chcp 65001
 uv run python -m civ_core.main
-pause 
+pause

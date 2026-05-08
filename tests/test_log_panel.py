@@ -19,11 +19,11 @@ import pytest
 # pytest-qt 不显式 import；qtbot fixture 由 plugin 自动注入
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from civil_auto.ui.components.log_panel import LogPanel  # noqa: E402
+from civ_core.ui.components.log_panel import LogPanel  # noqa: E402
 
 
 def _make_record(
-    name: str = "civil_auto.foo",
+    name: str = "civ_core.foo",
     level: int = logging.INFO,
     msg: str = "hello",
 ) -> logging.LogRecord:
@@ -132,13 +132,13 @@ class TestOnRecord:
         self, panel: LogPanel
     ) -> None:
         panel.on_record(
-            _make_record(name="civil_auto.ui.preset_list", msg="picked")
+            _make_record(name="civ_core.ui.preset_list", msg="picked")
         )
         text = panel._text.toPlainText()
         # 只显示最后一级 logger 名
         assert "preset_list" in text
         # 不应出现完整路径
-        assert "civil_auto.ui." not in text
+        assert "civ_core.ui." not in text
 
     def test_warning_message_present(self, panel: LogPanel) -> None:
         panel.on_record(_make_record(level=logging.WARNING, msg="warn!"))
@@ -242,7 +242,7 @@ class TestCapacity:
         这种假阳性。QPlainTextEdit.setMaximumBlockCount 保证 block 不超出，
         所以行数应等于 _MAX_BLOCKS。
         """
-        from civil_auto.ui.components.log_panel import _MAX_BLOCKS
+        from civ_core.ui.components.log_panel import _MAX_BLOCKS
 
         # 灌 _MAX_BLOCKS + 5 条，每条带唯一标识
         for i in range(_MAX_BLOCKS + 5):

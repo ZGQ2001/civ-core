@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from civil_auto.infra_io import preset_manager
-from civil_auto.infra_io.preset_manager import (
+from civ_core.infra_io import preset_manager
+from civ_core.infra_io.preset_manager import (
     PresetError,
     PresetSource,
     _merge,
@@ -308,7 +308,7 @@ class TestDevModeRouting:
 
     用 tmp_path 写自定义 config.toml 喂给 load_config；
     Path.home() 用 monkeypatch 重定向到 tmp_path 下的伪家目录，
-    避免在开发机真实家目录里乱建 .civil_auto_workspace。
+    避免在开发机真实家目录里乱建 .civ-core。
     """
 
     @staticmethod
@@ -337,7 +337,7 @@ user_presets_dir = "tests/fixtures/presets"
         cfg_path = tmp_path / "config.toml"
         self._write_config(cfg_path, dev_enabled=True)
 
-        from civil_auto.configs.loader import load_config
+        from civ_core.configs.loader import load_config
 
         # 清缓存（@lru_cache）确保读到我们的临时配置
         load_config.cache_clear()
@@ -362,13 +362,13 @@ user_presets_dir = "tests/fixtures/presets"
         cfg_path = tmp_path / "config.toml"
         self._write_config(cfg_path, dev_enabled=False)
 
-        from civil_auto.configs.loader import load_config
+        from civ_core.configs.loader import load_config
 
         load_config.cache_clear()
         try:
             cfg = load_config(cfg_path)
             assert cfg.dev.enabled is False
-            expected = (fake_home / ".civil_auto_workspace" / "presets").resolve()
+            expected = (fake_home / ".civ-core" / "presets").resolve()
             assert cfg.paths.user_presets_dir == expected
             # loader 对 user_presets_dir 自动 mkdir：跑完应该已存在
             assert cfg.paths.user_presets_dir.is_dir()

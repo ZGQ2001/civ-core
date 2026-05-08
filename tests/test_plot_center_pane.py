@@ -20,10 +20,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from civil_auto.configs.loader import load_config  # noqa: E402
-from civil_auto.ui.components.plot_center_pane import PlotCenterPane  # noqa: E402
-from civil_auto.ui.components.plot_settings_panel import PlotSettingsPanel  # noqa: E402
-from civil_auto.ui.components.preset_form_panel import PresetFormPanel  # noqa: E402
+from civ_core.configs.loader import load_config  # noqa: E402
+from civ_core.ui.components.plot_center_pane import PlotCenterPane  # noqa: E402
+from civ_core.ui.components.plot_settings_panel import PlotSettingsPanel  # noqa: E402
+from civ_core.ui.components.preset_form_panel import PresetFormPanel  # noqa: E402
 
 
 @pytest.fixture(scope="session")

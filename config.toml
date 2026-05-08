@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════════════
-#  Civil Auto Workspace — 用户可调配置
+#  筑核 (civ-core) — 用户可调配置
 #  改完不需要重启 IDE，只需要重启程序即可生效。
 #  路径如无特殊说明，均为「相对项目根」。
 # ════════════════════════════════════════════════════════════════════
@@ -55,7 +55,7 @@ log_panel_lines = 5000              # 日志面板最大保留行数
 
 # ── 开发模式 ─────────────────────────────────────────────────────
 # enabled=true：用户预设写入下面 user_presets_dir（默认 tests/fixtures/presets/，进 git）
-# enabled=false：用户预设写入 ~/.civil_auto_workspace/presets/（不进 git，最终用户场景）
+# enabled=false：用户预设写入 ~/.civ-core/presets/（不进 git，最终用户场景）
 # 普通用户保持 false；只有写测试 / 调试预设系统时才打开。
 [dev]
 enabled = false

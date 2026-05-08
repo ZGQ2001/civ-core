@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-PACKAGE_NAME = "civil_auto"
+PACKAGE_NAME = "civ_core"
 
 # 目录树（相对于项目根）
 DIRS: list[str] = [

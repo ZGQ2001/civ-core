@@ -25,8 +25,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from civil_auto.infra_io.preset_manager import PresetEntry, PresetSource  # noqa: E402
-from civil_auto.ui.components.preset_form_panel import PresetFormPanel  # noqa: E402
+from civ_core.infra_io.preset_manager import PresetEntry, PresetSource  # noqa: E402
+from civ_core.ui.components.preset_form_panel import PresetFormPanel  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────

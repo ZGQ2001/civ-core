@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "civil-auto-workspace"
+name = "civ-core"
 version = "0.2.3-dev"
 description = "土木工程自动化工具箱"
 readme = "README.md"
@@ -45,14 +45,14 @@ dev = [
 ]
 
 [project.scripts]
-civil-auto = "civil_auto.main:main"
+civ-core = "civ_core.main:main"
 
 # ── 包发现：src/ 布局 ─────────────────────────────────────────────
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-civil_auto = ["py.typed"]
+civ_core = ["py.typed"]
 
 # ── Pyright / Pylance ────────────────────────────────────────────
 [tool.pyright]
@@ -95,7 +95,7 @@ ignore = ["RUF001", "RUF002", "RUF003", "E402", "E722", "E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-# tests/test_cross_ref_fix.py 引用了已迁移走的 civil_auto.models.schema（旧路径），
+# tests/test_cross_ref_fix.py 引用了已迁移走的 civ_core.models.schema（旧路径），
 # 整个文件登记在 PROGRESS.md 的 P2 清理项里，待 02_Core 迁移完成后删除。
 # 现在放进 addopts 是为了让本地与 CI 行为一致，不必每次手敲 --ignore。
 addopts = "-q --strict-markers --ignore=tests/test_cross_ref_fix.py"

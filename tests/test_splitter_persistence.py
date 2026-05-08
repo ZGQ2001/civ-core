@@ -22,8 +22,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from civil_auto.configs.loader import load_config  # noqa: E402
-from civil_auto.ui.windows.plot_curves_view import (  # noqa: E402
+from civ_core.configs.loader import load_config  # noqa: E402
+from civ_core.ui.windows.plot_curves_view import (  # noqa: E402
     _INITIAL_SIZES,
     _SETTINGS_KEY_SPLITTER,
     PlotCurvesView,

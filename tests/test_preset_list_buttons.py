@@ -22,10 +22,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from civil_auto.infra_io import preset_manager  # noqa: E402
-from civil_auto.infra_io.preset_manager import PresetEntry, PresetSource  # noqa: E402
-from civil_auto.ui.components import preset_list as preset_list_mod  # noqa: E402
-from civil_auto.ui.components.preset_list import PresetListPane  # noqa: E402
+from civ_core.infra_io import preset_manager  # noqa: E402
+from civ_core.infra_io.preset_manager import PresetEntry, PresetSource  # noqa: E402
+from civ_core.ui.components import preset_list as preset_list_mod  # noqa: E402
+from civ_core.ui.components.preset_list import PresetListPane  # noqa: E402
 
 
 @pytest.fixture(scope="session")

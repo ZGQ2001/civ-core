@@ -11,7 +11,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "civil-auto-workspace"
+name = "civ-core"
 version = "0.2.3.dev0"
 source = { editable = "." }
 dependencies = [

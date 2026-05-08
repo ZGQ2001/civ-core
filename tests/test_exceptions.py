@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from civil_auto.utils.exceptions import (
+from civ_core.utils.exceptions import (
     BusinessError,
-    CivilAutoError,
+    CivCoreError,
     ColumnNotFoundError,
     ComUnavailable,
     ConfigError,
@@ -48,12 +48,12 @@ from civil_auto.utils.exceptions import (
 )
 def test_subclass_in_correct_tier(cls: type, base: type) -> None:
     assert issubclass(cls, base)
-    assert issubclass(cls, CivilAutoError)
+    assert issubclass(cls, CivCoreError)
 
 
 @pytest.mark.parametrize("base", [ConfigError, InputError, BusinessError, InfraIOError])
 def test_tier_base_subclasses_root(base: type) -> None:
-    assert issubclass(base, CivilAutoError)
+    assert issubclass(base, CivCoreError)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -104,21 +104,21 @@ def test_render_no_hint_when_explicitly_empty() -> None:
 def test_can_be_raised_and_caught_at_each_tier() -> None:
     with pytest.raises(BusinessError):
         raise WordHostNotRunning(cause="x")
-    with pytest.raises(CivilAutoError):
+    with pytest.raises(CivCoreError):
         raise FileLockedError(cause="x")
     with pytest.raises(InfraIOError):
         raise ComUnavailable(cause="x")
 
 
 def test_top_level_catch_all() -> None:
-    """main.py 兜底捕获 CivilAutoError 应能拦下所有自定义异常。"""
+    """main.py 兜底捕获 CivCoreError 应能拦下所有自定义异常。"""
     for cls in [ConfigSchemaError, ColumnNotFoundError, RuleViolation, FileLockedError]:
         try:
             raise cls(cause="x")
-        except CivilAutoError:
+        except CivCoreError:
             pass  # OK
         except Exception:
-            pytest.fail(f"{cls.__name__} 未被 CivilAutoError 兜底捕获")
+            pytest.fail(f"{cls.__name__} 未被 CivCoreError 兜底捕获")
 
 
 # ──────────────────────────────────────────────────────────────────

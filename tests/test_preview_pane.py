@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtGui import QColor, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from civil_auto.ui.components.preview_pane import PreviewPane  # noqa: E402
+from civ_core.ui.components.preview_pane import PreviewPane  # noqa: E402
 
 
 @pytest.fixture(scope="session")

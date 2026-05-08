@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from civil_auto.ui.windows.plot_curves_view import PlotCurvesView
+from civ_core.ui.windows.plot_curves_view import PlotCurvesView
 
 
 def _good_data() -> dict[str, Any]:

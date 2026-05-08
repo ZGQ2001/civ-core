@@ -53,7 +53,7 @@ def _fail(message: str, hint: str = "") -> str:
 def _check_config_loadable() -> str:
     """配置文件能否加载（含 paths / dev 段、自动 mkdir 验证）。"""
     try:
-        from civil_auto.configs.loader import load_config
+        from civ_core.configs.loader import load_config
 
         cfg = load_config()
         # 验证关键派生路径都已存在（loader 应该已自动 mkdir）
@@ -76,7 +76,7 @@ def _check_config_loadable() -> str:
 def _check_system_presets_readable() -> str:
     """系统预设 JSON 能否被 preset_manager 读到。"""
     try:
-        from civil_auto.infra_io.preset_manager import load_merged_presets
+        from civ_core.infra_io.preset_manager import load_merged_presets
 
         entries = load_merged_presets("plot_curves")
         if not entries:
@@ -96,8 +96,8 @@ def _check_system_presets_readable() -> str:
 def _check_user_preset_writable() -> str:
     """用户预设的写入 / 删除 / 复制 API 能否完整跑通（在临时位置做 round-trip）。"""
     try:
-        from civil_auto.infra_io import preset_manager
-        from civil_auto.infra_io.preset_manager import (
+        from civ_core.infra_io import preset_manager
+        from civ_core.infra_io.preset_manager import (
             copy_system_to_user,
             delete_user_preset,
             load_merged_presets_as_dict,
@@ -148,7 +148,7 @@ def _check_cli_list_presets() -> str:
         import io
         from contextlib import redirect_stdout
 
-        from civil_auto.main import main
+        from civ_core.main import main
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -176,8 +176,8 @@ def _check_log_panel() -> str:
 
         from PySide6.QtWidgets import QApplication
 
-        from civil_auto.ui.components.log_panel import LogPanel
-        from civil_auto.utils.logger import get_logger, setup_logging
+        from civ_core.ui.components.log_panel import LogPanel
+        from civ_core.utils.logger import get_logger, setup_logging
 
         app = QApplication.instance() or QApplication(sys.argv)
         _ = app
@@ -191,7 +191,7 @@ def _check_log_panel() -> str:
 
             # 灌一条 INFO 看是否 round-trip 到面板文本里
             probe = "healthcheck-probe-9f3a"
-            get_logger("civil_auto.healthcheck").info(probe)
+            get_logger("civ_core.healthcheck").info(probe)
 
             text = panel._text.toPlainText()
             panel.deleteLater()
@@ -219,7 +219,7 @@ def _check_preview_pane() -> str:
         from PySide6.QtGui import QColor, QPixmap
         from PySide6.QtWidgets import QApplication
 
-        from civil_auto.ui.components.preview_pane import PreviewPane
+        from civ_core.ui.components.preview_pane import PreviewPane
 
         app = QApplication.instance() or QApplication(sys.argv)
         _ = app  # 持有引用免被 GC
@@ -263,7 +263,7 @@ def _check_splitter_persistence() -> str:
     try:
         from PySide6.QtCore import QSettings
 
-        from civil_auto.ui.windows.plot_curves_view import (
+        from civ_core.ui.windows.plot_curves_view import (
             _SETTINGS_APP,
             _SETTINGS_ORG,
         )
@@ -305,8 +305,8 @@ def _check_gui_constructible() -> str:
     try:
         from PySide6.QtWidgets import QApplication
 
-        from civil_auto.configs.loader import load_config
-        from civil_auto.ui.windows.plot_curves_view import PlotCurvesView
+        from civ_core.configs.loader import load_config
+        from civ_core.ui.windows.plot_curves_view import PlotCurvesView
 
         app = QApplication.instance() or QApplication(sys.argv)
         cfg = load_config()
@@ -360,7 +360,7 @@ CHECKS: list[Callable[[], str]] = [
 
 def main() -> int:
     print("=" * 50)
-    print(" Civil Auto Workspace · 健康检查")
+    print(" 筑核 (civ-core) · 健康检查")
     print("=" * 50)
 
     failed = 0

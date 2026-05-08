@@ -7,15 +7,18 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 + P1/pytest-qt + P1/日志面板 完成；181 测试通过；healthcheck 8 项全 ✅。
+**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 + P1/pytest-qt + P1/日志面板 完成；项目更名 `civil-auto-workspace` → `civ-core`（筑核）已落地（commit `a6fe1f9`）；181 测试通过；healthcheck 8 项全 ✅。
 
-**当前任务：** 等下一轮指派（候选：P1 完整 curves 编辑器 / P2 旧代码清理）
+**当前任务：** P1（候选：完整 curves 编辑器）—— 等用户对齐具体子任务范围
 
-**下一步：** 与用户对齐下一轮任务范围
+**下一步：**
+1. **用户侧待办**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`（Settings 页或 `gh repo rename`）；② 关闭会话后手工 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08
+2. AI 侧：等用户在新路径重开会话后，更新 `git remote set-url` 并对齐 P1 子任务
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
 - 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
+- 旧 Qt QSettings 键名（applicationName=`CivilAuto`）已废，下次启动 GUI 三栏宽度/窗口几何会回到默认一次
 
 ---
 ### 可用指令（动态更新）
@@ -246,7 +249,7 @@ get_user_presets_path(tool="plot_curves") -> Path
 
 ### P2：旧代码清理
 
-- 项目更名 `civ-core` → `civ-core`（中文名：`筑核`）
+- ~~项目更名 `civil-auto-workspace` → `civ-core`（中文名：`筑核`）~~ ✅ 完成（`a6fe1f9`，2026-05-08）
 - `io/` → `infra_io/`
 - 消除 41 个 pyright 报错（`body_format.py`、`table_format.py`、`sort_photos.py`、`renumber_photos.py`）
 - 删除 `02_Core/`、`04_Config/`、`99_old_code/`
@@ -279,6 +282,24 @@ get_user_presets_path(tool="plot_curves") -> Path
 ## 🗂️ 会话历史
 
 > 当本节超过 50 条记录或文件总长超过 800 行时，归档到 `PROGRESS_ARCHIVE.md`，本节只保留最近 10 条。
+
+### [2026-05-08] 项目更名 civil-auto-workspace → civ-core（筑核）
+
+**完成内容：**
+- `git mv src/civil_auto/ → src/civ_core/`（保留历史）
+- 全量替换 5 种字符串变体，共 53 个文件：`civil_auto`→`civ_core`、`civil-auto-workspace`→`civ-core`、`Civil_Auto_Workspace`→`civ-core`、`.civil_auto_workspace`→`.civ-core`、`CivilAuto[Error]`→`CivCore[Error]`
+- `pyproject.toml` `name`/`scripts`/`package-data` 同步；`uv.lock` 重生成；`uv sync` 重装
+- README 标题改成「筑核 (civ-core) v0.2.3-dev」；config.toml/healthcheck/setup_env.bat 横幅同步
+- 校验：181 测试通过、ruff 通过、healthcheck 8/8
+
+**涉及文件：** 53 个（全部代码、测试、脚本、文档、配置；详见 `git show a6fe1f9 --stat`）
+
+**遗留问题：**
+- GitHub 端仓库名仍是 `Civil-Auto-Workspace`（push 通过 301 重定向走通），需用户手动改名为 `civ-core`
+- 本地父目录 `D:\CodeProjects\Civil_Auto_Workspace` 仍未改，需用户在会话结束后 `Rename-Item ... civ-core` + 删 `.venv` + `uv sync`
+- Qt QSettings applicationName 已改 `CivilAuto`→`CivCore`，下次启动 GUI 窗口几何/三栏宽度会回到默认一次（无害）
+
+**下一步：** 等用户完成 GitHub 重命名 + 本地目录重命名 + 在新路径重开会话；然后 `git remote set-url origin git@github.com:ZGQ2001/civ-core.git` 收尾，再对齐 P1 子任务
 
 -----
 

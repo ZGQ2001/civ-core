@@ -9,11 +9,11 @@
 
 **当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 + P1/pytest-qt + P1/日志面板 完成；项目更名 `civil-auto-workspace` → `civ-core`（筑核）已落地（commit `a6fe1f9`）；181 测试通过；healthcheck 8 项全 ✅。
 
-**当前任务：** P1（候选：完整 curves 编辑器）—— 等用户对齐具体子任务范围
+**当前任务：** P1/UI 重构（双栏 + 实时预览 + 数据源 Tab + curves 可视化编辑器）—— 已与用户对齐方案 B：原"预设编辑器迁移"独立任务**合并**到 L-3a 子步，避免做完一遍再搬运。下一步从 L-1 起步。
 
 **下一步：**
-1. **用户侧待办**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`（Settings 页或 `gh repo rename`）；② 关闭会话后手工 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08
-2. AI 侧：等用户在新路径重开会话后，更新 `git remote set-url` 并对齐 P1 子任务
+1. **AI 侧立即接续**：从 **L-1（布局重构：三栏 → 两栏 QSplitter）** 开始；按 L-1 → L-2 → L-3a → L-3b → L-4 → L-5 顺序推进，每步一个 commit、先写 pytest 拦截边界、再写业务、ruff + healthcheck 验收。详见 P1 章节
+2. **用户侧待办（历史遗留，本会话不阻塞 L-1）**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`；② 本地目录 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
@@ -245,8 +245,8 @@ get_user_presets_path(tool="plot_curves") -> Path
 - ~~预览区实现（缩略图列表 + 单击放大）~~ ✅ 完成（`2d00109` + `6c7e43d`）
 - ~~pytest-qt 装到 `[dependency-groups].dev`~~ ✅ 完成（`9a3d0a4`）
 - ~~日志面板接入（`QtLogBridge` 已就绪，连 UI 槽）~~ ✅ 完成（`d467348` + 本次）
-- 预设编辑器迁移（`old_code_02_Core/curve_template_editor.py`）—— T-4 已用 JSON 文本框临时替代，后续做完整可视化编辑器
-- **P1/UI 重构：双栏布局 + 实时预览 + 数据源 Tab（完成 plot_curves 模块可用性交付）**
+- ~~预设编辑器迁移（`old_code/02_Core/curve_template_editor.py`，673 行 tkinter）~~ → **合并入下方 L-3a**（2026-05-08 与用户对齐方案 B：避免先在 Pivot Tab 实装再搬运到风琴面板）
+- **P1/UI 重构：双栏布局 + 实时预览 + 数据源 Tab + curves 可视化编辑器（完成 plot_curves 模块可用性交付）**
 
   **目标**：把当前"三栏 + 切 Tab"的形态改成"左图右控 + 底栏多 Tab"，参数改完即时看到曲线变化，土木使用者直接照业务流程从上到下填表即可出图。
 
@@ -265,17 +265,28 @@ get_user_presets_path(tool="plot_curves") -> Path
   - 渲染走 worker 线程（沿用现有 `core.plot_curves`），但出图改成"渲到内存 BytesIO → QPixmap"，避免反复落盘
   - 多数据/批量出图按钮单独保留（沿用旧的 worker→PNG 流程）
 
-  **L-3：参数面板风琴式重排**
-  - 新建 `ui/components/preset_accordion_panel.py`，按土木出图业务流程分组（自上而下）：
-    1. **预设选择**（永远置顶不可折叠）：QComboBox 下拉列表 + 「最近使用」的 3 个置顶项（QSettings 存 `recent_presets` 字符串列表）+ 列表底部 `[+新建] [复制] [删除]` 三按钮
-    2. **数据源**：Excel 路径 + 表头行号 + ID 列名
-    3. **曲线定义**（curves）：每条曲线 X/Y 列、颜色、标签
-    4. **坐标轴**：X/Y 轴范围（min/max/step）、轴标签、刻度
-    5. **样式**：图例位置、网格、线宽
-    6. **输出**：文件名模板、标题模板、DPI
-  - 数值类参数（轴范围、DPI、线宽等）一律「滑块 + QSpinBox/QLineEdit」联动组合（封装成 `_SliderInputRow` 复用控件）
-  - 删除按钮二次确认：用 `qfluentwidgets.MessageBox`（不要原生 QMessageBox）；按钮文案明确写要删的预设名
-  - 系统预设可编辑：保存时走 `copy_system_to_user(name)`（preset_manager.py 已有 API），下次启动用户预设自动覆盖；UI 不再显示 🔒/✏️ 区分，但状态行显示「来源：系统/我的，保存后将存为我的预设」
+  **L-3：参数面板风琴式重排**（拆 L-3a + L-3b 两步交付）
+
+  - **L-3a：curves 可视化编辑器**（吸收原"预设编辑器迁移"任务）
+    - 参考实现：`old_code/02_Core/curve_template_editor.py`（tkinter 673 行，含完整业务逻辑）
+    - 新建 `ui/components/curves_editor.py`：
+      - 上半：曲线列表（QListWidget）+ 右侧 `[+ 加曲线] [复制] [删除] [上移] [下移]`
+      - 下半（选中曲线时显示）：name LineEdit / color 调色板按钮（弹 QColorDialog，支持 6 个常用色快选）/ marker QComboBox（`s o ^ v D x * +`）/ linewidth + markersize 用 L-3b 的滑块输入组合 / points 子表格（fixed_axis 单选 x/y、fixed_value DoubleSpinBox、var_column QComboBox 联动 Excel 表头）
+    - Excel 表头挂载：复用 L-2 的 `ExcelDataCache`，从当前选中的数据源 Excel 读出表头列表喂给 var_column 的 ComboBox（不挂载时退化为可编辑 LineEdit）
+    - 与 `preset_form_panel.py` 的 curves JSON 文本框替换：`current_data()` 返回的 curves 字段从文本解析改为编辑器序列化结果
+    - 测试：`tests/test_curves_editor.py`（增删/重排曲线、点序列编辑、Excel 表头联动、序列化往返）
+
+  - **L-3b：风琴面板外壳 + 其它分组**
+    - 新建 `ui/components/preset_accordion_panel.py`，按土木出图业务流程分组（自上而下）：
+      1. **预设选择**（永远置顶不可折叠）：QComboBox 下拉列表 + 「最近使用」的 3 个置顶项（QSettings 存 `recent_presets` 字符串列表）+ 列表底部 `[+新建] [复制] [删除]` 三按钮
+      2. **数据源**：Excel 路径 + 表头行号 + ID 列名
+      3. **曲线定义**（curves）：装 L-3a 做好的 `CurvesEditor`
+      4. **坐标轴**：X/Y 轴范围（min/max/step）、轴标签、刻度
+      5. **样式**：图例位置、网格、线宽
+      6. **输出**：文件名模板、标题模板、DPI
+    - 数值类参数（轴范围、DPI、线宽等）一律「滑块 + QSpinBox/QLineEdit」联动组合（封装成 `_SliderInputRow` 复用控件）
+    - 删除按钮二次确认：用 `qfluentwidgets.MessageBox`（不要原生 QMessageBox）；按钮文案明确写要删的预设名
+    - 系统预设可编辑：保存时走 `copy_system_to_user(name)`（preset_manager.py 已有 API），下次启动用户预设自动覆盖；UI 不再显示 🔒/✏️ 区分，但状态行显示「来源：系统/我的，保存后将存为我的预设」
 
   **L-4：底栏新增「数据源」Tab + 与曲线双向高亮**
   - 改造 `ui/components/log_panel.py` 为 `BottomTabPanel`（折叠面板内嵌 QTabWidget）
@@ -295,12 +306,14 @@ get_user_presets_path(tool="plot_curves") -> Path
   - `scripts/healthcheck.py` 加第 9 项「实时预览 + 数据源 Tab 功能正常」
 
   **拆分推进建议**（按 T-x 模式逐步交付，每步一个 commit）：
-  - L-1 布局骨架 → L-2 渲染管线 → L-3 参数面板 → L-4 数据源 Tab → L-5 测试收尾
+  - L-1 布局骨架 → L-2 渲染管线 → **L-3a curves 编辑器 → L-3b 风琴外壳** → L-4 数据源 Tab → L-5 测试收尾
 
   **不在本轮范围（登记 P1.5）**：
-  - 完整可视化 curves 编辑器（仍走 T-4 遗留任务）
   - 实时预览的"撤销/重做"
   - 数据源 Tab 的列编辑（只读展示已够用）
+  - curves 编辑器的"图形化拖点"（先做表格式编辑，拖点交互优先级最低）
+
+  **路径校正备注**：第 248 行旧文本里 `old_code_02_Core/curve_template_editor.py` 是渲染层显示问题，磁盘真实路径 `old_code/02_Core/curve_template_editor.py`
 
 ### P2：旧代码清理
 
@@ -337,6 +350,26 @@ get_user_presets_path(tool="plot_curves") -> Path
 ## 🗂️ 会话历史
 
 > 当本节超过 50 条记录或文件总长超过 800 行时，归档到 `PROGRESS_ARCHIVE.md`，本节只保留最近 10 条。
+
+### [2026-05-08] P1/UI 重构计划落定 + 预设编辑器迁移合并入 L-3a
+
+**完成内容：**
+- 与用户对齐 P1/UI 重构整体计划（L-1 布局重构 / L-2 实时渲染 + DataFrame 缓存 / L-3a curves 可视化编辑器 / L-3b 风琴面板外壳 / L-4 底栏数据源 Tab + 双向高亮 / L-5 测试 + healthcheck 第 9 项）
+- 决策合并：原 P1「预设编辑器迁移」（针对 `old_code/02_Core/curve_template_editor.py` 673 行 tkinter）作为独立任务**取消**，吸收为 L-3a 子步——理由：若先在现有 `preset_form_panel.py`（中栏 Pivot 第二 Tab）实装可视化编辑器，L-1 拆三栏时还要整体搬到 L-3b 风琴面板的「曲线定义」分组里，等于做两遍
+- PROGRESS.md 顶部摘要、P1 待办积压区、L-3 章节均同步更新；下次会话直接从 L-1 起步
+
+**涉及文件：**
+- `docs/dev_journal/PROGRESS.md`（仅本文件）
+
+**遗留问题：**
+- 无（L-1 起步前不需要任何前置准备；CLAUDE.md 工作流照常：先 pytest 拦截边界 → 业务代码 → ruff → healthcheck → commit）
+
+**下一步（下次会话直接接续）：**
+1. L-1 Step 1：拆 `plot_curves_view.py` 三栏 → 两栏 QSplitter（左：占位 LivePreviewPane / 右：占位 PresetAccordionPanel），splitter_sizes 维度 3→2，迁移 QSettings 键名
+2. L-1 Step 2：删除 `plot_center_pane.py`（Pivot 双 Tab 不再需要）；旧的 `preset_list.py` + `preset_form_panel.py` 暂留作 L-3b 时拆解吸收
+3. L-1 Step 3：测试 + healthcheck，验收
+
+-----
 
 ### [2026-05-08] 项目更名 civil-auto-workspace → civ-core（筑核）
 

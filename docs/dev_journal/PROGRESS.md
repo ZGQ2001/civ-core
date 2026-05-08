@@ -13,7 +13,7 @@
 
 **下一步：**
 1. **AI 侧立即接续**：从 **L-1（布局重构：三栏 → 两栏 QSplitter）** 开始；按 L-1 → L-2 → L-3a → L-3b → L-4 → L-5 顺序推进，每步一个 commit、先写 pytest 拦截边界、再写业务、ruff + healthcheck 验收。详见 P1 章节
-2. **用户侧待办（历史遗留，本会话不阻塞 L-1）**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`；② 本地目录 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08
+2. **用户侧待办（历史遗留，本会话不阻塞 L-1）**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`；② 本地目录 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08    `已办-ZGQ 2026-05-08`
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
@@ -248,13 +248,13 @@ get_user_presets_path(tool="plot_curves") -> Path
 - ~~预设编辑器迁移（`old_code/02_Core/curve_template_editor.py`，673 行 tkinter）~~ → **合并入下方 L-3a**（2026-05-08 与用户对齐方案 B：避免先在 Pivot Tab 实装再搬运到风琴面板）
 - **P1/UI 重构：双栏布局 + 实时预览 + 数据源 Tab + curves 可视化编辑器（完成 plot_curves 模块可用性交付）**
 
-  **目标**：把当前"三栏 + 切 Tab"的形态改成"左图右控 + 底栏多 Tab"，参数改完即时看到曲线变化，土木使用者直接照业务流程从上到下填表即可出图。
+  **目标**：把当前"三栏 + 切 Tab"的形态改成"左控右图 + 底栏多 Tab"，参数改完即时看到曲线变化，土木使用者直接照业务流程从上到下填表即可出图。
 
   **L-1：布局重构（三栏 → 两栏）**
   - 删除 `plot_center_pane.py` 的 Pivot+QStackedWidget 双 Tab 结构
   - 主视图改为 QSplitter 水平两栏：
-    - **左栏（实时预览区）**：单图大图渲染，参数变化后自动重绘当前选中预设的代表数据；保留缩略图（多数据/批量出图时）
-    - **右栏（参数面板）**：风琴式折叠（QToolBox 或 qfluentwidgets `ExpandLayout`+`SettingCardGroup`）
+    - **右栏（实时预览区）**：单图大图渲染，参数变化后自动重绘当前选中预设的代表数据；保留缩略图（多数据/批量出图时）
+    - **左栏（参数面板）**：风琴式折叠（QToolBox 或 qfluentwidgets `ExpandLayout`+`SettingCardGroup`）
   - QSettings 持久化键名沿用现有 `splitter_sizes`，但维度从 3 → 2；首次启动给安全默认值（如 `[600, 400]`）
   - 涉及文件：`ui/views/plot_curves_view.py`、`ui/components/plot_center_pane.py`（删除或改造）
 

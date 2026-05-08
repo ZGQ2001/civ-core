@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from civ_core.io.word_app import WordApp
+from civ_core.infra_io.word_app import WordApp
 from civ_core.models.schema import (
     AppException,
     BackupResult,

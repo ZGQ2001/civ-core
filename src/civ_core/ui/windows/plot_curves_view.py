@@ -180,6 +180,9 @@ class PlotCurvesView(QWidget):
         """
         right = QWidget(self)
         right.setObjectName("plotCurvesRightColumn")
+        # 显式允许窄宽：底栏 DataSourcePane 在 11 列长表头场景下不会
+        # 通过 minimumSizeHint 链条把整个主窗口拉过屏幕宽度
+        right.setMinimumWidth(0)
         v = QVBoxLayout(right)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)

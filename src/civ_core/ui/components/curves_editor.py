@@ -89,7 +89,7 @@ _MARKER_CHOICES: tuple[str, ...] = tuple(code for code, _ in _MARKER_DISPLAY)
 
 # 图类型 code → 人话显示。code 与 chart_writer._draw_series 的分支一致
 _PLOT_TYPE_DISPLAY: tuple[tuple[str, str], ...] = (
-    ("line", "折线图（带 marker，土木标准曲线）"),
+    ("line", "折线图（带数据点，标准曲线）"),
     ("scatter", "散点图（仅点，无连线）"),
     ("bar", "柱状图（桩号/节点对比）"),
     ("step", "阶梯图（分级加载工况）"),
@@ -169,9 +169,7 @@ class CurvesEditor(QWidget):
         self._curve_combo = ComboBox(self)
         self._curve_combo.setObjectName("curveCombo")
         self._curve_combo.setPlaceholderText("先在右边按 + 添加曲线")
-        self._curve_combo.setToolTip(
-            "曲线 = 这张图里要画的一条折线；预设可以包含 0~N 条曲线"
-        )
+        self._curve_combo.setToolTip("曲线 = 这张图里要画的一条折线；预设可以包含 0~N 条曲线")
         self._curve_combo.currentIndexChanged.connect(self._on_curve_selected)
         top.addWidget(self._curve_combo, 1)
 
@@ -261,9 +259,7 @@ class CurvesEditor(QWidget):
         self._marker_combo = ComboBox(self)
         for code, display in _MARKER_DISPLAY:
             self._marker_combo.addItem(display, userData=code)
-        self._marker_combo.setToolTip(
-            "图形 = 视觉示意；括号里的字母是 matplotlib marker code"
-        )
+        self._marker_combo.setToolTip("图形 = 视觉示意；括号里的字母是 matplotlib marker code")
         self._marker_combo.currentIndexChanged.connect(self._save_from_form)
         marker_row.addWidget(self._marker_combo)
         marker_row.addStretch(1)
@@ -298,16 +294,12 @@ class CurvesEditor(QWidget):
         self._points_table.horizontalHeader().setSectionResizeMode(
             _POINT_COL_VALUE, QHeaderView.ResizeMode.ResizeToContents
         )
-        self._points_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
+        self._points_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         # 保证至少能完整看到 4~5 行点；不被外层 QScrollArea 压扁到单行
         self._points_table.setMinimumHeight(200)
         # 去掉表格自身的 frame 边框（保留 grid 线即可）
         self._points_table.setFrameShape(QTableWidget.Shape.NoFrame)
-        self._points_table.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
+        self._points_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._form_layout.addWidget(self._points_table, 1)
 
         pt_btn_row = QHBoxLayout()
@@ -372,9 +364,7 @@ class CurvesEditor(QWidget):
                 color = str(c.get("color", "#000000"))
                 # qfluentwidgets.ComboBox.addItem 签名是 (text, icon=...)，
                 # 与原生 QComboBox.addItem(icon, text) 顺序不同
-                self._curve_combo.addItem(
-                    f"#{i + 1}  {name}", icon=self._color_icon(color)
-                )
+                self._curve_combo.addItem(f"#{i + 1}  {name}", icon=self._color_icon(color))
             if 0 <= self._current_idx < len(self._curves):
                 self._curve_combo.setCurrentIndex(self._current_idx)
             else:
@@ -512,9 +502,7 @@ class CurvesEditor(QWidget):
         self._curves[self._current_idx]["color"] = hex_color
         self._update_swatches(hex_color)
         # ComboBox 当前项的色块图标也跟着更新（保留主题字体色，仅换色块）
-        self._curve_combo.setItemIcon(
-            self._current_idx, self._color_icon(hex_color)
-        )
+        self._curve_combo.setItemIcon(self._current_idx, self._color_icon(hex_color))
         self.changed.emit()
 
     def _open_color_dialog(self) -> None:
@@ -569,9 +557,7 @@ class CurvesEditor(QWidget):
                     value_sb.setValue(float(pt.get("fixed_value", 0.0)))
                 except (TypeError, ValueError):
                     value_sb.setValue(0.0)
-                value_sb.valueChanged.connect(
-                    lambda v, r=pidx: self._on_point_value_changed(r, v)
-                )
+                value_sb.valueChanged.connect(lambda v, r=pidx: self._on_point_value_changed(r, v))
                 self._points_table.setCellWidget(pidx, _POINT_COL_VALUE, value_sb)
 
                 # var_column 列：有 Excel 表头 → ComboBox（可编辑），否则普通 LineEdit

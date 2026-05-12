@@ -32,6 +32,7 @@ from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
+    QSizePolicy,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -55,6 +56,9 @@ class DataSourcePane(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("dataSourcePane")
+        # 显式允许窄宽：avoid 被表格内容（11+ 列长表头）撑出最小宽度，
+        # 进而把 BottomTabPanel / 右栏 / 主窗口都拉过宽度（截图反馈的 bug）
+        self.setMinimumWidth(0)
 
         self._all_rows: list[dict[str, Any]] = []
         self._displayed_cols: list[str] = []
@@ -72,6 +76,7 @@ class DataSourcePane(QWidget):
 
         self._status = BodyLabel("尚未挂载数据源", self)
         self._status.setStyleSheet("color: #666;")
+        self._status.setWordWrap(True)
         layout.addWidget(self._status)
 
         self._table = QTableView(self)
@@ -85,17 +90,35 @@ class DataSourcePane(QWidget):
         self._table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
-        # 大数据时关掉 alternatingRowColors 会更省渲染开销
         self._table.setAlternatingRowColors(True)
-        # 列宽：第一列略宽，其余 ResizeToContents
+        # 关键修复：列宽用 Interactive + 固定默认值，不再 ResizeToContents
+        # ResizeToContents 会让"15.0kN (0.1Nd) 位移读数"这种长表头把列撑到
+        # ~150px，11 列总宽 ~1500px → 整个 widget sizeHint 撑大 → 主窗口被
+        # 拉过屏幕。Interactive 让用户拖宽度，超出可视区由横向滚动条接管。
         header = self._table.horizontalHeader()
-        header.setStretchLastSection(True)
-        header.setDefaultSectionSize(120)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setStretchLastSection(False)
+        header.setDefaultSectionSize(140)
+        header.setMinimumSectionSize(60)
+
+        # 横向 / 竖向滚动条按需出现（横向是本次修复的关键：列宽超出时能滚）
+        self._table.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._table.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        # 横向滚一格 = 一个像素，比"一格 = 一列"在长表头时手感更好
+        self._table.setHorizontalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        # 让表格本身的 sizePolicy 不强求空间：Ignored 让外层 layout 自由分配
+        self._table.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding
+        )
 
         self._model = QStandardItemModel(0, 0, self)
         self._table.setModel(self._model)
-        # 选择变化（包含 click + 键盘）触发 highlighted；selectRow 触发
-        # selectionChanged 也会进来 —— 用 _suppress_emit 守门避免回路
         sel = self._table.selectionModel()
         if sel is not None:
             sel.currentRowChanged.connect(self._on_current_row_changed)
@@ -187,12 +210,9 @@ class DataSourcePane(QWidget):
                 items.append(item)
             self._model.appendRow(items)
 
-        # 列宽自适应；最后一列保持 stretch（_build_layout 里设置过）
-        for i in range(len(self._displayed_cols) - 1):
-            self._table.horizontalHeader().setSectionResizeMode(
-                i, QHeaderView.ResizeMode.ResizeToContents
-            )
-
+        # 列宽固定走 _build_layout 里的 Interactive + defaultSectionSize=140
+        # 不再 ResizeToContents（会让长表头列被撑过宽，触发右栏整体扩张）
+        # 用户可以手动拖列宽，超出可视区由横向滚动条接管
         self._update_status_text()
 
     def _update_status_text(self) -> None:

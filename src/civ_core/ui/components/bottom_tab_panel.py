@@ -52,6 +52,9 @@ class BottomTabPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("bottomTabPanel")
+        # 显式允许窄宽：防止 DataSourcePane 内表格内容把整个面板撑大，
+        # 进而把右栏 / 主水平 splitter / 主窗口都拉过屏幕宽度
+        self.setMinimumWidth(0)
 
         # 默认折叠（与原 LogPanel 一致，避免开屏一堆日志干扰）
         self._collapsed = True

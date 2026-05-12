@@ -109,11 +109,22 @@ class PlotCurvesView(QWidget):
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(0)
 
-        # 左栏：参数面板（L-3b 实装风琴折叠）
+        # 左栏：参数面板（L-3b 风琴折叠）
         self.preset_accordion_panel = PresetAccordionPanel(self)
 
-        # 右栏：实时预览（L-2 实装防抖重绘 + DataFrame 缓存）
+        # 右栏：实时预览（L-2 防抖重绘 + DataFrame 缓存）
         self.live_preview_pane = LivePreviewPane(self)
+
+        # L-3b 信号路由：参数面板 → 实时预览
+        self.preset_accordion_panel.preset_changed.connect(
+            self.live_preview_pane.set_preset
+        )
+        self.preset_accordion_panel.data_source_changed.connect(
+            self.live_preview_pane.set_data_source
+        )
+        self.preset_accordion_panel.request_redraw_signal.connect(
+            self.live_preview_pane.request_redraw
+        )
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -229,13 +240,8 @@ class PlotCurvesView(QWidget):
 
     # ── 业务入口（L-1 期间为占位 stub，L-2/L-3 阶段挂回数据流） ────
     def _current_run_settings(self) -> PlotRunSettings:
-        """收集当前运行参数。
-
-        L-1 期间没有真实的参数面板数据源，返回一个全空 PlotRunSettings，
-        让 _missing_required_fields 自然识别为"未填完"，弹友善 InfoBar 提示。
-        L-3b 完成 PresetAccordionPanel 后，本方法从面板字段读出真实值。
-        """
-        return PlotRunSettings()
+        """收集当前运行参数。L-3b 起从 PresetAccordionPanel 取真实值。"""
+        return self.preset_accordion_panel.current_run_settings()
 
     def _on_generate_clicked(self) -> None:
         """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。
@@ -255,8 +261,8 @@ class PlotCurvesView(QWidget):
                 title="参数未填完",
                 reason=f"还差这些必填项：{ ' / '.join(missing) }",
                 hint=(
-                    "参数面板（左栏）将在 L-3b 阶段接入；"
-                    "实时预览（右栏）将在 L-2 阶段接入。"
+                    "「输入 Excel」「输出目录」在左栏【数据源】分组里选；"
+                    "「预设」在左栏【预设选择】分组里下拉。"
                 ),
             )
             return

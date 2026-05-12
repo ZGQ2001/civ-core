@@ -352,6 +352,82 @@ class TestSheetCombo:
         finally:
             panel.deleteLater()
 
+    def test_pick_excel_feeds_headers_to_curves_editor(
+        self,
+        qapp: QApplication,
+        tmp_settings: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """选了 Excel 后 CurvesEditor.set_excel_headers 应自动被调用，
+        数据点的 var_column cellWidget 升级为 ComboBox。"""
+        from openpyxl import Workbook
+        from PySide6.QtWidgets import QLineEdit
+        from qfluentwidgets import ComboBox as FluentComboBox
+
+        from civ_core.ui.components import preset_accordion_panel as pap
+        from civ_core.ui.components.curves_editor import _POINT_COL_VAR
+
+        # 真实 xlsx：表头行有 3 列
+        p = tmp_path / "real.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.append(["编号", "位移 (mm)", "荷载 (kN)"])
+        ws.append([1, 0.5, 60.0])
+        wb.save(str(p))
+
+        monkeypatch.setattr(
+            pap.QFileDialog,
+            "getOpenFileName",
+            staticmethod(lambda *a, **kw: (str(p), "")),
+        )
+
+        panel = pap.PresetAccordionPanel()
+        try:
+            # 喂一条带数据点的曲线进 CurvesEditor
+            panel._curves_editor.set_curves(
+                [
+                    {
+                        "name": "test",
+                        "color": "#1F4FE0",
+                        "marker": "s",
+                        "linewidth": 2.0,
+                        "markersize": 7.0,
+                        "plot_type": "line",
+                        "points": [
+                            {
+                                "fixed_axis": "y",
+                                "fixed_value": 60.0,
+                                "var_column": "位移 (mm)",
+                            }
+                        ],
+                    }
+                ]
+            )
+            # 还没选 Excel → var_column cell 是 QLineEdit
+            cell_before = panel._curves_editor._points_table.cellWidget(
+                0, _POINT_COL_VAR
+            )
+            assert isinstance(cell_before, QLineEdit)
+
+            # 选 Excel
+            panel._on_pick_input_excel()
+
+            # var_column cell 升级为 ComboBox
+            cell_after = panel._curves_editor._points_table.cellWidget(
+                0, _POINT_COL_VAR
+            )
+            assert isinstance(cell_after, FluentComboBox)
+            # ComboBox 含 Excel 表头里的项
+            items = [
+                cell_after.itemText(i) for i in range(cell_after.count())
+            ]
+            assert "位移 (mm)" in items
+            assert "荷载 (kN)" in items
+        finally:
+            panel.deleteLater()
+
     def test_data_source_changed_carries_sheet(
         self,
         qapp: QApplication,

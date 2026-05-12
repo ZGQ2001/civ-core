@@ -70,7 +70,11 @@ from qfluentwidgets import (
 )
 
 from civ_core.domain.schema import PlotRunSettings
-from civ_core.infra_io.excel_reader import ExcelReadError, read_sheet_names
+from civ_core.infra_io.excel_reader import (
+    ExcelReadError,
+    get_column_headers,
+    read_sheet_names,
+)
 from civ_core.infra_io.preset_manager import (
     PresetEntry,
     PresetError,
@@ -559,7 +563,7 @@ class PresetAccordionPanel(QWidget):
         self._header_row_spin = SpinBox(self)
         self._header_row_spin.setRange(1, 50)
         self._header_row_spin.setValue(1)
-        self._header_row_spin.valueChanged.connect(self._emit_request_redraw)
+        self._header_row_spin.valueChanged.connect(self._on_header_row_changed)
         short_grid.addWidget(self._header_row_spin, 1, 1)
 
         short_grid.setColumnStretch(0, 1)
@@ -890,7 +894,16 @@ class PresetAccordionPanel(QWidget):
         if self._suppress:
             return
         self._sheet_name = sheet or None
+        # 切 sheet 后表头可能完全不一样 → 重读
+        self._refresh_excel_headers()
         self._emit_data_source_changed()
+
+    def _on_header_row_changed(self, _v: int) -> None:
+        """表头行号变化 → 重读 Excel 表头喂 CurvesEditor + 触发重绘。"""
+        if self._suppress:
+            return
+        self._refresh_excel_headers()
+        self._emit_request_redraw()
 
     # ── 预设 ComboBox 交互 ───────────────────────────────────────
     def refresh(self, select_name: str | None = None) -> None:
@@ -1029,6 +1042,9 @@ class PresetAccordionPanel(QWidget):
         self._input_path_edit.setText(str(self._input_path))
         # 取该 Excel 的 sheet 名喂 ComboBox；用户随后可切
         self._refresh_sheet_combo()
+        # 读 Excel 表头喂 CurvesEditor，让数据点 var_column 列从 LineEdit
+        # 升级为 ComboBox（用户从下拉选 Excel 实际列名，避免手敲打错）
+        self._refresh_excel_headers()
         self._emit_data_source_changed()
 
     def _refresh_sheet_combo(self) -> None:
@@ -1057,6 +1073,28 @@ class PresetAccordionPanel(QWidget):
             self._sheet_name = sheets[0]
         finally:
             self._suppress = False
+
+    def _refresh_excel_headers(self) -> None:
+        """读当前 Excel 表头并喂给 CurvesEditor，让数据点 var_column 列
+        升级为 ComboBox 下拉（出 Excel 实际表头）。
+
+        触发时机：Excel 路径 / sheet / 表头行号 任一变化。失败时静默清空，
+        让 var_column 退化为 LineEdit（用户手敲列名）。
+        """
+        if self._input_path is None or not self._input_path.is_file():
+            self._curves_editor.set_excel_headers(None)
+            return
+        try:
+            headers = get_column_headers(
+                self._input_path,
+                self._sheet_name,
+                header_row=int(self._header_row_spin.value()),
+            )
+        except ExcelReadError as e:
+            log.warning("读取 Excel 表头失败：%s", e)
+            self._curves_editor.set_excel_headers(None)
+            return
+        self._curves_editor.set_excel_headers(headers)
 
     def _on_pick_output_dir(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "选择输出目录", "")

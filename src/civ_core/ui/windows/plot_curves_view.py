@@ -44,18 +44,20 @@ from qfluentwidgets import (
 )
 
 from civ_core.configs.loader import AppConfig
+from civ_core.core.data_cache import EXCEL_DATA_CACHE
 from civ_core.core.plot_curves import (
     RunResult,
     run_plot_curves,
 )
 from civ_core.domain.schema import PlotRunSettings
+from civ_core.infra_io.excel_reader import ExcelReadError
+from civ_core.ui.components.bottom_tab_panel import BottomTabPanel
 from civ_core.ui.components.error_infobar import (
     show_error_infobar,
     show_success_infobar,
     show_warning_infobar,
 )
 from civ_core.ui.components.live_preview_pane import LivePreviewPane
-from civ_core.ui.components.log_panel import LogPanel
 from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 from civ_core.utils.logger import get_logger, get_qt_bridge
 
@@ -77,6 +79,8 @@ _SETTINGS_APP = "CivCore"
 # 键名保持不变（沿用三栏时代的 key），但维度从 3→2；
 # 老用户存的 list[3] 会在读取时被识别为长度异常 → 回退默认（一次性丢弃）
 _SETTINGS_KEY_SPLITTER = "plot_curves/splitter_sizes"
+# L-4：底栏 Tab 面板折叠态持久化（沿用 LogPanel 设计的语义但用新键）
+_SETTINGS_KEY_BOTTOM_COLLAPSED = "plot_curves/bottom_panel_collapsed"
 
 
 class PlotCurvesView(QWidget):
@@ -125,6 +129,13 @@ class PlotCurvesView(QWidget):
         self.preset_accordion_panel.request_redraw_signal.connect(
             self.live_preview_pane.request_redraw
         )
+        # L-4 信号路由：参数面板 → 数据源 Tab；数据源行点击 → 预览高亮
+        self.preset_accordion_panel.preset_changed.connect(
+            self._refresh_data_source_pane
+        )
+        self.preset_accordion_panel.data_source_changed.connect(
+            self._on_data_source_changed
+        )
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -152,15 +163,25 @@ class PlotCurvesView(QWidget):
         bottom = self._build_action_bar()
         outer.addLayout(bottom)
 
-        # ── 最底部：可折叠日志面板（默认折叠，避免开屏一堆 INFO 干扰）──
+        # ── 最底部：L-4 BottomTabPanel（日志 + 数据源两 Tab，整体可折叠）──
         # 接 QtLogBridge —— bridge 在 setup_logging() 后才存在；
         # 测试场景未调用 setup_logging 时 bridge=None，跳过连接，面板仍可创建
-        self.log_panel = LogPanel(self)
+        self.bottom_panel = BottomTabPanel(self)
+        # 兼容字段：仍暴露 log_panel 名字（healthcheck / 其它代码可能用到）
+        self.log_panel = self.bottom_panel.log_panel
         bridge = get_qt_bridge()
         if bridge is not None:
-            bridge.record_emitted.connect(self.log_panel.on_record)
+            bridge.record_emitted.connect(self.bottom_panel.log_panel.on_record)
             log.debug("LogPanel 已连接到 QtLogBridge")
-        outer.addWidget(self.log_panel)
+        # L-4：数据源行点击 → 预览高亮（"表格 → 预览"那一支已通；
+        # "预览 → 表格"的鼠标悬停 hit-testing 留 P1.5）
+        self.bottom_panel.data_source_pane.row_highlighted.connect(
+            self.live_preview_pane.highlight_row
+        )
+        # 折叠态持久化
+        self.bottom_panel.collapse_changed.connect(self._on_bottom_collapse_changed)
+        self.bottom_panel.set_collapsed(self._restore_bottom_collapsed())
+        outer.addWidget(self.bottom_panel)
 
     # ── splitter 持久化 ──────────────────────────────────────────
     def _make_settings(self) -> QSettings:
@@ -204,6 +225,48 @@ class PlotCurvesView(QWidget):
 
         log.debug("已从 QSettings 恢复 splitter sizes: %s", sizes)
         return sizes
+
+    # ── L-4：底栏折叠态持久化 ─────────────────────────────────────
+    def _restore_bottom_collapsed(self) -> bool:
+        """读 QSettings 中的折叠态；默认 True（开屏不展开）。"""
+        v = self._make_settings().value(_SETTINGS_KEY_BOTTOM_COLLAPSED)
+        if v is None:
+            return True
+        # QSettings 各后端返回类型不同：bool / "true"/"false" / int
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, int):
+            return bool(v)
+        return str(v).lower() in {"true", "1", "yes"}
+
+    def _on_bottom_collapse_changed(self, collapsed: bool) -> None:
+        self._make_settings().setValue(_SETTINGS_KEY_BOTTOM_COLLAPSED, collapsed)
+
+    # ── L-4：数据源 Tab 数据流 ────────────────────────────────────
+    def _refresh_data_source_pane(self, _preset: dict | None = None) -> None:
+        """preset_changed 或 data_source_changed 时调用，把 (preset, rows) 喂给
+        DataSourcePane。
+
+        rows 通过 ExcelDataCache 拿，命中缓存零成本；缺数据源时清空表格。
+        """
+        preset = self.preset_accordion_panel.current_preset_data()
+        rs = self.preset_accordion_panel.current_run_settings()
+        input_path = rs.input_path
+        header_row = rs.header_row
+        if input_path is None:
+            self.bottom_panel.data_source_pane.clear()
+            return
+        try:
+            rows = EXCEL_DATA_CACHE.get_rows(input_path, None, header_row)
+        except ExcelReadError as e:
+            log.warning("DataSourcePane 加载数据失败：%s", e)
+            self.bottom_panel.data_source_pane.clear()
+            return
+        self.bottom_panel.data_source_pane.set_preset_and_data(preset, rows)
+
+    def _on_data_source_changed(self, _path: object) -> None:
+        """data_source_changed 信号到达时，让数据源 Tab 也刷新一次。"""
+        self._refresh_data_source_pane()
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """splitterMoved 信号 → 立即把当前 sizes 写到 QSettings。"""

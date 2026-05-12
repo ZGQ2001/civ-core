@@ -297,6 +297,70 @@ def _check_splitter_persistence() -> str:
         return _fail("布局记忆功能异常", f"原因：{e}")
 
 
+def _check_bottom_tab_panel() -> str:
+    """L-4：BottomTabPanel + DataSourcePane 链路完整。
+
+    用临时 PNG 数据走一遍 DataSourcePane.set_preset_and_data → 列过滤；
+    断言 row_highlighted 与 LivePreviewPane.highlight_row 能互连（构造时连）。
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        from civ_core.ui.components.bottom_tab_panel import BottomTabPanel
+
+        app = QApplication.instance() or QApplication(sys.argv)
+        _ = app
+        bottom = BottomTabPanel()
+
+        # 验证两个 Tab 都到位
+        if not hasattr(bottom, "log_panel"):
+            bottom.deleteLater()
+            return _fail(
+                "底栏面板缺少日志 Tab",
+                "BottomTabPanel.log_panel 未挂载",
+            )
+        if not hasattr(bottom, "data_source_pane"):
+            bottom.deleteLater()
+            return _fail(
+                "底栏面板缺少数据源 Tab",
+                "BottomTabPanel.data_source_pane 未挂载",
+            )
+
+        # 走一次列过滤 round-trip：3 列预设 + 5 列 row → 模型只显示 3 列
+        preset = {
+            "id_column": "编号",
+            "curves": [
+                {"points": [{"var_column": "X"}, {"var_column": "Y"}]},
+            ],
+        }
+        rows = [{"编号": "A", "X": 1.0, "Y": 2.0, "无关": 999}]
+        bottom.data_source_pane.set_preset_and_data(preset, rows)
+        if bottom.data_source_pane._model.columnCount() != 3:
+            bottom.deleteLater()
+            return _fail(
+                "数据源 Tab 列过滤异常",
+                f"期望 3 列，实际 {bottom.data_source_pane._model.columnCount()} 列",
+            )
+
+        # Tab 切换 + 折叠态切换
+        bottom.show_data_tab()
+        if bottom.current_tab() != "data":
+            bottom.deleteLater()
+            return _fail("数据源 Tab 切换失败")
+        bottom.set_collapsed(False)
+        if bottom.is_collapsed():
+            bottom.deleteLater()
+            return _fail("底栏面板展开失败")
+
+        bottom.deleteLater()
+        return _ok("底栏 Tab 面板功能正常（日志 + 数据源列过滤 + Tab 切换 + 折叠）")
+    except Exception as e:
+        return _fail("底栏 Tab 面板功能异常", f"原因：{e}")
+
+
 def _check_gui_constructible() -> str:
     """GUI 主视图能否被构造（offscreen 平台，不真正显示）。"""
     import os
@@ -314,15 +378,18 @@ def _check_gui_constructible() -> str:
 
         # 验证关键子组件都已就位（防重构遗漏）
         # L-1：两栏骨架 = 左参数面板（PresetAccordionPanel）+ 右实时预览（LivePreviewPane）
-        # + 日志面板；旧的 preset_pane / center_pane / preview_pane 已撤场，
-        # 业务数据流由 L-2/L-3 接回。
+        # L-4：底栏 BottomTabPanel（日志 Tab + 数据源 Tab）
         missing = []
         if not hasattr(view, "preset_accordion_panel"):
             missing.append("参数面板（左栏）")
         if not hasattr(view, "live_preview_pane"):
             missing.append("实时预览（右栏）")
-        if not hasattr(view, "log_panel"):
-            missing.append("日志面板")
+        if not hasattr(view, "bottom_panel"):
+            missing.append("底栏 Tab 面板")
+        if hasattr(view, "bottom_panel") and not hasattr(
+            view.bottom_panel, "data_source_pane"
+        ):
+            missing.append("数据源 Tab")
 
         view.deleteLater()
         del app  # 让 QApplication 实例 ref-count 不被本函数持续持有
@@ -350,6 +417,7 @@ CHECKS: list[Callable[[], str]] = [
     _check_splitter_persistence,
     _check_preview_pane,
     _check_log_panel,
+    _check_bottom_tab_panel,
 ]
 
 

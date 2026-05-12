@@ -69,6 +69,8 @@ class LivePreviewPane(QWidget):
         # 当前数据源
         self._preset: dict[str, Any] | None = None
         self._data_source: Path | None = None
+        # L-4 高亮行索引（占位，P1.5 才在图上画标记）
+        self._highlight_row_idx: int = -1
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -154,6 +156,22 @@ class LivePreviewPane(QWidget):
         """请求一次防抖重绘。可被高频调用（每次 valueChanged）。"""
         # singleShot 模式下，start 会重置剩余时间 —— 这就是"防抖"
         self._debounce_timer.start(_DEBOUNCE_MS)
+
+    def highlight_row(self, idx: int) -> None:
+        """L-4：让预览图上突出第 idx 行对应的曲线点。
+
+        L-4 简化版：仅更新状态指示文字 + 记内部索引，不在图上画突出标记。
+        真正的"在曲线上标记圆圈"留待 P1.5（需要把 idx → 曲线坐标的反向映射
+        和单独的 highlight worker，工作量足够单独立项）。
+
+        加这个方法是为了让 DataSourcePane.row_highlighted 信号有挂载点，
+        view 层的连线在 L-4 完整通过；后续 P1.5 只需要把渲染逻辑补齐。
+        """
+        self._highlight_row_idx = idx
+        log.debug("LivePreview highlight_row idx=%d（P1.5 起在图上画标记）", idx)
+        self._update_hint(
+            f"高亮第 {idx + 1} 行 · 图上突出标记由 P1.5 实装"
+        )
 
     # ── 渲染主流程 ───────────────────────────────────────────────
     def _do_redraw(self) -> None:

@@ -36,14 +36,12 @@ from copy import deepcopy
 from typing import Any
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -120,7 +118,7 @@ class CurvesEditor(QWidget):
         self._suppress_signals: bool = False
 
         self._build_layout()
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self._render_form()
 
     # ── UI 骨架 ──────────────────────────────────────────────────
@@ -129,47 +127,43 @@ class CurvesEditor(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(8)
 
-        # ── 上半：曲线列表 + 工具栏 ──
+        # ── 顶行：ComboBox 选曲线 + 5 个工具按钮（单行节省高度） ──
+        # 用 ComboBox 替代原大块 QListWidget：
+        #   • 体验和"预设选择"一致（统一交互模型，用户少想一次）
+        #   • 节省垂直空间（原 QListWidget 默认占 140px，现 ComboBox 32px）
+        #   • 曲线颜色用左侧色块 QIcon 表达，文字保留主题色（避免深色背景上的低对比度蓝字）
         top = QHBoxLayout()
-        top.setSpacing(8)
+        top.setSpacing(6)
 
-        # 左：曲线列表
-        self._curve_list = QListWidget(self)
-        self._curve_list.setObjectName("curveList")
-        self._curve_list.setMaximumHeight(140)
-        self._curve_list.currentRowChanged.connect(self._on_curve_selected)
-        top.addWidget(self._curve_list, 1)
+        self._curve_combo = ComboBox(self)
+        self._curve_combo.setObjectName("curveCombo")
+        self._curve_combo.setPlaceholderText("当前曲线（下拉切换）")
+        self._curve_combo.currentIndexChanged.connect(self._on_curve_selected)
+        top.addWidget(self._curve_combo, 1)
 
-        # 右：增/复制/删除/↑/↓ 工具栏
-        toolbar = QVBoxLayout()
-        toolbar.setSpacing(4)
-        self._btn_add = ToolButton("+", self)
-        self._btn_add.setToolTip("新增曲线")
-        self._btn_add.clicked.connect(self._on_add_curve)
-        toolbar.addWidget(self._btn_add)
+        # 工具按钮（用图标/符号 + 明确 tooltip；操作对象明确写"曲线"以
+        # 区分于"预设选择"分组里的"+新建/复制/删除"——那些是对预设的操作）
+        for symbol, slot, tip in [
+            ("+", self._on_add_curve, "新增一条曲线"),
+            ("⧉", self._on_duplicate_curve, "复制选中曲线"),
+            ("×", self._on_delete_curve, "删除选中曲线"),
+            ("↑", self._on_move_up, "上移选中曲线"),
+            ("↓", self._on_move_down, "下移选中曲线"),
+        ]:
+            btn = ToolButton(symbol, self)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            top.addWidget(btn)
+            # 把按钮挂到 self.* 便于测试 / 外部访问
+            attr = {
+                "+": "_btn_add",
+                "⧉": "_btn_dup",
+                "×": "_btn_del",
+                "↑": "_btn_up",
+                "↓": "_btn_down",
+            }[symbol]
+            setattr(self, attr, btn)
 
-        self._btn_dup = ToolButton("⧉", self)
-        self._btn_dup.setToolTip("复制选中曲线")
-        self._btn_dup.clicked.connect(self._on_duplicate_curve)
-        toolbar.addWidget(self._btn_dup)
-
-        self._btn_del = ToolButton("×", self)
-        self._btn_del.setToolTip("删除选中曲线")
-        self._btn_del.clicked.connect(self._on_delete_curve)
-        toolbar.addWidget(self._btn_del)
-
-        self._btn_up = ToolButton("↑", self)
-        self._btn_up.setToolTip("上移选中曲线")
-        self._btn_up.clicked.connect(self._on_move_up)
-        toolbar.addWidget(self._btn_up)
-
-        self._btn_down = ToolButton("↓", self)
-        self._btn_down.setToolTip("下移选中曲线")
-        self._btn_down.clicked.connect(self._on_move_down)
-        toolbar.addWidget(self._btn_down)
-
-        toolbar.addStretch(1)
-        top.addLayout(toolbar)
         outer.addLayout(top)
 
         # ── 下半：选中曲线的字段编辑表单 ──
@@ -280,7 +274,7 @@ class CurvesEditor(QWidget):
         self._curves = deepcopy(curves) if curves else []
         # 选中索引复位：列表非空时默认选第 0 条
         self._current_idx = 0 if self._curves else -1
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self._render_form()
 
     def curves(self) -> list[dict[str, Any]]:
@@ -295,26 +289,41 @@ class CurvesEditor(QWidget):
         self._excel_headers = list(headers) if headers else []
         self._render_form()
 
-    # ── 曲线列表区 ───────────────────────────────────────────────
-    def _refresh_curve_list(self) -> None:
-        """根据 self._curves 重建左侧 QListWidget；保持当前选中索引（如有效）。"""
+    # ── 曲线选择区 ───────────────────────────────────────────────
+    @staticmethod
+    def _color_icon(hex_color: str, size: int = 12) -> QIcon:
+        """生成一个 size×size 的色块 QIcon。用作 ComboBox item 装饰，
+        让曲线颜色用色块表达，文字本身保持主题色（适配黑/白主题）。
+        """
+        pix = QPixmap(size, size)
+        try:
+            pix.fill(QColor(hex_color))
+        except Exception:
+            pix.fill(QColor("#000000"))
+        return QIcon(pix)
+
+    def _refresh_curve_combo(self) -> None:
+        """根据 self._curves 重建 ComboBox 内容；保持当前选中索引。"""
         self._suppress_signals = True
         try:
-            self._curve_list.clear()
+            self._curve_combo.clear()
             for i, c in enumerate(self._curves):
                 name = str(c.get("name", "") or f"曲线 #{i + 1}")
-                item = QListWidgetItem(f"#{i + 1}  {name}")
-                # 把曲线颜色作为 item 前缀色（简单实现：item 文字色）
                 color = str(c.get("color", "#000000"))
-                item.setForeground(QColor(color))
-                self._curve_list.addItem(item)
+                # qfluentwidgets.ComboBox.addItem 签名是 (text, icon=...)，
+                # 与原生 QComboBox.addItem(icon, text) 顺序不同
+                self._curve_combo.addItem(
+                    f"#{i + 1}  {name}", icon=self._color_icon(color)
+                )
             if 0 <= self._current_idx < len(self._curves):
-                self._curve_list.setCurrentRow(self._current_idx)
+                self._curve_combo.setCurrentIndex(self._current_idx)
+            else:
+                self._curve_combo.setCurrentIndex(-1)
         finally:
             self._suppress_signals = False
 
     def _on_curve_selected(self, idx: int) -> None:
-        if self._suppress_signals:
+        if self._suppress_signals or idx < 0:
             return
         self._current_idx = idx
         self._render_form()
@@ -322,7 +331,7 @@ class CurvesEditor(QWidget):
     def _on_add_curve(self) -> None:
         self._curves.append(deepcopy(_EMPTY_CURVE))
         self._current_idx = len(self._curves) - 1
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self._render_form()
         self.changed.emit()
 
@@ -334,7 +343,7 @@ class CurvesEditor(QWidget):
         new["name"] = f"{new.get('name', '曲线')} (副本)"
         self._curves.insert(self._current_idx + 1, new)
         self._current_idx += 1
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self._render_form()
         self.changed.emit()
 
@@ -343,7 +352,7 @@ class CurvesEditor(QWidget):
             return
         idx = self._current_idx
         name = str(self._curves[idx].get("name", f"#{idx + 1}"))
-        # 二次确认：删除是不可逆操作，用 MessageBox 拦一道
+        # 二次确认（不可逆）
         box = MessageBox(
             "删除曲线",
             f"确认删除曲线 #{idx + 1}「{name}」？\n该操作不可撤销。",
@@ -352,13 +361,11 @@ class CurvesEditor(QWidget):
         if not box.exec():
             return
         del self._curves[idx]
-        # 删除后选中调整
         if not self._curves:
             self._current_idx = -1
         elif idx >= len(self._curves):
             self._current_idx = len(self._curves) - 1
-        # else 保持 idx 不变（指向"原来的下一条"）
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self._render_form()
         self.changed.emit()
 
@@ -368,7 +375,7 @@ class CurvesEditor(QWidget):
         i = self._current_idx
         self._curves[i - 1], self._curves[i] = self._curves[i], self._curves[i - 1]
         self._current_idx = i - 1
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self.changed.emit()
 
     def _on_move_down(self) -> None:
@@ -377,7 +384,7 @@ class CurvesEditor(QWidget):
         i = self._current_idx
         self._curves[i + 1], self._curves[i] = self._curves[i], self._curves[i + 1]
         self._current_idx = i + 1
-        self._refresh_curve_list()
+        self._refresh_curve_combo()
         self.changed.emit()
 
     # ── 曲线字段表单 ─────────────────────────────────────────────
@@ -438,10 +445,10 @@ class CurvesEditor(QWidget):
             return
         self._curves[self._current_idx]["color"] = hex_color
         self._update_swatches(hex_color)
-        # 列表里那条曲线的文字色也跟着更新
-        item = self._curve_list.item(self._current_idx)
-        if item is not None:
-            item.setForeground(QColor(hex_color))
+        # ComboBox 当前项的色块图标也跟着更新（保留主题字体色，仅换色块）
+        self._curve_combo.setItemIcon(
+            self._current_idx, self._color_icon(hex_color)
+        )
         self.changed.emit()
 
     def _open_color_dialog(self) -> None:
@@ -461,10 +468,10 @@ class CurvesEditor(QWidget):
         curve["marker"] = self._marker_combo.currentText()
         curve["linewidth"] = float(self._linewidth_spin.value())
         curve["markersize"] = float(self._markersize_spin.value())
-        # 名称改了，列表显示也要同步
-        item = self._curve_list.item(self._current_idx)
-        if item is not None:
-            item.setText(f"#{self._current_idx + 1}  {curve['name']}")
+        # 名称改了，ComboBox 当前项显示文字也要同步
+        self._curve_combo.setItemText(
+            self._current_idx, f"#{self._current_idx + 1}  {curve['name']}"
+        )
         self.changed.emit()
 
     # ── 点子表 ─────────────────────────────────────────────────

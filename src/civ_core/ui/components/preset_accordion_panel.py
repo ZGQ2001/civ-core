@@ -569,19 +569,35 @@ class PresetAccordionPanel(QWidget):
             self._y_range = rng
         return col
 
-    # ── 5. 样式 ──────────────────────────────────────────────────
+    # ── 5. 样式（图级，对所有曲线生效） ─────────────────────────
     def _build_style_section(self, layout: QVBoxLayout) -> None:
         self._show_grid_chk = CheckBox("显示网格", self)
         self._show_grid_chk.setChecked(True)
-        self._show_grid_chk.stateChanged.connect(self._emit_request_redraw)
+        self._show_grid_chk.stateChanged.connect(self._emit_preset_changed)
         layout.addWidget(self._show_grid_chk)
 
         layout.addWidget(BodyLabel("图例位置", self))
         self._legend_combo = ComboBox(self)
         self._legend_combo.addItems(["关闭"] + list(_LEGEND_LOC_CHOICES))
         self._legend_combo.setCurrentText("关闭")
-        self._legend_combo.currentTextChanged.connect(self._emit_request_redraw)
+        self._legend_combo.currentTextChanged.connect(self._emit_preset_changed)
         layout.addWidget(self._legend_combo)
+
+        # 对数刻度：土木场景常见（应力-应变对数曲线、振动衰减等）
+        layout.addWidget(BodyLabel("坐标刻度", self))
+        log_row = QHBoxLayout()
+        log_row.setContentsMargins(0, 0, 0, 0)
+        log_row.setSpacing(12)
+        self._x_log_chk = CheckBox("X 对数", self)
+        self._x_log_chk.setToolTip("X 轴用 log10 刻度（如频率、应变率）")
+        self._x_log_chk.stateChanged.connect(self._emit_preset_changed)
+        log_row.addWidget(self._x_log_chk)
+        self._y_log_chk = CheckBox("Y 对数", self)
+        self._y_log_chk.setToolTip("Y 轴用 log10 刻度（如振幅衰减、应力）")
+        self._y_log_chk.stateChanged.connect(self._emit_preset_changed)
+        log_row.addWidget(self._y_log_chk)
+        log_row.addStretch(1)
+        layout.addLayout(log_row)
 
     # ── 6. 输出 ──────────────────────────────────────────────────
     def _build_output_section(self, layout: QVBoxLayout) -> None:
@@ -722,6 +738,15 @@ class PresetAccordionPanel(QWidget):
             self._y_label_edit.setText(str(ya.get("label", "")))
             self._x_range.set_range(xa.get("range"))
             self._y_range.set_range(ya.get("range"))
+            self._x_log_chk.setChecked(bool(xa.get("log", False)))
+            self._y_log_chk.setChecked(bool(ya.get("log", False)))
+
+            style = data.get("style") or {}
+            self._show_grid_chk.setChecked(bool(style.get("grid", True)))
+            legend_loc = style.get("legend")
+            self._legend_combo.setCurrentText(
+                legend_loc if legend_loc else "关闭"
+            )
 
             self._curves_editor.set_curves(data.get("curves") or [])
         finally:
@@ -729,6 +754,9 @@ class PresetAccordionPanel(QWidget):
 
     # ── 当前数据收集 ─────────────────────────────────────────────
     def current_preset_data(self) -> dict[str, Any]:
+        # 图例位置：UI "关闭" → 不显示图例（legend=None）；其他原样
+        legend_text = self._legend_combo.currentText()
+        legend_loc = None if legend_text == "关闭" else legend_text
         return {
             "id_column": self._id_column_edit.text().strip(),
             "filename_template": self._fname_edit.text(),
@@ -736,10 +764,16 @@ class PresetAccordionPanel(QWidget):
             "x_axis": {
                 "label": self._x_label_edit.text(),
                 "range": self._x_range.get_range(),
+                "log": self._x_log_chk.isChecked(),
             },
             "y_axis": {
                 "label": self._y_label_edit.text(),
                 "range": self._y_range.get_range(),
+                "log": self._y_log_chk.isChecked(),
+            },
+            "style": {
+                "grid": self._show_grid_chk.isChecked(),
+                "legend": legend_loc,
             },
             "curves": self._curves_editor.curves(),
         }

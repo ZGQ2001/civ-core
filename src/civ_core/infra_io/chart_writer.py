@@ -78,21 +78,60 @@ def _arange_inclusive(start: float, stop: float, step: float) -> list[float]:
     return out
 
 
-def _configure_axes(
-    ax,
-    job: PlotJob,
-    *,
-    show_grid: bool,
-    show_legend: bool,
-    title_fontsize: int,
-    label_fontsize: int,
-) -> None:
-    """把 PlotJob 的样式 / 数据 / 轴配置应用到 Axes（落盘和 BytesIO 共用）。
+def _draw_series(ax, s) -> None:
+    """按 series.plot_type 调度到不同的 matplotlib 绘图方法。
 
-    抽出来是为了让 render_plot_to_png 和 render_plot_to_bytes 共享画图逻辑，
-    避免两边样式漂移；只保留"渲染目标"的差异。
+    分支：
+      line    ax.plot       折线 + marker（marker='' 时仅线）
+      scatter ax.scatter    散点，无连线；markersize 用 s 参数（面积）
+      bar     ax.bar        柱状；x 自动当柱中心，width 由 step 推测
+      step    ax.step       阶梯线（where='post' 与土木分级加载工况一致）
     """
-    for s in job.series:
+    if s.plot_type == "scatter":
+        # scatter 的 s 参数是点面积（按需放大约 markersize**2）
+        ax.scatter(
+            s.xs,
+            s.ys,
+            color=s.color,
+            marker=s.marker,
+            s=max(s.markersize, 1.0) ** 2,
+            edgecolors=s.color,
+            linewidths=1.0,
+            label=s.name,
+        )
+    elif s.plot_type == "bar":
+        # 柱宽估算：x 间距的 0.6 倍；x 单点时 fallback 1.0
+        if len(s.xs) >= 2:
+            spacing = min(
+                abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)
+            ) or 1.0
+            width = spacing * 0.6
+        else:
+            width = 1.0
+        ax.bar(
+            s.xs,
+            s.ys,
+            color=s.color,
+            width=width,
+            edgecolor=s.color,
+            linewidth=s.linewidth,
+            label=s.name,
+        )
+    elif s.plot_type == "step":
+        ax.step(
+            s.xs,
+            s.ys,
+            where="post",
+            color=s.color,
+            linewidth=s.linewidth,
+            marker=s.marker,
+            markersize=s.markersize,
+            markerfacecolor="white",
+            markeredgecolor=s.color,
+            markeredgewidth=1.5,
+            label=s.name,
+        )
+    else:  # "line" 默认
         ax.plot(
             s.xs,
             s.ys,
@@ -106,24 +145,56 @@ def _configure_axes(
             label=s.name,
         )
 
+
+def _configure_axes(
+    ax,
+    job: PlotJob,
+    *,
+    show_grid: bool,
+    show_legend: bool,
+    title_fontsize: int,
+    label_fontsize: int,
+) -> None:
+    """把 PlotJob 的样式 / 数据 / 轴配置应用到 Axes（落盘和 BytesIO 共用）。
+
+    show_grid / show_legend 是外部默认值；当 job.grid / job.legend_loc 显式
+    指定时（来自 preset["style"]），优先用 job 的值。
+    """
+    for s in job.series:
+        _draw_series(ax, s)
+
     ax.set_title(job.title, fontsize=title_fontsize, fontweight="bold", pad=10)
     ax.set_xlabel(job.x_axis.label, fontsize=label_fontsize)
     ax.set_ylabel(job.y_axis.label, fontsize=label_fontsize)
 
+    # 对数刻度（如启用）—— 必须在 set_xticks 前调，否则刻度被 log 缩放搞乱
+    if job.x_axis.log:
+        ax.set_xscale("log")
+    if job.y_axis.log:
+        ax.set_yscale("log")
+
     if job.x_axis.range is not None:
         x_min, x_max, x_step = job.x_axis.range
         ax.set_xlim(x_min, x_max)
-        ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
+        # log 刻度下不手工 set_xticks（让 matplotlib 自适应 10/100/1000 等位置）
+        if not job.x_axis.log:
+            ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
 
     if job.y_axis.range is not None:
         y_min, y_max, y_step = job.y_axis.range
         ax.set_ylim(y_min, y_max)
-        ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
+        if not job.y_axis.log:
+            ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
 
-    if show_grid:
+    # job.grid 优先于 show_grid 参数
+    if job.grid if job.grid is not None else show_grid:
         ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
         ax.set_axisbelow(True)
-    if show_legend:
+
+    # legend：job.legend_loc 优先；为 None 但 show_legend=True 用 "best"
+    if job.legend_loc:
+        ax.legend(loc=job.legend_loc, frameon=True)
+    elif show_legend:
         ax.legend(loc="best", frameon=True)
 
     for spine in ax.spines.values():

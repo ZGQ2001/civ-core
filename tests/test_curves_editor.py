@@ -271,6 +271,57 @@ class TestPointsEditing:
 
 
 # ──────────────────────────────────────────────────────────────────
+# marker / plot_type 人话 → code 往返
+# ──────────────────────────────────────────────────────────────────
+class TestMarkerAndPlotType:
+    def test_marker_userdata_is_code(self, qapp: QApplication) -> None:
+        """ComboBox 显示「■ 方块」等人话，userData 仍是 matplotlib code。"""
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            # 第 0 项的 userData 是 "s"
+            assert ed._marker_combo.itemData(0) == "s"
+            # 显示的人话应包含图形和中文
+            assert "方块" in ed._marker_combo.itemText(0)
+        finally:
+            ed.deleteLater()
+
+    def test_plot_type_default_line(self, qapp: QApplication) -> None:
+        """没指定 plot_type 时默认 "line"。"""
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            # 默认应当回 "line"
+            out = ed.curves()
+            assert out[0].get("plot_type", "line") in ("line",)
+        finally:
+            ed.deleteLater()
+
+    def test_plot_type_changes_persist(self, qapp: QApplication) -> None:
+        """切换图类型后 curves() 反映 code 值。"""
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            # 找到 "bar" 对应的 index
+            for i in range(ed._plot_type_combo.count()):
+                if ed._plot_type_combo.itemData(i) == "bar":
+                    ed._plot_type_combo.setCurrentIndex(i)
+                    break
+            assert ed.curves()[0]["plot_type"] == "bar"
+        finally:
+            ed.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
 # Excel 表头联动：LineEdit ⇄ ComboBox
 # ──────────────────────────────────────────────────────────────────
 class TestExcelHeadersBinding:

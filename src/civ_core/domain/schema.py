@@ -25,13 +25,15 @@ _HEX_COLOR_RE = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
 
 @dataclass(slots=True)
 class AxisSpec:
-    """坐标轴规格：标签 + 可选的固定范围 (min, max, tick_step)。
+    """坐标轴规格：标签 + 可选的固定范围 + 对数刻度开关。
 
     range=None 表示交给 matplotlib 自动选刻度。
+    log=True 时启用 log10 刻度（与 range 同时启用须保证 min/max > 0）。
     """
 
     label: str
     range: tuple[float, float, float] | None = None
+    log: bool = False
 
     def __post_init__(self) -> None:
         if self.range is None:
@@ -49,12 +51,20 @@ class AxisSpec:
             )
 
 
+# 支持的图类型（土木场景覆盖）：
+#   line    折线（默认）—— 经典荷载-位移 / 应力-应变曲线
+#   scatter 散点 —— 试验数据分布 / 沉降观测点云
+#   bar     柱状 —— 桩号-沉降 / 节点-承载力对比
+#   step    阶梯 —— 位移-时间分级加载 / 阶梯荷载工况
+_PLOT_TYPES = frozenset({"line", "scatter", "bar", "step"})
+
+
 @dataclass(slots=True)
 class CurveSeries:
     """一条待绘制的曲线（已经把 Excel 一行展开成 (x, y) 序列）。
 
     样式字段对齐 matplotlib.lines.Line2D 的关键属性：
-      color / marker / linewidth / markersize
+      color / marker / linewidth / markersize / plot_type
     """
 
     name: str
@@ -64,6 +74,8 @@ class CurveSeries:
     marker: str = "s"
     linewidth: float = 2.0
     markersize: float = 7.0
+    # 图类型：决定 chart_writer 走 ax.plot / scatter / bar / step
+    plot_type: str = "line"
 
     def __post_init__(self) -> None:
         if len(self.xs) != len(self.ys):
@@ -81,14 +93,20 @@ class CurveSeries:
             raise ValueError(
                 f"CurveSeries.color 必须是 #RGB 或 #RRGGBB 形式，得到 {self.color!r}"
             )
+        if self.plot_type not in _PLOT_TYPES:
+            raise ValueError(
+                f"CurveSeries.plot_type 必须是 {sorted(_PLOT_TYPES)} 之一，"
+                f"得到 {self.plot_type!r}"
+            )
 
 
 @dataclass(slots=True)
 class PlotJob:
     """一张待输出图所需的全部信息（一行 Excel → 一张 PNG）。
 
-    output_path：v2.3 总纲要求路径全部用 Path；__post_init__ 会把 str 自动包成 Path，
-    保留旧 plot_curves.py 用 os.path.join 拼字符串再传入的兼容性。
+    output_path：v2.3 总纲要求路径全部用 Path；__post_init__ 会把 str 自动包成 Path。
+    grid / legend_loc：图级样式（来自 preset["style"]，与 AxisSpec.log 一道交给
+    chart_writer 渲染时决定）；legend_loc=None 表示不显示图例。
     """
 
     title: str
@@ -96,11 +114,12 @@ class PlotJob:
     x_axis: AxisSpec
     y_axis: AxisSpec
     series: list[CurveSeries] = field(default_factory=list)
+    grid: bool = True
+    legend_loc: str | None = None
 
     def __post_init__(self) -> None:
         if not self.title or not self.title.strip():
             raise ValueError("PlotJob.title 不可为空")
-        # 接受 str / Path 两种输入，内部统一为 Path
         if not isinstance(self.output_path, Path):
             self.output_path = Path(self.output_path)
         if self.output_path.suffix == "":

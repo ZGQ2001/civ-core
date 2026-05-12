@@ -114,13 +114,15 @@ def get_preset_names(presets: dict[str, Any]) -> list[str]:
 
 
 def _axis_spec_from_dict(d: dict[str, Any]) -> AxisSpec:
-    """JSON 的 {label, range} → AxisSpec。range 兼容 list / null。"""
+    """JSON 的 {label, range, log} → AxisSpec。range 兼容 list / null；log 默认 False。"""
     rng = d.get("range")
+    log = bool(d.get("log", False))
     if rng is None:
-        return AxisSpec(label=d["label"], range=None)
+        return AxisSpec(label=d["label"], range=None, log=log)
     return AxisSpec(
         label=d["label"],
         range=(float(rng[0]), float(rng[1]), float(rng[2])),
+        log=log,
     )
 
 
@@ -227,6 +229,7 @@ def _series_from_preset(
         marker=curve_def.get("marker", "s"),
         linewidth=curve_def.get("linewidth", 2.0),
         markersize=curve_def.get("markersize", 7.0),
+        plot_type=curve_def.get("plot_type", "line"),
     )
 
 
@@ -264,6 +267,10 @@ def build_jobs(
     title_tpl = preset["title_template"]     # 同上
     x_axis = _axis_spec_from_dict(preset["x_axis"])
     y_axis = _axis_spec_from_dict(preset["y_axis"])
+    # 图级样式：preset["style"] 可能不存在（旧预设）→ 默认 grid=True / 无 legend
+    style = preset.get("style") or {}
+    grid = bool(style.get("grid", True))
+    legend_loc = style.get("legend")
 
     jobs: list[PlotJob] = []
     skipped_empty_id: list[int] = []
@@ -307,6 +314,8 @@ def build_jobs(
                 x_axis=x_axis,
                 y_axis=y_axis,
                 series=series_list,
+                grid=grid,
+                legend_loc=legend_loc,
             )
         )
 

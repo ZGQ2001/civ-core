@@ -72,8 +72,28 @@ _QUICK_COLORS: tuple[str, ...] = (
     "#000000",  # 黑
 )
 
-# matplotlib 兼容的 marker 集合（与旧版一致 + 顺序）
-_MARKER_CHOICES: tuple[str, ...] = ("s", "o", "^", "v", "D", "x", "*", "+")
+# matplotlib marker code → 人话显示（图形 + 中文名 + 原始 code）
+# 把 matplotlib 的单字母 code（s/o/^/v/D/x/*/+）翻成用户看得懂的图形+中文，
+# JSON 里仍保存 code，渲染时直接喂 matplotlib，不引入额外映射。
+_MARKER_DISPLAY: tuple[tuple[str, str], ...] = (
+    ("s", "■  方块"),
+    ("o", "●  圆"),
+    ("^", "▲  上三角"),
+    ("v", "▼  下三角"),
+    ("D", "◆  菱形"),
+    ("x", "✕  叉"),
+    ("*", "★  星"),
+    ("+", "✚  加号"),
+)
+_MARKER_CHOICES: tuple[str, ...] = tuple(code for code, _ in _MARKER_DISPLAY)
+
+# 图类型 code → 人话显示。code 与 chart_writer._draw_series 的分支一致
+_PLOT_TYPE_DISPLAY: tuple[tuple[str, str], ...] = (
+    ("line", "折线图（带 marker，土木标准曲线）"),
+    ("scatter", "散点图（仅点，无连线）"),
+    ("bar", "柱状图（桩号/节点对比）"),
+    ("step", "阶梯图（分级加载工况）"),
+)
 
 # 新曲线 / 新点的初始值
 _EMPTY_CURVE: dict[str, Any] = {
@@ -82,6 +102,7 @@ _EMPTY_CURVE: dict[str, Any] = {
     "marker": "s",
     "linewidth": 2.0,
     "markersize": 7.0,
+    "plot_type": "line",
     "points": [],
 }
 _EMPTY_POINT: dict[str, Any] = {
@@ -188,16 +209,37 @@ class CurvesEditor(QWidget):
         self._form_layout.setSpacing(6)
         outer.addWidget(self._form_widget, 1)
 
-        # ── 字段控件（统一构造一次，刷新时只 setValue / 不重建）──
-        # 名称
+        # ── 字段控件（按"基础 / 样式 / 数据点"三组，小标题区隔）──
+
+        # 「基础」小标题：曲线名
+        self._form_layout.addWidget(StrongBodyLabel("基础", self))
         name_row = self._make_row("曲线名:")
         self._name_edit = LineEdit(self)
         self._name_edit.editingFinished.connect(self._save_from_form)
         name_row.addWidget(self._name_edit, 1)
         self._form_layout.addLayout(name_row)
 
+        # 「样式」小标题：图类型 + 颜色 + marker + 线宽 + 标记尺寸
+        # 这些都是单条曲线的样式属性（每条独立），故留在编辑器内；
+        # 外部「样式」分组是整张图的样式（网格 / 图例 / 对数刻度）
+        self._form_layout.addWidget(StrongBodyLabel("样式", self))
+
+        # 图类型 ComboBox（支持土木常见 4 种图）
+        plot_type_row = self._make_row("图类型:")
+        self._plot_type_combo = ComboBox(self)
+        for code, display in _PLOT_TYPE_DISPLAY:
+            self._plot_type_combo.addItem(display, userData=code)
+        self._plot_type_combo.setToolTip(
+            "折线：土木标准曲线（荷载-位移、应力-应变等）\n"
+            "散点：试验数据分布、沉降观测点云\n"
+            "柱状：桩号-沉降、节点-承载力对比\n"
+            "阶梯：分级加载工况（位移-时间）"
+        )
+        self._plot_type_combo.currentIndexChanged.connect(self._save_from_form)
+        plot_type_row.addWidget(self._plot_type_combo, 1)
+        self._form_layout.addLayout(plot_type_row)
+
         # 颜色（6 个快选 + 更多…）；当前色 = 快选按钮加粗黑边显示
-        # 去掉之前那个 40×22 的 _color_indicator 大方块（语义模糊用户看不懂）
         color_row = self._make_row("颜色:")
         self._color_swatches: list[QPushButton] = []
         for hex_color in _QUICK_COLORS:
@@ -214,17 +256,21 @@ class CurvesEditor(QWidget):
         color_row.addStretch(1)
         self._form_layout.addLayout(color_row)
 
-        # marker
-        marker_row = self._make_row("标记:")
+        # marker（人话显示，matplotlib code 通过 userData 携带）
+        marker_row = self._make_row("点形状:")
         self._marker_combo = ComboBox(self)
-        self._marker_combo.addItems(list(_MARKER_CHOICES))
-        self._marker_combo.currentTextChanged.connect(self._save_from_form)
+        for code, display in _MARKER_DISPLAY:
+            self._marker_combo.addItem(display, userData=code)
+        self._marker_combo.setToolTip(
+            "图形 = 视觉示意；括号里的字母是 matplotlib marker code"
+        )
+        self._marker_combo.currentIndexChanged.connect(self._save_from_form)
         marker_row.addWidget(self._marker_combo)
         marker_row.addStretch(1)
         self._form_layout.addLayout(marker_row)
 
         # linewidth + markersize（一行两个）
-        sizes_row = self._make_row("线宽 / 标记尺寸:")
+        sizes_row = self._make_row("线宽 / 点大小:")
         self._linewidth_spin = DoubleSpinBox(self)
         self._linewidth_spin.setRange(0.1, 10.0)
         self._linewidth_spin.setSingleStep(0.5)
@@ -428,6 +474,12 @@ class CurvesEditor(QWidget):
             if marker in _MARKER_CHOICES:
                 self._marker_combo.setCurrentIndex(_MARKER_CHOICES.index(marker))
 
+            plot_type = str(curve.get("plot_type", "line"))
+            for i in range(self._plot_type_combo.count()):
+                if self._plot_type_combo.itemData(i) == plot_type:
+                    self._plot_type_combo.setCurrentIndex(i)
+                    break
+
             try:
                 self._linewidth_spin.setValue(float(curve.get("linewidth", 2.0)))
             except (TypeError, ValueError):
@@ -479,7 +531,11 @@ class CurvesEditor(QWidget):
             return
         curve = self._curves[self._current_idx]
         curve["name"] = self._name_edit.text()
-        curve["marker"] = self._marker_combo.currentText()
+        # marker / plot_type 用 currentData() 拿 code，不是 currentText（人话显示）
+        marker_code = self._marker_combo.currentData() or "s"
+        curve["marker"] = str(marker_code)
+        plot_type_code = self._plot_type_combo.currentData() or "line"
+        curve["plot_type"] = str(plot_type_code)
         curve["linewidth"] = float(self._linewidth_spin.value())
         curve["markersize"] = float(self._markersize_spin.value())
         # 名称改了，ComboBox 当前项显示文字也要同步

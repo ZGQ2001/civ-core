@@ -61,3 +61,80 @@ class TestRenderPlotToBytes:
         low = render_plot_to_bytes(_make_job(), dpi=50)
         high = render_plot_to_bytes(_make_job(), dpi=200)
         assert len(high) > len(low) * 1.5
+
+
+# ──────────────────────────────────────────────────────────────────
+# 多种 plot_type 都能渲染出 PNG
+# ──────────────────────────────────────────────────────────────────
+class TestPlotTypes:
+    def test_each_plot_type_renders(self) -> None:
+        """4 种 plot_type 都能产出合法 PNG。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        for plot_type in ("line", "scatter", "bar", "step"):
+            job = PlotJob(
+                title=f"plot_type={plot_type}",
+                output_path=Path("dummy.png"),
+                x_axis=AxisSpec(label="x"),
+                y_axis=AxisSpec(label="y"),
+                series=[
+                    CurveSeries(
+                        name="s",
+                        xs=[1.0, 2.0, 3.0, 4.0],
+                        ys=[1.0, 4.0, 2.0, 5.0],
+                        plot_type=plot_type,
+                    )
+                ],
+            )
+            data = render_plot_to_bytes(job)
+            assert data[:8] == b"\x89PNG\r\n\x1a\n", (
+                f"plot_type={plot_type} 没产出合法 PNG"
+            )
+
+    def test_invalid_plot_type_rejected_at_schema(self) -> None:
+        """CurveSeries 构造时即拦下非法 plot_type。"""
+        import pytest
+
+        with pytest.raises(ValueError, match="plot_type"):
+            CurveSeries(
+                name="x", xs=[0.0], ys=[0.0], plot_type="invalid_type"
+            )
+
+
+# ──────────────────────────────────────────────────────────────────
+# AxisSpec.log / PlotJob.grid / PlotJob.legend_loc 透传到渲染
+# ──────────────────────────────────────────────────────────────────
+class TestAxisAndStyle:
+    def test_log_scale_renders(self) -> None:
+        """X/Y 同时启用对数刻度也能渲染出合法 PNG。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="log-log",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x", log=True),
+            y_axis=AxisSpec(label="y", log=True),
+            series=[
+                CurveSeries(
+                    name="s",
+                    xs=[1.0, 10.0, 100.0],
+                    ys=[1.0, 10.0, 100.0],
+                )
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_legend_loc_renders(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="legend",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x"),
+            y_axis=AxisSpec(label="y"),
+            series=[CurveSeries(name="A", xs=[0.0, 1.0], ys=[0.0, 1.0])],
+            legend_loc="upper left",
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"

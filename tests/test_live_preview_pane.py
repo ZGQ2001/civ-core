@@ -205,7 +205,9 @@ class TestSerialPending:
             # 等主线程事件循环消费 ready 信号 → 回调里发现 pending → 补一次
             qtbot.waitUntil(lambda: stats["runs"] >= 2, timeout=2000)
             assert stats["runs"] == 2
-            # 最终状态应回到 idle，pending 被清掉
+            # runs+=1 在 worker.run() 入口；它和 ready 信号回主线程之间还有一段
+            # 跨线程队列投递，再等一轮 _is_rendering 复位（CI 慢机时序敏感）
+            qtbot.waitUntil(lambda: not pane._is_rendering, timeout=2000)
             assert pane._is_rendering is False
             assert pane._pending is False
         finally:

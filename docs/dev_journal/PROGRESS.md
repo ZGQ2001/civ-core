@@ -7,12 +7,17 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** P1/UI 重构（L-1 → L-5）**全部完成**（2026-05-12，commits `72d9585`/`d23eba7`/`b83d581`/`9949352`/`ed02de1`）；plot_curves 模块功能闭环：左栏六分组风琴参数面板 → 实时预览（300ms 防抖 + Excel 缓存 + BytesIO 渲染）→ 底栏数据源 Tab（按 var_column 过滤）→ 表格行联动预览。**231 测试通过**；healthcheck 9 项全 ✅（新增"底栏 Tab 面板"）。
+**当前状态：** P1 已交付 + 实跑 GUI 后 13 项 UX 反馈整改完成（2026-05-12，commits `8101dc3`/`ff71474`/`85a3d7b`/`4afacff`）。**244 测试通过**（含 7 项新覆盖 plot_type / 对数刻度 / marker userData）；ruff 0；healthcheck 9 项全 ✅。
 
-**当前任务：** 无 in-progress。P1 已交付，等用户验收/反馈或决定下一阶段方向（P1.5 收尾 / P2 旧代码清理 / P3 新工具接入）。
+plot_curves 模块功能闭环：
+- 左栏：QScrollArea 包六分组风琴参数面板（预设选择 / 数据源(含 sheet) / 曲线定义 / 坐标轴 / 样式(含 X/Y 对数刻度) / 输出）
+- 右栏：垂直 QSplitter [预览顶部工具栏(▶ 生成全部曲线 PNG) + 实时预览图 / 底栏 Tab(日志 + 数据源)]
+- 曲线编辑器：ComboBox 单行选曲线 + 5 按钮工具栏；按"基础 / 样式 / 数据点"分子段；4 种图类型（折线/散点/柱状/阶梯）；marker 显示「■ 方块」等人话
+
+**当前任务：** 无 in-progress。等用户验收或决定下一阶段方向。
 
 **下一步（候选，等用户拍板）：**
-1. **P1.5（收尾增强）**：① "鼠标悬停曲线点 → 表格滚到该行" 的 hit-testing 实装（需 PNG→数据坐标反向映射 + 单独 worker）；② LivePreviewPane.highlight_row 渲染时在图上画突出标记（marker 加大）；③ 实时预览的撤销/重做；④ CurvesEditor 的"图形化拖点"
+1. **P1.5（收尾增强）**：① "鼠标悬停曲线点 → 表格滚到该行" 的 hit-testing 实装（需 PNG→数据坐标反向映射 + 单独 worker）；② LivePreviewPane.highlight_row 渲染时在图上画突出标记（marker 加大）；③ 实时预览的撤销/重做；④ CurvesEditor 的"图形化拖点"；⑤ 双 Y 轴 / 误差棒图等更多土木图类型
 2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2（L-3b 已不再使用，但还未删）
 3. **P3（新工具接入）**：`word2pdf` / `auto_filler` / `bracket_normalize` 三个工具
 
@@ -353,6 +358,77 @@ get_user_presets_path(tool="plot_curves") -> Path
 ## 🗂️ 会话历史
 
 > 当本节超过 50 条记录或文件总长超过 800 行时，归档到 `PROGRESS_ARCHIVE.md`，本节只保留最近 10 条。
+
+### [2026-05-12] P1 实跑反馈 + UX 重构 + 多图类型支持
+
+实际跑 GUI 后用户给出 13 项整改 + 多个增强要求，按一个大方向 + 多次微调推进：
+
+**主体 UX 重构（commit `8101dc3`）**
+- 主水平 splitter + 右栏垂直 splitter：底栏 Tab 不再横跨整宽，
+  只在右栏下方占位；左栏参数面板独享全高
+- 预览顶部工具栏取代底部 action_bar：生成按钮紧邻预览图，
+  文案"▶ 生成全部曲线 PNG"
+- 右栏垂直比例持久化新键 `plot_curves/right_splitter_sizes`
+- PresetAccordionPanel 包 QScrollArea：超出时垂直滚动
+- 末尾 addStretch(1) 推所有分组贴顶（修原 addStretch(0) 无效）
+- 分组 SizePolicy 改 Maximum：折叠时只占标题高度
+- 数据源分组新增 sheet ComboBox：选 Excel 后自动 read_sheet_names；
+  data_source_changed 信号 arity 升级 Signal(object, object) = (path, sheet)
+- 长字段（Excel 路径 / 输出目录）改"标签独占一行 + 控件另一行"
+- Sheet + 表头行号用 QGridLayout 2 列横向
+- 坐标轴 X/Y 拆两块；输出分组所有字段纵向标签+控件
+- CurvesEditor 删除 _color_indicator 大色块；快选按钮加 3px 黑边高亮当前色
+- _points_table.setMinimumHeight(200)
+- LivePreviewPane 去 minimum size 360x220；LogPanel 去边框去 margin
+
+**CurvesEditor 列表 → ComboBox（commit `ff71474`）**
+- QListWidget 大块列表 → ComboBox 单行下拉（与"预设选择"统一）
+  节省约 140px 垂直空间
+- 删除 `item.setForeground(QColor(curve_color))` 强染色，解决深色主题
+  下蓝字+黑底对比度差
+- 曲线颜色用 12×12 QIcon 色块装饰 ComboBox item，文字保留主题色
+- 工具按钮 (+ ⧉ × ↑ ↓) 改横向同行
+- 修正 qfluentwidgets.ComboBox.addItem(text, icon=...) 参数顺序
+
+**按钮文字可见 + 语义澄清（commit `85a3d7b`）**
+- ToolButton 默认 IconOnly → QPushButton + setFixedWidth(32) 符号可见
+- 加显式"曲线"标签 + 编辑器顶部提示文字「下方为「当前预设里的曲线」
+  —— 新增/删除等操作只影响当前预设」澄清预设/曲线父子语义
+- 工具按钮 tooltip 强调"仅影响当前预设"
+
+**多图类型 + marker 人话 + 对数刻度（commit `4afacff`）**
+- CurveSeries.plot_type 字段，4 种：line / scatter / bar / step
+  chart_writer._draw_series 按 type 调度到 ax.plot/scatter/bar/step
+- marker ComboBox 显示「■ 方块」「● 圆」「▲ 上三角」等人话，
+  matplotlib code 通过 userData 携带；存盘仍是 "s" 等 code
+- CurvesEditor 内部按"基础 / 样式 / 数据点"三组小标题区隔
+- AxisSpec.log 字段；「样式」分组新增 X/Y 对数刻度 CheckBox；
+  chart_writer 处理 ax.set_xscale/yscale("log")
+- PlotJob.grid / legend_loc 字段；preset.style.grid / style.legend
+  → chart_writer 直接读 job 字段（job 优先于参数）
+- 老预设缺新字段时默认 line / grid=True / log=False（向后兼容）
+
+**CI 测试时序修复（本次）**
+- tests/test_live_preview_pane.py::test_pending_path_followup_render
+  在 CI 上偶发失败：runs+=1 后到 ready 信号回主线程之间有跨线程
+  延迟，第一个 assert 通过时 _is_rendering 可能还没复位
+- 修复：在断言 _is_rendering=False 前用 qtbot.waitUntil 多等一轮
+
+**累计验收：244 passed（181 → 237 → 244）/ ruff 0 / healthcheck 9/9 ✅**
+
+**涉及文件：**
+- src/civ_core/domain/schema.py（CurveSeries.plot_type、AxisSpec.log、PlotJob.grid/legend_loc）
+- src/civ_core/core/plot_curves.py（透传 plot_type / style.* 到 PlotJob）
+- src/civ_core/infra_io/chart_writer.py（_draw_series 按 type 调度 + 对数刻度 + 图级样式）
+- src/civ_core/ui/components/{preset_accordion_panel,curves_editor,live_preview_pane,log_panel}.py
+- src/civ_core/ui/windows/plot_curves_view.py（主水平 + 右栏垂直 splitter + 预览顶工具栏）
+- tests/{test_curves_editor,test_chart_writer_bytes,test_preset_accordion_panel,test_splitter_persistence,test_live_preview_pane}.py
+
+**遗留（→ P1.5）：**
+- 鼠标悬停曲线点 → 表格联动（需 PNG 坐标反向映射 + hit-testing worker）
+- highlight_row 渲染时图上突出标记
+- 实时预览的撤销/重做
+- 双 Y 轴 / 误差棒图等更多图类型
 
 ### [2026-05-12] P1/UI 重构 L-1 → L-5 全部交付
 

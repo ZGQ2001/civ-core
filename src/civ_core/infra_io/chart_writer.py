@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import io
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -77,6 +78,58 @@ def _arange_inclusive(start: float, stop: float, step: float) -> list[float]:
     return out
 
 
+def _configure_axes(
+    ax,
+    job: PlotJob,
+    *,
+    show_grid: bool,
+    show_legend: bool,
+    title_fontsize: int,
+    label_fontsize: int,
+) -> None:
+    """把 PlotJob 的样式 / 数据 / 轴配置应用到 Axes（落盘和 BytesIO 共用）。
+
+    抽出来是为了让 render_plot_to_png 和 render_plot_to_bytes 共享画图逻辑，
+    避免两边样式漂移；只保留"渲染目标"的差异。
+    """
+    for s in job.series:
+        ax.plot(
+            s.xs,
+            s.ys,
+            color=s.color,
+            linewidth=s.linewidth,
+            marker=s.marker,
+            markersize=s.markersize,
+            markerfacecolor="white",
+            markeredgecolor=s.color,
+            markeredgewidth=1.5,
+            label=s.name,
+        )
+
+    ax.set_title(job.title, fontsize=title_fontsize, fontweight="bold", pad=10)
+    ax.set_xlabel(job.x_axis.label, fontsize=label_fontsize)
+    ax.set_ylabel(job.y_axis.label, fontsize=label_fontsize)
+
+    if job.x_axis.range is not None:
+        x_min, x_max, x_step = job.x_axis.range
+        ax.set_xlim(x_min, x_max)
+        ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
+
+    if job.y_axis.range is not None:
+        y_min, y_max, y_step = job.y_axis.range
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
+
+    if show_grid:
+        ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
+        ax.set_axisbelow(True)
+    if show_legend:
+        ax.legend(loc="best", frameon=True)
+
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.8)
+
+
 def render_plot_to_png(
     job: PlotJob,
     *,
@@ -101,43 +154,14 @@ def render_plot_to_png(
     _configure_chinese_font()
 
     with _managed_figure(figsize, dpi) as (fig, ax):
-        for s in job.series:
-            ax.plot(
-                s.xs,
-                s.ys,
-                color=s.color,
-                linewidth=s.linewidth,
-                marker=s.marker,
-                markersize=s.markersize,
-                markerfacecolor="white",
-                markeredgecolor=s.color,
-                markeredgewidth=1.5,
-                label=s.name,
-            )
-
-        ax.set_title(job.title, fontsize=title_fontsize, fontweight="bold", pad=10)
-        ax.set_xlabel(job.x_axis.label, fontsize=label_fontsize)
-        ax.set_ylabel(job.y_axis.label, fontsize=label_fontsize)
-
-        if job.x_axis.range is not None:
-            x_min, x_max, x_step = job.x_axis.range
-            ax.set_xlim(x_min, x_max)
-            ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
-
-        if job.y_axis.range is not None:
-            y_min, y_max, y_step = job.y_axis.range
-            ax.set_ylim(y_min, y_max)
-            ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
-
-        if show_grid:
-            ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
-            ax.set_axisbelow(True)
-        if show_legend:
-            ax.legend(loc="best", frameon=True)
-
-        for spine in ax.spines.values():
-            spine.set_linewidth(0.8)
-
+        _configure_axes(
+            ax,
+            job,
+            show_grid=show_grid,
+            show_legend=show_legend,
+            title_fontsize=title_fontsize,
+            label_fontsize=label_fontsize,
+        )
         fig.tight_layout()
 
         # 走 atomic_writer：临时文件 → 原子替换。
@@ -149,3 +173,42 @@ def render_plot_to_png(
 
     log.debug("绘图完成: %s", job.output_path.name)
     return job.output_path
+
+
+def render_plot_to_bytes(
+    job: PlotJob,
+    *,
+    figsize: tuple[float, float] = (7.0, 4.0),
+    dpi: int = 100,
+    show_grid: bool = True,
+    show_legend: bool = False,
+    title_fontsize: int = 14,
+    label_fontsize: int = 11,
+) -> bytes:
+    """渲染一个 PlotJob 为 PNG 字节流（不落盘），供 LivePreviewPane 实时预览。
+
+    与 render_plot_to_png 的差异：
+      • 不走 atomic_writer，savefig 直接写 BytesIO —— 实时预览高频触发，
+        每次都落盘会把磁盘 IO 拉爆且产生大量孤儿文件
+      • dpi 默认 100（落盘默认 150）—— 屏幕显示用，省 CPU 加速重绘
+      • 仍复用 _configure_axes，保证预览和最终落盘的样式一致
+
+    返回值：PNG 字节流（job.output_path 字段被忽略；本函数不读它）。
+    """
+    _configure_chinese_font()
+
+    buf = io.BytesIO()
+    with _managed_figure(figsize, dpi) as (fig, ax):
+        _configure_axes(
+            ax,
+            job,
+            show_grid=show_grid,
+            show_legend=show_legend,
+            title_fontsize=title_fontsize,
+            label_fontsize=label_fontsize,
+        )
+        fig.tight_layout()
+        # 直接渲到内存 buffer；不走 atomic_writer 也就不需要文件锁/原子替换
+        fig.savefig(buf, dpi=dpi, bbox_inches="tight", format="png")
+
+    return buf.getvalue()

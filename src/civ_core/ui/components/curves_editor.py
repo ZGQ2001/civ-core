@@ -56,7 +56,6 @@ from qfluentwidgets import (
     MessageBox,
     PushButton,
     StrongBodyLabel,
-    ToolButton,
 )
 
 from civ_core.utils.logger import get_logger
@@ -127,42 +126,57 @@ class CurvesEditor(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(8)
 
-        # ── 顶行：ComboBox 选曲线 + 5 个工具按钮（单行节省高度） ──
-        # 用 ComboBox 替代原大块 QListWidget：
-        #   • 体验和"预设选择"一致（统一交互模型，用户少想一次）
-        #   • 节省垂直空间（原 QListWidget 默认占 140px，现 ComboBox 32px）
-        #   • 曲线颜色用左侧色块 QIcon 表达，文字保留主题色（避免深色背景上的低对比度蓝字）
+        # ── 头部说明 ──
+        # 用一行小字明确"曲线 ⊂ 预设"的父子关系，让用户明白：
+        # 预设按钮（+新建/复制/删除）操作的是整套配置；
+        # 下面的曲线按钮操作的是当前预设里的一条折线。
+        hint = BodyLabel(
+            "下方为「当前预设里的曲线」—— 新增/删除等操作只影响当前预设。",
+            self,
+        )
+        hint.setStyleSheet("color: #888;")
+        hint.setWordWrap(True)
+        outer.addWidget(hint)
+
+        # ── 顶行：标签 + ComboBox + 5 个工具按钮（单行节省高度） ──
         top = QHBoxLayout()
         top.setSpacing(6)
 
+        # 显式标签，与"预设选择"分组的 ComboBox 标签呼应、视觉上区分操作对象
+        top.addWidget(BodyLabel("曲线", self))
+
         self._curve_combo = ComboBox(self)
         self._curve_combo.setObjectName("curveCombo")
-        self._curve_combo.setPlaceholderText("当前曲线（下拉切换）")
+        self._curve_combo.setPlaceholderText("先在右边按 + 添加曲线")
+        self._curve_combo.setToolTip(
+            "曲线 = 这张图里要画的一条折线；预设可以包含 0~N 条曲线"
+        )
         self._curve_combo.currentIndexChanged.connect(self._on_curve_selected)
         top.addWidget(self._curve_combo, 1)
 
-        # 工具按钮（用图标/符号 + 明确 tooltip；操作对象明确写"曲线"以
-        # 区分于"预设选择"分组里的"+新建/复制/删除"——那些是对预设的操作）
-        for symbol, slot, tip in [
-            ("+", self._on_add_curve, "新增一条曲线"),
+        # 工具按钮：QPushButton + setFixedWidth 紧凑模式，符号始终可见
+        # （之前用 ToolButton 默认 IconOnly 看不到 text，已修）
+        button_specs = [
+            ("+", self._on_add_curve, "新增一条曲线（仅影响当前预设）"),
             ("⧉", self._on_duplicate_curve, "复制选中曲线"),
             ("×", self._on_delete_curve, "删除选中曲线"),
             ("↑", self._on_move_up, "上移选中曲线"),
             ("↓", self._on_move_down, "下移选中曲线"),
-        ]:
-            btn = ToolButton(symbol, self)
+        ]
+        attr_map = {
+            "+": "_btn_add",
+            "⧉": "_btn_dup",
+            "×": "_btn_del",
+            "↑": "_btn_up",
+            "↓": "_btn_down",
+        }
+        for symbol, slot, tip in button_specs:
+            btn = QPushButton(symbol, self)
             btn.setToolTip(tip)
+            btn.setFixedWidth(32)
             btn.clicked.connect(slot)
             top.addWidget(btn)
-            # 把按钮挂到 self.* 便于测试 / 外部访问
-            attr = {
-                "+": "_btn_add",
-                "⧉": "_btn_dup",
-                "×": "_btn_del",
-                "↑": "_btn_up",
-                "↓": "_btn_down",
-            }[symbol]
-            setattr(self, attr, btn)
+            setattr(self, attr_map[symbol], btn)
 
         outer.addLayout(top)
 

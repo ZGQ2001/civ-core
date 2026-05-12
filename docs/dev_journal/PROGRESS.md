@@ -7,18 +7,21 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** T-0~T-4 完成 + P1/QSplitter 宽度记忆 + P1/预览区 + P1/pytest-qt + P1/日志面板 完成；项目更名 `civil-auto-workspace` → `civ-core`（筑核）已落地（commit `a6fe1f9`）；181 测试通过；healthcheck 8 项全 ✅。
+**当前状态：** P1/UI 重构（L-1 → L-5）**全部完成**（2026-05-12，commits `72d9585`/`d23eba7`/`b83d581`/`9949352`/`ed02de1`）；plot_curves 模块功能闭环：左栏六分组风琴参数面板 → 实时预览（300ms 防抖 + Excel 缓存 + BytesIO 渲染）→ 底栏数据源 Tab（按 var_column 过滤）→ 表格行联动预览。**231 测试通过**；healthcheck 9 项全 ✅（新增"底栏 Tab 面板"）。
 
-**当前任务：** P1/UI 重构（双栏 + 实时预览 + 数据源 Tab + curves 可视化编辑器）—— 已与用户对齐方案 B：原"预设编辑器迁移"独立任务**合并**到 L-3a 子步，避免做完一遍再搬运。下一步从 L-1 起步。
+**当前任务：** 无 in-progress。P1 已交付，等用户验收/反馈或决定下一阶段方向（P1.5 收尾 / P2 旧代码清理 / P3 新工具接入）。
 
-**下一步：**
-1. **AI 侧立即接续**：从 **L-1（布局重构：三栏 → 两栏 QSplitter）** 开始；按 L-1 → L-2 → L-3a → L-3b → L-4 → L-5 顺序推进，每步一个 commit、先写 pytest 拦截边界、再写业务、ruff + healthcheck 验收。详见 P1 章节
-2. **用户侧待办（历史遗留，本会话不阻塞 L-1）**：① GitHub 仓库重命名 `Civil-Auto-Workspace` → `civ-core`；② 本地目录 `Rename-Item D:\CodeProjects\Civil_Auto_Workspace civ-core` + `uv sync`；详见会话历史 2026-05-08    `已办-ZGQ 2026-05-08`
+**下一步（候选，等用户拍板）：**
+1. **P1.5（收尾增强）**：① "鼠标悬停曲线点 → 表格滚到该行" 的 hit-testing 实装（需 PNG→数据坐标反向映射 + 单独 worker）；② LivePreviewPane.highlight_row 渲染时在图上画突出标记（marker 加大）；③ 实时预览的撤销/重做；④ CurvesEditor 的"图形化拖点"
+2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2（L-3b 已不再使用，但还未删）
+3. **P3（新工具接入）**：`word2pdf` / `auto_filler` / `bracket_normalize` 三个工具
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
 - 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
-- 旧 Qt QSettings 键名（applicationName=`CivilAuto`）已废，下次启动 GUI 三栏宽度/窗口几何会回到默认一次
+- 旧 Qt QSettings 键名（applicationName=`CivilAuto`）已废，下次启动 GUI 两栏宽度 / 窗口几何会回到默认一次
+- 旧用户存的三栏 splitter_sizes（list[3]）会在首次启动被识别为长度异常 → 回退默认 [600, 400]（一次性丢弃，后续拖动即覆盖）
+- `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 三个旧组件已不被 view 使用但暂留（test_preset_list_buttons / test_preset_form_panel / test_preview_pane 还在测它们 + healthcheck 第 7 项仍依赖 PreviewPane）；P2 阶段一并清理
 
 ---
 ### 可用指令（动态更新）
@@ -350,6 +353,90 @@ get_user_presets_path(tool="plot_curves") -> Path
 ## 🗂️ 会话历史
 
 > 当本节超过 50 条记录或文件总长超过 800 行时，归档到 `PROGRESS_ARCHIVE.md`，本节只保留最近 10 条。
+
+### [2026-05-12] P1/UI 重构 L-1 → L-5 全部交付
+
+**完成内容：**
+
+**L-1（commit `72d9585`）三栏 → 两栏 QSplitter 骨架**
+- 删除 `plot_center_pane.py` + `test_plot_center_pane.py`
+- 新增占位 `live_preview_pane.py` / `preset_accordion_panel.py`
+- `plot_curves_view.py` 改两栏：左 PresetAccordionPanel / 右 LivePreviewPane，默认 sizes `[600, 400]`
+- `_restore_splitter_sizes` 长度校验从 3 改为 2，老用户的 list[3] 会被识别为损坏 → 回退默认（一次性丢弃）
+- `_validate_preset_form` 保留为纯静态方法（L-3b save flow 仍要用，19 个测试用例覆盖）
+- 测试 176 → ruff 0 → healthcheck 8 项全 ✅
+
+**L-2（commit `d23eba7`）实时渲染管线：防抖 + 缓存 + BytesIO 渲染**
+- `core/data_cache.py` `ExcelDataCache` 单例：按 `(resolved_path, sheet, header_row, mtime_ns)` 缓存 `read_rows` 结果；mtime 自动失效
+- `infra_io/chart_writer.py` 抽 `_configure_axes` + 新增 `render_plot_to_bytes`（不走 atomic_writer，dpi 默认 100，渲到 `BytesIO`）
+- `live_preview_pane.py` 真实实装：
+  - 接口 `set_preset` / `set_data_source` / `request_redraw`
+  - `QTimer.singleShot(300ms)` 防抖；连点滑块合并成一次重绘
+  - Worker 串行（pyplot 全局状态多线程不安全）；pending 兜底 last-write-wins
+  - generation token 丢弃过期 worker 结果
+  - 失败友善降级：缺数据源 / 缺预设 / 列名不匹配 → QLabel 提示
+- 测试 +17 → 193
+
+**L-3a（commit `b83d581`）CurvesEditor 曲线可视化编辑器**
+- 新建 `ui/components/curves_editor.py`（迁移并精简 `old_code/02_Core/curve_template_editor.py` 中的曲线编辑部分；模板列表归 L-3b）
+- 组件结构：上半 QListWidget + 工具栏 `[+ ⧉ × ↑ ↓]`；下半 name / color / marker / linewidth / markersize + 点序列 QTableWidget
+- 颜色：6 个快选 + QColorDialog；marker ComboBox（s o ^ v D x * +）；删除曲线 MessageBox 二次确认
+- Excel 表头联动：`set_excel_headers` 后 var_column 由 `QLineEdit` 升级为 `qfluentwidgets.ComboBox`
+- 深拷贝边界：`set_curves` / `curves()` 双向深拷贝，外部 mutate 不污染编辑器
+- `changed` 信号：编辑后发出；`_render_form` 用 `_suppress_signals` 抑制误发
+- 测试 +17 → 210
+
+**L-3b（commit `9949352`）PresetAccordionPanel 六分组 + view 实时联动**
+- 新建 `ui/components/preset_accordion_panel.py`，六分组自上而下：
+  1. 预设选择（不可折叠）：ComboBox 含最近使用「★」置顶 + `[+新建/复制/删除/保存]`
+  2. 数据源：Excel 路径 / 表头行号 / 输出目录
+  3. 曲线定义：装 L-3a CurvesEditor
+  4. 坐标轴：X/Y 标签 + `_RangeTrio`（min/max/step + 启用开关）
+  5. 样式：网格 + 图例位置
+  6. 输出：filename_template / title_template / DPI（`_SliderInputRow` 滑块+输入）/ 标识列名
+- 私有控件 `_CollapsibleSection`（自写折叠分组）/ `_SliderInputRow` / `_RangeTrio`
+- 信号 `preset_changed(dict)` / `data_source_changed(object)` / `request_redraw_signal()`
+- `current_preset_data()` / `current_run_settings()` 聚合 form 字段
+- 最近使用预设 5 条 QSettings 滚动列表（去重 + 提前）；`_make_settings` 工厂方法供测试 monkeypatch
+- 系统预设禁删（MessageBox 提示）；用户预设删除走 preset_manager + 二次确认
+- view 接线：preset_changed → live_preview.set_preset；data_source_changed → live_preview.set_data_source；request_redraw_signal → live_preview.request_redraw；`_current_run_settings` 改从面板取真实值
+- 测试 +12 → 222
+
+**L-4（commit `ed02de1`，与 L-5 合并）底栏 Tab 面板 + 简化双向高亮**
+- 新建 `ui/components/data_source_pane.py`：QTableView + QStandardItemModel，按 `id_column + curves[*].points[*].var_column` 去重收齐显示列，preset 缺时兜底前 3 列；点击行 emit `row_highlighted(int)`；`highlight_row` 反向调用用 `_suppress_emit` 防回路；None/NaN 单元格渲染为空
+- 新建 `ui/components/bottom_tab_panel.py`：LogPanel + DataSourcePane 整合到 QStackedWidget；工具栏整体 toggle + Pivot 切换；LogPanel 自身 toggle 按钮隐藏避免双重折叠
+- `live_preview_pane.py` 新增 `highlight_row(idx)` 占位实装（仅记内部索引 + 更新提示文字，图上画突出标记留 P1.5）
+- `plot_curves_view.py`：LogPanel 替换为 BottomTabPanel（保留 `view.log_panel` 别名向后兼容）；新增 `_refresh_data_source_pane`（从 ExcelDataCache 拿 rows 喂表格）；折叠态持久化 QSettings 键 `plot_curves/bottom_panel_collapsed`
+- 简化部分：「鼠标悬停曲线点 → 表格高亮」未做，登记到 P1.5（需要 PNG 坐标反向映射 + 单独的 hit-testing worker）
+
+**L-5（与 L-4 合并到 commit `ed02de1`）测试 + healthcheck 收尾**
+- `tests/test_data_source_pane.py` 新增 9 项：列过滤 / 兜底 / 去重 / 行选中信号 / 反向高亮防回路 / 越界 / clear / None NaN
+- `scripts/healthcheck.py` 新增第 9 项 `_check_bottom_tab_panel`：列过滤 round-trip + Tab 切换 + 折叠态切换
+- `_check_gui_constructible` 子组件清单同步：preset_accordion_panel / live_preview_pane / bottom_panel / data_source_pane
+- 测试 +9 → 231
+
+**累计变化：**
+- 测试：181 → 231（+50；含 L-2 +17 / L-3a +17 / L-3b +12 / L-5 +9，扣除 L-1 删的 5 个 test_plot_center_pane）
+- healthcheck：8 → 9 项（新增"底栏 Tab 面板"）
+- 新增模块：`core/data_cache.py` / `ui/components/{curves_editor,preset_accordion_panel,live_preview_pane(重写),data_source_pane,bottom_tab_panel}.py`
+- 删除模块：`ui/components/plot_center_pane.py` + 对应测试
+- 文件改动：`infra_io/chart_writer.py`（抽 _configure_axes + render_plot_to_bytes）/ `scripts/healthcheck.py`（第 5 / 9 项）/ `ui/windows/plot_curves_view.py`（两栏 + L-4 接线）
+
+**涉及文件：**
+- 新增：`src/civ_core/core/data_cache.py`
+- 新增：`src/civ_core/ui/components/{live_preview_pane,preset_accordion_panel,curves_editor,data_source_pane,bottom_tab_panel}.py`
+- 新增：`tests/{test_data_cache,test_chart_writer_bytes,test_live_preview_pane,test_curves_editor,test_preset_accordion_panel,test_data_source_pane}.py`
+- 修改：`src/civ_core/infra_io/chart_writer.py` / `src/civ_core/ui/windows/plot_curves_view.py` / `scripts/healthcheck.py` / `tests/test_splitter_persistence.py`
+- 删除：`src/civ_core/ui/components/plot_center_pane.py` / `tests/test_plot_center_pane.py`
+
+**遗留问题（→ P1.5）：**
+- 鼠标悬停曲线点 → 表格滚到该行：需要 PNG → 数据坐标反向映射 + 单独的 hit-testing worker（与已登记的"图形化拖点"同类）
+- LivePreviewPane.highlight_row 当前只更新提示文字，图上画突出标记的渲染部分
+- 实时预览的"撤销/重做"
+- CurvesEditor 的"图形化拖点"
+
+**下一步（下次会话直接接续）：**
+- 待用户拍板：① P1.5 收尾 / ② P2 旧代码清理（含删 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 三个 view 已不用的旧组件 + healthcheck 第 7 项 PreviewPane → DataSourcePane 替换）/ ③ P3 新工具接入
 
 ### [2026-05-08] P1/UI 重构计划落定 + 预设编辑器迁移合并入 L-3a
 

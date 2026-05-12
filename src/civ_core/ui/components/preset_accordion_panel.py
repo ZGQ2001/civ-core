@@ -41,10 +41,13 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QColorDialog,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -61,6 +64,7 @@ from qfluentwidgets import (
     PushButton,
     Slider,
     SpinBox,
+    StrongBodyLabel,
     SubtitleLabel,
     ToolButton,
 )
@@ -100,6 +104,34 @@ _LEGEND_LOC_CHOICES = (
     "lower center",
     "upper center",
     "center",
+)
+
+# 曲线级样式常量（迁自 curves_editor.py；统一在「样式/当前曲线」子段使用）
+_QUICK_COLORS: tuple[str, ...] = (
+    "#1F4FE0",  # 蓝
+    "#E03A3A",  # 红
+    "#1AAA55",  # 绿
+    "#FFA500",  # 橙
+    "#9C27B0",  # 紫
+    "#000000",  # 黑
+)
+# matplotlib marker code → 人话显示
+_MARKER_DISPLAY: tuple[tuple[str, str], ...] = (
+    ("s", "■  方块"),
+    ("o", "●  圆"),
+    ("^", "▲  上三角"),
+    ("v", "▼  下三角"),
+    ("D", "◆  菱形"),
+    ("x", "✕  叉"),
+    ("*", "★  星"),
+    ("+", "✚  加号"),
+)
+# 图类型 code → 人话显示
+_PLOT_TYPE_DISPLAY: tuple[tuple[str, str], ...] = (
+    ("line", "折线图（带数据点，标准曲线）"),
+    ("scatter", "散点图（仅点，无连线）"),
+    ("bar", "柱状图（桩号/节点对比）"),
+    ("step", "阶梯图（分级加载工况）"),
 )
 
 # 新建预设的初始字段
@@ -438,6 +470,10 @@ class PresetAccordionPanel(QWidget):
         )
         self._curves_editor = CurvesEditor(self)
         self._curves_editor.changed.connect(self._on_curves_changed)
+        # 切曲线 / 增删 → 「样式 / 当前曲线」子段重载
+        self._curves_editor.current_curve_changed.connect(
+            self._on_current_curve_changed
+        )
         self._sec_curves.body_layout().addWidget(self._curves_editor)
         layout.addWidget(self._sec_curves)
 
@@ -569,8 +605,11 @@ class PresetAccordionPanel(QWidget):
             self._y_range = rng
         return col
 
-    # ── 5. 样式（图级，对所有曲线生效） ─────────────────────────
+    # ── 5. 样式：两个子段（图级 + 当前曲线） ────────────────────
     def _build_style_section(self, layout: QVBoxLayout) -> None:
+        # ── 子段 A：图级（对整张图生效） ──
+        layout.addWidget(StrongBodyLabel("图级（整张图）", self))
+
         self._show_grid_chk = CheckBox("显示网格", self)
         self._show_grid_chk.setChecked(True)
         self._show_grid_chk.stateChanged.connect(self._emit_preset_changed)
@@ -598,6 +637,110 @@ class PresetAccordionPanel(QWidget):
         log_row.addWidget(self._y_log_chk)
         log_row.addStretch(1)
         layout.addLayout(log_row)
+
+        # ── 子段 B：当前曲线（跟随曲线定义里选中的曲线变） ──
+        # 切曲线时 CurvesEditor.current_curve_changed → _on_current_curve_changed
+        # 在这里刷新；本子段所有字段的修改会回写到 CurvesEditor.curves[idx]
+        layout.addWidget(BodyLabel("", self))  # 间距
+        layout.addWidget(StrongBodyLabel("当前曲线（仅作用于选中曲线）", self))
+
+        self._curve_style_hint = BodyLabel("（请先在「曲线定义」分组选一条）", self)
+        self._curve_style_hint.setStyleSheet("color: #888;")
+        layout.addWidget(self._curve_style_hint)
+
+        # 整个"当前曲线"区放到一个 widget 里，便于 setEnabled 整体禁用
+        self._curve_style_box = QWidget(self)
+        cs_layout = QVBoxLayout(self._curve_style_box)
+        cs_layout.setContentsMargins(0, 0, 0, 0)
+        cs_layout.setSpacing(4)
+        layout.addWidget(self._curve_style_box)
+
+        # 图类型
+        cs_layout.addWidget(BodyLabel("图类型", self))
+        self._curve_plot_type_combo = ComboBox(self)
+        for code, display in _PLOT_TYPE_DISPLAY:
+            self._curve_plot_type_combo.addItem(display, userData=code)
+        self._curve_plot_type_combo.setToolTip(
+            "折线：标准曲线（荷载-位移、应力-应变）\n"
+            "散点：试验数据分布 / 沉降观测点云\n"
+            "柱状：桩号-沉降 / 节点-承载力对比\n"
+            "阶梯：分级加载工况（位移-时间）"
+        )
+        self._curve_plot_type_combo.currentIndexChanged.connect(
+            lambda _i: self._on_curve_style_field_changed(
+                "plot_type", self._curve_plot_type_combo.currentData() or "line"
+            )
+        )
+        cs_layout.addWidget(self._curve_plot_type_combo)
+
+        # 颜色（6 个快选 + 更多...）
+        cs_layout.addWidget(BodyLabel("颜色", self))
+        color_row = QHBoxLayout()
+        color_row.setContentsMargins(0, 0, 0, 0)
+        color_row.setSpacing(4)
+        self._curve_color_swatches: list[QPushButton] = []
+        for hex_color in _QUICK_COLORS:
+            btn = QPushButton(self)
+            btn.setFixedSize(24, 24)
+            btn.setProperty("colorHex", hex_color)
+            btn.setToolTip(hex_color)
+            btn.clicked.connect(
+                lambda _=False, c=hex_color: self._on_curve_style_field_changed(
+                    "color", c
+                )
+            )
+            color_row.addWidget(btn)
+            self._curve_color_swatches.append(btn)
+        self._btn_curve_color_more = PushButton("更多…", self)
+        self._btn_curve_color_more.clicked.connect(self._on_curve_color_dialog)
+        color_row.addWidget(self._btn_curve_color_more)
+        color_row.addStretch(1)
+        cs_layout.addLayout(color_row)
+
+        # 点形状
+        cs_layout.addWidget(BodyLabel("点形状", self))
+        self._curve_marker_combo = ComboBox(self)
+        for code, display in _MARKER_DISPLAY:
+            self._curve_marker_combo.addItem(display, userData=code)
+        self._curve_marker_combo.setToolTip(
+            "图形 = 视觉示意；存盘是 matplotlib marker code (s/o/^/v 等)"
+        )
+        self._curve_marker_combo.currentIndexChanged.connect(
+            lambda _i: self._on_curve_style_field_changed(
+                "marker", self._curve_marker_combo.currentData() or "s"
+            )
+        )
+        cs_layout.addWidget(self._curve_marker_combo)
+
+        # 线宽 + 点大小（一行两个）
+        cs_layout.addWidget(BodyLabel("线宽  /  点大小", self))
+        sizes_row = QHBoxLayout()
+        sizes_row.setContentsMargins(0, 0, 0, 0)
+        sizes_row.setSpacing(8)
+        self._curve_linewidth_spin = DoubleSpinBox(self)
+        self._curve_linewidth_spin.setRange(0.1, 10.0)
+        self._curve_linewidth_spin.setSingleStep(0.5)
+        self._curve_linewidth_spin.setDecimals(1)
+        self._curve_linewidth_spin.valueChanged.connect(
+            lambda v: self._on_curve_style_field_changed(
+                "linewidth", float(v)
+            )
+        )
+        sizes_row.addWidget(self._curve_linewidth_spin)
+        self._curve_markersize_spin = DoubleSpinBox(self)
+        self._curve_markersize_spin.setRange(0.0, 20.0)
+        self._curve_markersize_spin.setSingleStep(0.5)
+        self._curve_markersize_spin.setDecimals(1)
+        self._curve_markersize_spin.valueChanged.connect(
+            lambda v: self._on_curve_style_field_changed(
+                "markersize", float(v)
+            )
+        )
+        sizes_row.addWidget(self._curve_markersize_spin)
+        cs_layout.addLayout(sizes_row)
+
+        # 初始状态：无选中曲线 → 整体 disabled
+        self._curve_style_box.setEnabled(False)
 
     # ── 6. 输出 ──────────────────────────────────────────────────
     def _build_output_section(self, layout: QVBoxLayout) -> None:
@@ -657,6 +800,91 @@ class PresetAccordionPanel(QWidget):
 
     def _on_curves_changed(self) -> None:
         self._emit_preset_changed()
+
+    # ── 「样式 / 当前曲线」子段：与 CurvesEditor 双向同步 ────────
+    def _on_current_curve_changed(self, idx: int) -> None:
+        """CurvesEditor 切曲线 / 增删 / 上下移时调用。
+
+        从当前选中曲线读字段刷到样式区控件；无选中曲线时整段 disabled。
+        """
+        curve = self._curves_editor.current_curve_data()
+        if curve is None:
+            self._curve_style_hint.setText("（请先在「曲线定义」分组选一条）")
+            self._curve_style_box.setEnabled(False)
+            return
+        name = str(curve.get("name", f"#{idx + 1}"))
+        self._curve_style_hint.setText(
+            f"当前：#{idx + 1}  {name}（修改下方字段实时反映到该曲线）"
+        )
+        self._curve_style_box.setEnabled(True)
+        self._load_curve_style(curve)
+
+    def _load_curve_style(self, curve: dict[str, Any]) -> None:
+        """把曲线字段铺到样式区控件。suppress 期间不触发回写。"""
+        self._suppress = True
+        try:
+            # plot_type
+            plot_type = str(curve.get("plot_type", "line"))
+            for i in range(self._curve_plot_type_combo.count()):
+                if self._curve_plot_type_combo.itemData(i) == plot_type:
+                    self._curve_plot_type_combo.setCurrentIndex(i)
+                    break
+            # marker
+            marker = str(curve.get("marker", "s"))
+            for i in range(self._curve_marker_combo.count()):
+                if self._curve_marker_combo.itemData(i) == marker:
+                    self._curve_marker_combo.setCurrentIndex(i)
+                    break
+            # 线宽 / 点大小
+            try:
+                self._curve_linewidth_spin.setValue(
+                    float(curve.get("linewidth", 2.0))
+                )
+            except (TypeError, ValueError):
+                self._curve_linewidth_spin.setValue(2.0)
+            try:
+                self._curve_markersize_spin.setValue(
+                    float(curve.get("markersize", 7.0))
+                )
+            except (TypeError, ValueError):
+                self._curve_markersize_spin.setValue(7.0)
+            # 颜色快选高亮
+            self._update_curve_swatches(str(curve.get("color", "#1F4FE0")))
+        finally:
+            self._suppress = False
+
+    def _update_curve_swatches(self, current_hex: str) -> None:
+        """6 个色块按钮：当前色匹配的加 3px 黑边高亮。"""
+        cur = current_hex.upper()
+        for btn in self._curve_color_swatches:
+            hex_color = str(btn.property("colorHex") or "").upper()
+            is_current = hex_color == cur
+            btn.setStyleSheet(
+                f"QPushButton {{ background: {hex_color}; "
+                f"  border: {'3px solid #000' if is_current else '1px solid #888'}; "
+                f"  border-radius: 3px; }}"
+                f"QPushButton:hover {{ border: 2px solid #333; }}"
+            )
+
+    def _on_curve_style_field_changed(self, key: str, value: Any) -> None:
+        """样式区任意字段变化 → 回写当前曲线 + 触发预览重绘。"""
+        if self._suppress:
+            return
+        self._curves_editor.update_current_curve_field(key, value)
+        # 颜色变化时刷新色块高亮
+        if key == "color":
+            self._update_curve_swatches(str(value))
+        self._emit_preset_changed()
+
+    def _on_curve_color_dialog(self) -> None:
+        """点击"更多…" → QColorDialog 选自定义色 → 写回。"""
+        curve = self._curves_editor.current_curve_data()
+        if curve is None:
+            return
+        cur = QColor(str(curve.get("color", "#1F4FE0")))
+        chosen = QColorDialog.getColor(cur, self, "选择曲线颜色")
+        if chosen.isValid():
+            self._on_curve_style_field_changed("color", chosen.name())
 
     def _on_sheet_changed(self, sheet: str) -> None:
         if self._suppress:

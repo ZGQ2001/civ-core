@@ -38,7 +38,6 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QColorDialog,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
@@ -62,38 +61,8 @@ from civ_core.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-# 6 个常用色：来自旧版 COMMON_COLORS，保留兼容
-_QUICK_COLORS: tuple[str, ...] = (
-    "#1F4FE0",  # 蓝
-    "#E03A3A",  # 红
-    "#1AAA55",  # 绿
-    "#FFA500",  # 橙
-    "#9C27B0",  # 紫
-    "#000000",  # 黑
-)
-
-# matplotlib marker code → 人话显示（图形 + 中文名 + 原始 code）
-# 把 matplotlib 的单字母 code（s/o/^/v/D/x/*/+）翻成用户看得懂的图形+中文，
-# JSON 里仍保存 code，渲染时直接喂 matplotlib，不引入额外映射。
-_MARKER_DISPLAY: tuple[tuple[str, str], ...] = (
-    ("s", "■  方块"),
-    ("o", "●  圆"),
-    ("^", "▲  上三角"),
-    ("v", "▼  下三角"),
-    ("D", "◆  菱形"),
-    ("x", "✕  叉"),
-    ("*", "★  星"),
-    ("+", "✚  加号"),
-)
-_MARKER_CHOICES: tuple[str, ...] = tuple(code for code, _ in _MARKER_DISPLAY)
-
-# 图类型 code → 人话显示。code 与 chart_writer._draw_series 的分支一致
-_PLOT_TYPE_DISPLAY: tuple[tuple[str, str], ...] = (
-    ("line", "折线图（带数据点，标准曲线）"),
-    ("scatter", "散点图（仅点，无连线）"),
-    ("bar", "柱状图（桩号/节点对比）"),
-    ("step", "阶梯图（分级加载工况）"),
-)
+# 样式相关常量（颜色快选 / marker / plot_type）已迁到
+# preset_accordion_panel.py，编辑器只负责"基础 + 数据点"两段。
 
 # 新曲线 / 新点的初始值
 _EMPTY_CURVE: dict[str, Any] = {
@@ -123,6 +92,8 @@ class CurvesEditor(QWidget):
 
     # 任意字段编辑后发一次。view 层做防抖再驱动 LivePreviewPane 重绘。
     changed = Signal()
+    # 切曲线 / 列表变动后，当前选中曲线索引变了 → 外部「样式」分组用来重载
+    current_curve_changed = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -207,80 +178,16 @@ class CurvesEditor(QWidget):
         self._form_layout.setSpacing(6)
         outer.addWidget(self._form_widget, 1)
 
-        # ── 字段控件（按"基础 / 样式 / 数据点"三组，小标题区隔）──
+        # ── 字段控件（按"基础 / 数据点"两组）──
+        # 曲线的样式字段（图类型/颜色/点形状/线宽/点大小）已迁到外部
+        # 「样式」分组的"当前曲线"子段。切曲线时外部样式区自动跟随。
 
-        # 「基础」小标题：曲线名
         self._form_layout.addWidget(StrongBodyLabel("基础", self))
         name_row = self._make_row("曲线名:")
         self._name_edit = LineEdit(self)
         self._name_edit.editingFinished.connect(self._save_from_form)
         name_row.addWidget(self._name_edit, 1)
         self._form_layout.addLayout(name_row)
-
-        # 「样式」小标题：图类型 + 颜色 + marker + 线宽 + 标记尺寸
-        # 这些都是单条曲线的样式属性（每条独立），故留在编辑器内；
-        # 外部「样式」分组是整张图的样式（网格 / 图例 / 对数刻度）
-        self._form_layout.addWidget(StrongBodyLabel("样式", self))
-
-        # 图类型 ComboBox（支持土木常见 4 种图）
-        plot_type_row = self._make_row("图类型:")
-        self._plot_type_combo = ComboBox(self)
-        for code, display in _PLOT_TYPE_DISPLAY:
-            self._plot_type_combo.addItem(display, userData=code)
-        self._plot_type_combo.setToolTip(
-            "折线：土木标准曲线（荷载-位移、应力-应变等）\n"
-            "散点：试验数据分布、沉降观测点云\n"
-            "柱状：桩号-沉降、节点-承载力对比\n"
-            "阶梯：分级加载工况（位移-时间）"
-        )
-        self._plot_type_combo.currentIndexChanged.connect(self._save_from_form)
-        plot_type_row.addWidget(self._plot_type_combo, 1)
-        self._form_layout.addLayout(plot_type_row)
-
-        # 颜色（6 个快选 + 更多…）；当前色 = 快选按钮加粗黑边显示
-        color_row = self._make_row("颜色:")
-        self._color_swatches: list[QPushButton] = []
-        for hex_color in _QUICK_COLORS:
-            btn = QPushButton(self)
-            btn.setFixedSize(24, 24)
-            btn.setProperty("colorHex", hex_color)
-            btn.setToolTip(hex_color)
-            btn.clicked.connect(lambda _=False, c=hex_color: self._set_color(c))
-            color_row.addWidget(btn)
-            self._color_swatches.append(btn)
-        self._btn_color_dialog = PushButton("更多…", self)
-        self._btn_color_dialog.clicked.connect(self._open_color_dialog)
-        color_row.addWidget(self._btn_color_dialog)
-        color_row.addStretch(1)
-        self._form_layout.addLayout(color_row)
-
-        # marker（人话显示，matplotlib code 通过 userData 携带）
-        marker_row = self._make_row("点形状:")
-        self._marker_combo = ComboBox(self)
-        for code, display in _MARKER_DISPLAY:
-            self._marker_combo.addItem(display, userData=code)
-        self._marker_combo.setToolTip("图形 = 视觉示意；括号里的字母是 matplotlib marker code")
-        self._marker_combo.currentIndexChanged.connect(self._save_from_form)
-        marker_row.addWidget(self._marker_combo)
-        marker_row.addStretch(1)
-        self._form_layout.addLayout(marker_row)
-
-        # linewidth + markersize（一行两个）
-        sizes_row = self._make_row("线宽 / 点大小:")
-        self._linewidth_spin = DoubleSpinBox(self)
-        self._linewidth_spin.setRange(0.1, 10.0)
-        self._linewidth_spin.setSingleStep(0.5)
-        self._linewidth_spin.setDecimals(1)
-        self._linewidth_spin.valueChanged.connect(self._save_from_form)
-        sizes_row.addWidget(self._linewidth_spin)
-        self._markersize_spin = DoubleSpinBox(self)
-        self._markersize_spin.setRange(0.0, 20.0)
-        self._markersize_spin.setSingleStep(0.5)
-        self._markersize_spin.setDecimals(1)
-        self._markersize_spin.valueChanged.connect(self._save_from_form)
-        sizes_row.addWidget(self._markersize_spin)
-        sizes_row.addStretch(1)
-        self._form_layout.addLayout(sizes_row)
 
         # 点子表
         self._form_layout.addWidget(StrongBodyLabel("数据点：", self))
@@ -328,6 +235,8 @@ class CurvesEditor(QWidget):
         self._current_idx = 0 if self._curves else -1
         self._refresh_curve_combo()
         self._render_form()
+        # 通知外部"样式/当前曲线"子段重载（即使 idx 没变也要刷新数据）
+        self.current_curve_changed.emit(self._current_idx)
 
     def curves(self) -> list[dict[str, Any]]:
         """取当前编辑结果（深拷贝，外部 mutate 不污染编辑器）。"""
@@ -377,12 +286,14 @@ class CurvesEditor(QWidget):
             return
         self._current_idx = idx
         self._render_form()
+        self.current_curve_changed.emit(idx)
 
     def _on_add_curve(self) -> None:
         self._curves.append(deepcopy(_EMPTY_CURVE))
         self._current_idx = len(self._curves) - 1
         self._refresh_curve_combo()
         self._render_form()
+        self.current_curve_changed.emit(self._current_idx)
         self.changed.emit()
 
     def _on_duplicate_curve(self) -> None:
@@ -395,6 +306,7 @@ class CurvesEditor(QWidget):
         self._current_idx += 1
         self._refresh_curve_combo()
         self._render_form()
+        self.current_curve_changed.emit(self._current_idx)
         self.changed.emit()
 
     def _on_delete_curve(self) -> None:
@@ -417,6 +329,7 @@ class CurvesEditor(QWidget):
             self._current_idx = len(self._curves) - 1
         self._refresh_curve_combo()
         self._render_form()
+        self.current_curve_changed.emit(self._current_idx)
         self.changed.emit()
 
     def _on_move_up(self) -> None:
@@ -426,6 +339,7 @@ class CurvesEditor(QWidget):
         self._curves[i - 1], self._curves[i] = self._curves[i], self._curves[i - 1]
         self._current_idx = i - 1
         self._refresh_curve_combo()
+        self.current_curve_changed.emit(self._current_idx)
         self.changed.emit()
 
     def _on_move_down(self) -> None:
@@ -435,11 +349,16 @@ class CurvesEditor(QWidget):
         self._curves[i + 1], self._curves[i] = self._curves[i], self._curves[i + 1]
         self._current_idx = i + 1
         self._refresh_curve_combo()
+        self.current_curve_changed.emit(self._current_idx)
         self.changed.emit()
 
     # ── 曲线字段表单 ─────────────────────────────────────────────
     def _render_form(self) -> None:
-        """把当前选中曲线的字段值刷到表单控件 + 重建点表。"""
+        """把当前选中曲线的字段值刷到表单控件 + 重建点表。
+
+        样式字段（color/marker/plot_type/linewidth/markersize）已迁到
+        外部「样式」分组，本编辑器只负责"基础"（曲线名）和"数据点"两段。
+        """
         has_selection = 0 <= self._current_idx < len(self._curves)
         self._form_widget.setEnabled(has_selection)
 
@@ -447,89 +366,46 @@ class CurvesEditor(QWidget):
         try:
             if not has_selection:
                 self._name_edit.setText("")
-                self._marker_combo.setCurrentIndex(0)
-                self._linewidth_spin.setValue(2.0)
-                self._markersize_spin.setValue(7.0)
-                self._update_swatches("#1F4FE0")
                 self._points_table.setRowCount(0)
                 return
 
             curve = self._curves[self._current_idx]
             self._name_edit.setText(str(curve.get("name", "")))
-
-            color = str(curve.get("color", "#1F4FE0"))
-            self._update_swatches(color)
-
-            marker = str(curve.get("marker", "s"))
-            if marker in _MARKER_CHOICES:
-                self._marker_combo.setCurrentIndex(_MARKER_CHOICES.index(marker))
-
-            plot_type = str(curve.get("plot_type", "line"))
-            for i in range(self._plot_type_combo.count()):
-                if self._plot_type_combo.itemData(i) == plot_type:
-                    self._plot_type_combo.setCurrentIndex(i)
-                    break
-
-            try:
-                self._linewidth_spin.setValue(float(curve.get("linewidth", 2.0)))
-            except (TypeError, ValueError):
-                self._linewidth_spin.setValue(2.0)
-            try:
-                self._markersize_spin.setValue(float(curve.get("markersize", 7.0)))
-            except (TypeError, ValueError):
-                self._markersize_spin.setValue(7.0)
-
             self._rebuild_points_table(curve.get("points", []) or [])
         finally:
             self._suppress_signals = False
 
-    def _update_swatches(self, current_hex: str) -> None:
-        """刷新 6 个快选按钮：当前色匹配的按钮加粗黑边高亮（无单独 indicator）。"""
-        cur = current_hex.upper()
-        for btn in self._color_swatches:
-            hex_color = str(btn.property("colorHex") or "").upper()
-            is_current = hex_color == cur
-            btn.setStyleSheet(
-                f"QPushButton {{ background: {hex_color}; "
-                f"  border: {'3px solid #000' if is_current else '1px solid #888'}; "
-                f"  border-radius: 3px; }}"
-                f"QPushButton:hover {{ border: 2px solid #333; }}"
-            )
-
-    def _set_color(self, hex_color: str) -> None:
-        if self._current_idx < 0:
-            return
-        self._curves[self._current_idx]["color"] = hex_color
-        self._update_swatches(hex_color)
-        # ComboBox 当前项的色块图标也跟着更新（保留主题字体色，仅换色块）
-        self._curve_combo.setItemIcon(self._current_idx, self._color_icon(hex_color))
-        self.changed.emit()
-
-    def _open_color_dialog(self) -> None:
-        if self._current_idx < 0:
-            return
-        cur = QColor(str(self._curves[self._current_idx].get("color", "#1F4FE0")))
-        chosen = QColorDialog.getColor(cur, self, "选择曲线颜色")
-        if chosen.isValid():
-            self._set_color(chosen.name())
-
     def _save_from_form(self) -> None:
-        """文本/数值控件 valueChanged → 回写到 self._curves[idx]。"""
+        """曲线名 editingFinished → 回写 + 同步 ComboBox 当前项显示文字。"""
         if self._suppress_signals or self._current_idx < 0:
             return
         curve = self._curves[self._current_idx]
         curve["name"] = self._name_edit.text()
-        # marker / plot_type 用 currentData() 拿 code，不是 currentText（人话显示）
-        marker_code = self._marker_combo.currentData() or "s"
-        curve["marker"] = str(marker_code)
-        plot_type_code = self._plot_type_combo.currentData() or "line"
-        curve["plot_type"] = str(plot_type_code)
-        curve["linewidth"] = float(self._linewidth_spin.value())
-        curve["markersize"] = float(self._markersize_spin.value())
-        # 名称改了，ComboBox 当前项显示文字也要同步
         self._curve_combo.setItemText(
             self._current_idx, f"#{self._current_idx + 1}  {curve['name']}"
         )
+        self.changed.emit()
+
+    # ── 外部 API：供 PresetAccordionPanel 的"样式/当前曲线"子段调用 ──
+    def current_curve_data(self) -> dict[str, Any] | None:
+        """返回当前选中曲线的 dict（同一引用，外部 mutate 会影响内部状态）。
+
+        样式分组通过本方法拿到曲线初值；改字段后调 update_current_curve_field。
+        """
+        if 0 <= self._current_idx < len(self._curves):
+            return self._curves[self._current_idx]
+        return None
+
+    def update_current_curve_field(self, key: str, value: Any) -> None:
+        """外部样式分组改字段时调用：写回当前曲线 + 同步显示 + emit changed。"""
+        if not (0 <= self._current_idx < len(self._curves)):
+            return
+        self._curves[self._current_idx][key] = value
+        # 颜色变化时 ComboBox 当前项色块图标跟着换
+        if key == "color":
+            self._curve_combo.setItemIcon(
+                self._current_idx, self._color_icon(str(value))
+            )
         self.changed.emit()
 
     # ── 点子表 ─────────────────────────────────────────────────

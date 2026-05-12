@@ -271,52 +271,54 @@ class TestPointsEditing:
 
 
 # ──────────────────────────────────────────────────────────────────
-# marker / plot_type 人话 → code 往返
+# CurvesEditor 减肥后新增的外部 API（供"样式/当前曲线"子段调用）
 # ──────────────────────────────────────────────────────────────────
-class TestMarkerAndPlotType:
-    def test_marker_userdata_is_code(self, qapp: QApplication) -> None:
-        """ComboBox 显示「■ 方块」等人话，userData 仍是 matplotlib code。"""
+class TestExternalStyleApi:
+    def test_current_curve_data_returns_selected(
+        self, qapp: QApplication
+    ) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
         try:
             ed.set_curves(_sample_curves())
-            ed._current_idx = 0
-            # 第 0 项的 userData 是 "s"
-            assert ed._marker_combo.itemData(0) == "s"
-            # 显示的人话应包含图形和中文
-            assert "方块" in ed._marker_combo.itemText(0)
+            ed._current_idx = 1
+            curve = ed.current_curve_data()
+            assert curve is not None
+            assert curve["name"] == "卸载"
         finally:
             ed.deleteLater()
 
-    def test_plot_type_default_line(self, qapp: QApplication) -> None:
-        """没指定 plot_type 时默认 "line"。"""
+    def test_update_current_curve_field_writes_back(
+        self, qapp: QApplication
+    ) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
         try:
             ed.set_curves(_sample_curves())
             ed._current_idx = 0
-            # 默认应当回 "line"
-            out = ed.curves()
-            assert out[0].get("plot_type", "line") in ("line",)
-        finally:
-            ed.deleteLater()
-
-    def test_plot_type_changes_persist(self, qapp: QApplication) -> None:
-        """切换图类型后 curves() 反映 code 值。"""
-        from civ_core.ui.components.curves_editor import CurvesEditor
-
-        ed = CurvesEditor()
-        try:
-            ed.set_curves(_sample_curves())
-            ed._current_idx = 0
-            # 找到 "bar" 对应的 index
-            for i in range(ed._plot_type_combo.count()):
-                if ed._plot_type_combo.itemData(i) == "bar":
-                    ed._plot_type_combo.setCurrentIndex(i)
-                    break
+            ed.update_current_curve_field("plot_type", "bar")
+            ed.update_current_curve_field("color", "#1AAA55")
             assert ed.curves()[0]["plot_type"] == "bar"
+            assert ed.curves()[0]["color"] == "#1AAA55"
+        finally:
+            ed.deleteLater()
+
+    def test_current_curve_changed_signal_on_select(
+        self, qapp: QApplication, qtbot: Any
+    ) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            # set_curves 已 emit 一次；后续 ComboBox 切换应再 emit
+            with qtbot.waitSignal(
+                ed.current_curve_changed, timeout=500
+            ) as blocker:
+                ed._curve_combo.setCurrentIndex(1)
+            assert blocker.args == [1]
         finally:
             ed.deleteLater()
 

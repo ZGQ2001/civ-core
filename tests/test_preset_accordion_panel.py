@@ -394,6 +394,101 @@ class TestSheetCombo:
 
 
 # ──────────────────────────────────────────────────────────────────
+# 「样式 / 当前曲线」子段：与 CurvesEditor 双向同步
+# ──────────────────────────────────────────────────────────────────
+class TestCurveStyleSubSection:
+    def test_select_curve_loads_style(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """CurvesEditor 切曲线 → 样式区控件值跟着变。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            # 喂两条不同样式的曲线
+            sample = [
+                {
+                    "name": "A",
+                    "color": "#E03A3A",
+                    "marker": "o",
+                    "linewidth": 3.5,
+                    "markersize": 5.0,
+                    "plot_type": "scatter",
+                    "points": [],
+                },
+                {
+                    "name": "B",
+                    "color": "#1AAA55",
+                    "marker": "^",
+                    "linewidth": 1.5,
+                    "markersize": 9.0,
+                    "plot_type": "bar",
+                    "points": [],
+                },
+            ]
+            panel._curves_editor.set_curves(sample)
+            # 切到第二条
+            panel._curves_editor._curve_combo.setCurrentIndex(1)
+            # 样式区应该反映第二条曲线
+            assert panel._curve_linewidth_spin.value() == 1.5
+            assert panel._curve_markersize_spin.value() == 9.0
+            assert panel._curve_marker_combo.currentData() == "^"
+            assert panel._curve_plot_type_combo.currentData() == "bar"
+        finally:
+            panel.deleteLater()
+
+    def test_style_field_change_writes_to_curve(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """样式区改字段 → 写回 CurvesEditor 当前曲线。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            sample = [
+                {
+                    "name": "A",
+                    "color": "#1F4FE0",
+                    "marker": "s",
+                    "linewidth": 2.0,
+                    "markersize": 7.0,
+                    "plot_type": "line",
+                    "points": [],
+                }
+            ]
+            panel._curves_editor.set_curves(sample)
+            # 改图类型为 step
+            for i in range(panel._curve_plot_type_combo.count()):
+                if panel._curve_plot_type_combo.itemData(i) == "step":
+                    panel._curve_plot_type_combo.setCurrentIndex(i)
+                    break
+            # 改线宽
+            panel._curve_linewidth_spin.setValue(4.5)
+            # 改颜色（绕过 dialog，直接调内部）
+            panel._on_curve_style_field_changed("color", "#9C27B0")
+
+            out = panel._curves_editor.curves()
+            assert out[0]["plot_type"] == "step"
+            assert out[0]["linewidth"] == 4.5
+            assert out[0]["color"] == "#9C27B0"
+        finally:
+            panel.deleteLater()
+
+    def test_no_curve_disables_style_box(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """没有曲线时整个"当前曲线"区 disabled。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            panel._curves_editor.set_curves([])  # 空 curves
+            assert panel._curve_style_box.isEnabled() is False
+        finally:
+            panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
 # 风琴：分组折叠后顶贴
 # ──────────────────────────────────────────────────────────────────
 class TestSectionLayout:

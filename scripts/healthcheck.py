@@ -255,7 +255,7 @@ def _check_preview_pane() -> str:
 
 
 def _check_splitter_persistence() -> str:
-    """QSettings 持久化（GUI 三栏宽度记忆）能否完整 round-trip。
+    """QSettings 持久化（GUI 两栏宽度记忆）能否完整 round-trip。
 
     用专门的 healthcheck key 而不是真正的 splitter sizes key，避免
     污染用户已保存的拖动状态。
@@ -292,7 +292,7 @@ def _check_splitter_persistence() -> str:
         # 清掉探针 key，不在用户 settings 里留痕
         settings.remove(key)
         settings.sync()
-        return _ok("布局记忆功能正常（三栏宽度自动保存）")
+        return _ok("布局记忆功能正常（两栏宽度自动保存）")
     except Exception as e:
         return _fail("布局记忆功能异常", f"原因：{e}")
 
@@ -313,19 +313,14 @@ def _check_gui_constructible() -> str:
         view = PlotCurvesView(cfg)
 
         # 验证关键子组件都已就位（防重构遗漏）
+        # L-1：两栏骨架 = 左参数面板（PresetAccordionPanel）+ 右实时预览（LivePreviewPane）
+        # + 日志面板；旧的 preset_pane / center_pane / preview_pane 已撤场，
+        # 业务数据流由 L-2/L-3 接回。
         missing = []
-        if not hasattr(view, "preset_pane"):
-            missing.append("预设列表")
-        if not hasattr(view, "center_pane"):
-            missing.append("中栏 Pivot")
-        if not hasattr(view, "settings_pane"):
-            missing.append("绘图参数面板")
-        if hasattr(view, "center_pane") and not hasattr(
-            view.center_pane, "form_panel"
-        ):
-            missing.append("预设设置表单")
-        if not hasattr(view, "preview_pane"):
-            missing.append("预览区")
+        if not hasattr(view, "preset_accordion_panel"):
+            missing.append("参数面板（左栏）")
+        if not hasattr(view, "live_preview_pane"):
+            missing.append("实时预览（右栏）")
         if not hasattr(view, "log_panel"):
             missing.append("日志面板")
 
@@ -337,7 +332,7 @@ def _check_gui_constructible() -> str:
                 "GUI 子组件缺失",
                 f"未找到：{ '、'.join(missing) }（可能接线未完成）",
             )
-        return _ok("GUI 启动正常（三栏 + 日志面板）")
+        return _ok("GUI 启动正常（两栏骨架 + 日志面板）")
     except Exception as e:
         return _fail("GUI 启动失败", f"原因：{e}")
 

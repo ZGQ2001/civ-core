@@ -1,24 +1,36 @@
-"""绘曲线图工具 —— 三栏视图骨架（QSplitter）。
+"""绘曲线图工具 —— 两栏视图骨架（L-1 重构）。
 
 布局：
-  ┌─────────────┬───────────────────┬──────────────────────┐
-  │ 预设列表     │ Pivot 双 Tab：    │ 预览区                │
-  │             │   绘图参数         │   大图查看            │
-  │ 🔒/✏️ 列表 │   预设设置         │   缩略图列表          │
-  │ [+新建]     │                   │                      │
-  │ [复制][删除]│                   │                      │
-  └─────────────┴───────────────────┴──────────────────────┘
-        左               中                  右
+  ┌──────────────────────┬──────────────────────────────────────┐
+  │ 参数面板（左）        │ 实时预览（右）                         │
+  │ PresetAccordionPanel │ LivePreviewPane                       │
+  │ （L-3b 实装风琴分组）│ （L-2 实装实时渲染管线）              │
+  └──────────────────────┴──────────────────────────────────────┘
+                                 ↓
+                        ┌─ 状态 ── 进度 ── [生成] ─┐
+                        │  日志面板（可折叠）       │
+                        └────────────────────────┘
+
+L-1 Step 1 范围
+================
+  • 三栏 QSplitter → 两栏 QSplitter（左参数 / 右预览）
+  • 旧的 PresetListPane / PlotCenterPane / PreviewPane 在本视图不再使用；
+    其中 plot_center_pane 已删，preset_list / preset_form_panel / preview_pane
+    暂留待 L-3b 拆解吸收
+  • QSettings 键名沿用 `plot_curves/splitter_sizes`，但维度从 3→2；
+    老用户的三栏遗留值在 _restore_splitter_sizes 中被识别为损坏 → 回退默认
+  • Worker / 生成按钮 / 日志面板 保留，面板无关逻辑在 L-2/L-3 重新挂回数据流
+
+未挂回的业务（占位 stub）
+========================
+  • 预设选择 / 表单字段 / 预览结果展示：等 LivePreviewPane(L-2) +
+    PresetAccordionPanel(L-3b) 实装后，view 层重新连信号
+  • "生成"按钮当前因缺少 preset 数据源会进入 _missing_required_fields 的
+    友善 InfoBar 提示分支，不会跑出图；这是 L-1 期间的预期行为
 
 为什么 QSplitter 而不是固定 QHBoxLayout：
-  • 不同分辨率 / 不同长度的预设名 / 不同字段量的设置面板，宽度需求差异大
-  • 用户可以自己拖动分隔条；P1 已加 QSettings 持久化记忆拖到的位置
-  • setCollapsible(False) 防止误把某栏拖没
-
-各栏组件来源：
-  • 左栏：ui/components/preset_list.py PresetListPane
-  • 中栏：ui/components/plot_center_pane.py PlotCenterPane（含 settings_panel + form_panel）
-  • 右栏：ui/components/preview_pane.py PreviewPane
+  • 不同分辨率 / 参数字段量差异大，左右栏宽度需要自由拖
+  • setChildrenCollapsible(False) 防止误把某栏拖没
 """
 
 from __future__ import annotations
@@ -37,44 +49,40 @@ from civ_core.core.plot_curves import (
     run_plot_curves,
 )
 from civ_core.domain.schema import PlotRunSettings
-from civ_core.infra_io.preset_manager import (
-    PresetError,
-    PresetSource,
-    save_user_preset,
-)
 from civ_core.ui.components.error_infobar import (
     show_error_infobar,
     show_success_infobar,
     show_warning_infobar,
 )
+from civ_core.ui.components.live_preview_pane import LivePreviewPane
 from civ_core.ui.components.log_panel import LogPanel
-from civ_core.ui.components.plot_center_pane import PlotCenterPane
-from civ_core.ui.components.preset_list import PresetListPane
-from civ_core.ui.components.preview_pane import PreviewPane
+from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 from civ_core.utils.logger import get_logger, get_qt_bridge
 
 log = get_logger(__name__)
 
-# 三栏初始宽度（单位：像素，按 1320×840 默认窗口算）。
-# 主窗口 sidebar ≈ 280 → 视图区可用宽 ≈ 1040，三栏 220/380/440 比较舒展。
+# 两栏初始宽度（单位：像素）。
+# 默认假设 1320×840 窗口，侧栏 ≈ 280 → 视图区可用宽 ≈ 1040；
+# 600/400 给参数面板更宽（待 L-3b 装 6 个分组 + 滑块+输入框联动控件需要空间），
+# 预览图 400px 也能看清缩略大致；用户可自由拖动，结果落 QSettings。
 # QSplitter.setSizes 会按比例缩放，所以这些数字只是相对权重。
-_INITIAL_SIZES = (220, 380, 440)
+_INITIAL_SIZES = (600, 400)
 
 # QSettings 标识：决定持久化文件落到哪里。
 # Windows  → HKEY_CURRENT_USER\Software\ZGQ\CivCore
 # Linux    → ~/.config/ZGQ/CivCore.conf
 # macOS    → ~/Library/Preferences/com.ZGQ.CivCore.plist
-# 也可以用 IniFormat 强制走文本 ini，但默认 native 方式更"系统"，权限/同步问题少。
 _SETTINGS_ORG = "ZGQ"
 _SETTINGS_APP = "CivCore"
+# 键名保持不变（沿用三栏时代的 key），但维度从 3→2；
+# 老用户存的 list[3] 会在读取时被识别为长度异常 → 回退默认（一次性丢弃）
 _SETTINGS_KEY_SPLITTER = "plot_curves/splitter_sizes"
 
 
 class PlotCurvesView(QWidget):
     """绘曲线图工具的根视图（注册到 MainWindow.plot_curves_page 槽位）。
 
-    cfg 透传给后续接入的真子面板（如 SettingsPane 需要 paths.data_output 默认值），
-    本步骤仅占位，cfg 暂时只用来打日志。
+    L-1 Step 1：两栏占位骨架，业务数据流在 L-2/L-3 阶段接回。
     """
 
     def __init__(self, cfg: AppConfig, parent: QWidget | None = None) -> None:
@@ -96,57 +104,34 @@ class PlotCurvesView(QWidget):
         )
 
     def _build_layout(self) -> None:
-        # 外层 layout：只放一个 QSplitter，留窄边距
+        # 外层 layout：QSplitter + 操作栏 + 日志面板
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(0)
 
-        # 左栏：预设列表（step 10）
-        # 注意：PresetListPane.__init__ 不会自己 refresh —— 必须 build 完所有面板、
-        # connect 完所有信号之后再 refresh()，否则首次 setCurrentRow(0) 触发的
-        # preset_selected slot 可能访问到尚未创建的 center_pane / preview_pane。
-        self.preset_pane = PresetListPane(self)
+        # 左栏：参数面板（L-3b 实装风琴折叠）
+        self.preset_accordion_panel = PresetAccordionPanel(self)
 
-        # 中栏：Pivot 双 Tab（绘图参数 / 预设设置）—— T-4 重构
-        # PlotCenterPane 内部装着 PlotSettingsPanel + PresetFormPanel
-        # 通过 .settings_panel / .form_panel 暴露给本视图做联动
-        self.center_pane = PlotCenterPane(self._cfg, self)
-        # settings_pane 别名：保持与原代码兼容（worker / 校验等仍叫这个名字）
-        self.settings_pane = self.center_pane.settings_panel
-
-        # 右栏：预览区（缩略图列表 + 大图查看）
-        self.preview_pane = PreviewPane(self)
-
-        # 现在所有面板都就位了，连信号，再触发首次加载
-        self.preset_pane.preset_selected.connect(self._on_preset_selected)
-        self.preset_pane.new_preset_requested.connect(self._on_new_preset_requested)
-
-        # 「预设设置」表单的四个动作信号（系统/用户/新建三态）
-        form = self.center_pane.form_panel
-        form.copy_to_user_requested.connect(self._on_form_copy_clicked)
-        form.save_requested.connect(self._on_form_save_clicked)
-        form.reset_requested.connect(self._on_form_reset_clicked)
-        form.cancel_new_requested.connect(self._on_form_cancel_new_clicked)
+        # 右栏：实时预览（L-2 实装防抖重绘 + DataFrame 缓存）
+        self.live_preview_pane = LivePreviewPane(self)
 
         # 横向 QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("plotCurvesSplitter")
         splitter.setChildrenCollapsible(False)  # 防止用户误把某栏拖没
         splitter.setHandleWidth(6)
-        splitter.addWidget(self.preset_pane)
-        splitter.addWidget(self.center_pane)
-        splitter.addWidget(self.preview_pane)
+        # addWidget 顺序 = setSizes 顺序：左 [0] / 右 [1]
+        splitter.addWidget(self.preset_accordion_panel)
+        splitter.addWidget(self.live_preview_pane)
         # 持久化 sizes：上次拖动后保存的值优先；没保存过 / 损坏 → 用默认
         splitter.setSizes(self._restore_splitter_sizes())
 
-        # 三栏的拉伸优先级：预设列表固定窄，设置面板和预览区可拉伸
-        splitter.setStretchFactor(0, 0)
+        # 两栏的拉伸优先级：参数面板和预览区都可拉伸，预览区略大一些
+        splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 2)
 
         # 用户拖动 → 立即写盘。QSettings 的 setValue 是文件级别 IO，
         # 一次拖动会触发若干次 splitterMoved（鼠标移动间隔），这点频率写盘代价低。
-        # 不监听 view.closeEvent —— 进程异常退出时也能保住最后的拖动结果。
         splitter.splitterMoved.connect(self._on_splitter_moved)
 
         outer.addWidget(splitter, 1)
@@ -166,10 +151,6 @@ class PlotCurvesView(QWidget):
             log.debug("LogPanel 已连接到 QtLogBridge")
         outer.addWidget(self.log_panel)
 
-        # 所有结构都搭好了，触发首次加载（refresh 内部 setCurrentRow(0) 会触发
-        # preset_selected → _on_preset_selected，此时 settings_pane 已存在）
-        self.preset_pane.refresh()
-
     # ── splitter 持久化 ──────────────────────────────────────────
     def _make_settings(self) -> QSettings:
         """构造 QSettings 实例。
@@ -186,6 +167,9 @@ class PlotCurvesView(QWidget):
           - Windows 注册表里 list[int] 存为 QStringList，读出来就是 list[str]
           - Linux INI 文件同样
         所以这里要再 int() 一遍并做长度 / 总和合法性校验。
+
+        L-1 改造点：长度从 == 3 改成 == 2；老用户存的三栏值会因为长度不符
+        被识别为损坏 → 回退默认（一次性丢弃，下次拖动后即被两栏值覆盖）。
         """
         settings = self._make_settings()
         saved = settings.value(_SETTINGS_KEY_SPLITTER)
@@ -198,8 +182,8 @@ class PlotCurvesView(QWidget):
             log.warning("QSettings 中 splitter sizes 损坏（不是数字列表），回退到默认")
             return list(_INITIAL_SIZES)
 
-        # 三栏布局依赖 3 个值；总和为 0 / 负数说明 sizes 全 0（minimised）
-        if len(sizes) != 3 or sum(sizes) <= 0:
+        # 两栏布局严格要求 2 个值；总和为 0 / 负数说明 sizes 全 0（minimised）
+        if len(sizes) != 2 or sum(sizes) <= 0:
             log.warning(
                 "QSettings 中 splitter sizes 异常 (len=%d, sum=%d)，回退到默认",
                 len(sizes),
@@ -214,7 +198,7 @@ class PlotCurvesView(QWidget):
         """splitterMoved 信号 → 立即把当前 sizes 写到 QSettings。"""
         sizes = self._splitter.sizes()
         # 防御：拖到边界时偶发 sizes 含 0（虽然 setChildrenCollapsible(False) 已挡过），
-        # 不要把这种"只剩两栏"的状态存下去
+        # 不要把这种"某栏被拖没"的瞬态状态存下去
         if any(s <= 0 for s in sizes):
             return
         self._make_settings().setValue(_SETTINGS_KEY_SPLITTER, sizes)
@@ -243,104 +227,49 @@ class PlotCurvesView(QWidget):
 
         return bar
 
-    # ── slots ────────────────────────────────────────────────────
-    def _on_preset_selected(self, name: str) -> None:
-        """用户在左栏切预设 → 同步两件事：
+    # ── 业务入口（L-1 期间为占位 stub，L-2/L-3 阶段挂回数据流） ────
+    def _current_run_settings(self) -> PlotRunSettings:
+        """收集当前运行参数。
 
-        1) 「绘图参数」Tab 的 PlotSettingsPanel 显示当前预设名（worker 用）
-        2) 「预设设置」Tab 的 PresetFormPanel 字段铺成 entry 的内容；
-           系统预设 → 只读；用户预设 → 可编辑
-
-        按 PROGRESS.md T-4 交互规则，单击预设后自动切到「预设设置」Tab，
-        让用户能立即看到 / 改动当前预设字段，而不是停在绘图参数页里"看不见"。
+        L-1 期间没有真实的参数面板数据源，返回一个全空 PlotRunSettings，
+        让 _missing_required_fields 自然识别为"未填完"，弹友善 InfoBar 提示。
+        L-3b 完成 PresetAccordionPanel 后，本方法从面板字段读出真实值。
         """
-        log.info("已选预设：%s", name)
-        self.settings_pane.set_preset_name(name)
+        return PlotRunSettings()
 
-        # 拉整张 PresetEntry，推到「预设设置」Tab；
-        # 选不到（理论上不会，refresh 后 list 必有值）按 entry=None 处理（清空）
-        entry = self.preset_pane.selected_preset_entry()
-        form = self.center_pane.form_panel
-        form.set_entry(entry)
-        if entry is not None:
-            form.set_read_only(entry.source is PresetSource.SYSTEM)
+    def _on_generate_clicked(self) -> None:
+        """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。
 
-        # 切到「预设设置」Tab —— 让用户立即看到选中的预设字段
-        self.center_pane.show_form_tab()
-
-    def _on_new_preset_requested(self) -> None:
-        """用户在左栏点了「+新建」。
-
-        清空表单 + 切到「预设设置」Tab；写盘要等用户点「保存为我的预设」。
+        L-1 期间，_current_run_settings() 始终返回空设置 → 必填检查不过 →
+        给用户友善 InfoBar 提示"参数面板待 L-3b 接入"，不会跑出图。
         """
-        log.info("新建预设：清空表单 + 切到「预设设置」Tab")
-        # 绘图参数 Tab 的"当前预设"显示也清掉，避免用户看到旧名字
-        self.settings_pane.set_preset_name("")
-        form = self.center_pane.form_panel
-        form.set_entry(None)  # 清空所有字段
-        form.set_read_only(False)  # 新建的预设永远是用户预设，可编辑
-        self.center_pane.show_form_tab()
+        s = self._current_run_settings()
 
-    # ── 表单按钮 → 写入流程 ─────────────────────────────────────
-    def _on_form_copy_clicked(self) -> None:
-        """系统预设态点 [复制为我的预设] —— 直接复用左栏的复制流程，
-
-        用户当前选中的就是这条系统预设，preset_pane._on_copy_clicked 会
-        弹同样的输名对话框 + 走 copy_system_to_user。这里不重复实现。
-        """
-        log.info("从表单底部触发复制流程")
-        self.preset_pane._on_copy_clicked()
-
-    def _on_form_reset_clicked(self) -> None:
-        """[重置] —— 把表单字段恢复到加载时的原值。
-
-        没让 form 自己处理是为了让"重置"语义集中在 view 层，
-        以后如果要加二次确认（"未保存的修改将丢失"）就只改这里。
-        """
-        log.info("用户点了 [重置]")
-        self.center_pane.form_panel.reset_to_baseline()
-
-    def _on_form_cancel_new_clicked(self) -> None:
-        """新建态点 [取消] —— refresh 选回首项，让 form 自动反映成"系统预设态"。"""
-        log.info("用户取消新建")
-        self.preset_pane.refresh()  # 默认选第一项 → 触发 _on_preset_selected
-
-    def _on_form_save_clicked(self) -> None:
-        """[保存修改] / [保存为我的预设] —— 校验 → 写盘 → refresh + InfoBar。"""
-        form = self.center_pane.form_panel
-        name = form.current_name()
-        data = form.current_data()
-
-        # 1) 字段校验
-        issues = self._validate_preset_form(name, data, form.current_curves_text())
-        if issues:
-            log.warning("保存被拒：%d 项校验未通过", len(issues))
+        # 必填字段缺失：黄色 InfoBar 提示用户去左栏补完
+        missing = self._missing_required_fields(s)
+        if missing:
+            log.warning("生成被拒：缺少必填字段 %s", missing)
+            self._status_label.setText("⚠️ 设置未填完")
             show_warning_infobar(
                 self,
-                title="保存被拒：字段校验未通过",
-                reason=f"共 {len(issues)} 项问题需要先解决：",
-                hint="\n".join(f"• {x}" for x in issues),
-                duration=8000,
+                title="参数未填完",
+                reason=f"还差这些必填项：{ ' / '.join(missing) }",
+                hint=(
+                    "参数面板（左栏）将在 L-3b 阶段接入；"
+                    "实时预览（右栏）将在 L-2 阶段接入。"
+                ),
             )
             return
 
-        # 2) 落盘（preset_manager 的 save 是 upsert：同名覆盖）
-        try:
-            save_user_preset(name, data, tool="plot_curves")
-        except PresetError as e:
-            log.error("保存写盘失败：%s", e)
-            show_error_infobar(self, e, where="保存预设")
-            return
-
-        log.info("已保存用户预设：%s", name)
-        show_success_infobar(
-            self,
-            title="已保存到我的预设",
-            content=f"{name}（共 {len(data.get('curves', []))} 条曲线）",
-        )
-
-        # 3) 刷新左栏并选中刚保存的条目，让 form 进入"用户预设态"（含重置按钮）
-        self.preset_pane.refresh(select_name=name)
+        # 投递 worker
+        worker = _PlotCurvesWorker(s)
+        worker.signals.started.connect(self._on_worker_started)
+        worker.signals.progress.connect(self._on_worker_progress)
+        worker.signals.finished.connect(self._on_worker_finished)
+        worker.signals.failed.connect(self._on_worker_failed)
+        self._active_worker = worker  # 保活
+        self._pool.start(worker)
+        log.info("worker 已投递到线程池")
 
     @staticmethod
     def _validate_preset_form(
@@ -350,9 +279,13 @@ class PlotCurvesView(QWidget):
     ) -> list[str]:
         """轻量字段校验。返回所有问题点的人类可读列表，空 = 通过。
 
-        本轮只做"最低门槛"校验：每个字段非空 + range 单调 + curves 是合法 list。
-        不做深度校验（curves[i].points / Excel 列名一致性等），避免误伤用户的
-        "在线编辑中"状态。深度校验由实际跑出图时再暴露。
+        L-1 期间为 dead code（view 内未调用），保留是因为：
+          • 19 个测试用例覆盖的纯逻辑函数，重写代价高
+          • L-3b 把 PresetAccordionPanel 接到 save flow 时还要靠它做拦截
+
+        校验范围（"最低门槛"，不做深度业务校验）：
+          每个字段非空 + range 单调 + curves 是合法 list；
+          curves[i].points / Excel 列名一致性等留给真正跑出图时再暴露。
         """
         issues: list[str] = []
 
@@ -418,36 +351,6 @@ class PlotCurvesView(QWidget):
 
         return issues
 
-    def _on_generate_clicked(self) -> None:
-        """点击"生成" → 校验设置 → 投递 worker 到 QThreadPool。"""
-        s = self.settings_pane.settings
-
-        # 必填字段缺失：黄色 InfoBar 提示用户去左/中栏补完
-        missing = self._missing_required_fields(s)
-        if missing:
-            log.warning("生成被拒：缺少必填字段 %s", missing)
-            self._status_label.setText("⚠️ 设置未填完")
-            show_warning_infobar(
-                self,
-                title="参数未填完",
-                reason=f"还差这些必填项：{ ' / '.join(missing) }",
-                hint=(
-                    "「输入 Excel」「输出目录」在中栏的设置面板里点按钮选；"
-                    "「预设」在左栏列表里选。"
-                ),
-            )
-            return
-
-        # 投递 worker
-        worker = _PlotCurvesWorker(s)
-        worker.signals.started.connect(self._on_worker_started)
-        worker.signals.progress.connect(self._on_worker_progress)
-        worker.signals.finished.connect(self._on_worker_finished)
-        worker.signals.failed.connect(self._on_worker_failed)
-        self._active_worker = worker  # 保活
-        self._pool.start(worker)
-        log.info("worker 已投递到线程池")
-
     @staticmethod
     def _missing_required_fields(s: PlotRunSettings) -> list[str]:
         """返回缺失必填字段的人类可读名列表。"""
@@ -468,8 +371,7 @@ class PlotCurvesView(QWidget):
         self._progress.setValue(0)
         self._progress.show()
         self._status_label.setText("⏳ 正在处理…")
-        # 预览区清空，让用户看到"开始新一轮"的视觉反馈
-        self.preview_pane.clear()
+        # L-2 接入后，这里要清空 LivePreviewPane 当前图
 
     def _on_worker_progress(self, done: int, total: int) -> None:
         if total <= 0:
@@ -485,9 +387,7 @@ class PlotCurvesView(QWidget):
         n_fail = len(result.failed)
         log.info("worker 完成：成功 %d / 失败 %d", n_ok, n_fail)
 
-        # 预览区接收成功生成的图（result.written）
-        # 即使部分失败也展示成功的那些，让用户能立刻看到结果
-        self.preview_pane.set_results(result.written)
+        # L-2 接入后，这里要把 result.written 推给 LivePreviewPane 展示
 
         if n_fail == 0:
             # 完全成功：状态行 + 右上角绿色 InfoBar 双重反馈

@@ -307,3 +307,117 @@ class TestDataSourceFlow:
             assert str(fake_path) in panel._input_path_edit.text()
         finally:
             panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Sheet ComboBox：选 Excel 后自动读 sheet 名 / 切 sheet emit
+# ──────────────────────────────────────────────────────────────────
+class TestSheetCombo:
+    def test_real_xlsx_populates_sheet_combo(
+        self,
+        qapp: QApplication,
+        tmp_settings: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """选一个真实 xlsx 后，sheet ComboBox 自动填充 sheet 名 + 默认选第 0 个。"""
+        from openpyxl import Workbook
+
+        from civ_core.ui.components import preset_accordion_panel as pap
+
+        # 真实 xlsx：两个 sheet
+        p = tmp_path / "two_sheets.xlsx"
+        wb = Workbook()
+        ws1 = wb.active
+        assert ws1 is not None
+        ws1.title = "Sheet1"
+        ws1.append(["编号"])
+        ws2 = wb.create_sheet("Sheet2")
+        ws2.append(["编号"])
+        wb.save(str(p))
+
+        monkeypatch.setattr(
+            pap.QFileDialog,
+            "getOpenFileName",
+            staticmethod(lambda *a, **kw: (str(p), "")),
+        )
+
+        panel = pap.PresetAccordionPanel()
+        try:
+            panel._on_pick_input_excel()
+            assert panel._sheet_combo.isEnabled()
+            assert panel._sheet_combo.count() == 2
+            assert panel._sheet_combo.currentText() == "Sheet1"
+            assert panel._sheet_name == "Sheet1"
+        finally:
+            panel.deleteLater()
+
+    def test_data_source_changed_carries_sheet(
+        self,
+        qapp: QApplication,
+        tmp_settings: Path,
+        tmp_path: Path,
+        qtbot: Any,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """data_source_changed 信号现在带 (path, sheet) 双参数。"""
+        from openpyxl import Workbook
+
+        from civ_core.ui.components import preset_accordion_panel as pap
+
+        p = tmp_path / "one_sheet.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.title = "OnlySheet"
+        ws.append(["编号"])
+        wb.save(str(p))
+
+        monkeypatch.setattr(
+            pap.QFileDialog,
+            "getOpenFileName",
+            staticmethod(lambda *a, **kw: (str(p), "")),
+        )
+
+        panel = pap.PresetAccordionPanel()
+        try:
+            with qtbot.waitSignal(
+                panel.data_source_changed, timeout=500
+            ) as blocker:
+                panel._on_pick_input_excel()
+            # signal 应携带 (path, sheet) 两个参数
+            assert len(blocker.args) == 2
+            assert Path(blocker.args[0]) == p
+            assert blocker.args[1] == "OnlySheet"
+        finally:
+            panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# 风琴：分组折叠后顶贴
+# ──────────────────────────────────────────────────────────────────
+class TestSectionLayout:
+    def test_sections_are_max_size_policy(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """六个分组 widget 的 size policy 垂直方向都用 Maximum，
+        让外层 addStretch(1) 能把它们推到顶部（折叠时不被均分到中间）。"""
+        from PySide6.QtWidgets import QSizePolicy
+
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            for sec in (
+                panel._sec_preset,
+                panel._sec_data,
+                panel._sec_curves,
+                panel._sec_axis,
+                panel._sec_style,
+                panel._sec_out,
+            ):
+                assert (
+                    sec.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Maximum
+                )
+        finally:
+            panel.deleteLater()

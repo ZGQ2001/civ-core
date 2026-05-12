@@ -69,6 +69,7 @@ class LivePreviewPane(QWidget):
         # 当前数据源
         self._preset: dict[str, Any] | None = None
         self._data_source: Path | None = None
+        self._sheet_name: str | None = None
         # L-4 高亮行索引（占位，P1.5 才在图上画标记）
         self._highlight_row_idx: int = -1
 
@@ -99,7 +100,7 @@ class LivePreviewPane(QWidget):
         self._image_label = QLabel(self)
         self._image_label.setObjectName("livePreviewImage")
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_label.setMinimumSize(360, 220)
+        # 不强制 minimum size，让窗口可以无限缩小（缩小时图按比例 KeepAspectRatio）
         # scaledContents=False：用我们自己的 _scaled_pixmap 控制缩放，
         # 不让 QLabel 拉伸（拉伸会失真）
         self._image_label.setScaledContents(False)
@@ -141,15 +142,19 @@ class LivePreviewPane(QWidget):
         self._preset = preset
         self.request_redraw()
 
-    def set_data_source(self, path: Path | str | None) -> None:
-        """设置 Excel 数据源路径。None = 未选。
+    def set_data_source(
+        self, path: Path | str | None, sheet: str | None = None
+    ) -> None:
+        """设置 Excel 数据源路径 + sheet。None = 未选。
 
-        切数据源 → 触发防抖重绘（缓存按 (path, mtime) 命中，切回来零成本）。
+        切数据源或 sheet → 触发防抖重绘（缓存按 (path, mtime, sheet, header)
+        命中，切回来零成本）。
         """
         if path is None:
             self._data_source = None
         else:
             self._data_source = Path(path)
+        self._sheet_name = sheet
         self.request_redraw()
 
     def request_redraw(self) -> None:
@@ -202,6 +207,7 @@ class LivePreviewPane(QWidget):
         worker = _PreviewWorker(
             preset=self._preset,
             data_source=self._data_source,
+            sheet_name=self._sheet_name,
             generation=gen,
         )
         worker.signals.ready.connect(self._on_worker_ready)
@@ -268,17 +274,21 @@ class _PreviewWorker(QRunnable):
         *,
         preset: dict[str, Any],
         data_source: Path,
+        sheet_name: str | None,
         generation: int,
     ) -> None:
         super().__init__()
         self._preset = preset
         self._data_source = data_source
+        self._sheet_name = sheet_name
         self._gen = generation
         self.signals = _PreviewWorkerSignals()
 
     def run(self) -> None:  # noqa: D401
         try:
-            rows = EXCEL_DATA_CACHE.get_rows(self._data_source, None, 1)
+            rows = EXCEL_DATA_CACHE.get_rows(
+                self._data_source, self._sheet_name, 1
+            )
             if not rows:
                 self._safe_emit_failed("Excel 没有可用的数据行")
                 return

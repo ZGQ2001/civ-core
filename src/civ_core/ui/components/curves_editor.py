@@ -188,16 +188,14 @@ class CurvesEditor(QWidget):
         name_row.addWidget(self._name_edit, 1)
         self._form_layout.addLayout(name_row)
 
-        # 颜色（快选按钮 + 调色板按钮 + 当前色显示）
+        # 颜色（6 个快选 + 更多…）；当前色 = 快选按钮加粗黑边显示
+        # 去掉之前那个 40×22 的 _color_indicator 大方块（语义模糊用户看不懂）
         color_row = self._make_row("颜色:")
         self._color_swatches: list[QPushButton] = []
         for hex_color in _QUICK_COLORS:
             btn = QPushButton(self)
-            btn.setFixedSize(22, 22)
-            btn.setStyleSheet(
-                f"QPushButton {{ background: {hex_color}; border: 1px solid #888; border-radius: 3px; }}"
-                f"QPushButton:hover {{ border: 2px solid #333; }}"
-            )
+            btn.setFixedSize(24, 24)
+            btn.setProperty("colorHex", hex_color)
             btn.setToolTip(hex_color)
             btn.clicked.connect(lambda _=False, c=hex_color: self._set_color(c))
             color_row.addWidget(btn)
@@ -205,11 +203,6 @@ class CurvesEditor(QWidget):
         self._btn_color_dialog = PushButton("更多…", self)
         self._btn_color_dialog.clicked.connect(self._open_color_dialog)
         color_row.addWidget(self._btn_color_dialog)
-        # 当前色显示：右侧小色块 + hex 文字
-        self._color_indicator = QPushButton(self)
-        self._color_indicator.setFixedSize(40, 22)
-        self._color_indicator.setEnabled(False)  # 仅显示
-        color_row.addWidget(self._color_indicator)
         color_row.addStretch(1)
         self._form_layout.addLayout(color_row)
 
@@ -254,6 +247,10 @@ class CurvesEditor(QWidget):
         self._points_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
+        # 保证至少能完整看到 4~5 行点；不被外层 QScrollArea 压扁到单行
+        self._points_table.setMinimumHeight(200)
+        # 去掉表格自身的 frame 边框（保留 grid 线即可）
+        self._points_table.setFrameShape(QTableWidget.Shape.NoFrame)
         self._points_table.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -385,11 +382,7 @@ class CurvesEditor(QWidget):
 
     # ── 曲线字段表单 ─────────────────────────────────────────────
     def _render_form(self) -> None:
-        """把当前选中曲线的字段值刷到表单控件 + 重建点表。
-
-        suppress_signals 期间设值，避免 valueChanged 触发 _save_from_form
-        反向写回（会触发 changed，干扰测试）。
-        """
+        """把当前选中曲线的字段值刷到表单控件 + 重建点表。"""
         has_selection = 0 <= self._current_idx < len(self._curves)
         self._form_widget.setEnabled(has_selection)
 
@@ -400,7 +393,7 @@ class CurvesEditor(QWidget):
                 self._marker_combo.setCurrentIndex(0)
                 self._linewidth_spin.setValue(2.0)
                 self._markersize_spin.setValue(7.0)
-                self._set_color_indicator("#1F4FE0")
+                self._update_swatches("#1F4FE0")
                 self._points_table.setRowCount(0)
                 return
 
@@ -408,7 +401,7 @@ class CurvesEditor(QWidget):
             self._name_edit.setText(str(curve.get("name", "")))
 
             color = str(curve.get("color", "#1F4FE0"))
-            self._set_color_indicator(color)
+            self._update_swatches(color)
 
             marker = str(curve.get("marker", "s"))
             if marker in _MARKER_CHOICES:
@@ -427,18 +420,24 @@ class CurvesEditor(QWidget):
         finally:
             self._suppress_signals = False
 
-    def _set_color_indicator(self, hex_color: str) -> None:
-        self._color_indicator.setText(hex_color.upper())
-        self._color_indicator.setStyleSheet(
-            f"QPushButton {{ background: {hex_color}; color: #fff; "
-            f"text-shadow: 0 0 2px #000; border: 1px solid #888; }}"
-        )
+    def _update_swatches(self, current_hex: str) -> None:
+        """刷新 6 个快选按钮：当前色匹配的按钮加粗黑边高亮（无单独 indicator）。"""
+        cur = current_hex.upper()
+        for btn in self._color_swatches:
+            hex_color = str(btn.property("colorHex") or "").upper()
+            is_current = hex_color == cur
+            btn.setStyleSheet(
+                f"QPushButton {{ background: {hex_color}; "
+                f"  border: {'3px solid #000' if is_current else '1px solid #888'}; "
+                f"  border-radius: 3px; }}"
+                f"QPushButton:hover {{ border: 2px solid #333; }}"
+            )
 
     def _set_color(self, hex_color: str) -> None:
         if self._current_idx < 0:
             return
         self._curves[self._current_idx]["color"] = hex_color
-        self._set_color_indicator(hex_color)
+        self._update_swatches(hex_color)
         # 列表里那条曲线的文字色也跟着更新
         item = self._curve_list.item(self._current_idx)
         if item is not None:

@@ -29,7 +29,9 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from civ_core.configs.loader import load_config  # noqa: E402
 from civ_core.ui.windows.plot_curves_view import (  # noqa: E402
+    _INITIAL_RIGHT_SIZES,
     _INITIAL_SIZES,
+    _SETTINGS_KEY_RIGHT_SPLITTER,
     _SETTINGS_KEY_SPLITTER,
     PlotCurvesView,
 )
@@ -206,3 +208,35 @@ class TestConstructionUsesSaved:
             assert v._restore_splitter_sizes() == [620, 380]
         finally:
             v.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# 右栏垂直 splitter（预览/底栏 上下比例）持久化（UX 重构新增）
+# ──────────────────────────────────────────────────────────────────
+class TestRightSplitterPersistence:
+    def test_default_when_no_saved_value(
+        self, view: PlotCurvesView
+    ) -> None:
+        assert view._restore_right_splitter_sizes() == list(_INITIAL_RIGHT_SIZES)
+
+    def test_roundtrip_save_and_restore(
+        self,
+        view: PlotCurvesView,
+        tmp_settings_factory: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            view._right_splitter, "sizes", lambda: [500, 250]
+        )
+        view._on_right_splitter_moved(0, 0)
+        s = QSettings(str(tmp_settings_factory), QSettings.Format.IniFormat)
+        saved = s.value(_SETTINGS_KEY_RIGHT_SPLITTER)
+        assert [int(x) for x in saved] == [500, 250]
+
+    def test_wrong_length_falls_back(
+        self, view: PlotCurvesView, tmp_settings_factory: Path
+    ) -> None:
+        s = QSettings(str(tmp_settings_factory), QSettings.Format.IniFormat)
+        s.setValue(_SETTINGS_KEY_RIGHT_SPLITTER, [100, 200, 300])
+        s.sync()
+        assert view._restore_right_splitter_sizes() == list(_INITIAL_RIGHT_SIZES)

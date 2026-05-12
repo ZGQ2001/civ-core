@@ -170,15 +170,14 @@ class LogPanel(QWidget):
         font.setStyleHint(QFont.StyleHint.Monospace)
         font.setPointSize(9)
         self._text.setFont(font)
-        # 视觉上与 InfoBar / 卡片一致
+        # 简洁视觉：去边框去 margin，让 BottomTabPanel 提供整体边界
         self._text.setStyleSheet(
             "QPlainTextEdit { "
             "  background: #fafafa; "
-            "  border: 1px solid #e0e0e0; "
-            "  border-radius: 4px; "
-            "  margin: 0 8px 8px 8px; "
+            "  border: none; "
             "} "
         )
+        self._text.setFrameShape(QPlainTextEdit.Shape.NoFrame)
         outer.addWidget(self._text, 1)
 
     def _wire_signals(self) -> None:

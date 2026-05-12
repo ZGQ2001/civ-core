@@ -81,6 +81,10 @@ _SETTINGS_APP = "CivCore"
 _SETTINGS_KEY_SPLITTER = "plot_curves/splitter_sizes"
 # L-4：底栏 Tab 面板折叠态持久化（沿用 LogPanel 设计的语义但用新键）
 _SETTINGS_KEY_BOTTOM_COLLAPSED = "plot_curves/bottom_panel_collapsed"
+# UX 重构：右栏垂直 splitter（上预览 / 下底栏）的高度比例
+_SETTINGS_KEY_RIGHT_SPLITTER = "plot_curves/right_splitter_sizes"
+# 默认右栏上下比例：预览 ≈ 580 / 底栏 ≈ 200（底栏折叠时高度收到约 32）
+_INITIAL_RIGHT_SIZES = (580, 200)
 
 
 class PlotCurvesView(QWidget):
@@ -108,18 +112,20 @@ class PlotCurvesView(QWidget):
         )
 
     def _build_layout(self) -> None:
-        # 外层 layout：QSplitter + 操作栏 + 日志面板
+        """工程软件式布局：左栏参数面板 | 右栏(垂直 splitter [预览+工具栏 / 底栏 Tab])。"""
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setContentsMargins(4, 4, 4, 4)
         outer.setSpacing(0)
 
-        # 左栏：参数面板（L-3b 风琴折叠）
+        # ── 子组件 ──
         self.preset_accordion_panel = PresetAccordionPanel(self)
-
-        # 右栏：实时预览（L-2 防抖重绘 + DataFrame 缓存）
         self.live_preview_pane = LivePreviewPane(self)
+        self.bottom_panel = BottomTabPanel(self)
+        # 兼容别名：仍暴露 log_panel（healthcheck / 老代码可能用到）
+        self.log_panel = self.bottom_panel.log_panel
 
-        # L-3b 信号路由：参数面板 → 实时预览
+        # ── 信号路由 ──
+        # 参数面板 → 实时预览
         self.preset_accordion_panel.preset_changed.connect(
             self.live_preview_pane.set_preset
         )
@@ -129,59 +135,104 @@ class PlotCurvesView(QWidget):
         self.preset_accordion_panel.request_redraw_signal.connect(
             self.live_preview_pane.request_redraw
         )
-        # L-4 信号路由：参数面板 → 数据源 Tab；数据源行点击 → 预览高亮
+        # 参数面板 → 数据源 Tab
         self.preset_accordion_panel.preset_changed.connect(
             self._refresh_data_source_pane
         )
         self.preset_accordion_panel.data_source_changed.connect(
             self._on_data_source_changed
         )
-
-        # 横向 QSplitter
-        splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        splitter.setObjectName("plotCurvesSplitter")
-        splitter.setChildrenCollapsible(False)  # 防止用户误把某栏拖没
-        splitter.setHandleWidth(6)
-        # addWidget 顺序 = setSizes 顺序：左 [0] / 右 [1]
-        splitter.addWidget(self.preset_accordion_panel)
-        splitter.addWidget(self.live_preview_pane)
-        # 持久化 sizes：上次拖动后保存的值优先；没保存过 / 损坏 → 用默认
-        splitter.setSizes(self._restore_splitter_sizes())
-
-        # 两栏的拉伸优先级：参数面板和预览区都可拉伸，预览区略大一些
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-
-        # 用户拖动 → 立即写盘。QSettings 的 setValue 是文件级别 IO，
-        # 一次拖动会触发若干次 splitterMoved（鼠标移动间隔），这点频率写盘代价低。
-        splitter.splitterMoved.connect(self._on_splitter_moved)
-
-        outer.addWidget(splitter, 1)
-        self._splitter = splitter  # 测试 / 后续步骤可访问
-
-        # ── 底部操作栏：状态文字 / 进度条 / 生成按钮 ──
-        bottom = self._build_action_bar()
-        outer.addLayout(bottom)
-
-        # ── 最底部：L-4 BottomTabPanel（日志 + 数据源两 Tab，整体可折叠）──
-        # 接 QtLogBridge —— bridge 在 setup_logging() 后才存在；
-        # 测试场景未调用 setup_logging 时 bridge=None，跳过连接，面板仍可创建
-        self.bottom_panel = BottomTabPanel(self)
-        # 兼容字段：仍暴露 log_panel 名字（healthcheck / 其它代码可能用到）
-        self.log_panel = self.bottom_panel.log_panel
+        # 数据源行点击 → 预览高亮
+        self.bottom_panel.data_source_pane.row_highlighted.connect(
+            self.live_preview_pane.highlight_row
+        )
+        # QtLogBridge → 日志面板
         bridge = get_qt_bridge()
         if bridge is not None:
             bridge.record_emitted.connect(self.bottom_panel.log_panel.on_record)
             log.debug("LogPanel 已连接到 QtLogBridge")
-        # L-4：数据源行点击 → 预览高亮（"表格 → 预览"那一支已通；
-        # "预览 → 表格"的鼠标悬停 hit-testing 留 P1.5）
-        self.bottom_panel.data_source_pane.row_highlighted.connect(
-            self.live_preview_pane.highlight_row
-        )
-        # 折叠态持久化
+
+        # ── 右栏：上=工具栏+预览 / 下=底栏 Tab（垂直 splitter）──
+        right_widget = self._build_right_column()
+
+        # ── 主水平 QSplitter ──
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        splitter.setObjectName("plotCurvesSplitter")
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(4)
+        splitter.addWidget(self.preset_accordion_panel)
+        splitter.addWidget(right_widget)
+        splitter.setSizes(self._restore_splitter_sizes())
+        # 左栏：宽度不主动扩张；右栏吃掉所有水平 stretch
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.splitterMoved.connect(self._on_splitter_moved)
+        outer.addWidget(splitter, 1)
+        self._splitter = splitter
+
+        # 底栏折叠态恢复（必须在右栏已 build 后）
         self.bottom_panel.collapse_changed.connect(self._on_bottom_collapse_changed)
         self.bottom_panel.set_collapsed(self._restore_bottom_collapsed())
-        outer.addWidget(self.bottom_panel)
+
+    def _build_right_column(self) -> QWidget:
+        """右栏：工具栏(生成按钮+状态+进度) → 预览图 → 底栏 Tab。
+        预览与底栏之间用垂直 QSplitter 隔开，比例可调，持久化。
+        """
+        right = QWidget(self)
+        right.setObjectName("plotCurvesRightColumn")
+        v = QVBoxLayout(right)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        # 预览上方工具栏（替代原底部 action_bar，让"生成"紧邻预览图）
+        toolbar = self._build_preview_toolbar()
+        v.addLayout(toolbar)
+
+        vsplit = QSplitter(Qt.Orientation.Vertical, right)
+        vsplit.setObjectName("plotCurvesRightSplitter")
+        vsplit.setChildrenCollapsible(False)
+        vsplit.setHandleWidth(4)
+        vsplit.addWidget(self.live_preview_pane)
+        vsplit.addWidget(self.bottom_panel)
+        vsplit.setSizes(self._restore_right_splitter_sizes())
+        # 预览吃掉竖向 stretch（用户拉高窗口时主要给预览，不给底栏）
+        vsplit.setStretchFactor(0, 1)
+        vsplit.setStretchFactor(1, 0)
+        vsplit.splitterMoved.connect(self._on_right_splitter_moved)
+        self._right_splitter = vsplit
+
+        v.addWidget(vsplit, 1)
+        return right
+
+    def _build_preview_toolbar(self) -> QHBoxLayout:
+        """工程软件式工具栏：[生成按钮] + 状态 + 进度。
+
+        生成按钮放在预览图正上方，语义直白（"按当前预设把这些数据导出 PNG"），
+        告别原"右下角孤立小按钮"。
+        """
+        bar = QHBoxLayout()
+        bar.setContentsMargins(6, 4, 6, 4)
+        bar.setSpacing(8)
+
+        self._generate_btn = PrimaryPushButton("▶ 生成全部曲线 PNG", self)
+        self._generate_btn.setToolTip(
+            "按当前预设 + Excel 数据源，把所有行批量导出 PNG 到「输出目录」"
+        )
+        self._generate_btn.clicked.connect(self._on_generate_clicked)
+        bar.addWidget(self._generate_btn)
+
+        self._status_label = BodyLabel("就绪", self)
+        self._status_label.setStyleSheet("color: #666;")
+        bar.addWidget(self._status_label, 1)
+
+        self._progress = ProgressBar(self)
+        self._progress.setFixedWidth(200)
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.hide()
+        bar.addWidget(self._progress)
+
+        return bar
 
     # ── splitter 持久化 ──────────────────────────────────────────
     def _make_settings(self) -> QSettings:
@@ -242,64 +293,59 @@ class PlotCurvesView(QWidget):
     def _on_bottom_collapse_changed(self, collapsed: bool) -> None:
         self._make_settings().setValue(_SETTINGS_KEY_BOTTOM_COLLAPSED, collapsed)
 
-    # ── L-4：数据源 Tab 数据流 ────────────────────────────────────
-    def _refresh_data_source_pane(self, _preset: dict | None = None) -> None:
-        """preset_changed 或 data_source_changed 时调用，把 (preset, rows) 喂给
-        DataSourcePane。
+    # ── 数据源 Tab 数据流 ─────────────────────────────────────────
+    def _refresh_data_source_pane(self, *_args: object) -> None:
+        """preset_changed 或 data_source_changed 时刷新底栏数据表。
 
-        rows 通过 ExcelDataCache 拿，命中缓存零成本；缺数据源时清空表格。
+        *_args 让本方法既能挂 preset_changed(dict) 也能挂
+        data_source_changed(Path, sheet) —— 多余参数忽略。
         """
         preset = self.preset_accordion_panel.current_preset_data()
         rs = self.preset_accordion_panel.current_run_settings()
         input_path = rs.input_path
+        sheet_name = rs.sheet_name
         header_row = rs.header_row
         if input_path is None:
             self.bottom_panel.data_source_pane.clear()
             return
         try:
-            rows = EXCEL_DATA_CACHE.get_rows(input_path, None, header_row)
+            rows = EXCEL_DATA_CACHE.get_rows(input_path, sheet_name, header_row)
         except ExcelReadError as e:
             log.warning("DataSourcePane 加载数据失败：%s", e)
             self.bottom_panel.data_source_pane.clear()
             return
         self.bottom_panel.data_source_pane.set_preset_and_data(preset, rows)
 
-    def _on_data_source_changed(self, _path: object) -> None:
+    def _on_data_source_changed(self, *_args: object) -> None:
         """data_source_changed 信号到达时，让数据源 Tab 也刷新一次。"""
         self._refresh_data_source_pane()
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
-        """splitterMoved 信号 → 立即把当前 sizes 写到 QSettings。"""
+        """主水平 splitter 拖动 → 写盘。"""
         sizes = self._splitter.sizes()
-        # 防御：拖到边界时偶发 sizes 含 0（虽然 setChildrenCollapsible(False) 已挡过），
-        # 不要把这种"某栏被拖没"的瞬态状态存下去
         if any(s <= 0 for s in sizes):
             return
         self._make_settings().setValue(_SETTINGS_KEY_SPLITTER, sizes)
 
-    def _build_action_bar(self) -> QHBoxLayout:
-        """底部操作栏：状态 + 进度 + "生成"按钮。"""
-        bar = QHBoxLayout()
-        bar.setContentsMargins(4, 8, 4, 4)
-        bar.setSpacing(12)
+    # ── 右栏垂直 splitter 持久化 ─────────────────────────────────
+    def _restore_right_splitter_sizes(self) -> list[int]:
+        """读 QSettings 中右栏上下两段的高度；容错回退默认。"""
+        saved = self._make_settings().value(_SETTINGS_KEY_RIGHT_SPLITTER)
+        if saved is None:
+            return list(_INITIAL_RIGHT_SIZES)
+        try:
+            sizes = [int(x) for x in saved]
+        except (TypeError, ValueError):
+            return list(_INITIAL_RIGHT_SIZES)
+        if len(sizes) != 2 or sum(sizes) <= 0:
+            return list(_INITIAL_RIGHT_SIZES)
+        return sizes
 
-        self._status_label = BodyLabel("就绪", self)
-        self._status_label.setStyleSheet("color: #666;")
-        bar.addWidget(self._status_label, 1)  # stretch=1 占满中间
-
-        self._progress = ProgressBar(self)
-        self._progress.setFixedWidth(220)
-        self._progress.setRange(0, 100)
-        self._progress.setValue(0)
-        self._progress.hide()  # 空闲态隐藏
-        bar.addWidget(self._progress)
-
-        self._generate_btn = PrimaryPushButton("生成", self)
-        self._generate_btn.setMinimumWidth(120)
-        self._generate_btn.clicked.connect(self._on_generate_clicked)
-        bar.addWidget(self._generate_btn)
-
-        return bar
+    def _on_right_splitter_moved(self, _pos: int, _index: int) -> None:
+        sizes = self._right_splitter.sizes()
+        if any(s <= 0 for s in sizes):
+            return
+        self._make_settings().setValue(_SETTINGS_KEY_RIGHT_SPLITTER, sizes)
 
     # ── 业务入口（L-1 期间为占位 stub，L-2/L-3 阶段挂回数据流） ────
     def _current_run_settings(self) -> PlotRunSettings:

@@ -36,6 +36,7 @@ L-1 Step 1 范围
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, QRunnable, QSettings, Qt, QThreadPool, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -60,6 +61,7 @@ from civ_core.ui.components.error_infobar import (
 )
 from civ_core.ui.components.live_preview_pane import LivePreviewPane
 from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+from civ_core.ui.components.preset_undo import PresetUndoController
 from civ_core.utils.logger import get_logger, get_qt_bridge
 
 log = get_logger(__name__)
@@ -138,6 +140,24 @@ class PlotCurvesView(QWidget):
         self.preset_accordion_panel.request_redraw_signal.connect(
             self.live_preview_pane.request_redraw
         )
+        # P1.5-② 撤销/重做：监听 preset_changed → 入栈；Ctrl+Z/Y 快捷键
+        # 必须在其他 preset_changed 连接之前 / 之后无所谓，控制器只读不改 data
+        self._undo_ctrl = PresetUndoController(
+            self.preset_accordion_panel, parent=self
+        )
+        self.preset_accordion_panel.preset_changed.connect(
+            self._undo_ctrl.on_preset_changed
+        )
+        # QShortcut 在 view 范围内生效；用 StandardKey 兼容平台（macOS Cmd 自动映射）
+        self._undo_shortcut = QShortcut(
+            QKeySequence(QKeySequence.StandardKey.Undo), self
+        )
+        self._undo_shortcut.activated.connect(self._undo_ctrl.undo)
+        self._redo_shortcut = QShortcut(
+            QKeySequence(QKeySequence.StandardKey.Redo), self
+        )
+        self._redo_shortcut.activated.connect(self._undo_ctrl.redo)
+
         # 参数面板 → 数据源 Tab
         self.preset_accordion_panel.preset_changed.connect(
             self._refresh_data_source_pane

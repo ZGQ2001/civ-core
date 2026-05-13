@@ -993,6 +993,17 @@ class PresetAccordionPanel(QWidget):
         finally:
             self._suppress = False
 
+    def apply_preset_data(self, data: dict[str, Any]) -> None:
+        """对外公共版的 _load_entry_into_form。
+
+        P1.5-② 撤销/重做用：把 dict 数据反向写回 UI 字段，不触发 preset_changed
+        信号（由 _suppress 标记保护），避免和 Undo 控制器形成回路。
+
+        调用方需保证 data 是合法的"完整 preset 字典"（与 current_preset_data
+        返回结构一致）。
+        """
+        self._load_entry_into_form(data)
+
     # ── 当前数据收集 ─────────────────────────────────────────────
     def current_preset_data(self) -> dict[str, Any]:
         # 图例位置：UI "关闭" → 不显示图例（legend=None）；其他原样

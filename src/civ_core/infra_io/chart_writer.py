@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from civ_core.domain.schema import PlotJob
+from civ_core.domain.schema import AxisSpec, PlotJob
 from civ_core.infra_io.file_manager import atomic_writer
 from civ_core.utils.logger import get_logger
 
@@ -87,6 +87,9 @@ def _draw_series(ax, s) -> None:
       scatter ax.scatter    散点，无连线；markersize 用 s 参数（面积）
       bar     ax.bar        柱状；x 自动当柱中心，width 由 step 推测
       step    ax.step       阶梯线（where='post' 与土木分级加载工况一致）
+
+    误差棒（P1.5-④）：series.y_err 非 None 时叠加 ax.errorbar 画黑色误差杠。
+    step 类型不支持原生 errorbar，画了曲线后另起 errorbar(fmt='none')。
     """
     if s.plot_type == "scatter":
         # scatter 的 s 参数是点面积（按需放大约 markersize**2）
@@ -117,6 +120,9 @@ def _draw_series(ax, s) -> None:
             edgecolor=s.color,
             linewidth=s.linewidth,
             label=s.name,
+            yerr=s.y_err,  # None 时 matplotlib 自动忽略
+            ecolor="#222222",
+            capsize=3 if s.y_err else 0,
         )
     elif s.plot_type == "step":
         ax.step(
@@ -146,6 +152,42 @@ def _draw_series(ax, s) -> None:
             label=s.name,
         )
 
+    # 误差棒（line / scatter / step 共用：单独叠 errorbar 画"杠"，不重画 marker）
+    # bar 在 ax.bar(yerr=) 已经画过，跳过避免重复
+    if s.y_err is not None and s.plot_type != "bar":
+        ax.errorbar(
+            s.xs, s.ys, yerr=s.y_err,
+            fmt="none", ecolor="#222222", capsize=3,
+            zorder=2,
+        )
+
+
+def _apply_axis_spec(ax, spec: AxisSpec, *, label_fontsize: int,
+                      axis: str) -> None:
+    """把 AxisSpec 应用到给定 ax 的 X 或 Y 轴。
+
+    axis: "x" / "y"（决定调 xlabel/xlim/xticks 还是 ylabel/ylim/yticks）
+    抽取自原 _configure_axes，方便双 Y 轴复用（ax 主 / ax2 次共用同一套逻辑）。
+    """
+    if axis == "x":
+        ax.set_xlabel(spec.label, fontsize=label_fontsize)
+        if spec.log:
+            ax.set_xscale("log")
+        if spec.range is not None:
+            a_min, a_max, a_step = spec.range
+            ax.set_xlim(a_min, a_max)
+            if not spec.log:
+                ax.set_xticks(_arange_inclusive(a_min, a_max, a_step))
+    else:  # "y"
+        ax.set_ylabel(spec.label, fontsize=label_fontsize)
+        if spec.log:
+            ax.set_yscale("log")
+        if spec.range is not None:
+            a_min, a_max, a_step = spec.range
+            ax.set_ylim(a_min, a_max)
+            if not spec.log:
+                ax.set_yticks(_arange_inclusive(a_min, a_max, a_step))
+
 
 def _configure_axes(
     ax,
@@ -158,48 +200,57 @@ def _configure_axes(
 ) -> None:
     """把 PlotJob 的样式 / 数据 / 轴配置应用到 Axes（落盘和 BytesIO 共用）。
 
-    show_grid / show_legend 是外部默认值；当 job.grid / job.legend_loc 显式
-    指定时（来自 preset["style"]），优先用 job 的值。
+    P1.5-④ 双 Y 轴：job.y_axis2 不为 None 时创建 ax2 = ax.twinx()，
+    把 series 里 y_axis="secondary" 的曲线挂到 ax2。
+    legend 合并：主轴 + 次轴 handles 拼接后只在主轴一次性 legend。
     """
+    # 1) 准备双轴（如启用）
+    ax2 = ax.twinx() if job.y_axis2 is not None else None
+    # 双轴时 grid 默认只画主轴的，避免次轴 grid 叠加污染视觉
+    # （ax.twinx() 默认隐藏次轴的 grid）
+
+    # 2) 分发 series 到对应 axes
     for s in job.series:
-        _draw_series(ax, s)
+        target = ax2 if (ax2 is not None and s.y_axis == "secondary") else ax
+        _draw_series(target, s)
 
+    # 3) 标题 + 主轴标签
     ax.set_title(job.title, fontsize=title_fontsize, fontweight="bold", pad=10)
-    ax.set_xlabel(job.x_axis.label, fontsize=label_fontsize)
-    ax.set_ylabel(job.y_axis.label, fontsize=label_fontsize)
+    _apply_axis_spec(ax, job.x_axis, label_fontsize=label_fontsize, axis="x")
+    _apply_axis_spec(ax, job.y_axis, label_fontsize=label_fontsize, axis="y")
 
-    # 对数刻度（如启用）—— 必须在 set_xticks 前调，否则刻度被 log 缩放搞乱
-    if job.x_axis.log:
-        ax.set_xscale("log")
-    if job.y_axis.log:
-        ax.set_yscale("log")
+    # 4) 次轴 spec（如启用）
+    if ax2 is not None and job.y_axis2 is not None:
+        _apply_axis_spec(
+            ax2, job.y_axis2, label_fontsize=label_fontsize, axis="y"
+        )
 
-    if job.x_axis.range is not None:
-        x_min, x_max, x_step = job.x_axis.range
-        ax.set_xlim(x_min, x_max)
-        # log 刻度下不手工 set_xticks（让 matplotlib 自适应 10/100/1000 等位置）
-        if not job.x_axis.log:
-            ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
-
-    if job.y_axis.range is not None:
-        y_min, y_max, y_step = job.y_axis.range
-        ax.set_ylim(y_min, y_max)
-        if not job.y_axis.log:
-            ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
-
-    # job.grid 优先于 show_grid 参数
+    # 5) grid：只画主轴 grid（次轴 grid 与主轴叠加会显得乱）
     if job.grid if job.grid is not None else show_grid:
         ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
         ax.set_axisbelow(True)
 
-    # legend：job.legend_loc 优先；为 None 但 show_legend=True 用 "best"
-    if job.legend_loc:
-        ax.legend(loc=job.legend_loc, frameon=True)
-    elif show_legend:
-        ax.legend(loc="best", frameon=True)
+    # 6) legend：双轴 → 合并 handles + labels；单轴沿用旧逻辑
+    if ax2 is not None:
+        h1, l1 = ax.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        if h1 or h2:
+            ax.legend(
+                h1 + h2, l1 + l2,
+                loc=job.legend_loc or ("best" if show_legend else "best"),
+                frameon=True,
+            )
+    else:
+        if job.legend_loc:
+            ax.legend(loc=job.legend_loc, frameon=True)
+        elif show_legend:
+            ax.legend(loc="best", frameon=True)
 
     for spine in ax.spines.values():
         spine.set_linewidth(0.8)
+    if ax2 is not None:
+        for spine in ax2.spines.values():
+            spine.set_linewidth(0.8)
 
 
 def render_plot_to_png(

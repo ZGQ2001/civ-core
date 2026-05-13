@@ -368,3 +368,147 @@ class TestRenderPlotWithHittest:
         # _make_job 用 (0, 10, 2) / (0, 100, 20)
         assert meta.xlim == (0.0, 10.0)
         assert meta.ylim == (0.0, 100.0)
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-④ 双 Y 轴 + 误差棒
+# ──────────────────────────────────────────────────────────────────
+class TestDualYAndErrorBar:
+    def test_dual_y_renders(self) -> None:
+        """job.y_axis2 不为 None → ax.twinx；y_axis='secondary' 的曲线挂次轴。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="dual y",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="时间", range=(0.0, 10.0, 2.0)),
+            y_axis=AxisSpec(label="位移 (mm)", range=(0.0, 50.0, 10.0)),
+            y_axis2=AxisSpec(label="温度 (℃)", range=(0.0, 100.0, 20.0)),
+            series=[
+                CurveSeries(
+                    name="位移",
+                    xs=[0.0, 2.0, 4.0, 6.0],
+                    ys=[0.0, 10.0, 25.0, 40.0],
+                    y_axis="primary",
+                ),
+                CurveSeries(
+                    name="温度",
+                    xs=[0.0, 2.0, 4.0, 6.0],
+                    ys=[20.0, 35.0, 60.0, 80.0],
+                    y_axis="secondary",
+                ),
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_dual_y_log_scale_renders(self) -> None:
+        """次轴对数也能渲染。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="dual y log",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x"),
+            y_axis=AxisSpec(label="y1"),
+            y_axis2=AxisSpec(label="y2", log=True),
+            series=[
+                CurveSeries(name="a", xs=[1.0, 2.0], ys=[1.0, 2.0]),
+                CurveSeries(name="b", xs=[1.0, 2.0], ys=[1.0, 100.0], y_axis="secondary"),
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_error_bar_line(self) -> None:
+        """折线带误差棒。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="err line",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x"),
+            y_axis=AxisSpec(label="y"),
+            series=[
+                CurveSeries(
+                    name="带误差",
+                    xs=[0.0, 1.0, 2.0, 3.0],
+                    ys=[10.0, 20.0, 30.0, 40.0],
+                    y_err=[1.0, 2.0, 1.5, 0.5],
+                ),
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_error_bar_bar(self) -> None:
+        """柱状图带误差棒。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="err bar",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x"),
+            y_axis=AxisSpec(label="y"),
+            series=[
+                CurveSeries(
+                    name="柱+err",
+                    xs=[1.0, 2.0, 3.0],
+                    ys=[5.0, 7.0, 6.0],
+                    y_err=[0.5, 0.4, 0.8],
+                    plot_type="bar",
+                ),
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_dual_y_with_error_bars(self) -> None:
+        """双 Y + 主轴误差棒 + 次轴普通线，能渲。"""
+        from civ_core.infra_io.chart_writer import render_plot_to_bytes
+
+        job = PlotJob(
+            title="combo",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x"),
+            y_axis=AxisSpec(label="y1"),
+            y_axis2=AxisSpec(label="y2"),
+            series=[
+                CurveSeries(
+                    name="主",
+                    xs=[0.0, 1.0, 2.0],
+                    ys=[10.0, 20.0, 30.0],
+                    y_err=[1.0, 2.0, 1.0],
+                ),
+                CurveSeries(
+                    name="次",
+                    xs=[0.0, 1.0, 2.0],
+                    ys=[100.0, 80.0, 60.0],
+                    y_axis="secondary",
+                ),
+            ],
+        )
+        data = render_plot_to_bytes(job)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_dual_y_with_hittest(self) -> None:
+        """render_plot_with_hittest 也支持双 Y（meta.ylim 取主轴）。"""
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        job = PlotJob(
+            title="t",
+            output_path=Path("dummy.png"),
+            x_axis=AxisSpec(label="x", range=(0.0, 10.0, 2.0)),
+            y_axis=AxisSpec(label="y1", range=(0.0, 100.0, 20.0)),
+            y_axis2=AxisSpec(label="y2", range=(0.0, 500.0, 100.0)),
+            series=[
+                CurveSeries(name="a", xs=[0.0, 5.0], ys=[10.0, 50.0]),
+                CurveSeries(name="b", xs=[0.0, 5.0], ys=[100.0, 300.0], y_axis="secondary"),
+            ],
+        )
+        png, meta = render_plot_with_hittest(job)
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        # meta.ylim 取主轴
+        assert meta.ylim == (0.0, 100.0)
+        # curves 仍是 2 条
+        assert len(meta.curves) == 2

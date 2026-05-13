@@ -149,6 +149,11 @@ class PlotCurvesView(QWidget):
         self.bottom_panel.data_source_pane.row_highlighted.connect(
             self.live_preview_pane.highlight_row
         )
+        # P1.5-Step3c：反向 —— 叠加模式下 hover 曲线 → 表格滚动到对应行
+        # DataSourcePane.highlight_row 内有 _suppress_emit 防回环，安全
+        self.live_preview_pane.point_hovered.connect(
+            self.bottom_panel.data_source_pane.highlight_row
+        )
         # QtLogBridge → 日志面板
         bridge = get_qt_bridge()
         if bridge is not None:

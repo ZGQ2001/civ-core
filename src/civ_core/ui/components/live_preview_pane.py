@@ -35,8 +35,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QObject, QPoint, QRunnable, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel
 
@@ -46,7 +46,8 @@ from civ_core.core.plot_curves import (
     build_jobs,
 )
 from civ_core.infra_io.chart_writer import (
-    render_overlay_to_bytes,
+    HitTestMeta,
+    render_overlay_with_hittest,
     render_plot_to_bytes,
 )
 from civ_core.infra_io.excel_reader import ExcelReadError
@@ -62,8 +63,40 @@ _PREVIEW_FIGSIZE = (7.0, 4.0)
 _PREVIEW_DPI = 100
 
 
+class _HoverableLabel(QLabel):
+    """支持 mouseMove + leave 信号的 QLabel（P1.5-Step3c）。
+
+    QLabel 默认 mouseTracking=False（按下才有 move 事件）；这里开启 tracking，
+    把鼠标在 label 内的逐点位置和"离开"事件转成信号，方便父组件不重写
+    eventFilter 也能监听。
+    """
+
+    hover_at = Signal(QPoint)
+    hover_left = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # 不按键也产生 mouseMoveEvent —— hover hit-testing 必备
+        self.setMouseTracking(True)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: D401
+        # event.position() 返回 QPointF；.toPoint() 取整。
+        # 注意：必须 emit "before" super，否则 super 可能消化 event 提前返回
+        self.hover_at.emit(event.position().toPoint())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: object) -> None:  # noqa: D401
+        # Qt 把 leave 单独立项；用 object 类型注解避免 PySide6 在不同 Qt 版本下
+        # 的 QEvent 类型差异
+        self.hover_left.emit()
+        super().leaveEvent(event)  # type: ignore[arg-type]
+
+
 class LivePreviewPane(QWidget):
     """实时预览面板：参数变化 → 300ms 防抖 → 重绘当前预设的代表行。"""
+
+    # P1.5-Step3c：叠加模式下，鼠标 hover 曲线点 → 通知外部"对应第 row_idx 行"
+    point_hovered = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -80,6 +113,9 @@ class LivePreviewPane(QWidget):
         # P1.5-Step2 叠加对比模式：True = 把所有 jobs 画到一张图上，
         # _current_row_idx 用来"高亮哪根"；False = 只画 jobs[_current_row_idx]。
         self._overlay_mode: bool = False
+        # P1.5-Step3c：最近一次叠加渲染的 hit-test 元数据；
+        # 单行模式 / 还没渲染时为 None —— hover 直接忽略
+        self._hit_test_meta: HitTestMeta | None = None
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -104,14 +140,17 @@ class LivePreviewPane(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(6)
 
-        # 图像区：QLabel + setPixmap；alignment 居中，避免缩放后偏左上
-        self._image_label = QLabel(self)
+        # 图像区：_HoverableLabel + setPixmap；alignment 居中，避免缩放后偏左上
+        # P1.5-Step3c：用 _HoverableLabel 子类替代 QLabel，让 mouseMove 转信号
+        self._image_label = _HoverableLabel(self)
         self._image_label.setObjectName("livePreviewImage")
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # 不强制 minimum size，让窗口可以无限缩小（缩小时图按比例 KeepAspectRatio）
         # scaledContents=False：用我们自己的 _scaled_pixmap 控制缩放，
         # 不让 QLabel 拉伸（拉伸会失真）
         self._image_label.setScaledContents(False)
+        # 叠加模式下的 hover hit-testing
+        self._image_label.hover_at.connect(self._on_image_hover)
         layout.addWidget(self._image_label, 1)
 
         # 状态/提示行：在 image 上方时占用图位置；改为下方"小字"提示更轻
@@ -244,6 +283,7 @@ class LivePreviewPane(QWidget):
             overlay_mode=self._overlay_mode,
         )
         worker.signals.ready.connect(self._on_worker_ready)
+        worker.signals.overlay_ready.connect(self._on_worker_overlay_ready)
         worker.signals.failed.connect(self._on_worker_failed)
         # 保活：测试场景下 worker 一旦超出 _launch_worker 作用域可能被 GC
         self._active_worker = worker
@@ -251,7 +291,10 @@ class LivePreviewPane(QWidget):
         log.debug("LivePreview 启动渲染 worker gen=%d", gen)
 
     def _on_worker_ready(self, gen: int, png_bytes: bytes) -> None:
-        """worker 回主线程：仅当 gen 仍是最新代时接受结果。"""
+        """worker 回主线程：仅当 gen 仍是最新代时接受结果。
+
+        单行 ready 路径 → 清空 _hit_test_meta（叠加 meta 对单行无意义）。
+        """
         self._is_rendering = False
         if gen != self._render_gen:
             log.debug(
@@ -260,16 +303,80 @@ class LivePreviewPane(QWidget):
                 self._render_gen,
             )
         else:
-            pix = QPixmap()
-            pix.loadFromData(png_bytes, "PNG")
-            self._current_pixmap = pix
-            self._image_label.setPixmap(self._scaled_pixmap())
-            self._update_hint(f"已渲染（{len(png_bytes) // 1024} KB）")
+            self._hit_test_meta = None
+            self._apply_png(png_bytes)
 
         # pending 兜底：渲染过程中收到的新请求需补一次
         if self._pending:
             self._pending = False
             self._launch_worker()
+
+    def _on_worker_overlay_ready(
+        self, gen: int, png_bytes: bytes, meta: object
+    ) -> None:
+        """叠加模式 worker 回主线程：除 png 外还带 hit-test meta。
+
+        与 _on_worker_ready 的差异：保存 meta 供后续 hover 反算；
+        渲染逻辑共用 _apply_png（避免两条 ready 路径重复代码）。
+        """
+        self._is_rendering = False
+        if gen != self._render_gen:
+            log.debug("LivePreview 丢弃过期 overlay worker gen=%d", gen)
+        else:
+            # meta 类型由 Signal(object) 跨线程传递，运行时确保是 HitTestMeta
+            assert isinstance(meta, HitTestMeta)
+            self._hit_test_meta = meta
+            self._apply_png(png_bytes)
+
+        if self._pending:
+            self._pending = False
+            self._launch_worker()
+
+    def _apply_png(self, png_bytes: bytes) -> None:
+        """把 PNG 字节流展示到 image_label，更新提示。两条 ready 路径共用。"""
+        pix = QPixmap()
+        pix.loadFromData(png_bytes, "PNG")
+        self._current_pixmap = pix
+        self._image_label.setPixmap(self._scaled_pixmap())
+        self._update_hint(f"已渲染（{len(png_bytes) // 1024} KB）")
+
+    def _on_image_hover(self, point: QPoint) -> None:
+        """叠加模式下，鼠标在预览图上移动 → 反算 row idx → emit point_hovered。
+
+        路径：
+          label 像素 → _label_to_png_pixel → PNG 像素
+                    → _pixel_to_data → data 坐标
+                    → _find_nearest_row → row idx
+        meta 为 None（单行模式 / 未渲染）→ 不做事，避免误 emit。
+        """
+        meta = self._hit_test_meta
+        if meta is None or self._current_pixmap is None or self._current_pixmap.isNull():
+            return
+
+        label_size = (self._image_label.width(), self._image_label.height())
+        pixmap_size = (self._current_pixmap.width(), self._current_pixmap.height())
+        pix = _label_to_png_pixel(
+            float(point.x()), float(point.y()),
+            label_size=label_size, pixmap_size=pixmap_size,
+        )
+        if pix is None:
+            return
+        data_xy = _pixel_to_data(
+            pix[0], pix[1],
+            axes_bbox_px=meta.axes_bbox_px,
+            xlim=meta.xlim, ylim=meta.ylim,
+            x_log=meta.x_log, y_log=meta.y_log,
+        )
+        if data_xy is None:
+            return
+        found = _find_nearest_row(
+            data_xy[0], data_xy[1], meta.points,
+            xlim=meta.xlim, ylim=meta.ylim,
+        )
+        if found is None:
+            return
+        row_idx, _dist = found
+        self.point_hovered.emit(row_idx)
 
     def _on_worker_failed(self, gen: int, reason: str) -> None:
         self._is_rendering = False
@@ -289,6 +396,8 @@ class LivePreviewPane(QWidget):
 class _PreviewWorkerSignals(QObject):
     # 信号带 generation：让主线程能识别"这是哪一代请求"，过期就丢
     ready = Signal(int, bytes)
+    # P1.5-Step3c：叠加模式额外携带 HitTestMeta（用 object 避开 Qt 元类型注册）
+    overlay_ready = Signal(int, bytes, object)
     failed = Signal(int, str)
 
 
@@ -473,13 +582,14 @@ class _PreviewWorker(QRunnable):
                 return
 
             if self._overlay_mode:
-                # 叠加模式：所有 jobs 画到一张图，按 _row_idx 高亮
-                png = render_overlay_to_bytes(
+                # 叠加模式：用 with_hittest 同时拿 PNG + 反算 meta
+                png, meta = render_overlay_with_hittest(
                     jobs,
                     highlight_row_idx=picked,
                     figsize=_PREVIEW_FIGSIZE,
                     dpi=_PREVIEW_DPI,
                 )
+                self._safe_emit_overlay_ready(png, meta)
             else:
                 # 单行模式：只画 jobs[picked]
                 png = render_plot_to_bytes(
@@ -487,7 +597,7 @@ class _PreviewWorker(QRunnable):
                     figsize=_PREVIEW_FIGSIZE,
                     dpi=_PREVIEW_DPI,
                 )
-            self._safe_emit_ready(png)
+                self._safe_emit_ready(png)
 
         except PlotCurvesError as e:
             # 业务异常（缺列等）：把 hint 也带上，让用户看到怎么修
@@ -510,6 +620,12 @@ class _PreviewWorker(QRunnable):
             self.signals.ready.emit(self._gen, png)
         except RuntimeError:
             # 主窗口已销毁 —— signals 对象 C++ 部分被回收，忽略
+            pass
+
+    def _safe_emit_overlay_ready(self, png: bytes, meta: HitTestMeta) -> None:
+        try:
+            self.signals.overlay_ready.emit(self._gen, png, meta)
+        except RuntimeError:
             pass
 
     def _safe_emit_failed(self, reason: str) -> None:

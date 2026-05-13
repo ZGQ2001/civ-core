@@ -586,6 +586,131 @@ class TestLabelToPngPixel:
                                      pixmap_size=(100, 0)) is None
 
 
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step3c：LivePreviewPane.point_hovered 信号 + _on_image_hover
+# ──────────────────────────────────────────────────────────────────
+class TestPointHoveredSignal:
+    """叠加模式下，hover 预览图 → emit point_hovered(row_idx)。"""
+
+    def test_signal_exists(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            # point_hovered 信号应存在并可 connect
+            assert hasattr(pane, "point_hovered")
+            seen: list[int] = []
+            pane.point_hovered.connect(seen.append)
+            pane.point_hovered.emit(7)
+            assert seen == [7]
+        finally:
+            pane.deleteLater()
+
+    def test_no_meta_no_emit(self, qapp: QApplication) -> None:
+        """meta=None（单行 / 未渲染）→ _on_image_hover 不 emit。"""
+        from PySide6.QtCore import QPoint
+
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            seen: list[int] = []
+            pane.point_hovered.connect(seen.append)
+            pane._hit_test_meta = None  # 显式（默认就是）
+            pane._on_image_hover(QPoint(100, 100))
+            assert seen == []
+        finally:
+            pane.deleteLater()
+
+    def test_hover_emits_correct_row_idx(self, qapp: QApplication) -> None:
+        """构造已知 meta + pixmap，hover label 内一点应 emit 最近曲线的 row_idx。"""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QPixmap
+
+        from civ_core.infra_io.chart_writer import HitTestMeta
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            # 模拟一次叠加渲染：pixmap 600×400，axes 占满（无留白）
+            pix = QPixmap(600, 400)
+            pix.fill()
+            pane._current_pixmap = pix
+            pane._image_label.resize(600, 400)
+            pane._image_label.setPixmap(pix)
+
+            # 三根试件，row 0 在 x=1 / row 1 在 x=5 / row 2 在 x=9（y=50）
+            pane._hit_test_meta = HitTestMeta(
+                png_width=600,
+                png_height=400,
+                axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
+                xlim=(0.0, 10.0),
+                ylim=(0.0, 100.0),
+                points=[
+                    (0, [1.0], [50.0]),
+                    (1, [5.0], [50.0]),
+                    (2, [9.0], [50.0]),
+                ],
+            )
+
+            seen: list[int] = []
+            pane.point_hovered.connect(seen.append)
+            # label 中点 (300, 200) → pixmap (300, 200) → data (5, 50) → row 1
+            pane._on_image_hover(QPoint(300, 200))
+            assert seen == [1]
+        finally:
+            pane.deleteLater()
+
+    def test_hover_in_letterbox_no_emit(self, qapp: QApplication) -> None:
+        """落在 letterbox 留白区 → _label_to_png_pixel 返 None → 不 emit。"""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QPixmap
+
+        from civ_core.infra_io.chart_writer import HitTestMeta
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            # pixmap 400×200 → label 400×300：上下各 50 留白
+            pix = QPixmap(400, 200)
+            pix.fill()
+            pane._current_pixmap = pix
+            pane._image_label.resize(400, 300)
+            pane._image_label.setPixmap(pix)
+
+            pane._hit_test_meta = HitTestMeta(
+                png_width=400, png_height=200,
+                axes_bbox_px=(0.0, 0.0, 400.0, 200.0),
+                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                points=[(0, [1.0], [50.0])],
+            )
+
+            seen: list[int] = []
+            pane.point_hovered.connect(seen.append)
+            pane._on_image_hover(QPoint(200, 25))  # 顶部留白
+            assert seen == []
+        finally:
+            pane.deleteLater()
+
+    def test_hoverable_label_emits_hover_at(self, qapp: QApplication) -> None:
+        """_HoverableLabel 启用 mouseTracking 且能 emit hover_at。"""
+        from PySide6.QtCore import QPoint
+
+        from civ_core.ui.components.live_preview_pane import _HoverableLabel
+
+        lab = _HoverableLabel()
+        try:
+            assert lab.hasMouseTracking() is True
+
+            seen: list[QPoint] = []
+            lab.hover_at.connect(seen.append)
+            lab.hover_at.emit(QPoint(42, 17))
+            assert len(seen) == 1
+            assert seen[0].x() == 42 and seen[0].y() == 17
+        finally:
+            lab.deleteLater()
+
+
 class TestFindNearestRow:
     """从多曲线点里找离查询点最近的，返回 row_idx。"""
 

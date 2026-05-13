@@ -39,6 +39,7 @@ from PySide6.QtCore import QObject, QRunnable, QSettings, Qt, QThreadPool, Signa
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
+    CheckBox,
     PrimaryPushButton,
     ProgressBar,
 )
@@ -85,6 +86,8 @@ _SETTINGS_KEY_BOTTOM_COLLAPSED = "plot_curves/bottom_panel_collapsed"
 _SETTINGS_KEY_RIGHT_SPLITTER = "plot_curves/right_splitter_sizes"
 # 默认右栏上下比例：预览 ≈ 580 / 底栏 ≈ 200（底栏折叠时高度收到约 32）
 _INITIAL_RIGHT_SIZES = (580, 200)
+# P1.5-Step2：叠加对比模式开关持久化
+_SETTINGS_KEY_OVERLAY_MODE = "plot_curves/overlay_mode"
 
 
 class PlotCurvesView(QWidget):
@@ -224,6 +227,19 @@ class PlotCurvesView(QWidget):
         self._generate_btn.clicked.connect(self._on_generate_clicked)
         bar.addWidget(self._generate_btn)
 
+        # P1.5-Step2：叠加对比开关（默认关）
+        # 开 → 预览把所有行的曲线画到一张图，每根试件一种颜色；
+        # 数据源 Tab 点行 → 该根曲线加粗高亮 + 其余半透明
+        self._overlay_chk = CheckBox("叠加对比", self)
+        self._overlay_chk.setToolTip(
+            "开启后预览改成叠加图：每根试件一条曲线；点表格行 → 该根高亮加粗"
+        )
+        # 先 connect 再 setChecked：让 setChecked 触发 toggled，
+        # 自动把模式同步给 live_preview_pane（一次副作用：可能起一次重绘）
+        self._overlay_chk.toggled.connect(self._on_overlay_toggled)
+        self._overlay_chk.setChecked(self._restore_overlay_mode())
+        bar.addWidget(self._overlay_chk)
+
         self._status_label = BodyLabel("就绪", self)
         self._status_label.setStyleSheet("color: #666;")
         bar.addWidget(self._status_label, 1)
@@ -295,6 +311,23 @@ class PlotCurvesView(QWidget):
 
     def _on_bottom_collapse_changed(self, collapsed: bool) -> None:
         self._make_settings().setValue(_SETTINGS_KEY_BOTTOM_COLLAPSED, collapsed)
+
+    # ── P1.5-Step2：叠加对比模式持久化 ────────────────────────────
+    def _restore_overlay_mode(self) -> bool:
+        """读 QSettings 中的叠加模式；默认 False（开屏单行）。"""
+        v = self._make_settings().value(_SETTINGS_KEY_OVERLAY_MODE)
+        if v is None:
+            return False
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, int):
+            return bool(v)
+        return str(v).lower() in {"true", "1", "yes"}
+
+    def _on_overlay_toggled(self, checked: bool) -> None:
+        """工具栏复选框 → 预览面板模式切换 + 持久化。"""
+        self.live_preview_pane.set_overlay_mode(checked)
+        self._make_settings().setValue(_SETTINGS_KEY_OVERLAY_MODE, checked)
 
     # ── 数据源 Tab 数据流 ─────────────────────────────────────────
     def _refresh_data_source_pane(self, *_args: object) -> None:

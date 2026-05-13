@@ -347,3 +347,101 @@ class TestPickJobIndex:
 
         assert _pick_job_index(0, 0) == -1
         assert _pick_job_index(0, 3) == -1
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step2：叠加对比模式开关
+# ──────────────────────────────────────────────────────────────────
+class TestOverlayMode:
+    """LivePreviewPane.set_overlay_mode 切换单行/叠加渲染模式。"""
+
+    def test_initial_overlay_mode_is_false(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            assert pane._overlay_mode is False
+        finally:
+            pane.deleteLater()
+
+    def test_set_overlay_mode_updates_state(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.set_overlay_mode(True)
+            assert pane._overlay_mode is True
+            pane.set_overlay_mode(False)
+            assert pane._overlay_mode is False
+        finally:
+            pane.deleteLater()
+
+    def test_set_overlay_mode_triggers_redraw(
+        self,
+        qapp: QApplication,
+        patched_worker: dict[str, int],
+        tmp_path: Path,
+        qtbot: Any,
+    ) -> None:
+        """切模式应触发一次重绘（叠加 vs 单行渲染目标不同）。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.set_preset(_make_preset())
+            pane.set_data_source(tmp_path / "x.xlsx")
+            qtbot.wait(500)
+            patched_worker["runs"] = 0
+
+            pane.set_overlay_mode(True)
+            qtbot.wait(500)
+            assert patched_worker["runs"] == 1
+        finally:
+            pane.deleteLater()
+
+    def test_set_same_mode_does_not_redraw(
+        self,
+        qapp: QApplication,
+        patched_worker: dict[str, int],
+        tmp_path: Path,
+        qtbot: Any,
+    ) -> None:
+        """重复设置相同模式应是 no-op，不重绘。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.set_preset(_make_preset())
+            pane.set_data_source(tmp_path / "x.xlsx")
+            qtbot.wait(500)
+            patched_worker["runs"] = 0
+
+            pane.set_overlay_mode(False)  # 与初始相同
+            qtbot.wait(500)
+            assert patched_worker["runs"] == 0
+        finally:
+            pane.deleteLater()
+
+    def test_worker_accepts_overlay_mode_kw(self, qapp: QApplication) -> None:
+        """_PreviewWorker.__init__ 接受 overlay_mode 关键字参数。"""
+        import inspect
+
+        from civ_core.ui.components.live_preview_pane import _PreviewWorker
+
+        sig = inspect.signature(_PreviewWorker.__init__)
+        assert "overlay_mode" in sig.parameters
+
+    def test_highlight_in_overlay_mode_does_not_reset_idx(
+        self, qapp: QApplication
+    ) -> None:
+        """叠加模式下 highlight_row 应保留 idx 用于"高亮哪根"。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.set_overlay_mode(True)
+            pane.highlight_row(3)
+            assert pane._current_row_idx == 3
+            assert pane._overlay_mode is True
+        finally:
+            pane.deleteLater()

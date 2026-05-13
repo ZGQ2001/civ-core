@@ -45,7 +45,10 @@ from civ_core.core.plot_curves import (
     PlotCurvesError,
     build_jobs,
 )
-from civ_core.infra_io.chart_writer import render_plot_to_bytes
+from civ_core.infra_io.chart_writer import (
+    render_overlay_to_bytes,
+    render_plot_to_bytes,
+)
 from civ_core.infra_io.excel_reader import ExcelReadError
 from civ_core.utils.logger import get_logger
 
@@ -74,6 +77,9 @@ class LivePreviewPane(QWidget):
         # P1.5-Step1 起 highlight_row(idx) 不再只是占位，而是真切换到第 idx 行的图。
         # 切预设 / 切数据源时重置 0（旧 idx 对新数据集越界）。
         self._current_row_idx: int = 0
+        # P1.5-Step2 叠加对比模式：True = 把所有 jobs 画到一张图上，
+        # _current_row_idx 用来"高亮哪根"；False = 只画 jobs[_current_row_idx]。
+        self._overlay_mode: bool = False
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -173,7 +179,7 @@ class LivePreviewPane(QWidget):
 
         旧 L-4 版本只是占位（更新提示文字）；现在真正切换：
           1. 更新 _current_row_idx；负数 / 不变忽略
-          2. 触发防抖重绘 —— worker 会拿 jobs[idx]（而非 jobs[0]）
+          2. 触发防抖重绘 —— 单行模式拿 jobs[idx]；叠加模式则高亮第 idx 根
 
         worker 端越界回退由 _pick_job_index 兜底；这里不做边界检查
         因为本方法不知道 jobs 总数（rows 在 worker 里才被读）。
@@ -185,6 +191,22 @@ class LivePreviewPane(QWidget):
             return
         self._current_row_idx = idx
         log.debug("LivePreview 切换到第 %d 行（0-based）", idx)
+        self.request_redraw()
+
+    def set_overlay_mode(self, enabled: bool) -> None:
+        """切换"叠加对比图 / 单行图"渲染模式（P1.5-Step2）。
+
+        叠加模式：所有 jobs 画到同一张图，每根试件一种颜色；
+        _current_row_idx 决定哪根高亮（其他半透明）。
+        单行模式（默认）：只画 jobs[_current_row_idx]。
+
+        模式切换会重绘（两种渲染目标不同）；重复设置同值是 no-op。
+        idx 不重置 —— 叠加模式下保留高亮、切回单行时仍是同一根的图。
+        """
+        if bool(enabled) == self._overlay_mode:
+            return
+        self._overlay_mode = bool(enabled)
+        log.debug("LivePreview 叠加模式=%s", self._overlay_mode)
         self.request_redraw()
 
     # ── 渲染主流程 ───────────────────────────────────────────────
@@ -219,6 +241,7 @@ class LivePreviewPane(QWidget):
             sheet_name=self._sheet_name,
             generation=gen,
             row_idx=self._current_row_idx,
+            overlay_mode=self._overlay_mode,
         )
         worker.signals.ready.connect(self._on_worker_ready)
         worker.signals.failed.connect(self._on_worker_failed)
@@ -305,6 +328,7 @@ class _PreviewWorker(QRunnable):
         sheet_name: str | None,
         generation: int,
         row_idx: int = 0,
+        overlay_mode: bool = False,
     ) -> None:
         super().__init__()
         self._preset = preset
@@ -312,6 +336,7 @@ class _PreviewWorker(QRunnable):
         self._sheet_name = sheet_name
         self._gen = generation
         self._row_idx = row_idx
+        self._overlay_mode = overlay_mode
         self.signals = _PreviewWorkerSignals()
 
     def run(self) -> None:  # noqa: D401
@@ -333,11 +358,21 @@ class _PreviewWorker(QRunnable):
                 self._safe_emit_failed("数据行都无法生成有效曲线（详见日志）")
                 return
 
-            png = render_plot_to_bytes(
-                jobs[picked],
-                figsize=_PREVIEW_FIGSIZE,
-                dpi=_PREVIEW_DPI,
-            )
+            if self._overlay_mode:
+                # 叠加模式：所有 jobs 画到一张图，按 _row_idx 高亮
+                png = render_overlay_to_bytes(
+                    jobs,
+                    highlight_row_idx=picked,
+                    figsize=_PREVIEW_FIGSIZE,
+                    dpi=_PREVIEW_DPI,
+                )
+            else:
+                # 单行模式：只画 jobs[picked]
+                png = render_plot_to_bytes(
+                    jobs[picked],
+                    figsize=_PREVIEW_FIGSIZE,
+                    dpi=_PREVIEW_DPI,
+                )
             self._safe_emit_ready(png)
 
         except PlotCurvesError as e:

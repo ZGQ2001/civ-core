@@ -311,3 +311,60 @@ class TestRenderOverlayWithHittest:
 
         with pytest.raises(ValueError, match="jobs 不可为空"):
             render_overlay_with_hittest([])
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-④ 单行 hover tooltip：render_plot_with_hittest + SingleRowHitTestMeta
+# ──────────────────────────────────────────────────────────────────
+class TestRenderPlotWithHittest:
+    def test_returns_png_and_meta(self) -> None:
+        from civ_core.infra_io.chart_writer import (
+            SingleRowHitTestMeta,
+            render_plot_with_hittest,
+        )
+
+        png, meta = render_plot_with_hittest(_make_job())
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        assert isinstance(meta, SingleRowHitTestMeta)
+
+    def test_meta_dimensions_match_figsize_dpi(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        _png, meta = render_plot_with_hittest(
+            _make_job(), figsize=(7.0, 4.0), dpi=100
+        )
+        assert meta.png_width == 700
+        assert meta.png_height == 400
+
+    def test_meta_carries_axis_labels(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        _png, meta = render_plot_with_hittest(_make_job())
+        assert meta.x_label == "位移"
+        assert meta.y_label == "荷载"
+
+    def test_meta_carries_series(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        _png, meta = render_plot_with_hittest(_make_job())
+        # _make_job 只有 1 条曲线"加载"，4 个点
+        assert len(meta.curves) == 1
+        name, xs, ys = meta.curves[0]
+        assert name == "加载"
+        assert len(xs) == len(ys) == 4
+
+    def test_meta_axes_bbox_within_png(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        _png, meta = render_plot_with_hittest(_make_job())
+        x0, y0, x1, y1 = meta.axes_bbox_px
+        assert 0 <= x0 < x1 <= meta.png_width
+        assert 0 <= y0 < y1 <= meta.png_height
+
+    def test_meta_xlim_ylim_recorded(self) -> None:
+        from civ_core.infra_io.chart_writer import render_plot_with_hittest
+
+        _png, meta = render_plot_with_hittest(_make_job())
+        # _make_job 用 (0, 10, 2) / (0, 100, 20)
+        assert meta.xlim == (0.0, 10.0)
+        assert meta.ylim == (0.0, 100.0)

@@ -256,6 +256,28 @@ _OVERLAY_PALETTE: list[str] = [
 
 
 @dataclass(slots=True)
+class SingleRowHitTestMeta:
+    """单行预览图的 hit-testing 元数据（hover tooltip 用）。
+
+    与叠加版 HitTestMeta 的差异：
+      • 这里曲线区分用 series_name（"加载"/"卸载"），不区分 row idx
+      • 多带 x_label / y_label，方便 UI 拼成 "位移=5.0 / 荷载=60.0" 的 tooltip
+    """
+
+    png_width: int
+    png_height: int
+    axes_bbox_px: tuple[float, float, float, float]
+    xlim: tuple[float, float]
+    ylim: tuple[float, float]
+    x_log: bool = False
+    y_log: bool = False
+    x_label: str = ""
+    y_label: str = ""
+    # 每条曲线：(series_name, xs, ys)
+    curves: list[tuple[str, list[float], list[float]]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class HitTestMeta:
     """叠加预览图的 hit-testing 元数据：让 UI 把 label 像素映射回 row_idx。
 
@@ -569,3 +591,69 @@ def render_plot_to_bytes(
         fig.savefig(buf, dpi=dpi, bbox_inches="tight", format="png")
 
     return buf.getvalue()
+
+
+def render_plot_with_hittest(
+    job: PlotJob,
+    *,
+    figsize: tuple[float, float] = (7.0, 4.0),
+    dpi: int = 100,
+    show_grid: bool = True,
+    show_legend: bool = False,
+    title_fontsize: int = 14,
+    label_fontsize: int = 11,
+) -> tuple[bytes, SingleRowHitTestMeta]:
+    """同 render_plot_to_bytes，但额外返回单行 hit-test meta（hover tooltip 用）。
+
+    与 render_plot_to_bytes 的差异：
+      • 不走 bbox_inches="tight"，让 PNG 留白固定 = figsize × dpi，
+        axes 在 PNG 中的位置可精确反算
+      • 多算一次 canvas.draw + get_window_extent 拿 axes 像素 bbox
+    """
+    _configure_chinese_font()
+
+    buf = io.BytesIO()
+    meta: SingleRowHitTestMeta
+    with _managed_figure(figsize, dpi) as (fig, ax):
+        _configure_axes(
+            ax,
+            job,
+            show_grid=show_grid,
+            show_legend=show_legend,
+            title_fontsize=title_fontsize,
+            label_fontsize=label_fontsize,
+        )
+        fig.tight_layout()
+
+        # 拿 axes 像素 bbox（与叠加版同样的 y 翻转）
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        ax_bbox = ax.get_window_extent(renderer=renderer)
+        fig_w_px = int(round(fig.get_size_inches()[0] * fig.dpi))
+        fig_h_px = int(round(fig.get_size_inches()[1] * fig.dpi))
+        x0_png = float(ax_bbox.x0)
+        x1_png = float(ax_bbox.x1)
+        y0_png = float(fig_h_px - ax_bbox.y1)
+        y1_png = float(fig_h_px - ax_bbox.y0)
+
+        xlim_t = ax.get_xlim()
+        ylim_t = ax.get_ylim()
+        curves: list[tuple[str, list[float], list[float]]] = []
+        for s in job.series:
+            curves.append((s.name, list(s.xs), list(s.ys)))
+
+        meta = SingleRowHitTestMeta(
+            png_width=fig_w_px,
+            png_height=fig_h_px,
+            axes_bbox_px=(x0_png, y0_png, x1_png, y1_png),
+            xlim=(float(xlim_t[0]), float(xlim_t[1])),
+            ylim=(float(ylim_t[0]), float(ylim_t[1])),
+            x_log=job.x_axis.log,
+            y_log=job.y_axis.log,
+            x_label=job.x_axis.label,
+            y_label=job.y_axis.label,
+            curves=curves,
+        )
+        fig.savefig(buf, dpi=dpi, format="png")
+
+    return buf.getvalue(), meta

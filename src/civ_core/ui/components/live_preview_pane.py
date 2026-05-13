@@ -47,8 +47,9 @@ from civ_core.core.plot_curves import (
 )
 from civ_core.infra_io.chart_writer import (
     HitTestMeta,
+    SingleRowHitTestMeta,
     render_overlay_with_hittest,
-    render_plot_to_bytes,
+    render_plot_with_hittest,
 )
 from civ_core.infra_io.excel_reader import ExcelReadError
 from civ_core.utils.logger import get_logger
@@ -116,6 +117,8 @@ class LivePreviewPane(QWidget):
         # P1.5-Step3c：最近一次叠加渲染的 hit-test 元数据；
         # 单行模式 / 还没渲染时为 None —— hover 直接忽略
         self._hit_test_meta: HitTestMeta | None = None
+        # P1.5-④：单行模式的 hit-test 元数据；用于 hover 时显示 tooltip
+        self._single_hit_test_meta: SingleRowHitTestMeta | None = None
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -186,9 +189,11 @@ class LivePreviewPane(QWidget):
 
         切预设视为"内容变化"，立刻触发防抖重绘。
         重置 _current_row_idx 为 0：旧预设下的行号对新预设可能无意义。
+        旧 meta / tooltip 也清空，防止过期数据残留误导用户。
         """
         self._preset = preset
         self._current_row_idx = 0
+        self._invalidate_hit_test()
         self.request_redraw()
 
     def set_data_source(
@@ -206,6 +211,7 @@ class LivePreviewPane(QWidget):
             self._data_source = Path(path)
         self._sheet_name = sheet
         self._current_row_idx = 0
+        self._invalidate_hit_test()
         self.request_redraw()
 
     def request_redraw(self) -> None:
@@ -246,7 +252,15 @@ class LivePreviewPane(QWidget):
             return
         self._overlay_mode = bool(enabled)
         log.debug("LivePreview 叠加模式=%s", self._overlay_mode)
+        # 模式切换时 meta / tooltip 也作废，等新 worker 把新模式 meta 推回来
+        self._invalidate_hit_test()
         self.request_redraw()
+
+    def _invalidate_hit_test(self) -> None:
+        """清空 hit-test 状态：meta + 图像 tooltip。切预设/数据源/模式时调用。"""
+        self._hit_test_meta = None
+        self._single_hit_test_meta = None
+        self._image_label.setToolTip("")
 
     # ── 渲染主流程 ───────────────────────────────────────────────
     def _do_redraw(self) -> None:
@@ -283,6 +297,9 @@ class LivePreviewPane(QWidget):
             overlay_mode=self._overlay_mode,
         )
         worker.signals.ready.connect(self._on_worker_ready)
+        worker.signals.single_hittest_ready.connect(
+            self._on_worker_single_hittest_ready
+        )
         worker.signals.overlay_ready.connect(self._on_worker_overlay_ready)
         worker.signals.failed.connect(self._on_worker_failed)
         # 保活：测试场景下 worker 一旦超出 _launch_worker 作用域可能被 GC
@@ -293,7 +310,7 @@ class LivePreviewPane(QWidget):
     def _on_worker_ready(self, gen: int, png_bytes: bytes) -> None:
         """worker 回主线程：仅当 gen 仍是最新代时接受结果。
 
-        单行 ready 路径 → 清空 _hit_test_meta（叠加 meta 对单行无意义）。
+        兜底路径（生产代码已不走，保留供测试 stub 用）：清空所有 meta + tooltip。
         """
         self._is_rendering = False
         if gen != self._render_gen:
@@ -303,7 +320,7 @@ class LivePreviewPane(QWidget):
                 self._render_gen,
             )
         else:
-            self._hit_test_meta = None
+            self._invalidate_hit_test()
             self._apply_png(png_bytes)
 
         # pending 兜底：渲染过程中收到的新请求需补一次
@@ -326,6 +343,26 @@ class LivePreviewPane(QWidget):
             # meta 类型由 Signal(object) 跨线程传递，运行时确保是 HitTestMeta
             assert isinstance(meta, HitTestMeta)
             self._hit_test_meta = meta
+            # 切到叠加 meta → 清单行 meta（避免 tooltip 残留旧数据）
+            self._single_hit_test_meta = None
+            self._apply_png(png_bytes)
+
+        if self._pending:
+            self._pending = False
+            self._launch_worker()
+
+    def _on_worker_single_hittest_ready(
+        self, gen: int, png_bytes: bytes, meta: object
+    ) -> None:
+        """单行模式 worker 回主线程：带 SingleRowHitTestMeta 用于 hover tooltip。"""
+        self._is_rendering = False
+        if gen != self._render_gen:
+            log.debug("LivePreview 丢弃过期 single hit-test worker gen=%d", gen)
+        else:
+            assert isinstance(meta, SingleRowHitTestMeta)
+            self._single_hit_test_meta = meta
+            # 切到单行 meta → 清叠加 meta（避免 hover 误 emit point_hovered）
+            self._hit_test_meta = None
             self._apply_png(png_bytes)
 
         if self._pending:
@@ -341,24 +378,39 @@ class LivePreviewPane(QWidget):
         self._update_hint(f"已渲染（{len(png_bytes) // 1024} KB）")
 
     def _on_image_hover(self, point: QPoint) -> None:
-        """叠加模式下，鼠标在预览图上移动 → 反算 row idx → emit point_hovered。
+        """鼠标在预览图上移动 → 按当前模式路由。
 
-        路径：
-          label 像素 → _label_to_png_pixel → PNG 像素
-                    → _pixel_to_data → data 坐标
-                    → _find_nearest_row → row idx
-        meta 为 None（单行模式 / 未渲染）→ 不做事，避免误 emit。
+        叠加模式（_hit_test_meta != None）：反算 row idx → emit point_hovered。
+        单行模式（_single_hit_test_meta != None）：反算最近曲线点 → 设 QLabel tooltip。
+        都没 meta → no-op。
         """
-        meta = self._hit_test_meta
-        if meta is None or self._current_pixmap is None or self._current_pixmap.isNull():
+        if self._current_pixmap is None or self._current_pixmap.isNull():
             return
 
+        if self._hit_test_meta is not None:
+            self._handle_overlay_hover(point, self._hit_test_meta)
+        elif self._single_hit_test_meta is not None:
+            self._handle_single_hover(point, self._single_hit_test_meta)
+
+    def _label_pixel_to_png_pixel(
+        self, point: QPoint
+    ) -> tuple[float, float] | None:
+        """label 坐标 → PNG 像素。两条 hover 路径共用，无 pixmap 时返 None。"""
+        if self._current_pixmap is None or self._current_pixmap.isNull():
+            return None
         label_size = (self._image_label.width(), self._image_label.height())
-        pixmap_size = (self._current_pixmap.width(), self._current_pixmap.height())
-        pix = _label_to_png_pixel(
+        pixmap_size = (
+            self._current_pixmap.width(),
+            self._current_pixmap.height(),
+        )
+        return _label_to_png_pixel(
             float(point.x()), float(point.y()),
             label_size=label_size, pixmap_size=pixmap_size,
         )
+
+    def _handle_overlay_hover(self, point: QPoint, meta: HitTestMeta) -> None:
+        """叠加模式 hover：label 像素 → row idx → emit point_hovered。"""
+        pix = self._label_pixel_to_png_pixel(point)
         if pix is None:
             return
         data_xy = _pixel_to_data(
@@ -378,6 +430,40 @@ class LivePreviewPane(QWidget):
         row_idx, _dist = found
         self.point_hovered.emit(row_idx)
 
+    def _handle_single_hover(
+        self, point: QPoint, meta: SingleRowHitTestMeta
+    ) -> None:
+        """单行模式 hover：label 像素 → 最近曲线点 → 设 tooltip。"""
+        pix = self._label_pixel_to_png_pixel(point)
+        if pix is None:
+            self._image_label.setToolTip("")
+            return
+        data_xy = _pixel_to_data(
+            pix[0], pix[1],
+            axes_bbox_px=meta.axes_bbox_px,
+            xlim=meta.xlim, ylim=meta.ylim,
+            x_log=meta.x_log, y_log=meta.y_log,
+        )
+        if data_xy is None:
+            self._image_label.setToolTip("")
+            return
+        # 复用 _find_nearest_row：单行模式 points 用 (curve_idx, xs, ys) 占位
+        # 但需要拿到具体的最近 (x, y) 值。这里走专门的查找返回 (curve_name, x, y)
+        found = _find_nearest_curve_point(
+            data_xy[0], data_xy[1], meta.curves,
+            xlim=meta.xlim, ylim=meta.ylim,
+        )
+        if found is None:
+            self._image_label.setToolTip("")
+            return
+        curve_name, x_val, y_val = found
+        tip = _format_single_hover_tooltip(
+            curve_name=curve_name,
+            x_label=meta.x_label, x_value=x_val,
+            y_label=meta.y_label, y_value=y_val,
+        )
+        self._image_label.setToolTip(tip)
+
     def _on_worker_failed(self, gen: int, reason: str) -> None:
         self._is_rendering = False
         if gen != self._render_gen:
@@ -396,6 +482,8 @@ class LivePreviewPane(QWidget):
 class _PreviewWorkerSignals(QObject):
     # 信号带 generation：让主线程能识别"这是哪一代请求"，过期就丢
     ready = Signal(int, bytes)
+    # P1.5-④：单行模式额外携带 SingleRowHitTestMeta（hover tooltip 用）
+    single_hittest_ready = Signal(int, bytes, object)
     # P1.5-Step3c：叠加模式额外携带 HitTestMeta（用 object 避开 Qt 元类型注册）
     overlay_ready = Signal(int, bytes, object)
     failed = Signal(int, str)
@@ -475,6 +563,74 @@ def _pixel_to_data(
         y_data = ylim[1] - fy * (ylim[1] - ylim[0])
 
     return x_data, y_data
+
+
+def _find_nearest_curve_point(
+    x_data: float,
+    y_data: float,
+    curves: list[tuple[str, list[float], list[float]]],
+    *,
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+) -> tuple[str, float, float] | None:
+    """从单行多曲线点里找离 (x_data, y_data) 最近的，返回 (curve_name, x, y)。
+
+    与 _find_nearest_row 的差异：返回曲线名 + 该点的原始 (x, y) 值
+    （tooltip 要展示具体数值，而不是行号）。归一化策略相同。
+    """
+    if not curves:
+        return None
+    x_span = max(xlim[1] - xlim[0], 1e-12)
+    y_span = max(ylim[1] - ylim[0], 1e-12)
+    qx = (x_data - xlim[0]) / x_span
+    qy = (y_data - ylim[0]) / y_span
+
+    best_name = ""
+    best_x = 0.0
+    best_y = 0.0
+    best_d2 = float("inf")
+    for name, xs, ys in curves:
+        for x, y in zip(xs, ys):
+            nx = (x - xlim[0]) / x_span
+            ny = (y - ylim[0]) / y_span
+            d2 = (nx - qx) ** 2 + (ny - qy) ** 2
+            if d2 < best_d2:
+                best_d2 = d2
+                best_name = name
+                best_x = x
+                best_y = y
+    if best_d2 == float("inf"):
+        return None
+    return best_name, best_x, best_y
+
+
+def _format_single_hover_tooltip(
+    *,
+    curve_name: str,
+    x_label: str,
+    x_value: float,
+    y_label: str,
+    y_value: float,
+) -> str:
+    """生成单行 hover tooltip 文本，三行格式：曲线名 / X 标签 / Y 标签。
+
+    数值格式：保留 4 位有效数字 + 去尾随零。土木场景 (位移 mm 0.01 量级
+    到 荷载 kN 100 量级) 都能显示干净，不会"0.50000000"或"5e+01"。
+    """
+    return (
+        f"曲线: {curve_name}\n"
+        f"{x_label or 'X'}: {_fmt_num(x_value)}\n"
+        f"{y_label or 'Y'}: {_fmt_num(y_value)}"
+    )
+
+
+def _fmt_num(v: float) -> str:
+    """把数字格式化成易读字符串（去尾随零；用 g 格式 4 位有效数字）。"""
+    s = f"{v:.4g}"
+    # 4g 不带尾随零，但科学计数法时 "5e+01" 难看 → 强制 plain
+    if "e" in s or "E" in s:
+        s = f"{v:.4f}".rstrip("0").rstrip(".")
+    return s or "0"
 
 
 def _find_nearest_row(
@@ -591,13 +747,13 @@ class _PreviewWorker(QRunnable):
                 )
                 self._safe_emit_overlay_ready(png, meta)
             else:
-                # 单行模式：只画 jobs[picked]
-                png = render_plot_to_bytes(
+                # 单行模式：render_plot_with_hittest 带 meta，供 hover tooltip
+                png, single_meta = render_plot_with_hittest(
                     jobs[picked],
                     figsize=_PREVIEW_FIGSIZE,
                     dpi=_PREVIEW_DPI,
                 )
-                self._safe_emit_ready(png)
+                self._safe_emit_single_hittest_ready(png, single_meta)
 
         except PlotCurvesError as e:
             # 业务异常（缺列等）：把 hint 也带上，让用户看到怎么修
@@ -625,6 +781,14 @@ class _PreviewWorker(QRunnable):
     def _safe_emit_overlay_ready(self, png: bytes, meta: HitTestMeta) -> None:
         try:
             self.signals.overlay_ready.emit(self._gen, png, meta)
+        except RuntimeError:
+            pass
+
+    def _safe_emit_single_hittest_ready(
+        self, png: bytes, meta: SingleRowHitTestMeta
+    ) -> None:
+        try:
+            self.signals.single_hittest_ready.emit(self._gen, png, meta)
         except RuntimeError:
             pass
 

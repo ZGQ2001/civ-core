@@ -711,6 +711,198 @@ class TestPointHoveredSignal:
             lab.deleteLater()
 
 
+# ──────────────────────────────────────────────────────────────────
+# P1.5-① 单行 hover tooltip
+# ──────────────────────────────────────────────────────────────────
+class TestFindNearestCurvePoint:
+    """单行 hover 用：找最近 (curve_name, x, y)。"""
+
+    def test_returns_nearest(self) -> None:
+        from civ_core.ui.components.live_preview_pane import (
+            _find_nearest_curve_point,
+        )
+
+        curves = [
+            ("加载", [0.0, 2.0, 5.0], [0.0, 20.0, 50.0]),
+            ("卸载", [5.0, 3.0, 0.0], [50.0, 25.0, 0.0]),
+        ]
+        # 查询点 (2.1, 20) → 加载.第二点 (2, 20)
+        r = _find_nearest_curve_point(
+            2.1, 20.0, curves, xlim=(0.0, 10.0), ylim=(0.0, 100.0)
+        )
+        assert r is not None
+        name, x, y = r
+        assert name == "加载"
+        assert x == 2.0 and y == 20.0
+
+    def test_empty_returns_none(self) -> None:
+        from civ_core.ui.components.live_preview_pane import (
+            _find_nearest_curve_point,
+        )
+
+        assert _find_nearest_curve_point(
+            0.0, 0.0, [], xlim=(0.0, 1.0), ylim=(0.0, 1.0)
+        ) is None
+
+
+class TestFormatHoverTooltip:
+    def test_basic_format(self) -> None:
+        from civ_core.ui.components.live_preview_pane import (
+            _format_single_hover_tooltip,
+        )
+
+        s = _format_single_hover_tooltip(
+            curve_name="加载",
+            x_label="位移",
+            x_value=5.123,
+            y_label="荷载",
+            y_value=60.0,
+        )
+        assert "曲线: 加载" in s
+        assert "位移: 5.123" in s
+        assert "荷载: 60" in s  # 去尾随零
+
+    def test_handles_empty_axis_label(self) -> None:
+        from civ_core.ui.components.live_preview_pane import (
+            _format_single_hover_tooltip,
+        )
+
+        s = _format_single_hover_tooltip(
+            curve_name="A", x_label="", x_value=1.0, y_label="", y_value=2.0
+        )
+        # 空 label 回退到 "X" / "Y"
+        assert "X: 1" in s
+        assert "Y: 2" in s
+
+
+class TestSingleRowHoverTooltip:
+    """LivePreviewPane 单行 hover 设 tooltip 集成测试。"""
+
+    def test_single_meta_hover_sets_tooltip(self, qapp: QApplication) -> None:
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QPixmap
+
+        from civ_core.infra_io.chart_writer import SingleRowHitTestMeta
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pix = QPixmap(600, 400)
+            pix.fill()
+            pane._current_pixmap = pix
+            pane._image_label.resize(600, 400)
+            pane._image_label.setPixmap(pix)
+
+            pane._single_hit_test_meta = SingleRowHitTestMeta(
+                png_width=600, png_height=400,
+                axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
+                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                x_label="位移", y_label="荷载",
+                curves=[
+                    ("加载", [1.0, 5.0, 9.0], [10.0, 50.0, 90.0]),
+                ],
+            )
+
+            # 中点 (300, 200) → data (5, 50) → 最近"加载".第二点 (5, 50)
+            pane._on_image_hover(QPoint(300, 200))
+            tip = pane._image_label.toolTip()
+            assert "加载" in tip
+            assert "5" in tip
+            assert "50" in tip
+        finally:
+            pane.deleteLater()
+
+    def test_overlay_meta_present_skips_single_path(
+        self, qapp: QApplication
+    ) -> None:
+        """同时有两类 meta（理论不该出现）时 overlay 优先，单行 tooltip 不设。"""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QPixmap
+
+        from civ_core.infra_io.chart_writer import (
+            HitTestMeta,
+            SingleRowHitTestMeta,
+        )
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pix = QPixmap(600, 400)
+            pix.fill()
+            pane._current_pixmap = pix
+            pane._image_label.resize(600, 400)
+            pane._image_label.setPixmap(pix)
+
+            pane._hit_test_meta = HitTestMeta(
+                png_width=600, png_height=400,
+                axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
+                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                points=[(0, [5.0], [50.0])],
+            )
+            pane._single_hit_test_meta = SingleRowHitTestMeta(
+                png_width=600, png_height=400,
+                axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
+                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                curves=[("X", [5.0], [50.0])],
+            )
+
+            pane._image_label.setToolTip("")
+            seen: list[int] = []
+            pane.point_hovered.connect(seen.append)
+
+            pane._on_image_hover(QPoint(300, 200))
+            assert seen == [0]  # overlay 路径走了
+            assert pane._image_label.toolTip() == ""  # 单行没走
+        finally:
+            pane.deleteLater()
+
+    def test_invalidate_clears_tooltip_and_meta(
+        self, qapp: QApplication
+    ) -> None:
+        """切预设 / 数据源 / 模式 → meta + tooltip 都清空。"""
+        from PySide6.QtGui import QPixmap
+
+        from civ_core.infra_io.chart_writer import SingleRowHitTestMeta
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pix = QPixmap(600, 400)
+            pix.fill()
+            pane._current_pixmap = pix
+            pane._single_hit_test_meta = SingleRowHitTestMeta(
+                png_width=600, png_height=400,
+                axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
+                xlim=(0.0, 1.0), ylim=(0.0, 1.0),
+                curves=[("a", [0.5], [0.5])],
+            )
+            pane._image_label.setToolTip("旧 tooltip")
+
+            pane.set_preset(_make_preset())
+            assert pane._single_hit_test_meta is None
+            assert pane._hit_test_meta is None
+            assert pane._image_label.toolTip() == ""
+        finally:
+            pane.deleteLater()
+
+    def test_worker_single_hittest_signal_exists(
+        self, qapp: QApplication
+    ) -> None:
+        from civ_core.ui.components.live_preview_pane import (
+            _PreviewWorkerSignals,
+        )
+
+        sigs = _PreviewWorkerSignals()
+        # 信号对象存在且能 emit / connect
+        assert hasattr(sigs, "single_hittest_ready")
+        seen: list[tuple[int, bytes, object]] = []
+        sigs.single_hittest_ready.connect(
+            lambda g, b, m: seen.append((g, b, m))
+        )
+        sigs.single_hittest_ready.emit(1, b"abc", "fake")
+        assert seen == [(1, b"abc", "fake")]
+
+
 class TestFindNearestRow:
     """从多曲线点里找离查询点最近的，返回 row_idx。"""
 

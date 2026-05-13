@@ -228,3 +228,122 @@ class TestPublicInterface:
             assert callable(pane.request_redraw)
         finally:
             pane.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step1：highlight_row 切换 _current_row_idx + 触发重绘
+# ──────────────────────────────────────────────────────────────────
+class TestHighlightRowSwitchesPreview:
+    """P1.5 Step 1：highlight_row(idx) 不再只是占位，
+    应该真切换预览到第 idx 行的图。"""
+
+    def test_initial_row_idx_is_zero(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            assert pane._current_row_idx == 0
+        finally:
+            pane.deleteLater()
+
+    def test_highlight_row_updates_idx(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.highlight_row(3)
+            assert pane._current_row_idx == 3
+        finally:
+            pane.deleteLater()
+
+    def test_highlight_row_triggers_redraw(
+        self,
+        qapp: QApplication,
+        patched_worker: dict[str, int],
+        tmp_path: Path,
+        qtbot: Any,
+    ) -> None:
+        """数据已齐备时，highlight_row 应触发 worker 跑一次（重绘新行）。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.set_preset(_make_preset())
+            pane.set_data_source(tmp_path / "x.xlsx")
+            qtbot.wait(500)
+            patched_worker["runs"] = 0  # 重置
+
+            pane.highlight_row(2)
+            qtbot.wait(500)  # 等防抖 + worker
+            assert patched_worker["runs"] == 1
+        finally:
+            pane.deleteLater()
+
+    def test_set_preset_resets_row_idx(self, qapp: QApplication) -> None:
+        """切预设时，原 row_idx 在新数据集可能越界 → 重置 0。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.highlight_row(5)
+            assert pane._current_row_idx == 5
+            pane.set_preset(_make_preset())
+            assert pane._current_row_idx == 0
+        finally:
+            pane.deleteLater()
+
+    def test_set_data_source_resets_row_idx(
+        self, qapp: QApplication, tmp_path: Path
+    ) -> None:
+        """切数据源同理：原 idx 对新文件无意义 → 重置 0。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.highlight_row(5)
+            pane.set_data_source(tmp_path / "x.xlsx")
+            assert pane._current_row_idx == 0
+        finally:
+            pane.deleteLater()
+
+    def test_highlight_negative_or_huge_is_ignored(
+        self, qapp: QApplication
+    ) -> None:
+        """负数 / 极端值不应崩 —— 负数视为"不切换"。"""
+        from civ_core.ui.components.live_preview_pane import LivePreviewPane
+
+        pane = LivePreviewPane()
+        try:
+            pane.highlight_row(4)
+            pane.highlight_row(-1)  # 忽略
+            assert pane._current_row_idx == 4
+        finally:
+            pane.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step1：_pick_job_index 纯函数（越界回退 0；空列表回退 -1）
+# ──────────────────────────────────────────────────────────────────
+class TestPickJobIndex:
+    """worker 内 jobs[row_idx] 的越界回退策略 —— 抽成纯函数便于单测。"""
+
+    def test_normal_in_range(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _pick_job_index
+
+        assert _pick_job_index(5, 2) == 2
+        assert _pick_job_index(5, 0) == 0
+        assert _pick_job_index(5, 4) == 4
+
+    def test_out_of_range_falls_back_to_zero(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _pick_job_index
+
+        assert _pick_job_index(5, 5) == 0  # 上界外
+        assert _pick_job_index(5, 100) == 0
+        assert _pick_job_index(5, -1) == 0
+
+    def test_empty_jobs_returns_negative(self) -> None:
+        """空 jobs：返回 -1，调用方据此走"无可用图"分支。"""
+        from civ_core.ui.components.live_preview_pane import _pick_job_index
+
+        assert _pick_job_index(0, 0) == -1
+        assert _pick_job_index(0, 3) == -1

@@ -70,8 +70,10 @@ class LivePreviewPane(QWidget):
         self._preset: dict[str, Any] | None = None
         self._data_source: Path | None = None
         self._sheet_name: str | None = None
-        # L-4 高亮行索引（占位，P1.5 才在图上画标记）
-        self._highlight_row_idx: int = -1
+        # 当前预览的行索引（0-based）。
+        # P1.5-Step1 起 highlight_row(idx) 不再只是占位，而是真切换到第 idx 行的图。
+        # 切预设 / 切数据源时重置 0（旧 idx 对新数据集越界）。
+        self._current_row_idx: int = 0
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -138,8 +140,10 @@ class LivePreviewPane(QWidget):
         """设置当前预设（dict 结构，与 curve_presets.json 单条预设字段一致）。
 
         切预设视为"内容变化"，立刻触发防抖重绘。
+        重置 _current_row_idx 为 0：旧预设下的行号对新预设可能无意义。
         """
         self._preset = preset
+        self._current_row_idx = 0
         self.request_redraw()
 
     def set_data_source(
@@ -149,12 +153,14 @@ class LivePreviewPane(QWidget):
 
         切数据源或 sheet → 触发防抖重绘（缓存按 (path, mtime, sheet, header)
         命中，切回来零成本）。
+        重置 _current_row_idx 为 0：旧文件的行号在新文件可能越界。
         """
         if path is None:
             self._data_source = None
         else:
             self._data_source = Path(path)
         self._sheet_name = sheet
+        self._current_row_idx = 0
         self.request_redraw()
 
     def request_redraw(self) -> None:
@@ -163,20 +169,23 @@ class LivePreviewPane(QWidget):
         self._debounce_timer.start(_DEBOUNCE_MS)
 
     def highlight_row(self, idx: int) -> None:
-        """L-4：让预览图上突出第 idx 行对应的曲线点。
+        """切换预览到第 idx 行对应的图（P1.5-Step1 实装）。
 
-        L-4 简化版：仅更新状态指示文字 + 记内部索引，不在图上画突出标记。
-        真正的"在曲线上标记圆圈"留待 P1.5（需要把 idx → 曲线坐标的反向映射
-        和单独的 highlight worker，工作量足够单独立项）。
+        旧 L-4 版本只是占位（更新提示文字）；现在真正切换：
+          1. 更新 _current_row_idx；负数 / 不变忽略
+          2. 触发防抖重绘 —— worker 会拿 jobs[idx]（而非 jobs[0]）
 
-        加这个方法是为了让 DataSourcePane.row_highlighted 信号有挂载点，
-        view 层的连线在 L-4 完整通过；后续 P1.5 只需要把渲染逻辑补齐。
+        worker 端越界回退由 _pick_job_index 兜底；这里不做边界检查
+        因为本方法不知道 jobs 总数（rows 在 worker 里才被读）。
         """
-        self._highlight_row_idx = idx
-        log.debug("LivePreview highlight_row idx=%d（P1.5 起在图上画标记）", idx)
-        self._update_hint(
-            f"高亮第 {idx + 1} 行 · 图上突出标记由 P1.5 实装"
-        )
+        if idx < 0:
+            log.debug("highlight_row 忽略负数 idx=%d", idx)
+            return
+        if idx == self._current_row_idx:
+            return
+        self._current_row_idx = idx
+        log.debug("LivePreview 切换到第 %d 行（0-based）", idx)
+        self.request_redraw()
 
     # ── 渲染主流程 ───────────────────────────────────────────────
     def _do_redraw(self) -> None:
@@ -209,6 +218,7 @@ class LivePreviewPane(QWidget):
             data_source=self._data_source,
             sheet_name=self._sheet_name,
             generation=gen,
+            row_idx=self._current_row_idx,
         )
         worker.signals.ready.connect(self._on_worker_ready)
         worker.signals.failed.connect(self._on_worker_failed)
@@ -259,13 +269,31 @@ class _PreviewWorkerSignals(QObject):
     failed = Signal(int, str)
 
 
+def _pick_job_index(jobs_count: int, requested: int) -> int:
+    """从 jobs 列表里挑出 row_idx 对应的 job 下标。
+
+    返回：
+      • jobs_count <= 0          → -1（无可用图，调用方走"空"分支）
+      • 0 <= requested < jobs_count → requested（正常命中）
+      • 越界 / 负数                 → 0（回退第一张）
+
+    抽成纯函数是为了单测（不依赖 Qt / matplotlib / Excel）。
+    """
+    if jobs_count <= 0:
+        return -1
+    if 0 <= requested < jobs_count:
+        return requested
+    return 0
+
+
 class _PreviewWorker(QRunnable):
     """渲染一次预览的 QRunnable。
 
     流程：
       1. 从 EXCEL_DATA_CACHE 拿 rows（mtime 内自动复用）
-      2. build_jobs(preset, rows) 取第一个有效 PlotJob 作为代表
-      3. render_plot_to_bytes → emit ready(gen, png_bytes)
+      2. build_jobs(preset, rows) 得到所有 PlotJob
+      3. 按 row_idx 选 jobs[row_idx]（越界回退 0），render_plot_to_bytes
+      4. emit ready(gen, png_bytes)
     任意环节异常 → emit failed(gen, 友善文字)，不抛到 worker 线程外。
     """
 
@@ -276,12 +304,14 @@ class _PreviewWorker(QRunnable):
         data_source: Path,
         sheet_name: str | None,
         generation: int,
+        row_idx: int = 0,
     ) -> None:
         super().__init__()
         self._preset = preset
         self._data_source = data_source
         self._sheet_name = sheet_name
         self._gen = generation
+        self._row_idx = row_idx
         self.signals = _PreviewWorkerSignals()
 
     def run(self) -> None:  # noqa: D401
@@ -293,17 +323,18 @@ class _PreviewWorker(QRunnable):
                 self._safe_emit_failed("Excel 没有可用的数据行")
                 return
 
-            # 预览只取第一个 PlotJob（一行 = 一张图）作为代表
-            # output_dir 传 /tmp 占位 —— build_jobs 只用它拼路径，render_plot_to_bytes 忽略它
+            # build_jobs 返回所有行的图；按 row_idx 选一张作为预览
+            # output_dir 传 . 占位 —— render_plot_to_bytes 忽略它
             jobs, _summary = build_jobs(
                 self._preset, rows, output_dir=Path(".")
             )
-            if not jobs:
+            picked = _pick_job_index(len(jobs), self._row_idx)
+            if picked < 0:
                 self._safe_emit_failed("数据行都无法生成有效曲线（详见日志）")
                 return
 
             png = render_plot_to_bytes(
-                jobs[0],
+                jobs[picked],
                 figsize=_PREVIEW_FIGSIZE,
                 dpi=_PREVIEW_DPI,
             )

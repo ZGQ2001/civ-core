@@ -292,6 +292,120 @@ class _PreviewWorkerSignals(QObject):
     failed = Signal(int, str)
 
 
+def _label_to_png_pixel(
+    lx: float,
+    ly: float,
+    *,
+    label_size: tuple[int, int],
+    pixmap_size: tuple[int, int],
+) -> tuple[float, float] | None:
+    """QLabel 内坐标 → 原 PNG 像素坐标。
+
+    QLabel 用 KeepAspectRatio 居中显示 pixmap，所以 label 上会有 letterbox 留白。
+    本函数反算出实际显示区在 label 中的偏移 / 缩放，再把 label 坐标映射回 pixmap。
+    落在留白区（letterbox）时返回 None。
+    """
+    lw, lh = label_size
+    pw, ph = pixmap_size
+    if lw <= 0 or lh <= 0 or pw <= 0 or ph <= 0:
+        return None
+
+    # KeepAspectRatio：缩放到能完整 fit 进 label，取较小比例
+    scale = min(lw / pw, lh / ph)
+    shown_w = pw * scale
+    shown_h = ph * scale
+    offset_x = (lw - shown_w) / 2.0
+    offset_y = (lh - shown_h) / 2.0
+    dx = lx - offset_x
+    dy = ly - offset_y
+    if dx < 0 or dx > shown_w or dy < 0 or dy > shown_h:
+        return None
+    return dx / scale, dy / scale
+
+
+def _pixel_to_data(
+    px: float,
+    py: float,
+    *,
+    axes_bbox_px: tuple[float, float, float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+    x_log: bool = False,
+    y_log: bool = False,
+) -> tuple[float, float] | None:
+    """PNG 像素坐标 → data 坐标（线性 / log 都支持）。
+
+    像素原点左上、y 向下；matplotlib data 原点左下、y 向上。
+    返回 (x_data, y_data)；像素落在 axes_bbox_px 外时返回 None。
+
+    log 轴：把像素先线性插值到 log10 域，再 10**。
+    """
+    import math
+
+    x0, y0, x1, y1 = axes_bbox_px
+    if px < x0 or px > x1 or py < y0 or py > y1:
+        return None
+    if x1 <= x0 or y1 <= y0:
+        return None  # 退化 bbox 防 0 除
+
+    # 横向：x0 → xlim[0]，x1 → xlim[1]
+    fx = (px - x0) / (x1 - x0)
+    if x_log:
+        lx0, lx1 = math.log10(xlim[0]), math.log10(xlim[1])
+        x_data = 10 ** (lx0 + fx * (lx1 - lx0))
+    else:
+        x_data = xlim[0] + fx * (xlim[1] - xlim[0])
+
+    # 纵向：注意 y 翻转 —— py=y0(顶) → ylim[1]（上）；py=y1(底) → ylim[0]（下）
+    fy = (py - y0) / (y1 - y0)
+    if y_log:
+        ly0, ly1 = math.log10(ylim[0]), math.log10(ylim[1])
+        # fy=0 顶 ⇒ ylim[1]；fy=1 底 ⇒ ylim[0]
+        y_data = 10 ** (ly1 - fy * (ly1 - ly0))
+    else:
+        y_data = ylim[1] - fy * (ylim[1] - ylim[0])
+
+    return x_data, y_data
+
+
+def _find_nearest_row(
+    x_data: float,
+    y_data: float,
+    points: list[tuple[int, list[float], list[float]]],
+    *,
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+) -> tuple[int, float] | None:
+    """在所有曲线点里找离 (x_data, y_data) 最近的，返回 (row_idx, 归一化距离)。
+
+    归一化：把每条曲线的 (xs, ys) 用 (xlim, ylim) 缩放到 [0,1]²，
+    距离用欧氏。这样 x、y 量纲不同（位移 mm vs 荷载 kN）时不会被
+    某一轴主导。
+
+    空 points → None。
+    """
+    if not points:
+        return None
+    x_span = max(xlim[1] - xlim[0], 1e-12)
+    y_span = max(ylim[1] - ylim[0], 1e-12)
+    qx = (x_data - xlim[0]) / x_span
+    qy = (y_data - ylim[0]) / y_span
+
+    best_row = -1
+    best_d2 = float("inf")
+    for row_idx, xs, ys in points:
+        for x, y in zip(xs, ys):
+            nx = (x - xlim[0]) / x_span
+            ny = (y - ylim[0]) / y_span
+            d2 = (nx - qx) ** 2 + (ny - qy) ** 2
+            if d2 < best_d2:
+                best_d2 = d2
+                best_row = row_idx
+    if best_row < 0:
+        return None
+    return best_row, best_d2 ** 0.5
+
+
 def _pick_job_index(jobs_count: int, requested: int) -> int:
     """从 jobs 列表里挑出 row_idx 对应的 job 下标。
 

@@ -243,3 +243,71 @@ class TestRenderOverlayToBytes:
             _make_overlay_jobs(2), title="自定义对比图"
         )
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step3a：render_overlay_with_hittest 返回 PNG + 元数据
+# ──────────────────────────────────────────────────────────────────
+class TestRenderOverlayWithHittest:
+    def test_returns_png_and_meta(self) -> None:
+        from civ_core.infra_io.chart_writer import (
+            HitTestMeta,
+            render_overlay_with_hittest,
+        )
+
+        png, meta = render_overlay_with_hittest(_make_overlay_jobs(3))
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        assert isinstance(meta, HitTestMeta)
+
+    def test_meta_dimensions_match_figsize_dpi(self) -> None:
+        """PNG 宽高 = figsize × dpi（不裁剪，留白保留）。"""
+        from civ_core.infra_io.chart_writer import render_overlay_with_hittest
+
+        png, meta = render_overlay_with_hittest(
+            _make_overlay_jobs(2), figsize=(6.0, 4.0), dpi=100
+        )
+        assert meta.png_width == 600
+        assert meta.png_height == 400
+
+    def test_axes_bbox_inside_png(self) -> None:
+        """axes bbox 在 PNG 范围内 + x0<x1, y0<y1。"""
+        from civ_core.infra_io.chart_writer import render_overlay_with_hittest
+
+        _png, meta = render_overlay_with_hittest(
+            _make_overlay_jobs(2), figsize=(7.0, 4.0), dpi=100
+        )
+        x0, y0, x1, y1 = meta.axes_bbox_px
+        assert 0 <= x0 < x1 <= meta.png_width
+        assert 0 <= y0 < y1 <= meta.png_height
+        # axes 通常占图面 50%~85%；用宽松界限：覆盖 30%+ 面积
+        ax_area = (x1 - x0) * (y1 - y0)
+        png_area = meta.png_width * meta.png_height
+        assert ax_area / png_area > 0.3
+
+    def test_meta_points_carry_all_rows(self) -> None:
+        """meta.points 每根试件一项，row_idx 严格递增 + xs/ys 长度一致。"""
+        from civ_core.infra_io.chart_writer import render_overlay_with_hittest
+
+        jobs = _make_overlay_jobs(4)
+        _png, meta = render_overlay_with_hittest(jobs)
+        assert len(meta.points) == 4
+        for i, (row_idx, xs, ys) in enumerate(meta.points):
+            assert row_idx == i
+            assert len(xs) == len(ys) == 4  # _make_overlay_jobs 每根 4 点
+
+    def test_xlim_ylim_recorded(self) -> None:
+        """显式 axis range 应反映到 meta.xlim/ylim。"""
+        from civ_core.infra_io.chart_writer import render_overlay_with_hittest
+
+        _png, meta = render_overlay_with_hittest(_make_overlay_jobs(2))
+        # _make_overlay_jobs 用 (0, 10, 2) / (0, 100, 20)
+        assert meta.xlim == (0.0, 10.0)
+        assert meta.ylim == (0.0, 100.0)
+
+    def test_empty_jobs_still_raises(self) -> None:
+        import pytest
+
+        from civ_core.infra_io.chart_writer import render_overlay_with_hittest
+
+        with pytest.raises(ValueError, match="jobs 不可为空"):
+            render_overlay_with_hittest([])

@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import matplotlib
@@ -254,6 +255,30 @@ _OVERLAY_PALETTE: list[str] = [
 ]
 
 
+@dataclass(slots=True)
+class HitTestMeta:
+    """叠加预览图的 hit-testing 元数据：让 UI 把 label 像素映射回 row_idx。
+
+    所有像素坐标都基于 PNG 的左上原点（与 Qt QImage 一致）。
+
+    字段：
+      png_width / png_height : PNG 输出尺寸（像素）
+      axes_bbox_px           : axes 在 PNG 中的矩形 (x0, y0, x1, y1)
+      xlim / ylim            : data 坐标范围（线性轴用线性插值 / log 轴在 log10 域插值）
+      x_log / y_log          : 对数轴标志
+      points                 : [(row_idx, xs, ys), ...] 每根试件的全部 (x, y) 点
+    """
+
+    png_width: int
+    png_height: int
+    axes_bbox_px: tuple[float, float, float, float]
+    xlim: tuple[float, float]
+    ylim: tuple[float, float]
+    x_log: bool = False
+    y_log: bool = False
+    points: list[tuple[int, list[float], list[float]]] = field(default_factory=list)
+
+
 def _draw_overlay_series(ax, s, *, color: str, alpha: float, zorder: int,
                           lw_mul: float, label: str | None) -> None:
     """叠加模式下绘一条 series：颜色 / 透明度 / 层级由调用方覆盖。
@@ -304,42 +329,41 @@ def _draw_overlay_series(ax, s, *, color: str, alpha: float, zorder: int,
         )
 
 
-def render_overlay_to_bytes(
+def _render_overlay_core(
     jobs: list[PlotJob],
     *,
-    highlight_row_idx: int = -1,
-    figsize: tuple[float, float] = (7.0, 4.0),
-    dpi: int = 100,
-    title: str | None = None,
-    show_grid: bool = True,
-    show_legend: bool = True,
-    title_fontsize: int = 14,
-    label_fontsize: int = 11,
-) -> bytes:
-    """渲染多根试件的叠加对比图为 PNG 字节流。
+    highlight_row_idx: int,
+    figsize: tuple[float, float],
+    dpi: int,
+    title: str | None,
+    show_grid: bool,
+    show_legend: bool,
+    title_fontsize: int,
+    label_fontsize: int,
+    collect_hit_test: bool,
+) -> tuple[bytes, HitTestMeta | None]:
+    """叠加图共用核心：画图 + 输出 PNG +（可选）收集 hit-test 元数据。
 
-    语义：
-      • 每个 PlotJob = 一根试件 = 叠加图上一种颜色（按 row idx 循环色环）
-      • 同 job 的多条 series（如"加载/卸载"）共用颜色；只第一条带 legend label
-      • highlight_row_idx 命中的 job：linewidth × 1.8、alpha=1.0、zorder=10
-        其他 job：alpha=0.4（让高亮项视觉跳出）；未指定高亮（-1）时所有 0.85
-      • axis label / range / log / grid / legend_loc 沿用 jobs[0]
-      • title 可被 title 参数覆盖；为 None 时用 "叠加对比图（共 N 根）"
+    单独抽出是因为：
+      • render_overlay_to_bytes 不要 meta（hover 关闭时不需要）
+      • render_overlay_with_hittest 要 meta（hover 时把 label 像素映射回 row idx）
+      • collect_hit_test=True 时，PNG 必须不裁剪（bbox_inches != 'tight'），
+        否则 axes bbox 在 PNG 中的位置与 figure 像素不一致，反算会偏
 
-    异常：jobs 为空 → ValueError（调用方应在投递 worker 前拦下）
+    返回 (png_bytes, meta) —— collect_hit_test=False 时 meta=None。
     """
     if not jobs:
-        raise ValueError("render_overlay_to_bytes: jobs 不可为空")
+        raise ValueError("render_overlay: jobs 不可为空")
 
     _configure_chinese_font()
 
     base = jobs[0]
     final_title = title if title else f"叠加对比图（共 {len(jobs)} 根）"
-
-    # 是否处于"有高亮"模式 —— 影响未高亮项的 alpha
     has_highlight = 0 <= highlight_row_idx < len(jobs)
 
     buf = io.BytesIO()
+    meta: HitTestMeta | None = None
+
     with _managed_figure(figsize, dpi) as (fig, ax):
         for row_idx, job in enumerate(jobs):
             color = _OVERLAY_PALETTE[row_idx % len(_OVERLAY_PALETTE)]
@@ -352,7 +376,6 @@ def render_overlay_to_bytes(
                 alpha, zorder, lw_mul = 0.85, 5, 1.0
 
             for s_idx, s in enumerate(job.series):
-                # 一根试件只用第一条曲线挂 label，避免 legend 里"试件 A"出现多次
                 label = job.title if s_idx == 0 else None
                 _draw_overlay_series(
                     ax, s,
@@ -386,7 +409,6 @@ def render_overlay_to_bytes(
             ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
             ax.set_axisbelow(True)
 
-        # 叠加图默认开 legend —— 没 legend 用户分不清哪条是哪根
         if base.legend_loc:
             ax.legend(loc=base.legend_loc, frameon=True, fontsize=9)
         elif show_legend:
@@ -396,9 +418,118 @@ def render_overlay_to_bytes(
             spine.set_linewidth(0.8)
 
         fig.tight_layout()
-        fig.savefig(buf, dpi=dpi, bbox_inches="tight", format="png")
 
-    return buf.getvalue()
+        if collect_hit_test:
+            # 不能用 bbox_inches="tight"：那会裁掉留白，让 axes 在最终 PNG 中
+            # 的像素位置脱离 fig.get_size_inches() × dpi 的天然对应。
+            # 这里走"原汁原味"savefig，确保 axes_bbox_px 与 PNG 像素一致。
+            fig.canvas.draw()  # 让 get_window_extent 拿到正确的 layout
+            renderer = fig.canvas.get_renderer()
+            ax_bbox = ax.get_window_extent(renderer=renderer)
+            fig_w_px = int(round(fig.get_size_inches()[0] * fig.dpi))
+            fig_h_px = int(round(fig.get_size_inches()[1] * fig.dpi))
+            # matplotlib 坐标原点左下，PNG 原点左上 —— y 轴翻转
+            x0_png = float(ax_bbox.x0)
+            x1_png = float(ax_bbox.x1)
+            y0_png = float(fig_h_px - ax_bbox.y1)
+            y1_png = float(fig_h_px - ax_bbox.y0)
+
+            xlim_t = ax.get_xlim()
+            ylim_t = ax.get_ylim()
+            points: list[tuple[int, list[float], list[float]]] = []
+            for row_idx, job in enumerate(jobs):
+                merged_xs: list[float] = []
+                merged_ys: list[float] = []
+                for s in job.series:
+                    merged_xs.extend(s.xs)
+                    merged_ys.extend(s.ys)
+                points.append((row_idx, merged_xs, merged_ys))
+
+            meta = HitTestMeta(
+                png_width=fig_w_px,
+                png_height=fig_h_px,
+                axes_bbox_px=(x0_png, y0_png, x1_png, y1_png),
+                xlim=(float(xlim_t[0]), float(xlim_t[1])),
+                ylim=(float(ylim_t[0]), float(ylim_t[1])),
+                x_log=base.x_axis.log,
+                y_log=base.y_axis.log,
+                points=points,
+            )
+            fig.savefig(buf, dpi=dpi, format="png")
+        else:
+            fig.savefig(buf, dpi=dpi, bbox_inches="tight", format="png")
+
+    return buf.getvalue(), meta
+
+
+def render_overlay_to_bytes(
+    jobs: list[PlotJob],
+    *,
+    highlight_row_idx: int = -1,
+    figsize: tuple[float, float] = (7.0, 4.0),
+    dpi: int = 100,
+    title: str | None = None,
+    show_grid: bool = True,
+    show_legend: bool = True,
+    title_fontsize: int = 14,
+    label_fontsize: int = 11,
+) -> bytes:
+    """渲染多根试件的叠加对比图为 PNG 字节流。
+
+    语义：
+      • 每个 PlotJob = 一根试件 = 叠加图上一种颜色（按 row idx 循环色环）
+      • 同 job 的多条 series（如"加载/卸载"）共用颜色；只第一条带 legend label
+      • highlight_row_idx 命中的 job：linewidth × 1.8、alpha=1.0、zorder=10
+        其他 job：alpha=0.4（让高亮项视觉跳出）；未指定高亮（-1）时所有 0.85
+      • axis label / range / log / grid / legend_loc 沿用 jobs[0]
+      • title 可被 title 参数覆盖；为 None 时用 "叠加对比图（共 N 根）"
+
+    本函数不收集 hit-test 元数据；要 hover 用 render_overlay_with_hittest。
+
+    异常：jobs 为空 → ValueError（调用方应在投递 worker 前拦下）
+    """
+    png, _meta = _render_overlay_core(
+        jobs,
+        highlight_row_idx=highlight_row_idx,
+        figsize=figsize, dpi=dpi, title=title,
+        show_grid=show_grid, show_legend=show_legend,
+        title_fontsize=title_fontsize, label_fontsize=label_fontsize,
+        collect_hit_test=False,
+    )
+    return png
+
+
+def render_overlay_with_hittest(
+    jobs: list[PlotJob],
+    *,
+    highlight_row_idx: int = -1,
+    figsize: tuple[float, float] = (7.0, 4.0),
+    dpi: int = 100,
+    title: str | None = None,
+    show_grid: bool = True,
+    show_legend: bool = True,
+    title_fontsize: int = 14,
+    label_fontsize: int = 11,
+) -> tuple[bytes, HitTestMeta]:
+    """同 render_overlay_to_bytes，但额外返回 HitTestMeta 用于鼠标 hover 反算。
+
+    与无 meta 版的差异：
+      • 输出 PNG 不裁剪（bbox_inches 不传 "tight"），让 axes 在 PNG 中的
+        像素位置与 fig.dpi × figsize 严格对应；周围会有少量留白
+      • 多算一次 fig.canvas.draw() + get_window_extent 拿 axes bbox
+
+    返回 (png_bytes, hit_test_meta)。meta 字段见 HitTestMeta。
+    """
+    png, meta = _render_overlay_core(
+        jobs,
+        highlight_row_idx=highlight_row_idx,
+        figsize=figsize, dpi=dpi, title=title,
+        show_grid=show_grid, show_legend=show_legend,
+        title_fontsize=title_fontsize, label_fontsize=label_fontsize,
+        collect_hit_test=True,
+    )
+    assert meta is not None  # collect_hit_test=True 保证非空
+    return png, meta
 
 
 def render_plot_to_bytes(

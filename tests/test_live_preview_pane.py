@@ -445,3 +445,181 @@ class TestOverlayMode:
             assert pane._overlay_mode is True
         finally:
             pane.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step3b：_pixel_to_data + _find_nearest_row 纯函数
+# ──────────────────────────────────────────────────────────────────
+class TestPixelToData:
+    """PNG 像素 → data 坐标 反算（线性 / log / 越界）。"""
+
+    def test_inside_box_linear(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _pixel_to_data
+
+        # axes 在 PNG 中占 (100, 50) - (500, 350)，即 400×300 像素
+        bbox = (100.0, 50.0, 500.0, 350.0)
+        # 左下角 (100, 350) → (0, 0)
+        r = _pixel_to_data(100.0, 350.0, axes_bbox_px=bbox, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
+        assert r is not None
+        assert abs(r[0] - 0.0) < 1e-9
+        assert abs(r[1] - 0.0) < 1e-9
+        # 右上角 (500, 50) → (10, 100)
+        r = _pixel_to_data(500.0, 50.0, axes_bbox_px=bbox, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
+        assert r is not None
+        assert abs(r[0] - 10.0) < 1e-9
+        assert abs(r[1] - 100.0) < 1e-9
+        # 中心
+        r = _pixel_to_data(300.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
+        assert r is not None
+        assert abs(r[0] - 5.0) < 1e-9
+        assert abs(r[1] - 50.0) < 1e-9
+
+    def test_outside_returns_none(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _pixel_to_data
+
+        bbox = (100.0, 50.0, 500.0, 350.0)
+        assert _pixel_to_data(99.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        assert _pixel_to_data(501.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        assert _pixel_to_data(200.0, 49.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        assert _pixel_to_data(200.0, 351.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+
+    def test_log_axis_uses_log10_interp(self) -> None:
+        """log 轴：像素中心 → 10**((log10(min)+log10(max))/2)。"""
+        import math
+
+        from civ_core.ui.components.live_preview_pane import _pixel_to_data
+
+        bbox = (0.0, 0.0, 100.0, 100.0)
+        # x: log 轴 1..1000；中心像素 50 应映射到 10**1.5 ≈ 31.62
+        r = _pixel_to_data(50.0, 50.0, axes_bbox_px=bbox,
+                            xlim=(1.0, 1000.0), ylim=(0.0, 1.0),
+                            x_log=True, y_log=False)
+        assert r is not None
+        assert math.isclose(r[0], 10 ** 1.5, rel_tol=1e-6)
+
+    def test_degenerate_bbox_returns_none(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _pixel_to_data
+
+        # x1 == x0：退化
+        r = _pixel_to_data(50.0, 50.0, axes_bbox_px=(100.0, 50.0, 100.0, 350.0),
+                            xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+        assert r is None
+
+
+class TestLabelToPngPixel:
+    """QLabel 坐标 → PNG 像素（KeepAspectRatio 居中显示）。"""
+
+    def test_exact_fit_no_letterbox(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        # label 和 pixmap 同比例：无留白，scale = 1
+        r = _label_to_png_pixel(150.0, 100.0,
+                                  label_size=(300, 200),
+                                  pixmap_size=(300, 200))
+        assert r is not None
+        assert abs(r[0] - 150.0) < 1e-9
+        assert abs(r[1] - 100.0) < 1e-9
+
+    def test_horizontal_letterbox(self) -> None:
+        """pixmap 比 label 更宽：上下留白。"""
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        # pixmap 400×200 → label 400×300：scale = min(1.0, 1.5) = 1.0
+        # shown 400×200，上下各留 50。中心 (200, 150) → pixmap (200, 100)
+        r = _label_to_png_pixel(200.0, 150.0,
+                                  label_size=(400, 300),
+                                  pixmap_size=(400, 200))
+        assert r is not None
+        assert abs(r[0] - 200.0) < 1e-9
+        assert abs(r[1] - 100.0) < 1e-9
+
+    def test_vertical_letterbox(self) -> None:
+        """pixmap 比 label 更高：左右留白。"""
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        # pixmap 200×400 → label 300×400：scale = min(1.5, 1.0) = 1.0
+        # shown 200×400，左右各留 50。点 (150, 200) → pixmap (100, 200)
+        r = _label_to_png_pixel(150.0, 200.0,
+                                  label_size=(300, 400),
+                                  pixmap_size=(200, 400))
+        assert r is not None
+        assert abs(r[0] - 100.0) < 1e-9
+        assert abs(r[1] - 200.0) < 1e-9
+
+    def test_in_letterbox_returns_none(self) -> None:
+        """落在留白区返回 None。"""
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        # pixmap 400×200 → label 400×300，上下各 50 留白
+        # 点 (200, 25) 在顶部留白
+        r = _label_to_png_pixel(200.0, 25.0,
+                                  label_size=(400, 300),
+                                  pixmap_size=(400, 200))
+        assert r is None
+        # 点 (200, 275) 在底部留白
+        r = _label_to_png_pixel(200.0, 275.0,
+                                  label_size=(400, 300),
+                                  pixmap_size=(400, 200))
+        assert r is None
+
+    def test_scaling_inversed_correctly(self) -> None:
+        """label 比 pixmap 大 → scale>1，反算除以 scale。"""
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        # pixmap 200×100 → label 600×300：scale = min(3.0, 3.0) = 3.0
+        # shown 600×300（无留白）。label 中心 (300, 150) → pixmap (100, 50)
+        r = _label_to_png_pixel(300.0, 150.0,
+                                  label_size=(600, 300),
+                                  pixmap_size=(200, 100))
+        assert r is not None
+        assert abs(r[0] - 100.0) < 1e-9
+        assert abs(r[1] - 50.0) < 1e-9
+
+    def test_zero_size_returns_none(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
+
+        assert _label_to_png_pixel(10.0, 10.0,
+                                     label_size=(0, 100),
+                                     pixmap_size=(100, 100)) is None
+        assert _label_to_png_pixel(10.0, 10.0,
+                                     label_size=(100, 100),
+                                     pixmap_size=(100, 0)) is None
+
+
+class TestFindNearestRow:
+    """从多曲线点里找离查询点最近的，返回 row_idx。"""
+
+    def test_returns_nearest_row(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _find_nearest_row
+
+        # 三根试件：row 0 在 x=1 / row 1 在 x=5 / row 2 在 x=9
+        pts = [
+            (0, [1.0], [50.0]),
+            (1, [5.0], [50.0]),
+            (2, [9.0], [50.0]),
+        ]
+        r = _find_nearest_row(5.1, 50.0, pts, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
+        assert r is not None
+        assert r[0] == 1
+
+    def test_returns_none_for_empty(self) -> None:
+        from civ_core.ui.components.live_preview_pane import _find_nearest_row
+
+        assert _find_nearest_row(0.0, 0.0, [], xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+
+    def test_uses_normalized_distance(self) -> None:
+        """量纲悬殊时，归一化距离能让"两轴等重要"。"""
+        from civ_core.ui.components.live_preview_pane import _find_nearest_row
+
+        # row 0 离查询点 x 偏 0.5 / y 偏 0；row 1 x 偏 0 / y 偏 5
+        # 归一化前：欧氏 0.5 vs 5（row 0 近）
+        # 归一化后（xlim 0..10、ylim 0..100）：row 0=0.05、row 1=0.05（接近）
+        # 取再近 1 步：让 row 1 略近，验证归一化生效
+        pts = [
+            (0, [0.5], [50.0]),  # x 偏 0.5（归 0.05），y 偏 0
+            (1, [0.0], [49.0]),  # x 偏 0，y 偏 1（归 0.01）
+        ]
+        # 查询点 (0, 50)：row 1 归一化距离 0.01，row 0 归一化 0.05 → row 1 近
+        r = _find_nearest_row(0.0, 50.0, pts, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
+        assert r is not None
+        assert r[0] == 1

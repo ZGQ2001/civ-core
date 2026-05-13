@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -41,7 +41,6 @@ from qfluentwidgets import (
 
 from civ_core.configs.loader import AppConfig
 from civ_core.infra_io.pdf_io import (
-    PdfOpError,
     merge_pdfs,
     split_pdf_by_ranges,
     split_pdf_per_page,

@@ -58,6 +58,12 @@ class AxisSpec:
 #   step    阶梯 —— 位移-时间分级加载 / 阶梯荷载工况
 _PLOT_TYPES = frozenset({"line", "scatter", "bar", "step"})
 
+# P1.5-④ 双 Y 轴：CurveSeries 挂哪一个 Y 轴（默认主轴）
+#   primary    —— 挂主 Y 轴（左边）；与单 Y 轴行为一致
+#   secondary  —— 挂次 Y 轴（右边，twinx）；用于一图同时显示量纲不同的两组数据
+#                 （如 荷载-位移 vs 时间-沉降；土壤围压 vs 应变）
+_Y_AXES = frozenset({"primary", "secondary"})
+
 
 @dataclass(slots=True)
 class CurveSeries:
@@ -65,6 +71,10 @@ class CurveSeries:
 
     样式字段对齐 matplotlib.lines.Line2D 的关键属性：
       color / marker / linewidth / markersize / plot_type
+
+    P1.5-④ 新字段：
+      y_axis : "primary" / "secondary" —— 挂主 / 次 Y 轴
+      y_err  : 误差棒数据；None 表示无误差棒
     """
 
     name: str
@@ -76,6 +86,11 @@ class CurveSeries:
     markersize: float = 7.0
     # 图类型：决定 chart_writer 走 ax.plot / scatter / bar / step
     plot_type: str = "line"
+    # P1.5-④ 双 Y 轴：挂主 / 次 Y 轴
+    y_axis: str = "primary"
+    # P1.5-④ 误差棒：每点的 ±y 误差；None=不画误差棒
+    # 非 None 时长度必须 == len(ys)；每个值 >= 0
+    y_err: list[float] | None = None
 
     def __post_init__(self) -> None:
         if len(self.xs) != len(self.ys):
@@ -98,6 +113,22 @@ class CurveSeries:
                 f"CurveSeries.plot_type 必须是 {sorted(_PLOT_TYPES)} 之一，"
                 f"得到 {self.plot_type!r}"
             )
+        if self.y_axis not in _Y_AXES:
+            raise ValueError(
+                f"CurveSeries.y_axis 必须是 {sorted(_Y_AXES)} 之一，"
+                f"得到 {self.y_axis!r}"
+            )
+        if self.y_err is not None:
+            if len(self.y_err) != len(self.ys):
+                raise ValueError(
+                    "CurveSeries.y_err 长度必须等于 ys，"
+                    f"得到 y_err={len(self.y_err)} / ys={len(self.ys)}"
+                )
+            for i, e in enumerate(self.y_err):
+                if e < 0:
+                    raise ValueError(
+                        f"CurveSeries.y_err[{i}] 必须 >= 0，得到 {e}"
+                    )
 
 
 @dataclass(slots=True)
@@ -107,6 +138,9 @@ class PlotJob:
     output_path：v2.3 总纲要求路径全部用 Path；__post_init__ 会把 str 自动包成 Path。
     grid / legend_loc：图级样式（来自 preset["style"]，与 AxisSpec.log 一道交给
     chart_writer 渲染时决定）；legend_loc=None 表示不显示图例。
+
+    P1.5-④ y_axis2：次 Y 轴（双 Y 轴用，None=不画双轴）；
+    匹配 series 里 y_axis="secondary" 的曲线挂到这一轴上。
     """
 
     title: str
@@ -116,6 +150,8 @@ class PlotJob:
     series: list[CurveSeries] = field(default_factory=list)
     grid: bool = True
     legend_loc: str | None = None
+    # P1.5-④ 双 Y 轴的次 Y 轴规格；None 表示无（向后兼容）
+    y_axis2: AxisSpec | None = None
 
     def __post_init__(self) -> None:
         if not self.title or not self.title.strip():

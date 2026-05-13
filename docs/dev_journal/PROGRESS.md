@@ -7,7 +7,7 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** P1 + P1.5 全部交付（③ 拖点编辑因架构限制跳过；2026-05-13）。**359 测试通过**；ruff 0；healthcheck 9 项全 ✅。
+**当前状态：** P1 + P1.5 + P3 前两个工具（PDF 工具 / Word→PDF） + 全局科技蓝主题 + 主窗口毛玻璃 已交付（2026-05-13）。**403 测试通过**（+44 新覆盖 pdf_io / word_to_pdf / pdf_tools_view / word2pdf_view）；ruff 0；healthcheck 9 项全 ✅。
 
 P1.5 子项交付状态：
 - ✅ **Step1/2/3** 点交互闭环：单行切换 / 叠加对比 / hover hit-testing
@@ -24,12 +24,17 @@ plot_curves 模块功能闭环：
 - 单行模式 hover 曲线点 → tooltip 显示"曲线名 / X列名:值 / Y列名:值"
 - `Ctrl+Z/Y` 撤销/重做所有预设字段变更
 
-**当前任务：** 无 in-progress。P1.5 全部子项交付（③ 跳过）；可进 P2 或 P3。
+**已交付的其他工具与体验改动：**
+- **PDF 工具页**（infra_io/pdf_io.py + ui/windows/pdf_tools_view.py）：合并多个 PDF / 按页拆分 / 按页号范围拆分（"1-3,5,7-9"）。pypdf 实现，落盘走 atomic_writer
+- **Word → PDF 页**（infra_io/word_to_pdf.py + ui/windows/word2pdf_view.py）：批量 .doc/.docx 通过 COM SaveAs(FileFormat=17) 转 PDF。优先 Word，回退 WPS。worker 启 1 个 Word 进程跑完关掉
+- **全局科技蓝主题色 #0078D4** + **主窗口 Win11 Mica 毛玻璃**（旧系统自动 fallback Acrylic / 纯色）
+
+**当前任务：** 无 in-progress。可进 P2（旧代码清理）或 P3 剩余项（auto_filler / bracket_normalize）。
 
 **下一步（候选，等用户拍板）：**
 1. **P1.5-③ 拖点编辑**（推迟到未来）：要做须用 `FigureCanvasQTAgg` 替代 `Agg→PNG→QLabel` 链路；改动大且会牵连撤销栈与预览防抖，评估为非 P1.5 量级，归到独立"渲染管线重构"专项
 2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2
-3. **P3（新工具接入）**：`word2pdf` / `auto_filler` / `bracket_normalize` 三个工具
+3. **P3 剩余项**：`auto_filler` / `bracket_normalize` 两个工具（`word2pdf` 已完成 + 加送了 PDF 合并/拆分工具）
 
 **遗留问题：**
 - `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）

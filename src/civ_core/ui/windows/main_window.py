@@ -66,6 +66,13 @@ class MainWindow(FluentWindow):
         self._build_pages(cfg)
         self._register_navigation()
         self._apply_window_metrics(cfg)
+        # Win11 Mica 毛玻璃：自动 fallback 到 Acrylic（Win10）或纯色（更低）；
+        # qfluentwidgets ≥ 1.7 提供 setMicaEffectEnabled。任何异常都不致命 ——
+        # 没有毛玻璃也能用，只是少了视觉层次
+        try:
+            self.setMicaEffectEnabled(True)
+        except Exception as e:
+            log.warning("启用 Mica 毛玻璃失败（系统/版本不支持，已忽略）：%s", e)
 
         # 默认落在首页
         self.switchTo(self.home_page)

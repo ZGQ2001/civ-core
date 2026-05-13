@@ -20,8 +20,9 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
-from qfluentwidgets import Theme, setTheme
+from qfluentwidgets import Theme, setTheme, setThemeColor
 
 from civ_core.configs.loader import AppConfig, load_config
 from civ_core.utils.logger import get_logger, get_qt_bridge, setup_from_config
@@ -63,12 +64,21 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
     app.setOrganizationName("CivCore")
 
     setTheme(_THEME_MAP.get(cfg.ui.theme, Theme.AUTO))
+    # 主题色：把 config.toml 里的 ui.accent_color (科技蓝 #0078D4) 应用到全局
+    # qfluentwidgets 用这个色染主按钮、滑块、选中态、checkbox 钩等强调位
+    # save=False：不写盘到 qfluentwidgets 自己的配置（避免污染用户家目录的 qfluentwidgets/config.json）
+    try:
+        setThemeColor(QColor(cfg.ui.accent_color), save=False, lazy=True)
+    except Exception as e:
+        # 非法颜色字符串：保留默认，不致命
+        log.warning("ui.accent_color=%r 无效，保留默认主题色：%s", cfg.ui.accent_color, e)
 
     log.info(
-        "QApplication ready | name=%s version=%s theme=%s",
+        "QApplication ready | name=%s version=%s theme=%s accent=%s",
         cfg.app.name,
         cfg.app.version,
         cfg.ui.theme,
+        cfg.ui.accent_color,
     )
     return app, cfg  # type: ignore[return-value]
 

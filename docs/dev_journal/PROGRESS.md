@@ -7,19 +7,28 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** P1 + P1.5-Step1/2/3「点交互闭环」已交付（2026-05-13，commits `d81df09`/`1750f25`/`1fb24ce`/`31f33d4`/`e003b5c`）。**295 测试通过**（+38 新覆盖单行切换 / 叠加渲染 / hit-test 反算 / hover 信号）；ruff 0；healthcheck 9 项全 ✅。
+**当前状态：** P1 + P1.5 全部交付（③ 拖点编辑因架构限制跳过；2026-05-13）。**359 测试通过**；ruff 0；healthcheck 9 项全 ✅。
+
+P1.5 子项交付状态：
+- ✅ **Step1/2/3** 点交互闭环：单行切换 / 叠加对比 / hover hit-testing
+- ✅ **①** 单行模式 hover tooltip（X/Y 列名+值，鼠标停在曲线点上显示）
+- ✅ **②** 实时预览参数变更接 `Ctrl+Z/Y` 撤销/重做（独立 `PresetUndoController`，快照模式 + 300ms 防抖 + max_depth=50）
+- ⏭️ **③** 图形化拖点 —— 架构限制（Agg 后端 + PNG→QLabel 链路）跳过；要做须把渲染换 `FigureCanvasQTAgg`
+- ✅ **④** 双 Y 轴 / 误差棒：`CurveSeries.y_axis` / `y_err` + `PlotJob.y_axis2` 全链贯通；UI 加 Y 轴选择 + 误差列 + 启用次 Y 轴 CheckBox
 
 plot_curves 模块功能闭环：
-- 左栏：QScrollArea 包六分组风琴参数面板（预设选择 / 数据源(含 sheet) / 曲线定义 / 坐标轴 / 样式(含 X/Y 对数刻度) / 输出）
+- 左栏：QScrollArea 包六分组风琴参数面板（预设选择 / 数据源(含 sheet) / 曲线定义(**含 Y 轴归属 / 误差列**) / 坐标轴(**含可选次 Y 轴**) / 样式(含 X/Y 对数刻度) / 输出）
 - 右栏：垂直 QSplitter [预览顶部工具栏(▶ 生成全部曲线 PNG + **☑️ 叠加对比**) + 实时预览图 / 底栏 Tab(日志 + 数据源)]
-- 曲线编辑器：ComboBox 单行选曲线 + 5 按钮工具栏；按"基础 / 样式 / 数据点"分子段；4 种图类型（折线/散点/柱状/阶梯）；marker 显示「■ 方块」等人话
-- **预览 ↔ 数据源双向联动**：点表格行 → 预览切到该行（单行）或高亮该根（叠加）；叠加模式下 hover 任一曲线 → 表格自动滚到对应行
+- 曲线编辑器：ComboBox 单行选曲线 + 5 按钮工具栏；按"基础(含 Y 轴) / 样式 / 数据点(含 err_column 4 列)"分子段；4 种图类型（折线/散点/柱状/阶梯）；marker 显示「■ 方块」等人话
+- 预览 ↔ 数据源双向联动：点表格行 → 预览切到该行（单行）或高亮该根（叠加）；叠加模式下 hover 任一曲线 → 表格自动滚到对应行
+- 单行模式 hover 曲线点 → tooltip 显示"曲线名 / X列名:值 / Y列名:值"
+- `Ctrl+Z/Y` 撤销/重做所有预设字段变更
 
-**当前任务：** 无 in-progress。P1.5-Step1/2/3 已完成；可选 Step 4（单行 hover tooltip）未做。
+**当前任务：** 无 in-progress。P1.5 全部子项交付（③ 跳过）；可进 P2 或 P3。
 
 **下一步（候选，等用户拍板）：**
-1. **P1.5 剩余项**：① 单行模式 hover tooltip（X 列名/值 + Y 列名/值，使用频率低，建议跳过）；② 实时预览的撤销/重做；③ CurvesEditor 的"图形化拖点"；④ 双 Y 轴 / 误差棒图等更多土木图类型
-2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2（L-3b 已不再使用，但还未删）
+1. **P1.5-③ 拖点编辑**（推迟到未来）：要做须用 `FigureCanvasQTAgg` 替代 `Agg→PNG→QLabel` 链路；改动大且会牵连撤销栈与预览防抖，评估为非 P1.5 量级，归到独立"渲染管线重构"专项
+2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2
 3. **P3（新工具接入）**：`word2pdf` / `auto_filler` / `bracket_normalize` 三个工具
 
 **遗留问题：**

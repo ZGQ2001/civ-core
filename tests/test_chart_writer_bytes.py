@@ -138,3 +138,108 @@ class TestAxisAndStyle:
         )
         data = render_plot_to_bytes(job)
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-Step2：render_overlay_to_bytes 多 jobs 叠加渲染
+# ──────────────────────────────────────────────────────────────────
+def _make_overlay_jobs(n: int) -> list[PlotJob]:
+    """造 n 根试件的 jobs，title 区分 / xs.ys 略微偏移。"""
+    jobs: list[PlotJob] = []
+    for i in range(n):
+        jobs.append(
+            PlotJob(
+                title=f"试件 {i + 1}",
+                output_path=Path(f"j{i}.png"),
+                x_axis=AxisSpec(label="位移", range=(0.0, 10.0, 2.0)),
+                y_axis=AxisSpec(label="荷载", range=(0.0, 100.0, 20.0)),
+                series=[
+                    CurveSeries(
+                        name="加载",
+                        xs=[0.0, 2.0, 4.0, 6.0],
+                        ys=[0.0 + i, 20.0 + i, 50.0 + i, 80.0 + i],
+                    )
+                ],
+            )
+        )
+    return jobs
+
+
+class TestRenderOverlayToBytes:
+    def test_empty_jobs_raises(self) -> None:
+        import pytest
+
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        with pytest.raises(ValueError, match="jobs 不可为空"):
+            render_overlay_to_bytes([])
+
+    def test_single_job_renders(self) -> None:
+        """单 job 也能用（虽然 view 此时会走单行模式，但 API 不限制）。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        data = render_overlay_to_bytes(_make_overlay_jobs(1))
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_multiple_jobs_renders(self) -> None:
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        data = render_overlay_to_bytes(_make_overlay_jobs(5))
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+        assert len(data) > 500
+
+    def test_highlight_in_range(self) -> None:
+        """highlight_row_idx 命中应不崩，输出仍是 PNG。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        data = render_overlay_to_bytes(
+            _make_overlay_jobs(4), highlight_row_idx=2
+        )
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_highlight_out_of_range_does_not_crash(self) -> None:
+        """越界 highlight_row_idx：视为"无高亮"，所有曲线正常透明度。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        # 大于 len(jobs) 与负数都允许（容错）
+        for idx in (10, -1, 999):
+            data = render_overlay_to_bytes(
+                _make_overlay_jobs(3), highlight_row_idx=idx
+            )
+            assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_more_than_10_jobs_uses_palette_cycle(self) -> None:
+        """颜色色环只有 10 色，>10 根试件应按 mod 循环不崩。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        data = render_overlay_to_bytes(_make_overlay_jobs(15))
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_log_axes_overlay(self) -> None:
+        """叠加图也应支持对数轴（沿用 jobs[0] 的 axis）。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        jobs = []
+        for i in range(3):
+            jobs.append(
+                PlotJob(
+                    title=f"j{i}",
+                    output_path=Path(f"j{i}.png"),
+                    x_axis=AxisSpec(label="x", log=True),
+                    y_axis=AxisSpec(label="y", log=True),
+                    series=[CurveSeries(name="s", xs=[1.0, 10.0, 100.0], ys=[1.0, 10.0, 100.0])],
+                )
+            )
+        data = render_overlay_to_bytes(jobs)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_custom_title_overrides_default(self) -> None:
+        """显式传 title 应覆盖默认"叠加对比图（共 N 根）"。"""
+        from civ_core.infra_io.chart_writer import render_overlay_to_bytes
+
+        # 只能间接验证：自定义 title 时不崩 + 是 PNG
+        # PNG 字节差异具体值不可移植断言
+        data = render_overlay_to_bytes(
+            _make_overlay_jobs(2), title="自定义对比图"
+        )
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"

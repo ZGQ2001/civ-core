@@ -246,6 +246,161 @@ def render_plot_to_png(
     return job.output_path
 
 
+# 叠加对比图色环（来自 matplotlib tab10，hex 化便于纯字符串处理）。
+# 一根试件 = 一种颜色；超过 10 根循环复用（土木场景一次对比通常 < 20 根）。
+_OVERLAY_PALETTE: list[str] = [
+    "#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD",
+    "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF",
+]
+
+
+def _draw_overlay_series(ax, s, *, color: str, alpha: float, zorder: int,
+                          lw_mul: float, label: str | None) -> None:
+    """叠加模式下绘一条 series：颜色 / 透明度 / 层级由调用方覆盖。
+
+    与 _draw_series 的差异：
+      • 强制覆盖 series.color —— 让同一根试件的所有曲线共用一种颜色
+      • alpha / zorder / linewidth 倍率由调用方根据 highlight 状态决定
+      • 一根试件只有第一条曲线带 label（避免 legend 重复"试件 A"三次）
+    """
+    if s.plot_type == "scatter":
+        ax.scatter(
+            s.xs, s.ys,
+            color=color, marker=s.marker,
+            s=max(s.markersize, 1.0) ** 2,
+            edgecolors=color, linewidths=1.0,
+            alpha=alpha, zorder=zorder, label=label,
+        )
+    elif s.plot_type == "bar":
+        if len(s.xs) >= 2:
+            spacing = min(
+                abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)
+            ) or 1.0
+            width = spacing * 0.6
+        else:
+            width = 1.0
+        ax.bar(
+            s.xs, s.ys, color=color, width=width,
+            edgecolor=color, linewidth=s.linewidth * lw_mul,
+            alpha=alpha, zorder=zorder, label=label,
+        )
+    elif s.plot_type == "step":
+        ax.step(
+            s.xs, s.ys, where="post",
+            color=color, linewidth=s.linewidth * lw_mul,
+            marker=s.marker, markersize=s.markersize,
+            markerfacecolor="white",
+            markeredgecolor=color, markeredgewidth=1.5,
+            alpha=alpha, zorder=zorder, label=label,
+        )
+    else:  # line
+        ax.plot(
+            s.xs, s.ys,
+            color=color, linewidth=s.linewidth * lw_mul,
+            marker=s.marker, markersize=s.markersize,
+            markerfacecolor="white",
+            markeredgecolor=color, markeredgewidth=1.5,
+            alpha=alpha, zorder=zorder, label=label,
+        )
+
+
+def render_overlay_to_bytes(
+    jobs: list[PlotJob],
+    *,
+    highlight_row_idx: int = -1,
+    figsize: tuple[float, float] = (7.0, 4.0),
+    dpi: int = 100,
+    title: str | None = None,
+    show_grid: bool = True,
+    show_legend: bool = True,
+    title_fontsize: int = 14,
+    label_fontsize: int = 11,
+) -> bytes:
+    """渲染多根试件的叠加对比图为 PNG 字节流。
+
+    语义：
+      • 每个 PlotJob = 一根试件 = 叠加图上一种颜色（按 row idx 循环色环）
+      • 同 job 的多条 series（如"加载/卸载"）共用颜色；只第一条带 legend label
+      • highlight_row_idx 命中的 job：linewidth × 1.8、alpha=1.0、zorder=10
+        其他 job：alpha=0.4（让高亮项视觉跳出）；未指定高亮（-1）时所有 0.85
+      • axis label / range / log / grid / legend_loc 沿用 jobs[0]
+      • title 可被 title 参数覆盖；为 None 时用 "叠加对比图（共 N 根）"
+
+    异常：jobs 为空 → ValueError（调用方应在投递 worker 前拦下）
+    """
+    if not jobs:
+        raise ValueError("render_overlay_to_bytes: jobs 不可为空")
+
+    _configure_chinese_font()
+
+    base = jobs[0]
+    final_title = title if title else f"叠加对比图（共 {len(jobs)} 根）"
+
+    # 是否处于"有高亮"模式 —— 影响未高亮项的 alpha
+    has_highlight = 0 <= highlight_row_idx < len(jobs)
+
+    buf = io.BytesIO()
+    with _managed_figure(figsize, dpi) as (fig, ax):
+        for row_idx, job in enumerate(jobs):
+            color = _OVERLAY_PALETTE[row_idx % len(_OVERLAY_PALETTE)]
+            is_hl = has_highlight and row_idx == highlight_row_idx
+            if is_hl:
+                alpha, zorder, lw_mul = 1.0, 10, 1.8
+            elif has_highlight:
+                alpha, zorder, lw_mul = 0.4, 5, 1.0
+            else:
+                alpha, zorder, lw_mul = 0.85, 5, 1.0
+
+            for s_idx, s in enumerate(job.series):
+                # 一根试件只用第一条曲线挂 label，避免 legend 里"试件 A"出现多次
+                label = job.title if s_idx == 0 else None
+                _draw_overlay_series(
+                    ax, s,
+                    color=color, alpha=alpha,
+                    zorder=zorder, lw_mul=lw_mul,
+                    label=label,
+                )
+
+        ax.set_title(final_title, fontsize=title_fontsize, fontweight="bold", pad=10)
+        ax.set_xlabel(base.x_axis.label, fontsize=label_fontsize)
+        ax.set_ylabel(base.y_axis.label, fontsize=label_fontsize)
+
+        if base.x_axis.log:
+            ax.set_xscale("log")
+        if base.y_axis.log:
+            ax.set_yscale("log")
+
+        if base.x_axis.range is not None:
+            x_min, x_max, x_step = base.x_axis.range
+            ax.set_xlim(x_min, x_max)
+            if not base.x_axis.log:
+                ax.set_xticks(_arange_inclusive(x_min, x_max, x_step))
+
+        if base.y_axis.range is not None:
+            y_min, y_max, y_step = base.y_axis.range
+            ax.set_ylim(y_min, y_max)
+            if not base.y_axis.log:
+                ax.set_yticks(_arange_inclusive(y_min, y_max, y_step))
+
+        if base.grid if base.grid is not None else show_grid:
+            ax.grid(True, linestyle="-", linewidth=0.4, color="#CCCCCC", alpha=0.8)
+            ax.set_axisbelow(True)
+
+        # 叠加图默认开 legend —— 没 legend 用户分不清哪条是哪根
+        if base.legend_loc:
+            ax.legend(loc=base.legend_loc, frameon=True, fontsize=9)
+        elif show_legend:
+            ax.legend(loc="best", frameon=True, fontsize=9)
+
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.8)
+
+        fig.tight_layout()
+        fig.savefig(buf, dpi=dpi, bbox_inches="tight", format="png")
+
+    return buf.getvalue()
+
+
 def render_plot_to_bytes(
     job: PlotJob,
     *,

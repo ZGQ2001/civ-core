@@ -199,9 +199,7 @@ class TestLoadMergedPresets:
     完全避开 load_config，让测试不受真实 config.toml 影响。
     """
 
-    def test_end_to_end_merge(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_end_to_end_merge(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         sys_file = tmp_path / "sys.json"
         sys_file.write_text(
             json.dumps(
@@ -247,9 +245,7 @@ class TestLoadMergedPresets:
     ) -> None:
         """用户预设文件不存在 → 只返回系统预设，不抛。"""
         sys_file = tmp_path / "sys.json"
-        sys_file.write_text(
-            json.dumps({"OnlySystem": {"v": 1}}), encoding="utf-8"
-        )
+        sys_file.write_text(json.dumps({"OnlySystem": {"v": 1}}), encoding="utf-8")
 
         monkeypatch.setattr(
             preset_manager, "get_system_presets_path", lambda tool="plot_curves": sys_file
@@ -396,9 +392,7 @@ class TestWriteAPIs:
     """覆盖 T-4 Step 1 新增的三个写入 API 的所有正常 + 异常路径。"""
 
     @pytest.fixture
-    def patched_paths(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> tuple[Path, Path]:
+    def patched_paths(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
         """把系统/用户预设路径 monkeypatch 到 tmp_path，并预置一份系统预设。
 
         返回 (sys_file, user_file)。user_file 默认不存在，由各用例按需创建。
@@ -426,9 +420,7 @@ class TestWriteAPIs:
         return sys_file, user_file
 
     # ── save_user_preset ─────────────────────────────────────────
-    def test_save_creates_file_when_missing(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_creates_file_when_missing(self, patched_paths: tuple[Path, Path]) -> None:
         """用户文件不存在 → 自动创建（含父目录），只写本条。"""
         _, user_file = patched_paths
         assert not user_file.exists()
@@ -439,9 +431,7 @@ class TestWriteAPIs:
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {"我的锚杆": {"id_column": "X"}}
 
-    def test_save_appends_to_existing_file(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_appends_to_existing_file(self, patched_paths: tuple[Path, Path]) -> None:
         """用户文件已有其它预设 → 新增不破坏原有内容。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
@@ -455,24 +445,18 @@ class TestWriteAPIs:
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {"已有": {"v": 1}, "新增": {"v": 2}}
 
-    def test_save_overrides_same_name(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_overrides_same_name(self, patched_paths: tuple[Path, Path]) -> None:
         """同名保存 → 覆盖原值。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
-        user_file.write_text(
-            json.dumps({"X": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
-        )
+        user_file.write_text(json.dumps({"X": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
 
         preset_manager.save_user_preset("X", {"v": 999})
 
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {"X": {"v": 999}}
 
-    def test_save_deepcopies_input(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_deepcopies_input(self, patched_paths: tuple[Path, Path]) -> None:
         """落盘后修改入参 dict，不应影响磁盘内容。"""
         _, user_file = patched_paths
         data = {"v": [1, 2, 3]}
@@ -498,23 +482,17 @@ class TestWriteAPIs:
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {"修复后": {"v": 1}}
 
-    def test_save_rejects_empty_name(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_rejects_empty_name(self, patched_paths: tuple[Path, Path]) -> None:
         with pytest.raises(PresetError) as ei:
             preset_manager.save_user_preset("", {})
         assert "非法预设名" in str(ei.value)
 
-    def test_save_rejects_underscore_name(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_rejects_underscore_name(self, patched_paths: tuple[Path, Path]) -> None:
         """下划线开头的 key 在合并时会被过滤，禁止保存。"""
         with pytest.raises(PresetError):
             preset_manager.save_user_preset("_comment", {"v": 1})
 
-    def test_save_writes_human_readable_json(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_save_writes_human_readable_json(self, patched_paths: tuple[Path, Path]) -> None:
         """落盘格式：indent + 中文不转义，让用户能直接编辑。"""
         _, user_file = patched_paths
         preset_manager.save_user_preset("锚杆", {"id_column": "锚杆编号"})
@@ -525,9 +503,7 @@ class TestWriteAPIs:
         assert "    " in text
 
     # ── delete_user_preset ───────────────────────────────────────
-    def test_delete_removes_entry(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_delete_removes_entry(self, patched_paths: tuple[Path, Path]) -> None:
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
         user_file.write_text(
@@ -540,15 +516,11 @@ class TestWriteAPIs:
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {"B": {"v": 2}}
 
-    def test_delete_keeps_file_even_when_empty(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_delete_keeps_file_even_when_empty(self, patched_paths: tuple[Path, Path]) -> None:
         """删完最后一条 → 文件仍存在（保留"用户启用过自定义"的标记）。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
-        user_file.write_text(
-            json.dumps({"only": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
-        )
+        user_file.write_text(json.dumps({"only": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
 
         preset_manager.delete_user_preset("only")
 
@@ -556,32 +528,24 @@ class TestWriteAPIs:
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw == {}
 
-    def test_delete_missing_name_raises(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_delete_missing_name_raises(self, patched_paths: tuple[Path, Path]) -> None:
         """不在用户预设里（典型场景：误删系统预设）→ 抛 PresetError。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
-        user_file.write_text(
-            json.dumps({"A": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
-        )
+        user_file.write_text(json.dumps({"A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
 
         with pytest.raises(PresetError) as ei:
             preset_manager.delete_user_preset("锚杆")  # 系统预设名
         assert "找不到" in str(ei.value)
         assert ei.value.hint  # 必须带 hint 引导用户
 
-    def test_delete_when_user_file_missing(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_delete_when_user_file_missing(self, patched_paths: tuple[Path, Path]) -> None:
         """用户文件根本不存在 → 抛 PresetError（按"找不到"处理）。"""
         with pytest.raises(PresetError):
             preset_manager.delete_user_preset("任何名")
 
     # ── copy_system_to_user ──────────────────────────────────────
-    def test_copy_system_preset_to_user(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_system_preset_to_user(self, patched_paths: tuple[Path, Path]) -> None:
         """复制系统预设 → 落到用户文件，data 是深拷贝。"""
         _, user_file = patched_paths
 
@@ -594,45 +558,33 @@ class TestWriteAPIs:
             "x_axis": {"label": "位移"},
         }
 
-    def test_copy_user_preset_to_user(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_user_preset_to_user(self, patched_paths: tuple[Path, Path]) -> None:
         """复制源也可以是已有的用户预设。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
-        user_file.write_text(
-            json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
-        )
+        user_file.write_text(json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
 
         preset_manager.copy_system_to_user("我的A", "我的A (再分一份)")
 
         raw = json.loads(user_file.read_text(encoding="utf-8"))
         assert raw["我的A (再分一份)"] == {"v": 1}
 
-    def test_copy_unknown_source_raises(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_unknown_source_raises(self, patched_paths: tuple[Path, Path]) -> None:
         with pytest.raises(PresetError) as ei:
             preset_manager.copy_system_to_user("不存在的预设", "新名")
         assert "找不到" in str(ei.value)
 
-    def test_copy_to_existing_user_name_raises(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_to_existing_user_name_raises(self, patched_paths: tuple[Path, Path]) -> None:
         """new_name 已经在用户预设里 → 拒绝（防误覆盖）。"""
         _, user_file = patched_paths
         user_file.parent.mkdir(parents=True)
-        user_file.write_text(
-            json.dumps({"已有": {"v": 1}}, ensure_ascii=False), encoding="utf-8"
-        )
+        user_file.write_text(json.dumps({"已有": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
 
         with pytest.raises(PresetError) as ei:
             preset_manager.copy_system_to_user("锚杆", "已有")
         assert "已经有" in str(ei.value)
 
-    def test_copy_to_system_same_name_allowed(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_to_system_same_name_allowed(self, patched_paths: tuple[Path, Path]) -> None:
         """new_name 与系统预设同名是允许的（用户主动覆盖系统预设的常见做法）。"""
         _, user_file = patched_paths
 
@@ -644,15 +596,11 @@ class TestWriteAPIs:
         # 复制出的内容与系统预设相同（深拷贝）
         assert raw["锚杆"]["id_column"] == "锚杆编号"
 
-    def test_copy_rejects_empty_new_name(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_rejects_empty_new_name(self, patched_paths: tuple[Path, Path]) -> None:
         with pytest.raises(PresetError):
             preset_manager.copy_system_to_user("锚杆", "")
 
-    def test_copy_rejects_underscore_new_name(
-        self, patched_paths: tuple[Path, Path]
-    ) -> None:
+    def test_copy_rejects_underscore_new_name(self, patched_paths: tuple[Path, Path]) -> None:
         with pytest.raises(PresetError):
             preset_manager.copy_system_to_user("锚杆", "_注释")
 

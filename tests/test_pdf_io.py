@@ -126,8 +126,7 @@ class TestMergePdfs:
         from civ_core.infra_io.pdf_io import merge_pdfs
 
         pdfs = [
-            _make_test_pdf(tmp_path / f"{i}.pdf", n_pages=i + 1)
-            for i in range(3)
+            _make_test_pdf(tmp_path / f"{i}.pdf", n_pages=i + 1) for i in range(3)
         ]  # 1, 2, 3 页
         out = tmp_path / "ordered.pdf"
         merge_pdfs(pdfs, out)
@@ -190,9 +189,7 @@ class TestSplitPerPage:
 
         src = _make_test_pdf(tmp_path / "x.pdf", n_pages=2)
         out_dir = tmp_path / "out"
-        written = split_pdf_per_page(
-            src, out_dir, name_template="page-{n}-of-{stem}.pdf"
-        )
+        written = split_pdf_per_page(src, out_dir, name_template="page-{n}-of-{stem}.pdf")
         # 名字应是 page-01-of-x.pdf
         assert written[0].name.startswith("page-01-of-x")
 
@@ -226,9 +223,7 @@ class TestSplitByRanges:
         assert len(written) == 3
         # 文件名校验
         names = sorted(p.name for p in written)
-        assert names == sorted(
-            ["doc_1-3.pdf", "doc_5-5.pdf", "doc_7-9.pdf"]
-        )
+        assert names == sorted(["doc_1-3.pdf", "doc_5-5.pdf", "doc_7-9.pdf"])
 
     def test_invalid_expr_propagates(self, tmp_path: Path) -> None:
         from civ_core.infra_io.pdf_io import PdfOpError, split_pdf_by_ranges

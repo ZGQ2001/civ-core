@@ -46,9 +46,7 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
-def tmp_settings_factory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def tmp_settings_factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """让 PlotCurvesView._make_settings 返回指向 tmp INI 文件的 QSettings。"""
     ini_path = tmp_path / "settings.ini"
 
@@ -80,9 +78,7 @@ class TestDimensionality:
 # 默认行为：没存过 → 用 _INITIAL_SIZES
 # ──────────────────────────────────────────────────────────────────
 class TestRestoreDefault:
-    def test_no_saved_value_uses_initial_sizes(
-        self, view: PlotCurvesView
-    ) -> None:
+    def test_no_saved_value_uses_initial_sizes(self, view: PlotCurvesView) -> None:
         """首次启动（settings 文件全空）→ splitter 用默认 sizes。"""
         # _splitter.sizes() 反映布局之后的实际像素，可能被 view 显示尺寸缩放过；
         # 我们直接断言"还原函数"返回的是默认值即可
@@ -214,9 +210,7 @@ class TestConstructionUsesSaved:
 # 右栏垂直 splitter（预览/底栏 上下比例）持久化（UX 重构新增）
 # ──────────────────────────────────────────────────────────────────
 class TestRightSplitterPersistence:
-    def test_default_when_no_saved_value(
-        self, view: PlotCurvesView
-    ) -> None:
+    def test_default_when_no_saved_value(self, view: PlotCurvesView) -> None:
         assert view._restore_right_splitter_sizes() == list(_INITIAL_RIGHT_SIZES)
 
     def test_roundtrip_save_and_restore(
@@ -225,9 +219,7 @@ class TestRightSplitterPersistence:
         tmp_settings_factory: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(
-            view._right_splitter, "sizes", lambda: [500, 250]
-        )
+        monkeypatch.setattr(view._right_splitter, "sizes", lambda: [500, 250])
         view._on_right_splitter_moved(0, 0)
         s = QSettings(str(tmp_settings_factory), QSettings.Format.IniFormat)
         saved = s.value(_SETTINGS_KEY_RIGHT_SPLITTER)

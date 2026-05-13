@@ -429,9 +429,7 @@ class CurvesEditor(QWidget):
         self._curves[self._current_idx][key] = value
         # 颜色变化时 ComboBox 当前项色块图标跟着换
         if key == "color":
-            self._curve_combo.setItemIcon(
-                self._current_idx, self._color_icon(str(value))
-            )
+            self._curve_combo.setItemIcon(self._current_idx, self._color_icon(str(value)))
         self.changed.emit()
 
     # ── 点子表 ─────────────────────────────────────────────────
@@ -507,9 +505,7 @@ class CurvesEditor(QWidget):
                     else:
                         cb_err.setCurrentIndex(0)  # (无)
                     cb_err.currentTextChanged.connect(
-                        lambda v, r=pidx: self._on_point_err_changed(
-                            r, "" if v == "(无)" else v
-                        )
+                        lambda v, r=pidx: self._on_point_err_changed(r, "" if v == "(无)" else v)
                     )
                     err_widget = cb_err
                 else:
@@ -517,9 +513,7 @@ class CurvesEditor(QWidget):
                     le_err.setText(cur_err)
                     le_err.setPlaceholderText("(无)")
                     le_err.editingFinished.connect(
-                        lambda r=pidx, w=le_err: self._on_point_err_changed(
-                            r, w.text()
-                        )
+                        lambda r=pidx, w=le_err: self._on_point_err_changed(r, w.text())
                     )
                     err_widget = le_err
                 self._points_table.setCellWidget(pidx, _POINT_COL_ERR, err_widget)

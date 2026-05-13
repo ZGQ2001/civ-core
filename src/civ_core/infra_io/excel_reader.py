@@ -169,9 +169,7 @@ def read_rows(
         return []
 
     raw_header = all_rows[header_row - 1]
-    headers: list[str | None] = [
-        None if _is_blank(h) else str(h).strip() for h in raw_header
-    ]
+    headers: list[str | None] = [None if _is_blank(h) else str(h).strip() for h in raw_header]
     valid_indices = [i for i, h in enumerate(headers) if h is not None]
     if not valid_indices:
         log.warning("Sheet %r 表头行 %d 全为空，返回空列表", sheet, header_row)

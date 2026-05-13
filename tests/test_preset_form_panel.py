@@ -111,9 +111,7 @@ class TestRoundtrip:
         assert cur["y_axis"]["range"] is None
         assert cur["curves"] == []
 
-    def test_range_with_only_two_values_padded_to_three(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_range_with_only_two_values_padded_to_three(self, panel: PresetFormPanel) -> None:
         """容错：JSON range 是 [min, max] 两元组时，step 用 0 填充。"""
         data = _sample_data()
         data["y_axis"]["range"] = [0, 100]
@@ -138,9 +136,7 @@ class TestDirty:
         panel.id_column_edit.setText("新的列名")
         assert panel.is_dirty() is True
 
-    def test_change_back_to_baseline_clears_dirty(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_change_back_to_baseline_clears_dirty(self, panel: PresetFormPanel) -> None:
         """改回原值 → dirty 自动恢复 False（用户敲完又改回去的常见路径）。"""
         panel.set_entry(_sample_entry())
         panel.id_column_edit.setText("临时改的")
@@ -148,9 +144,7 @@ class TestDirty:
         panel.id_column_edit.setText("锚杆编号")  # 改回原值
         assert panel.is_dirty() is False
 
-    def test_dirty_signal_emits_on_transitions(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_dirty_signal_emits_on_transitions(self, panel: PresetFormPanel) -> None:
         """dirty_changed 只在状态翻转时 emit，不抖动。"""
         emitted: list[bool] = []
         panel.dirty_changed.connect(lambda v: emitted.append(v))
@@ -173,9 +167,7 @@ class TestDirty:
 # reset / read_only
 # ──────────────────────────────────────────────────────────────────
 class TestResetAndReadOnly:
-    def test_reset_to_baseline_restores_all_fields(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_reset_to_baseline_restores_all_fields(self, panel: PresetFormPanel) -> None:
         panel.set_entry(_sample_entry())
         panel.id_column_edit.setText("乱改")
         panel.x_range_row.auto_cb.setChecked(False)
@@ -218,9 +210,7 @@ class TestCurvesParsing:
         panel.curves_edit.setPlainText("")
         assert panel.current_data()["curves"] == []
 
-    def test_invalid_json_returns_error_marker(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_invalid_json_returns_error_marker(self, panel: PresetFormPanel) -> None:
         """坏 JSON：current_data 返回带 _parse_error 标记的 list（不抛）。"""
         panel.set_entry(None)
         panel.curves_edit.setPlainText("[not valid")
@@ -229,9 +219,7 @@ class TestCurvesParsing:
         assert "_parse_error" in curves[0]
         assert "_raw" in curves[0]
 
-    def test_non_list_root_returns_error_marker(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_non_list_root_returns_error_marker(self, panel: PresetFormPanel) -> None:
         panel.set_entry(None)
         panel.curves_edit.setPlainText('{"name": "x"}')
         curves = panel.current_data()["curves"]
@@ -239,9 +227,7 @@ class TestCurvesParsing:
         assert "_parse_error" in curves[0]
         assert "list" in curves[0]["_parse_error"]
 
-    def test_current_curves_text_returns_raw(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_current_curves_text_returns_raw(self, panel: PresetFormPanel) -> None:
         panel.set_entry(None)
         panel.curves_edit.setPlainText('  [{"name": "a"}]  ')
         # 不去空白，原样返回，方便调用方拿到 JSON 错误位置
@@ -280,9 +266,7 @@ class TestButtonVisibility:
         assert panel._cancel_btn.isVisibleTo(panel) is False
         assert panel._save_btn.text() == "保存修改"
 
-    def test_new_draft_state_shows_save_and_cancel(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_new_draft_state_shows_save_and_cancel(self, panel: PresetFormPanel) -> None:
         panel.set_entry(None)
         panel.set_read_only(False)
         assert panel._copy_btn.isVisibleTo(panel) is False
@@ -291,9 +275,7 @@ class TestButtonVisibility:
         assert panel._cancel_btn.isVisibleTo(panel) is True
         assert panel._save_btn.text() == "保存为我的预设"
 
-    def test_save_button_disabled_when_clean(
-        self, panel: PresetFormPanel
-    ) -> None:
+    def test_save_button_disabled_when_clean(self, panel: PresetFormPanel) -> None:
         """非 dirty 时保存按钮禁用（避免无意义的写盘）。"""
         panel.set_entry(_sample_entry(PresetSource.USER))
         panel.set_read_only(False)

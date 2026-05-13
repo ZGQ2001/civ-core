@@ -196,9 +196,7 @@ class LivePreviewPane(QWidget):
         self._invalidate_hit_test()
         self.request_redraw()
 
-    def set_data_source(
-        self, path: Path | str | None, sheet: str | None = None
-    ) -> None:
+    def set_data_source(self, path: Path | str | None, sheet: str | None = None) -> None:
         """设置 Excel 数据源路径 + sheet。None = 未选。
 
         切数据源或 sheet → 触发防抖重绘（缓存按 (path, mtime, sheet, header)
@@ -297,9 +295,7 @@ class LivePreviewPane(QWidget):
             overlay_mode=self._overlay_mode,
         )
         worker.signals.ready.connect(self._on_worker_ready)
-        worker.signals.single_hittest_ready.connect(
-            self._on_worker_single_hittest_ready
-        )
+        worker.signals.single_hittest_ready.connect(self._on_worker_single_hittest_ready)
         worker.signals.overlay_ready.connect(self._on_worker_overlay_ready)
         worker.signals.failed.connect(self._on_worker_failed)
         # 保活：测试场景下 worker 一旦超出 _launch_worker 作用域可能被 GC
@@ -328,9 +324,7 @@ class LivePreviewPane(QWidget):
             self._pending = False
             self._launch_worker()
 
-    def _on_worker_overlay_ready(
-        self, gen: int, png_bytes: bytes, meta: object
-    ) -> None:
+    def _on_worker_overlay_ready(self, gen: int, png_bytes: bytes, meta: object) -> None:
         """叠加模式 worker 回主线程：除 png 外还带 hit-test meta。
 
         与 _on_worker_ready 的差异：保存 meta 供后续 hover 反算；
@@ -351,9 +345,7 @@ class LivePreviewPane(QWidget):
             self._pending = False
             self._launch_worker()
 
-    def _on_worker_single_hittest_ready(
-        self, gen: int, png_bytes: bytes, meta: object
-    ) -> None:
+    def _on_worker_single_hittest_ready(self, gen: int, png_bytes: bytes, meta: object) -> None:
         """单行模式 worker 回主线程：带 SingleRowHitTestMeta 用于 hover tooltip。"""
         self._is_rendering = False
         if gen != self._render_gen:
@@ -392,9 +384,7 @@ class LivePreviewPane(QWidget):
         elif self._single_hit_test_meta is not None:
             self._handle_single_hover(point, self._single_hit_test_meta)
 
-    def _label_pixel_to_png_pixel(
-        self, point: QPoint
-    ) -> tuple[float, float] | None:
+    def _label_pixel_to_png_pixel(self, point: QPoint) -> tuple[float, float] | None:
         """label 坐标 → PNG 像素。两条 hover 路径共用，无 pixmap 时返 None。"""
         if self._current_pixmap is None or self._current_pixmap.isNull():
             return None
@@ -404,8 +394,10 @@ class LivePreviewPane(QWidget):
             self._current_pixmap.height(),
         )
         return _label_to_png_pixel(
-            float(point.x()), float(point.y()),
-            label_size=label_size, pixmap_size=pixmap_size,
+            float(point.x()),
+            float(point.y()),
+            label_size=label_size,
+            pixmap_size=pixmap_size,
         )
 
     def _handle_overlay_hover(self, point: QPoint, meta: HitTestMeta) -> None:
@@ -414,35 +406,42 @@ class LivePreviewPane(QWidget):
         if pix is None:
             return
         data_xy = _pixel_to_data(
-            pix[0], pix[1],
+            pix[0],
+            pix[1],
             axes_bbox_px=meta.axes_bbox_px,
-            xlim=meta.xlim, ylim=meta.ylim,
-            x_log=meta.x_log, y_log=meta.y_log,
+            xlim=meta.xlim,
+            ylim=meta.ylim,
+            x_log=meta.x_log,
+            y_log=meta.y_log,
         )
         if data_xy is None:
             return
         found = _find_nearest_row(
-            data_xy[0], data_xy[1], meta.points,
-            xlim=meta.xlim, ylim=meta.ylim,
+            data_xy[0],
+            data_xy[1],
+            meta.points,
+            xlim=meta.xlim,
+            ylim=meta.ylim,
         )
         if found is None:
             return
         row_idx, _dist = found
         self.point_hovered.emit(row_idx)
 
-    def _handle_single_hover(
-        self, point: QPoint, meta: SingleRowHitTestMeta
-    ) -> None:
+    def _handle_single_hover(self, point: QPoint, meta: SingleRowHitTestMeta) -> None:
         """单行模式 hover：label 像素 → 最近曲线点 → 设 tooltip。"""
         pix = self._label_pixel_to_png_pixel(point)
         if pix is None:
             self._image_label.setToolTip("")
             return
         data_xy = _pixel_to_data(
-            pix[0], pix[1],
+            pix[0],
+            pix[1],
             axes_bbox_px=meta.axes_bbox_px,
-            xlim=meta.xlim, ylim=meta.ylim,
-            x_log=meta.x_log, y_log=meta.y_log,
+            xlim=meta.xlim,
+            ylim=meta.ylim,
+            x_log=meta.x_log,
+            y_log=meta.y_log,
         )
         if data_xy is None:
             self._image_label.setToolTip("")
@@ -450,8 +449,11 @@ class LivePreviewPane(QWidget):
         # 复用 _find_nearest_row：单行模式 points 用 (curve_idx, xs, ys) 占位
         # 但需要拿到具体的最近 (x, y) 值。这里走专门的查找返回 (curve_name, x, y)
         found = _find_nearest_curve_point(
-            data_xy[0], data_xy[1], meta.curves,
-            xlim=meta.xlim, ylim=meta.ylim,
+            data_xy[0],
+            data_xy[1],
+            meta.curves,
+            xlim=meta.xlim,
+            ylim=meta.ylim,
         )
         if found is None:
             self._image_label.setToolTip("")
@@ -459,8 +461,10 @@ class LivePreviewPane(QWidget):
         curve_name, x_val, y_val = found
         tip = _format_single_hover_tooltip(
             curve_name=curve_name,
-            x_label=meta.x_label, x_value=x_val,
-            y_label=meta.y_label, y_value=y_val,
+            x_label=meta.x_label,
+            x_value=x_val,
+            y_label=meta.y_label,
+            y_value=y_val,
         )
         self._image_label.setToolTip(tip)
 
@@ -668,7 +672,7 @@ def _find_nearest_row(
                 best_row = row_idx
     if best_row < 0:
         return None
-    return best_row, best_d2 ** 0.5
+    return best_row, best_d2**0.5
 
 
 def _pick_job_index(jobs_count: int, requested: int) -> int:
@@ -720,18 +724,14 @@ class _PreviewWorker(QRunnable):
 
     def run(self) -> None:  # noqa: D401
         try:
-            rows = EXCEL_DATA_CACHE.get_rows(
-                self._data_source, self._sheet_name, 1
-            )
+            rows = EXCEL_DATA_CACHE.get_rows(self._data_source, self._sheet_name, 1)
             if not rows:
                 self._safe_emit_failed("Excel 没有可用的数据行")
                 return
 
             # build_jobs 返回所有行的图；按 row_idx 选一张作为预览
             # output_dir 传 . 占位 —— render_plot_to_bytes 忽略它
-            jobs, _summary = build_jobs(
-                self._preset, rows, output_dir=Path(".")
-            )
+            jobs, _summary = build_jobs(self._preset, rows, output_dir=Path("."))
             picked = _pick_job_index(len(jobs), self._row_idx)
             if picked < 0:
                 self._safe_emit_failed("数据行都无法生成有效曲线（详见日志）")
@@ -784,9 +784,7 @@ class _PreviewWorker(QRunnable):
         except RuntimeError:
             pass
 
-    def _safe_emit_single_hittest_ready(
-        self, png: bytes, meta: SingleRowHitTestMeta
-    ) -> None:
+    def _safe_emit_single_hittest_ready(self, png: bytes, meta: SingleRowHitTestMeta) -> None:
         try:
             self.signals.single_hittest_ready.emit(self._gen, png, meta)
         except RuntimeError:

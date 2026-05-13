@@ -268,9 +268,7 @@ class PlotSettingsPanel(ScrollArea):
         s = self._settings
 
         self.input_card.setContent(str(s.input_path) if s.input_path else "尚未选择")
-        self.output_card.setContent(
-            str(s.output_dir) if s.output_dir else "尚未选择"
-        )
+        self.output_card.setContent(str(s.output_dir) if s.output_dir else "尚未选择")
         self.header_card.set_value(s.header_row)
         # preset_name 由 set_preset_name 单独管，这里不动
         if s.preset_name:

@@ -160,9 +160,7 @@ class PresetUndoController(QObject):
             self._cursor = len(self._stack) - 1
         else:
             self._cursor += 1
-        log.debug(
-            "undo push → cursor=%d / depth=%d", self._cursor, len(self._stack)
-        )
+        log.debug("undo push → cursor=%d / depth=%d", self._cursor, len(self._stack))
 
     def _flush_pending(self) -> None:
         """undo/redo 前确保 pending 已经入栈，避免"按了 Ctrl+Z 跳过了刚改的"。"""

@@ -113,9 +113,7 @@ class TestConvertOne:
         from civ_core.infra_io import word_to_pdf
 
         fake = _FakeApp()
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         src = _make_docx(tmp_path / "doc.docx")
         out_dir = tmp_path / "out"
@@ -138,9 +136,7 @@ class TestConvertOne:
         from civ_core.infra_io import word_to_pdf
 
         fake = _FakeApp()
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         with pytest.raises(word_to_pdf.Word2PdfError, match="不存在"):
             word_to_pdf.convert_one(tmp_path / "nope.docx", tmp_path)
@@ -160,9 +156,7 @@ class TestConvertOne:
         src = _make_docx(tmp_path / "doc.docx")
         # SaveAs 失败
         fake = _FakeApp(fail_on={"saveas:doc.docx"})
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         with pytest.raises(word_to_pdf.Word2PdfError, match="转换失败"):
             word_to_pdf.convert_one(src, tmp_path / "out")
@@ -184,9 +178,7 @@ class TestConvertBatch:
         from civ_core.infra_io import word_to_pdf
 
         fake = _FakeApp()
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         inputs = [_make_docx(tmp_path / f"f{i}.docx") for i in range(3)]
         out_dir = tmp_path / "out"
@@ -211,9 +203,7 @@ class TestConvertBatch:
         inputs = [_make_docx(tmp_path / f"f{i}.docx") for i in range(3)]
         # f1 SaveAs 失败
         fake = _FakeApp(fail_on={"saveas:f1.docx"})
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         result = word_to_pdf.convert_batch(inputs, tmp_path / "out")
         assert len(result.written) == 2
@@ -229,18 +219,14 @@ class TestConvertBatch:
         from civ_core.infra_io import word_to_pdf
 
         fake = _FakeApp()
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         inputs = [_make_docx(tmp_path / f"f{i}.docx") for i in range(3)]
         seen: list[tuple[int, int, str]] = []
         word_to_pdf.convert_batch(
             inputs,
             tmp_path / "out",
-            progress_cb=lambda done, total, cur: seen.append(
-                (done, total, cur.name)
-            ),
+            progress_cb=lambda done, total, cur: seen.append((done, total, cur.name)),
         )
         assert seen == [
             (1, 3, "f0.docx"),
@@ -256,9 +242,7 @@ class TestConvertBatch:
         from civ_core.infra_io import word_to_pdf
 
         fake = _FakeApp()
-        monkeypatch.setattr(
-            word_to_pdf, "_mount_engine", lambda: (fake, "fake")
-        )
+        monkeypatch.setattr(word_to_pdf, "_mount_engine", lambda: (fake, "fake"))
 
         inputs = [_make_docx(tmp_path / f"f{i}.docx") for i in range(3)]
 
@@ -266,9 +250,7 @@ class TestConvertBatch:
             raise RuntimeError("回调炸了")
 
         # 不应抛出（被 word_to_pdf 内部吞掉 + warn）
-        result = word_to_pdf.convert_batch(
-            inputs, tmp_path / "out", progress_cb=bad_cb
-        )
+        result = word_to_pdf.convert_batch(inputs, tmp_path / "out", progress_cb=bad_cb)
         assert len(result.written) == 3
 
     def test_empty_inputs_raises(

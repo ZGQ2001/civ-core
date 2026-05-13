@@ -63,7 +63,9 @@ class TestValidation:
             view.deleteLater()
 
     def test_missing_out_dir_blocks(
-        self, qapp: QApplication, tmp_path: Path,
+        self,
+        qapp: QApplication,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from civ_core.ui.windows import word2pdf_view as w2v
@@ -84,7 +86,9 @@ class TestValidation:
             view.deleteLater()
 
     def test_valid_inputs_starts_worker(
-        self, qapp: QApplication, tmp_path: Path,
+        self,
+        qapp: QApplication,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from civ_core.ui.windows import word2pdf_view as w2v

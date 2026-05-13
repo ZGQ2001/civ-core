@@ -119,9 +119,7 @@ class TestCacheHit:
 # mtime 变更：触发重读
 # ──────────────────────────────────────────────────────────────────
 class TestMtimeInvalidation:
-    def test_mtime_change_triggers_reread(
-        self, sample_xlsx: Path
-    ) -> None:
+    def test_mtime_change_triggers_reread(self, sample_xlsx: Path) -> None:
         """改文件 mtime → key 变 → 不命中缓存，重新读取。
 
         注意：单纯改 mtime 不改内容也算"变了"——缓存键以 mtime 为准，

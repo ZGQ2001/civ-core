@@ -232,9 +232,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     cfg_path = Path(config_path) if config_path else project_root / "config.toml"
 
     if not cfg_path.is_file():
-        raise ConfigError(
-            f"找不到配置文件：{cfg_path}\n请把 config.toml 放到项目根。"
-        )
+        raise ConfigError(f"找不到配置文件：{cfg_path}\n请把 config.toml 放到项目根。")
 
     try:
         # tomllib 要求二进制模式，由库内部按 UTF-8 解析

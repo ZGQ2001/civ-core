@@ -71,9 +71,7 @@ class TestBaseline:
 # 防抖：连续 on_preset_changed 合并成一条
 # ──────────────────────────────────────────────────────────────────
 class TestDebounce:
-    def test_three_changes_in_window_push_one(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_three_changes_in_window_push_one(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})
@@ -90,9 +88,7 @@ class TestDebounce:
         finally:
             ctrl.deleteLater()
 
-    def test_two_windows_push_two(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_two_windows_push_two(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})
@@ -107,9 +103,7 @@ class TestDebounce:
         finally:
             ctrl.deleteLater()
 
-    def test_no_op_change_skipped(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_no_op_change_skipped(self, qapp: QApplication, qtbot: Any) -> None:
         """value 没变 → 不入栈。"""
         from civ_core.ui.components.preset_undo import PresetUndoController
 
@@ -127,9 +121,7 @@ class TestDebounce:
 # undo / redo
 # ──────────────────────────────────────────────────────────────────
 class TestUndoRedo:
-    def test_undo_redo_round_trip(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_undo_redo_round_trip(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})
@@ -168,9 +160,7 @@ class TestUndoRedo:
 # 截断未来分支
 # ──────────────────────────────────────────────────────────────────
 class TestBranchTruncation:
-    def test_edit_in_middle_truncates_future(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_edit_in_middle_truncates_future(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})
@@ -196,9 +186,7 @@ class TestBranchTruncation:
 # 栈深度上限
 # ──────────────────────────────────────────────────────────────────
 class TestStackDepthLimit:
-    def test_pops_from_bottom_when_exceeded(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_pops_from_bottom_when_exceeded(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})
@@ -219,9 +207,7 @@ class TestStackDepthLimit:
 # _suppress 防回路
 # ──────────────────────────────────────────────────────────────────
 class TestSuppress:
-    def test_apply_does_not_recurse(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_apply_does_not_recurse(self, qapp: QApplication, qtbot: Any) -> None:
         """模拟：apply 触发的 on_preset_changed 不应再入栈。"""
         from civ_core.ui.components.preset_undo import PresetUndoController
 
@@ -247,9 +233,7 @@ class TestSuppress:
 # undo 前 flush pending
 # ──────────────────────────────────────────────────────────────────
 class TestFlushPendingBeforeUndo:
-    def test_undo_commits_in_flight_change(
-        self, qapp: QApplication
-    ) -> None:
+    def test_undo_commits_in_flight_change(self, qapp: QApplication) -> None:
         """正在防抖中的修改也算"已发生"，undo 应能跳过它回到上一个稳定点。
 
         语义：
@@ -276,9 +260,7 @@ class TestFlushPendingBeforeUndo:
 # clear
 # ──────────────────────────────────────────────────────────────────
 class TestClear:
-    def test_clear_resets_to_current(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_clear_resets_to_current(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_undo import PresetUndoController
 
         panel = _MockPanel({"k": 0})

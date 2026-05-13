@@ -293,7 +293,5 @@ def write_audit_entry(
         entry.update(extra)
 
     # ensure_ascii=False 让中文不转 \uXXXX；separators 去多余空格压缩行长
-    line = json.dumps(
-        entry, ensure_ascii=False, separators=(",", ":"), default=str
-    )
+    line = json.dumps(entry, ensure_ascii=False, separators=(",", ":"), default=str)
     logger.info(line)

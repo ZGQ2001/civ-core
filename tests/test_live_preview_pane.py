@@ -292,9 +292,7 @@ class TestHighlightRowSwitchesPreview:
         finally:
             pane.deleteLater()
 
-    def test_set_data_source_resets_row_idx(
-        self, qapp: QApplication, tmp_path: Path
-    ) -> None:
+    def test_set_data_source_resets_row_idx(self, qapp: QApplication, tmp_path: Path) -> None:
         """切数据源同理：原 idx 对新文件无意义 → 重置 0。"""
         from civ_core.ui.components.live_preview_pane import LivePreviewPane
 
@@ -306,9 +304,7 @@ class TestHighlightRowSwitchesPreview:
         finally:
             pane.deleteLater()
 
-    def test_highlight_negative_or_huge_is_ignored(
-        self, qapp: QApplication
-    ) -> None:
+    def test_highlight_negative_or_huge_is_ignored(self, qapp: QApplication) -> None:
         """负数 / 极端值不应崩 —— 负数视为"不切换"。"""
         from civ_core.ui.components.live_preview_pane import LivePreviewPane
 
@@ -431,9 +427,7 @@ class TestOverlayMode:
         sig = inspect.signature(_PreviewWorker.__init__)
         assert "overlay_mode" in sig.parameters
 
-    def test_highlight_in_overlay_mode_does_not_reset_idx(
-        self, qapp: QApplication
-    ) -> None:
+    def test_highlight_in_overlay_mode_does_not_reset_idx(self, qapp: QApplication) -> None:
         """叠加模式下 highlight_row 应保留 idx 用于"高亮哪根"。"""
         from civ_core.ui.components.live_preview_pane import LivePreviewPane
 
@@ -478,10 +472,20 @@ class TestPixelToData:
         from civ_core.ui.components.live_preview_pane import _pixel_to_data
 
         bbox = (100.0, 50.0, 500.0, 350.0)
-        assert _pixel_to_data(99.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
-        assert _pixel_to_data(501.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
-        assert _pixel_to_data(200.0, 49.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
-        assert _pixel_to_data(200.0, 351.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        assert (
+            _pixel_to_data(99.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        )
+        assert (
+            _pixel_to_data(501.0, 200.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+            is None
+        )
+        assert (
+            _pixel_to_data(200.0, 49.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
+        )
+        assert (
+            _pixel_to_data(200.0, 351.0, axes_bbox_px=bbox, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+            is None
+        )
 
     def test_log_axis_uses_log10_interp(self) -> None:
         """log 轴：像素中心 → 10**((log10(min)+log10(max))/2)。"""
@@ -491,18 +495,25 @@ class TestPixelToData:
 
         bbox = (0.0, 0.0, 100.0, 100.0)
         # x: log 轴 1..1000；中心像素 50 应映射到 10**1.5 ≈ 31.62
-        r = _pixel_to_data(50.0, 50.0, axes_bbox_px=bbox,
-                            xlim=(1.0, 1000.0), ylim=(0.0, 1.0),
-                            x_log=True, y_log=False)
+        r = _pixel_to_data(
+            50.0,
+            50.0,
+            axes_bbox_px=bbox,
+            xlim=(1.0, 1000.0),
+            ylim=(0.0, 1.0),
+            x_log=True,
+            y_log=False,
+        )
         assert r is not None
-        assert math.isclose(r[0], 10 ** 1.5, rel_tol=1e-6)
+        assert math.isclose(r[0], 10**1.5, rel_tol=1e-6)
 
     def test_degenerate_bbox_returns_none(self) -> None:
         from civ_core.ui.components.live_preview_pane import _pixel_to_data
 
         # x1 == x0：退化
-        r = _pixel_to_data(50.0, 50.0, axes_bbox_px=(100.0, 50.0, 100.0, 350.0),
-                            xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+        r = _pixel_to_data(
+            50.0, 50.0, axes_bbox_px=(100.0, 50.0, 100.0, 350.0), xlim=(0.0, 1.0), ylim=(0.0, 1.0)
+        )
         assert r is None
 
 
@@ -513,9 +524,7 @@ class TestLabelToPngPixel:
         from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
 
         # label 和 pixmap 同比例：无留白，scale = 1
-        r = _label_to_png_pixel(150.0, 100.0,
-                                  label_size=(300, 200),
-                                  pixmap_size=(300, 200))
+        r = _label_to_png_pixel(150.0, 100.0, label_size=(300, 200), pixmap_size=(300, 200))
         assert r is not None
         assert abs(r[0] - 150.0) < 1e-9
         assert abs(r[1] - 100.0) < 1e-9
@@ -526,9 +535,7 @@ class TestLabelToPngPixel:
 
         # pixmap 400×200 → label 400×300：scale = min(1.0, 1.5) = 1.0
         # shown 400×200，上下各留 50。中心 (200, 150) → pixmap (200, 100)
-        r = _label_to_png_pixel(200.0, 150.0,
-                                  label_size=(400, 300),
-                                  pixmap_size=(400, 200))
+        r = _label_to_png_pixel(200.0, 150.0, label_size=(400, 300), pixmap_size=(400, 200))
         assert r is not None
         assert abs(r[0] - 200.0) < 1e-9
         assert abs(r[1] - 100.0) < 1e-9
@@ -539,9 +546,7 @@ class TestLabelToPngPixel:
 
         # pixmap 200×400 → label 300×400：scale = min(1.5, 1.0) = 1.0
         # shown 200×400，左右各留 50。点 (150, 200) → pixmap (100, 200)
-        r = _label_to_png_pixel(150.0, 200.0,
-                                  label_size=(300, 400),
-                                  pixmap_size=(200, 400))
+        r = _label_to_png_pixel(150.0, 200.0, label_size=(300, 400), pixmap_size=(200, 400))
         assert r is not None
         assert abs(r[0] - 100.0) < 1e-9
         assert abs(r[1] - 200.0) < 1e-9
@@ -552,14 +557,10 @@ class TestLabelToPngPixel:
 
         # pixmap 400×200 → label 400×300，上下各 50 留白
         # 点 (200, 25) 在顶部留白
-        r = _label_to_png_pixel(200.0, 25.0,
-                                  label_size=(400, 300),
-                                  pixmap_size=(400, 200))
+        r = _label_to_png_pixel(200.0, 25.0, label_size=(400, 300), pixmap_size=(400, 200))
         assert r is None
         # 点 (200, 275) 在底部留白
-        r = _label_to_png_pixel(200.0, 275.0,
-                                  label_size=(400, 300),
-                                  pixmap_size=(400, 200))
+        r = _label_to_png_pixel(200.0, 275.0, label_size=(400, 300), pixmap_size=(400, 200))
         assert r is None
 
     def test_scaling_inversed_correctly(self) -> None:
@@ -568,9 +569,7 @@ class TestLabelToPngPixel:
 
         # pixmap 200×100 → label 600×300：scale = min(3.0, 3.0) = 3.0
         # shown 600×300（无留白）。label 中心 (300, 150) → pixmap (100, 50)
-        r = _label_to_png_pixel(300.0, 150.0,
-                                  label_size=(600, 300),
-                                  pixmap_size=(200, 100))
+        r = _label_to_png_pixel(300.0, 150.0, label_size=(600, 300), pixmap_size=(200, 100))
         assert r is not None
         assert abs(r[0] - 100.0) < 1e-9
         assert abs(r[1] - 50.0) < 1e-9
@@ -578,12 +577,8 @@ class TestLabelToPngPixel:
     def test_zero_size_returns_none(self) -> None:
         from civ_core.ui.components.live_preview_pane import _label_to_png_pixel
 
-        assert _label_to_png_pixel(10.0, 10.0,
-                                     label_size=(0, 100),
-                                     pixmap_size=(100, 100)) is None
-        assert _label_to_png_pixel(10.0, 10.0,
-                                     label_size=(100, 100),
-                                     pixmap_size=(100, 0)) is None
+        assert _label_to_png_pixel(10.0, 10.0, label_size=(0, 100), pixmap_size=(100, 100)) is None
+        assert _label_to_png_pixel(10.0, 10.0, label_size=(100, 100), pixmap_size=(100, 0)) is None
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -679,9 +674,11 @@ class TestPointHoveredSignal:
             pane._image_label.setPixmap(pix)
 
             pane._hit_test_meta = HitTestMeta(
-                png_width=400, png_height=200,
+                png_width=400,
+                png_height=200,
                 axes_bbox_px=(0.0, 0.0, 400.0, 200.0),
-                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                xlim=(0.0, 10.0),
+                ylim=(0.0, 100.0),
                 points=[(0, [1.0], [50.0])],
             )
 
@@ -727,9 +724,7 @@ class TestFindNearestCurvePoint:
             ("卸载", [5.0, 3.0, 0.0], [50.0, 25.0, 0.0]),
         ]
         # 查询点 (2.1, 20) → 加载.第二点 (2, 20)
-        r = _find_nearest_curve_point(
-            2.1, 20.0, curves, xlim=(0.0, 10.0), ylim=(0.0, 100.0)
-        )
+        r = _find_nearest_curve_point(2.1, 20.0, curves, xlim=(0.0, 10.0), ylim=(0.0, 100.0))
         assert r is not None
         name, x, y = r
         assert name == "加载"
@@ -740,9 +735,7 @@ class TestFindNearestCurvePoint:
             _find_nearest_curve_point,
         )
 
-        assert _find_nearest_curve_point(
-            0.0, 0.0, [], xlim=(0.0, 1.0), ylim=(0.0, 1.0)
-        ) is None
+        assert _find_nearest_curve_point(0.0, 0.0, [], xlim=(0.0, 1.0), ylim=(0.0, 1.0)) is None
 
 
 class TestFormatHoverTooltip:
@@ -794,10 +787,13 @@ class TestSingleRowHoverTooltip:
             pane._image_label.setPixmap(pix)
 
             pane._single_hit_test_meta = SingleRowHitTestMeta(
-                png_width=600, png_height=400,
+                png_width=600,
+                png_height=400,
                 axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
-                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
-                x_label="位移", y_label="荷载",
+                xlim=(0.0, 10.0),
+                ylim=(0.0, 100.0),
+                x_label="位移",
+                y_label="荷载",
                 curves=[
                     ("加载", [1.0, 5.0, 9.0], [10.0, 50.0, 90.0]),
                 ],
@@ -812,9 +808,7 @@ class TestSingleRowHoverTooltip:
         finally:
             pane.deleteLater()
 
-    def test_overlay_meta_present_skips_single_path(
-        self, qapp: QApplication
-    ) -> None:
+    def test_overlay_meta_present_skips_single_path(self, qapp: QApplication) -> None:
         """同时有两类 meta（理论不该出现）时 overlay 优先，单行 tooltip 不设。"""
         from PySide6.QtCore import QPoint
         from PySide6.QtGui import QPixmap
@@ -834,15 +828,19 @@ class TestSingleRowHoverTooltip:
             pane._image_label.setPixmap(pix)
 
             pane._hit_test_meta = HitTestMeta(
-                png_width=600, png_height=400,
+                png_width=600,
+                png_height=400,
                 axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
-                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                xlim=(0.0, 10.0),
+                ylim=(0.0, 100.0),
                 points=[(0, [5.0], [50.0])],
             )
             pane._single_hit_test_meta = SingleRowHitTestMeta(
-                png_width=600, png_height=400,
+                png_width=600,
+                png_height=400,
                 axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
-                xlim=(0.0, 10.0), ylim=(0.0, 100.0),
+                xlim=(0.0, 10.0),
+                ylim=(0.0, 100.0),
                 curves=[("X", [5.0], [50.0])],
             )
 
@@ -856,9 +854,7 @@ class TestSingleRowHoverTooltip:
         finally:
             pane.deleteLater()
 
-    def test_invalidate_clears_tooltip_and_meta(
-        self, qapp: QApplication
-    ) -> None:
+    def test_invalidate_clears_tooltip_and_meta(self, qapp: QApplication) -> None:
         """切预设 / 数据源 / 模式 → meta + tooltip 都清空。"""
         from PySide6.QtGui import QPixmap
 
@@ -871,9 +867,11 @@ class TestSingleRowHoverTooltip:
             pix.fill()
             pane._current_pixmap = pix
             pane._single_hit_test_meta = SingleRowHitTestMeta(
-                png_width=600, png_height=400,
+                png_width=600,
+                png_height=400,
                 axes_bbox_px=(0.0, 0.0, 600.0, 400.0),
-                xlim=(0.0, 1.0), ylim=(0.0, 1.0),
+                xlim=(0.0, 1.0),
+                ylim=(0.0, 1.0),
                 curves=[("a", [0.5], [0.5])],
             )
             pane._image_label.setToolTip("旧 tooltip")
@@ -885,9 +883,7 @@ class TestSingleRowHoverTooltip:
         finally:
             pane.deleteLater()
 
-    def test_worker_single_hittest_signal_exists(
-        self, qapp: QApplication
-    ) -> None:
+    def test_worker_single_hittest_signal_exists(self, qapp: QApplication) -> None:
         from civ_core.ui.components.live_preview_pane import (
             _PreviewWorkerSignals,
         )
@@ -896,9 +892,7 @@ class TestSingleRowHoverTooltip:
         # 信号对象存在且能 emit / connect
         assert hasattr(sigs, "single_hittest_ready")
         seen: list[tuple[int, bytes, object]] = []
-        sigs.single_hittest_ready.connect(
-            lambda g, b, m: seen.append((g, b, m))
-        )
+        sigs.single_hittest_ready.connect(lambda g, b, m: seen.append((g, b, m)))
         sigs.single_hittest_ready.emit(1, b"abc", "fake")
         assert seen == [(1, b"abc", "fake")]
 

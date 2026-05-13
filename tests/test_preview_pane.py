@@ -71,9 +71,7 @@ class TestInitialState:
 # set_results：填充 + 自动选中第一张
 # ──────────────────────────────────────────────────────────────────
 class TestSetResults:
-    def test_populates_thumb_list(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_populates_thumb_list(self, pane: PreviewPane, tmp_path: Path) -> None:
         files = [tmp_path / "a.png", tmp_path / "b.png", tmp_path / "c.png"]
         for f in files:
             _make_test_png(f)
@@ -85,9 +83,7 @@ class TestSetResults:
         names = {pane._thumb_list.item(i).text() for i in range(3)}
         assert names == {"a.png", "b.png", "c.png"}
 
-    def test_auto_selects_first_item(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_auto_selects_first_item(self, pane: PreviewPane, tmp_path: Path) -> None:
         files = [tmp_path / "a.png", tmp_path / "b.png"]
         for f in files:
             _make_test_png(f)
@@ -96,9 +92,7 @@ class TestSetResults:
 
         assert pane._thumb_list.currentRow() == 0
 
-    def test_first_image_loaded_as_big(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_first_image_loaded_as_big(self, pane: PreviewPane, tmp_path: Path) -> None:
         """选中第一张后，大图区应已加载 pixmap（非空、非空文字）。"""
         f = tmp_path / "a.png"
         _make_test_png(f)
@@ -113,17 +107,13 @@ class TestSetResults:
         assert pane._current_pixmap is not None
         assert not pane._current_pixmap.isNull()
 
-    def test_empty_paths_falls_back_to_empty_state(
-        self, pane: PreviewPane
-    ) -> None:
+    def test_empty_paths_falls_back_to_empty_state(self, pane: PreviewPane) -> None:
         """set_results 传空 list → 等价于 clear。"""
         pane.set_results([])
         assert pane._thumb_list.count() == 0
         assert "运行批量出图后" in pane._big_label.text()
 
-    def test_replaces_old_results(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_replaces_old_results(self, pane: PreviewPane, tmp_path: Path) -> None:
         """新一轮出图 → 列表不应留旧条目。"""
         old1 = tmp_path / "old1.png"
         old2 = tmp_path / "old2.png"
@@ -143,9 +133,7 @@ class TestSetResults:
 # 切换缩略图 → 大图刷新
 # ──────────────────────────────────────────────────────────────────
 class TestSelectionChange:
-    def test_select_other_thumb_updates_big_image(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_select_other_thumb_updates_big_image(self, pane: PreviewPane, tmp_path: Path) -> None:
         red = tmp_path / "red.png"
         blue = tmp_path / "blue.png"
         _make_test_png(red, Qt.GlobalColor.red)
@@ -167,9 +155,7 @@ class TestSelectionChange:
 # clear()
 # ──────────────────────────────────────────────────────────────────
 class TestClear:
-    def test_clear_resets_to_empty_state(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_clear_resets_to_empty_state(self, pane: PreviewPane, tmp_path: Path) -> None:
         f = tmp_path / "a.png"
         _make_test_png(f)
         pane.set_results([f])
@@ -189,9 +175,7 @@ class TestClear:
 # 加载失败兜底
 # ──────────────────────────────────────────────────────────────────
 class TestLoadFailures:
-    def test_missing_file_does_not_crash(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_missing_file_does_not_crash(self, pane: PreviewPane, tmp_path: Path) -> None:
         """文件不存在 → 列表条目仍创建（标 tooltip），后续条目不受影响。"""
         good = tmp_path / "good.png"
         _make_test_png(good)
@@ -213,9 +197,7 @@ class TestLoadFailures:
 # UserRole 上挂的 Path
 # ──────────────────────────────────────────────────────────────────
 class TestPathStorage:
-    def test_path_attached_to_item_user_role(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_path_attached_to_item_user_role(self, pane: PreviewPane, tmp_path: Path) -> None:
         """每个列表项的 UserRole 应挂原 Path（供 _on_current_changed 取用）。"""
         f = tmp_path / "x.png"
         _make_test_png(f)
@@ -226,9 +208,7 @@ class TestPathStorage:
         assert isinstance(stored, Path)
         assert stored == f
 
-    def test_tooltip_shows_full_path(
-        self, pane: PreviewPane, tmp_path: Path
-    ) -> None:
+    def test_tooltip_shows_full_path(self, pane: PreviewPane, tmp_path: Path) -> None:
         """tooltip 应是完整路径（让用户看到落到哪个目录）。"""
         f = tmp_path / "x.png"
         _make_test_png(f)

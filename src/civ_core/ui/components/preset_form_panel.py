@@ -253,9 +253,7 @@ class PresetFormPanel(ScrollArea):
 
         content = QWidget(self)
         content.setObjectName("presetFormContent")
-        content.setStyleSheet(
-            "QWidget#presetFormContent { background: transparent; }"
-        )
+        content.setStyleSheet("QWidget#presetFormContent { background: transparent; }")
         self.setWidget(content)
 
         outer = QVBoxLayout(content)
@@ -285,15 +283,11 @@ class PresetFormPanel(ScrollArea):
 
         self.filename_template_edit = LineEdit(content)
         self.filename_template_edit.setPlaceholderText("如：锚杆{id}_荷载位移曲线.png")
-        form_basic.addRow(
-            StrongBodyLabel("文件名模板", content), self.filename_template_edit
-        )
+        form_basic.addRow(StrongBodyLabel("文件名模板", content), self.filename_template_edit)
 
         self.title_template_edit = LineEdit(content)
         self.title_template_edit.setPlaceholderText("如：锚杆{id}：荷载-位移曲线")
-        form_basic.addRow(
-            StrongBodyLabel("图标题模板", content), self.title_template_edit
-        )
+        form_basic.addRow(StrongBodyLabel("图标题模板", content), self.title_template_edit)
 
         outer.addLayout(form_basic)
 
@@ -518,12 +512,8 @@ class PresetFormPanel(ScrollArea):
         try:
             self.name_edit.setText(name)
             self.id_column_edit.setText(str(data.get("id_column", "")))
-            self.filename_template_edit.setText(
-                str(data.get("filename_template", ""))
-            )
-            self.title_template_edit.setText(
-                str(data.get("title_template", ""))
-            )
+            self.filename_template_edit.setText(str(data.get("filename_template", "")))
+            self.title_template_edit.setText(str(data.get("title_template", "")))
 
             x_axis = data.get("x_axis") or {}
             self.x_label_edit.setText(str(x_axis.get("label", "")))
@@ -535,9 +525,7 @@ class PresetFormPanel(ScrollArea):
 
             # curves 用 indent JSON 落到文本框，方便用户读
             curves = data.get("curves", [])
-            self.curves_edit.setPlainText(
-                json.dumps(curves, indent=2, ensure_ascii=False)
-            )
+            self.curves_edit.setPlainText(json.dumps(curves, indent=2, ensure_ascii=False))
         finally:
             for w in widgets:
                 w.blockSignals(False)
@@ -566,9 +554,7 @@ class PresetFormPanel(ScrollArea):
         cur_name = self.current_name()
         cur_data = self.current_data()
 
-        is_dirty = (
-            cur_name != self._baseline_name or cur_data != self._baseline_data
-        )
+        is_dirty = cur_name != self._baseline_name or cur_data != self._baseline_data
         self._set_dirty(is_dirty)
 
     def _set_dirty(self, value: bool) -> None:

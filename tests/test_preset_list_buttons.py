@@ -37,9 +37,7 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
-def patched_paths(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, Path]:
+def patched_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """把系统/用户预设路径都 monkeypatch 到 tmp_path，避免动真实文件系统。"""
     sys_file = tmp_path / "sys.json"
     user_file = tmp_path / "user.json"
@@ -68,9 +66,7 @@ def patched_paths(
 
 
 @pytest.fixture
-def pane(
-    qapp: QApplication, patched_paths: tuple[Path, Path]
-) -> PresetListPane:
+def pane(qapp: QApplication, patched_paths: tuple[Path, Path]) -> PresetListPane:
     p = PresetListPane()
     yield p
     p.deleteLater()
@@ -80,35 +76,27 @@ def pane(
 # 按钮态：_update_action_buttons
 # ──────────────────────────────────────────────────────────────────
 class TestButtonStates:
-    def test_no_selection_disables_copy_and_delete(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_no_selection_disables_copy_and_delete(self, pane: PresetListPane) -> None:
         pane._update_action_buttons(entry=None)
         assert pane._new_btn.isEnabled() is True
         assert pane._copy_btn.isEnabled() is False
         assert pane._delete_btn.isEnabled() is False
 
-    def test_system_selection_enables_copy_only(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_system_selection_enables_copy_only(self, pane: PresetListPane) -> None:
         entry = PresetEntry(name="X", data={}, source=PresetSource.SYSTEM)
         pane._update_action_buttons(entry=entry)
         assert pane._new_btn.isEnabled() is True
         assert pane._copy_btn.isEnabled() is True
         assert pane._delete_btn.isEnabled() is False
 
-    def test_user_selection_enables_copy_and_delete(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_user_selection_enables_copy_and_delete(self, pane: PresetListPane) -> None:
         entry = PresetEntry(name="X", data={}, source=PresetSource.USER)
         pane._update_action_buttons(entry=entry)
         assert pane._new_btn.isEnabled() is True
         assert pane._copy_btn.isEnabled() is True
         assert pane._delete_btn.isEnabled() is True
 
-    def test_buttons_track_selection_after_refresh(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_buttons_track_selection_after_refresh(self, pane: PresetListPane) -> None:
         """整张 refresh 后，按钮态应反映"当前选中是系统还是用户"。
 
         默认 setCurrentRow(0) 选第一项 → 系统A → 删除应禁用。
@@ -123,9 +111,7 @@ class TestButtonStates:
 # +新建：信号 + 取消选中
 # ──────────────────────────────────────────────────────────────────
 class TestNewButton:
-    def test_new_emits_signal_and_clears_selection(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_new_emits_signal_and_clears_selection(self, pane: PresetListPane) -> None:
         emitted: list[None] = []
         pane.new_preset_requested.connect(lambda: emitted.append(None))
 
@@ -158,9 +144,7 @@ class TestCopyButton:
             original_init(self, title, default_name, parent)
             self.nameEdit.setText(new_name)
 
-        monkeypatch.setattr(
-            preset_list_mod._NameInputDialog, "__init__", fake_init
-        )
+        monkeypatch.setattr(preset_list_mod._NameInputDialog, "__init__", fake_init)
         monkeypatch.setattr(
             preset_list_mod._NameInputDialog,
             "exec",
@@ -236,15 +220,11 @@ class TestCopyButton:
 # 删除：monkeypatch 确认对话框
 # ──────────────────────────────────────────────────────────────────
 class TestDeleteButton:
-    def _patch_confirm(
-        self, monkeypatch: pytest.MonkeyPatch, accepted: bool
-    ) -> None:
+    def _patch_confirm(self, monkeypatch: pytest.MonkeyPatch, accepted: bool) -> None:
         # 删除用 MessageBox 弹确认，monkeypatch 它的 exec
         from qfluentwidgets import MessageBox
 
-        monkeypatch.setattr(
-            MessageBox, "exec", lambda self: 1 if accepted else 0
-        )
+        monkeypatch.setattr(MessageBox, "exec", lambda self: 1 if accepted else 0)
 
     def test_delete_user_preset_removes_and_refreshes(
         self,
@@ -321,27 +301,19 @@ class TestDeleteButton:
 # refresh(select_name=...) 行为
 # ──────────────────────────────────────────────────────────────────
 class TestRefreshSelectName:
-    def test_refresh_default_selects_first(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_refresh_default_selects_first(self, pane: PresetListPane) -> None:
         pane.refresh()
         assert pane.selected_preset_name() == "系统A"
 
-    def test_refresh_with_select_name_picks_that_entry(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_refresh_with_select_name_picks_that_entry(self, pane: PresetListPane) -> None:
         pane.refresh(select_name="我的X")
         assert pane.selected_preset_name() == "我的X"
 
-    def test_refresh_with_empty_string_clears_selection(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_refresh_with_empty_string_clears_selection(self, pane: PresetListPane) -> None:
         pane.refresh()
         pane.refresh(select_name="")
         assert pane.selected_preset_name() is None
 
-    def test_refresh_with_unknown_name_falls_back_to_first(
-        self, pane: PresetListPane
-    ) -> None:
+    def test_refresh_with_unknown_name_falls_back_to_first(self, pane: PresetListPane) -> None:
         pane.refresh(select_name="不存在的预设")
         assert pane.selected_preset_name() == "系统A"

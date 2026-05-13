@@ -592,3 +592,88 @@ class TestSectionLayout:
                 )
         finally:
             panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-④ 次 Y 轴 UI
+# ──────────────────────────────────────────────────────────────────
+class TestSecondaryYAxis:
+    def test_default_disabled(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        from civ_core.ui.components.preset_accordion_panel import (
+            PresetAccordionPanel,
+        )
+
+        panel = PresetAccordionPanel()
+        try:
+            assert panel._y2_enable_chk.isChecked() is False
+            # 字段隐藏
+            assert panel._y2_fields_widget.isHidden() is True
+            # current_preset_data → y_axis2=None
+            data = panel.current_preset_data()
+            assert "y_axis2" in data
+            assert data["y_axis2"] is None
+        finally:
+            panel.deleteLater()
+
+    def test_enable_shows_fields_and_emits_data(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        from civ_core.ui.components.preset_accordion_panel import (
+            PresetAccordionPanel,
+        )
+
+        panel = PresetAccordionPanel()
+        try:
+            panel._y2_enable_chk.setChecked(True)
+            assert panel._y2_fields_widget.isHidden() is False
+            panel._y2_label_edit.setText("温度")
+            data = panel.current_preset_data()
+            assert isinstance(data["y_axis2"], dict)
+            assert data["y_axis2"]["label"] == "温度"
+        finally:
+            panel.deleteLater()
+
+    def test_apply_preset_data_with_y_axis2(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        from civ_core.ui.components.preset_accordion_panel import (
+            PresetAccordionPanel,
+        )
+
+        panel = PresetAccordionPanel()
+        try:
+            data = panel.current_preset_data()
+            data["y_axis2"] = {
+                "label": "Y2 标签",
+                "range": [0.0, 10.0, 2.0],
+                "log": False,
+            }
+            panel.apply_preset_data(data)
+            assert panel._y2_enable_chk.isChecked() is True
+            assert panel._y2_label_edit.text() == "Y2 标签"
+            assert panel._y2_fields_widget.isHidden() is False
+        finally:
+            panel.deleteLater()
+
+    def test_apply_preset_data_with_y_axis2_none_disables(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        from civ_core.ui.components.preset_accordion_panel import (
+            PresetAccordionPanel,
+        )
+
+        panel = PresetAccordionPanel()
+        try:
+            # 先启用
+            panel._y2_enable_chk.setChecked(True)
+            panel._y2_label_edit.setText("会被清掉")
+            # apply None → 关闭
+            data = panel.current_preset_data()
+            data["y_axis2"] = None
+            panel.apply_preset_data(data)
+            assert panel._y2_enable_chk.isChecked() is False
+            assert panel._y2_fields_widget.isHidden() is True
+        finally:
+            panel.deleteLater()

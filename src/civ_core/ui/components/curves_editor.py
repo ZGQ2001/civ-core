@@ -72,19 +72,26 @@ _EMPTY_CURVE: dict[str, Any] = {
     "linewidth": 2.0,
     "markersize": 7.0,
     "plot_type": "line",
+    "y_axis": "primary",
     "points": [],
 }
 _EMPTY_POINT: dict[str, Any] = {
     "fixed_axis": "y",
     "fixed_value": 0.0,
     "var_column": "",
+    "err_column": "",
 }
 
 # 点表列顺序与标题
 _POINT_COL_AXIS = 0
 _POINT_COL_VALUE = 1
 _POINT_COL_VAR = 2
-_POINT_HEADERS = ("固定轴", "固定值", "另一轴 ← 列名")
+_POINT_COL_ERR = 3
+_POINT_HEADERS = ("固定轴", "固定值", "另一轴 ← 列名", "误差列（可空）")
+
+# Y 轴选择文本（UI 显示 ↔ schema 值）
+_Y_AXIS_LABELS: dict[str, str] = {"primary": "主 Y 轴", "secondary": "次 Y 轴"}
+_Y_AXIS_VALUES: dict[str, str] = {v: k for k, v in _Y_AXIS_LABELS.items()}
 
 
 class CurvesEditor(QWidget):
@@ -189,9 +196,20 @@ class CurvesEditor(QWidget):
         name_row.addWidget(self._name_edit, 1)
         self._form_layout.addLayout(name_row)
 
+        # P1.5-④ 曲线挂哪条 Y 轴（主/次）
+        # 启用次轴需要 PresetAccordionPanel 同步配次 Y 轴 spec，否则渲染时会
+        # 被当作主轴；UI 显示用中文，存值用 schema 字符串 "primary"/"secondary"
+        y_axis_row = self._make_row("Y 轴:")
+        self._y_axis_combo = ComboBox(self)
+        self._y_axis_combo.addItems(list(_Y_AXIS_LABELS.values()))
+        self._y_axis_combo.setCurrentText(_Y_AXIS_LABELS["primary"])
+        self._y_axis_combo.currentTextChanged.connect(self._save_from_form)
+        y_axis_row.addWidget(self._y_axis_combo, 1)
+        self._form_layout.addLayout(y_axis_row)
+
         # 点子表
         self._form_layout.addWidget(StrongBodyLabel("数据点：", self))
-        self._points_table = QTableWidget(0, 3, self)
+        self._points_table = QTableWidget(0, 4, self)
         self._points_table.setHorizontalHeaderLabels(list(_POINT_HEADERS))
         self._points_table.verticalHeader().setVisible(False)
         self._points_table.horizontalHeader().setStretchLastSection(True)
@@ -357,7 +375,7 @@ class CurvesEditor(QWidget):
         """把当前选中曲线的字段值刷到表单控件 + 重建点表。
 
         样式字段（color/marker/plot_type/linewidth/markersize）已迁到
-        外部「样式」分组，本编辑器只负责"基础"（曲线名）和"数据点"两段。
+        外部「样式」分组，本编辑器只负责"基础"（曲线名 + Y 轴）和"数据点"两段。
         """
         has_selection = 0 <= self._current_idx < len(self._curves)
         self._form_widget.setEnabled(has_selection)
@@ -366,21 +384,29 @@ class CurvesEditor(QWidget):
         try:
             if not has_selection:
                 self._name_edit.setText("")
+                self._y_axis_combo.setCurrentText(_Y_AXIS_LABELS["primary"])
                 self._points_table.setRowCount(0)
                 return
 
             curve = self._curves[self._current_idx]
             self._name_edit.setText(str(curve.get("name", "")))
+            # Y 轴：缺省 primary；非法值退化到 primary
+            y_axis_value = str(curve.get("y_axis", "primary"))
+            label = _Y_AXIS_LABELS.get(y_axis_value, _Y_AXIS_LABELS["primary"])
+            self._y_axis_combo.setCurrentText(label)
             self._rebuild_points_table(curve.get("points", []) or [])
         finally:
             self._suppress_signals = False
 
     def _save_from_form(self) -> None:
-        """曲线名 editingFinished → 回写 + 同步 ComboBox 当前项显示文字。"""
+        """曲线名 / Y 轴 变化 → 回写当前曲线 + 同步 ComboBox 当前项显示文字。"""
         if self._suppress_signals or self._current_idx < 0:
             return
         curve = self._curves[self._current_idx]
         curve["name"] = self._name_edit.text()
+        # Y 轴：UI 中文 → schema 字符串
+        cur_label = self._y_axis_combo.currentText()
+        curve["y_axis"] = _Y_AXIS_VALUES.get(cur_label, "primary")
         self._curve_combo.setItemText(
             self._current_idx, f"#{self._current_idx + 1}  {curve['name']}"
         )
@@ -462,6 +488,41 @@ class CurvesEditor(QWidget):
                     )
                     var_widget = le
                 self._points_table.setCellWidget(pidx, _POINT_COL_VAR, var_widget)
+
+                # err_column 列（P1.5-④ 误差棒）：空字符串=不画误差
+                # 风格与 var_column 列一致：有 Excel 表头 → ComboBox，否则 LineEdit
+                # 第一项加"(无)"代表空字符串，避免用户必须输入空格
+                err_widget: QWidget
+                cur_err = str(pt.get("err_column", ""))
+                if self._excel_headers:
+                    cb_err = ComboBox(self._points_table)
+                    cb_err.addItem("(无)")
+                    cb_err.addItems(self._excel_headers)
+                    if cur_err in self._excel_headers:
+                        cb_err.setCurrentText(cur_err)
+                    elif cur_err:
+                        # 当前值不在表头：插到下拉里让用户看见，不丢
+                        cb_err.insertItem(1, cur_err)
+                        cb_err.setCurrentIndex(1)
+                    else:
+                        cb_err.setCurrentIndex(0)  # (无)
+                    cb_err.currentTextChanged.connect(
+                        lambda v, r=pidx: self._on_point_err_changed(
+                            r, "" if v == "(无)" else v
+                        )
+                    )
+                    err_widget = cb_err
+                else:
+                    le_err = QLineEdit(self._points_table)
+                    le_err.setText(cur_err)
+                    le_err.setPlaceholderText("(无)")
+                    le_err.editingFinished.connect(
+                        lambda r=pidx, w=le_err: self._on_point_err_changed(
+                            r, w.text()
+                        )
+                    )
+                    err_widget = le_err
+                self._points_table.setCellWidget(pidx, _POINT_COL_ERR, err_widget)
         finally:
             self._suppress_signals = False
 
@@ -495,6 +556,16 @@ class CurvesEditor(QWidget):
         if pts is None or row >= len(pts):
             return
         pts[row]["var_column"] = value
+        self.changed.emit()
+
+    def _on_point_err_changed(self, row: int, value: str) -> None:
+        """P1.5-④：误差列字段变化。空字符串视为"不画误差棒"。"""
+        if self._suppress_signals:
+            return
+        pts = self._current_points()
+        if pts is None or row >= len(pts):
+            return
+        pts[row]["err_column"] = value
         self.changed.emit()
 
     def _on_add_point(self) -> None:

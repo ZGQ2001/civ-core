@@ -586,6 +586,8 @@ class PresetAccordionPanel(QWidget):
         # （避免被横向挤到不可读）
         layout.addLayout(self._build_axis_block(axis="X"))
         layout.addLayout(self._build_axis_block(axis="Y"))
+        # P1.5-④ 次 Y 轴（默认关；启用后双 Y 轴）
+        layout.addLayout(self._build_y2_axis_block())
 
     def _build_axis_block(self, *, axis: str) -> QVBoxLayout:
         col = QVBoxLayout()
@@ -608,6 +610,50 @@ class PresetAccordionPanel(QWidget):
             self._y_label_edit = edit
             self._y_range = rng
         return col
+
+    def _build_y2_axis_block(self) -> QVBoxLayout:
+        """P1.5-④：次 Y 轴 block。启用 CheckBox 控制下面 label/range/log 字段可见。
+
+        当未启用时 current_preset_data() 返回 y_axis2=None；
+        启用时返回 {label, range, log} 字典（与 x_axis/y_axis 结构相同）。
+        """
+        col = QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(2)
+
+        self._y2_enable_chk = CheckBox("启用次 Y 轴（双 Y 轴对比）", self)
+        self._y2_enable_chk.stateChanged.connect(self._on_y2_enable_changed)
+        col.addWidget(self._y2_enable_chk)
+
+        # 下面三块字段：用 QWidget 容器包起来，方便整体显隐
+        self._y2_fields_widget = QWidget(self)
+        y2_col = QVBoxLayout(self._y2_fields_widget)
+        y2_col.setContentsMargins(0, 0, 0, 0)
+        y2_col.setSpacing(2)
+
+        y2_col.addWidget(BodyLabel("次 Y 轴标签", self))
+        self._y2_label_edit = LineEdit(self._y2_fields_widget)
+        self._y2_label_edit.editingFinished.connect(self._on_axis_changed)
+        y2_col.addWidget(self._y2_label_edit)
+
+        self._y2_range = _RangeTrio(self._y2_fields_widget)
+        self._y2_range.valueChanged.connect(self._on_axis_changed)
+        y2_col.addWidget(self._y2_range)
+
+        self._y2_log_chk = CheckBox("次 Y 对数刻度", self._y2_fields_widget)
+        self._y2_log_chk.stateChanged.connect(self._emit_preset_changed)
+        y2_col.addWidget(self._y2_log_chk)
+
+        col.addWidget(self._y2_fields_widget)
+        # 启动时未启用 → 隐藏字段
+        self._y2_fields_widget.setVisible(False)
+        return col
+
+    def _on_y2_enable_changed(self, _state: int) -> None:
+        """次 Y 启用 / 关闭 → 显隐字段 + 触发预设变更（双 Y 图重渲染）。"""
+        enabled = self._y2_enable_chk.isChecked()
+        self._y2_fields_widget.setVisible(enabled)
+        self._emit_preset_changed()
 
     # ── 5. 样式：两个子段（图级 + 当前曲线） ────────────────────
     def _build_style_section(self, layout: QVBoxLayout) -> None:
@@ -982,6 +1028,20 @@ class PresetAccordionPanel(QWidget):
             self._x_log_chk.setChecked(bool(xa.get("log", False)))
             self._y_log_chk.setChecked(bool(ya.get("log", False)))
 
+            # P1.5-④ 次 Y 轴：data.y_axis2 为 None / 缺失 → 关闭
+            y2 = data.get("y_axis2")
+            y2_enabled = isinstance(y2, dict)
+            self._y2_enable_chk.setChecked(y2_enabled)
+            self._y2_fields_widget.setVisible(y2_enabled)
+            if y2_enabled and isinstance(y2, dict):
+                self._y2_label_edit.setText(str(y2.get("label", "")))
+                self._y2_range.set_range(y2.get("range"))
+                self._y2_log_chk.setChecked(bool(y2.get("log", False)))
+            else:
+                self._y2_label_edit.setText("")
+                self._y2_range.set_range(None)
+                self._y2_log_chk.setChecked(False)
+
             style = data.get("style") or {}
             self._show_grid_chk.setChecked(bool(style.get("grid", True)))
             legend_loc = style.get("legend")
@@ -1009,6 +1069,16 @@ class PresetAccordionPanel(QWidget):
         # 图例位置：UI "关闭" → 不显示图例（legend=None）；其他原样
         legend_text = self._legend_combo.currentText()
         legend_loc = None if legend_text == "关闭" else legend_text
+        # P1.5-④ 次 Y 轴：未启用 → y_axis2=None
+        y_axis2: dict[str, Any] | None
+        if self._y2_enable_chk.isChecked():
+            y_axis2 = {
+                "label": self._y2_label_edit.text(),
+                "range": self._y2_range.get_range(),
+                "log": self._y2_log_chk.isChecked(),
+            }
+        else:
+            y_axis2 = None
         return {
             "id_column": self._id_column_edit.text().strip(),
             "filename_template": self._fname_edit.text(),
@@ -1023,6 +1093,7 @@ class PresetAccordionPanel(QWidget):
                 "range": self._y_range.get_range(),
                 "log": self._y_log_chk.isChecked(),
             },
+            "y_axis2": y_axis2,
             "style": {
                 "grid": self._show_grid_chk.isChecked(),
                 "legend": legend_loc,

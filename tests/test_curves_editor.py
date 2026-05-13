@@ -404,3 +404,104 @@ class TestChangedSignal:
                 ed._on_point_value_changed(0, 100.0)
         finally:
             ed.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# P1.5-④ 曲线级 y_axis + 点级 err_column
+# ──────────────────────────────────────────────────────────────────
+class TestYAxisField:
+    def test_default_primary_in_new_curve(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed._on_add_curve()
+            cs = ed.curves()
+            assert cs[0]["y_axis"] == "primary"
+        finally:
+            ed.deleteLater()
+
+    def test_y_axis_loaded_from_data(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            data = _sample_curves()
+            data[0]["y_axis"] = "secondary"
+            ed.set_curves(data)
+            # 当前选中第 0 条 → ComboBox 应显示"次 Y 轴"
+            assert "次" in ed._y_axis_combo.currentText()
+        finally:
+            ed.deleteLater()
+
+    def test_y_axis_change_writes_back(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            # 改 ComboBox → _save_from_form 触发
+            ed._y_axis_combo.setCurrentText("次 Y 轴")
+            cs = ed.curves()
+            assert cs[0]["y_axis"] == "secondary"
+        finally:
+            ed.deleteLater()
+
+
+class TestErrColumnField:
+    def test_default_empty_in_new_point(self, qapp: QApplication) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            ed._on_add_point()
+            cs = ed.curves()
+            # 新点的 err_column 默认是空字符串
+            assert cs[0]["points"][-1]["err_column"] == ""
+        finally:
+            ed.deleteLater()
+
+    def test_point_err_change_writes_back(
+        self, qapp: QApplication
+    ) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            ed._on_point_err_changed(0, "E1")
+            cs = ed.curves()
+            assert cs[0]["points"][0]["err_column"] == "E1"
+        finally:
+            ed.deleteLater()
+
+    def test_points_table_has_4_columns(self, qapp: QApplication) -> None:
+        """点表应有 4 列（固定轴 / 固定值 / 列名 / 误差列）。"""
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            ed._render_form()
+            assert ed._points_table.columnCount() == 4
+        finally:
+            ed.deleteLater()
+
+    def test_err_column_change_emits(
+        self, qapp: QApplication, qtbot: Any
+    ) -> None:
+        from civ_core.ui.components.curves_editor import CurvesEditor
+
+        ed = CurvesEditor()
+        try:
+            ed.set_curves(_sample_curves())
+            ed._current_idx = 0
+            with qtbot.waitSignal(ed.changed, timeout=500):
+                ed._on_point_err_changed(0, "E2")
+        finally:
+            ed.deleteLater()

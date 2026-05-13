@@ -152,6 +152,9 @@ def resolve_columns(
         for pt in curve.get("points", []):
             if pt.get("var_column") and pt["var_column"] not in needed:
                 needed.append(pt["var_column"])
+            # P1.5-④ 误差棒：err_column 也参与列名解析
+            if pt.get("err_column") and pt["err_column"] not in needed:
+                needed.append(pt["err_column"])
 
     resolved: dict[str, str] = {}
     missing: list[str] = []
@@ -192,9 +195,17 @@ def _series_from_preset(
     任一点缺数据则整条曲线返回 None；调用方据此跳过该行。
     fixed_axis='y' 表示 y 是预设写死的常量（如载荷 60kN），x 从 Excel 列读；
     'x' 反之。
+
+    P1.5-④ 新字段：
+      curve_def["y_axis"]          : "primary"|"secondary"（默认 primary）
+      curve_def["points"][j].err_column : 该点 ±y 误差来源列（可选）
+        - 任一点配置了 err_column → 整条曲线 y_err 非空
+        - 缺该列或非数字 → 该点误差填 0（不导致整曲线无效）
     """
     xs: list[float] = []
     ys: list[float] = []
+    y_err_buf: list[float] = []
+    has_any_err = False
     for pt in curve_def["points"]:
         # preset_col 是预设里写的列名引用，actual_col 是 Excel 实际表头（容差匹配后的结果）
         preset_col = pt["var_column"]
@@ -221,6 +232,24 @@ def _series_from_preset(
                 hint="检查 curve_presets.json 里对应曲线点的 fixed_axis 字段。",
             )
 
+        # 误差：每点都收一个；不配 / 缺列 / 非数字 → 填 0
+        err_col_preset = pt.get("err_column")
+        if err_col_preset:
+            err_actual = col_map.get(err_col_preset, err_col_preset)
+            if err_actual in row:
+                try:
+                    e = float(row[err_actual])
+                    if e < 0:
+                        e = 0.0
+                    y_err_buf.append(e)
+                    has_any_err = True
+                except (TypeError, ValueError):
+                    y_err_buf.append(0.0)
+            else:
+                y_err_buf.append(0.0)
+        else:
+            y_err_buf.append(0.0)
+
     return CurveSeries(
         name=curve_def["name"],
         xs=xs,
@@ -230,6 +259,8 @@ def _series_from_preset(
         linewidth=curve_def.get("linewidth", 2.0),
         markersize=curve_def.get("markersize", 7.0),
         plot_type=curve_def.get("plot_type", "line"),
+        y_axis=curve_def.get("y_axis", "primary"),
+        y_err=(y_err_buf if has_any_err else None),
     )
 
 
@@ -267,6 +298,13 @@ def build_jobs(
     title_tpl = preset["title_template"]     # 同上
     x_axis = _axis_spec_from_dict(preset["x_axis"])
     y_axis = _axis_spec_from_dict(preset["y_axis"])
+    # P1.5-④ 双 Y 轴：预设可选 y_axis2；缺省 / None → 单 Y 轴
+    y_axis2_dict = preset.get("y_axis2")
+    y_axis2 = (
+        _axis_spec_from_dict(y_axis2_dict)
+        if y_axis2_dict is not None
+        else None
+    )
     # 图级样式：preset["style"] 可能不存在（旧预设）→ 默认 grid=True / 无 legend
     style = preset.get("style") or {}
     grid = bool(style.get("grid", True))
@@ -316,6 +354,7 @@ def build_jobs(
                 series=series_list,
                 grid=grid,
                 legend_loc=legend_loc,
+                y_axis2=y_axis2,
             )
         )
 

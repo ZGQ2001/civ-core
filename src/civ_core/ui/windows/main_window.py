@@ -17,7 +17,9 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
 from civ_core.configs.loader import AppConfig
+from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 from civ_core.ui.windows.plot_curves_view import PlotCurvesView
+from civ_core.ui.windows.word2pdf_view import Word2PdfView
 from civ_core.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -87,6 +89,10 @@ class MainWindow(FluentWindow):
         )
         # 绘曲线图页：三栏视图（步骤 9 已接入；子面板内容在 step 10/11/13 渐进填充）
         self.plot_curves_page = PlotCurvesView(cfg)
+        # PDF 工具页（合并 + 拆分）
+        self.pdf_tools_page = PdfToolsView(cfg)
+        # Word → PDF 批量转换页
+        self.word2pdf_page = Word2PdfView(cfg)
         self.settings_page = _PlaceholderPage(
             "settingsPage",
             "设置",
@@ -97,6 +103,8 @@ class MainWindow(FluentWindow):
         # 顶部：工具页
         self.addSubInterface(self.home_page, FluentIcon.HOME, "首页")
         self.addSubInterface(self.plot_curves_page, FluentIcon.MARKET, "绘曲线图")
+        self.addSubInterface(self.pdf_tools_page, FluentIcon.DOCUMENT, "PDF 工具")
+        self.addSubInterface(self.word2pdf_page, FluentIcon.SEND, "Word→PDF")
         # 底部：辅助项
         self.addSubInterface(
             self.settings_page,

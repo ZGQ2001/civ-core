@@ -19,6 +19,12 @@
        用户感知是"选完数据源仍提示请先选预设"。
    断言：直接构造 panel 后调 current_run_settings()，preset_name 不该为 None
         （前提：系统预设 curve_presets.json 非空 —— 由 healthcheck 保证）。
+
+4. **风琴菜单切换 expand 时标题文字不"跳动"**
+   bug：ToolButton.setText(f"{arrow}  {title}") 模式下 `▾`(U+25BE small white)
+       和 `▸`(U+25B8 small black) 字面宽度+字形粗细都不同，切换时整段文本左右晃。
+   断言：_SectionHeader 内部箭头 QLabel 宽度恒定（fixedWidth=14），且 expand /
+        collapse 切换前后 title QLabel 的 x 起点完全相等。
 """
 
 from __future__ import annotations
@@ -45,9 +51,7 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
-def tmp_settings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def tmp_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """让 PresetAccordionPanel._make_settings 走 tmp ini，避免污染。"""
     ini_path = tmp_path / "settings.ini"
 
@@ -56,9 +60,7 @@ def tmp_settings(
     def fake_make_settings(self: Any) -> QSettings:
         return QSettings(str(ini_path), QSettings.Format.IniFormat)
 
-    monkeypatch.setattr(
-        pap.PresetAccordionPanel, "_make_settings", fake_make_settings
-    )
+    monkeypatch.setattr(pap.PresetAccordionPanel, "_make_settings", fake_make_settings)
     return ini_path
 
 
@@ -94,8 +96,7 @@ class TestLivePreviewShrinkable:
         try:
             ms = pane._image_label.minimumSize()
             assert ms.width() <= 1 and ms.height() <= 1, (
-                f"image_label minimumSize={ms.width()}x{ms.height()} 太大，"
-                "splitter 右拖会被它顶住"
+                f"image_label minimumSize={ms.width()}x{ms.height()} 太大，splitter 右拖会被它顶住"
             )
         finally:
             pane.deleteLater()
@@ -129,12 +130,10 @@ class TestMainWindowMinSize:
             # 不强求精确数值，但必须比"启动尺寸"小（否则用户根本拖不动收缩）
             startup_w, startup_h = cfg.ui.startup_size
             assert ms.width() < startup_w, (
-                f"主窗口 minWidth={ms.width()} ≥ 启动宽度 {startup_w}，"
-                "用户无法把窗口缩小"
+                f"主窗口 minWidth={ms.width()} ≥ 启动宽度 {startup_w}，用户无法把窗口缩小"
             )
             assert ms.height() < startup_h, (
-                f"主窗口 minHeight={ms.height()} ≥ 启动高度 {startup_h}，"
-                "用户无法把窗口缩小"
+                f"主窗口 minHeight={ms.height()} ≥ 启动高度 {startup_h}，用户无法把窗口缩小"
             )
             # 但也不能小到 0×0 —— 内容会塌
             assert ms.width() >= 400 and ms.height() >= 300, (
@@ -169,11 +168,55 @@ class TestPresetDefaultSelected:
                 pytest.skip("系统预设为空，本用例不适用")
             s = panel.current_run_settings()
             assert s.preset_name is not None, (
-                "启动后预设默认未选中 —— "
-                "用户选完 Excel 点生成会被提示「请先选预设」"
+                "启动后预设默认未选中 —— 用户选完 Excel 点生成会被提示「请先选预设」"
             )
         finally:
             panel.deleteLater()
+
+    def test_section_header_arrow_fixed_width_and_title_no_jitter(self, qapp: QApplication) -> None:
+        """风琴菜单 expand/collapse 切换时标题不能跳动。
+
+        断言两件事：
+          1. 箭头 QLabel 宽度恒定（=14px，由 setFixedWidth 保证）
+          2. expand → collapse → expand 切换前后，title QLabel 的 x 坐标完全相等
+        """
+        from civ_core.ui.components.preset_accordion_panel import (
+            _CollapsibleSection,
+        )
+
+        section = _CollapsibleSection("测试分组", collapsible=True, initially_expanded=True)
+        try:
+            # 必须先 show 才会有真实布局尺寸（offscreen 模式下也成立）
+            section.resize(300, 100)
+            section.show()
+            qapp.processEvents()
+
+            arrow = section._header._arrow_label
+            title = section._header._title_label
+
+            w_before = arrow.width()
+            x_title_before = title.x()
+
+            section._toggle()  # 收起
+            qapp.processEvents()
+            w_collapsed = arrow.width()
+            x_title_collapsed = title.x()
+
+            section._toggle()  # 再展开
+            qapp.processEvents()
+            w_after = arrow.width()
+            x_title_after = title.x()
+
+            assert w_before == w_collapsed == w_after, (
+                f"箭头宽度不恒定：expand={w_before}, collapse={w_collapsed}, "
+                f"expand={w_after} —— 这就是用户看到的「标题跳动」根因"
+            )
+            assert x_title_before == x_title_collapsed == x_title_after, (
+                f"标题 x 起点抖动：expand x={x_title_before}, "
+                f"collapse x={x_title_collapsed}, expand x={x_title_after}"
+            )
+        finally:
+            section.deleteLater()
 
     def test_run_settings_preset_name_survives_state_reset(
         self, qapp: QApplication, tmp_settings: Path

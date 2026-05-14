@@ -41,12 +41,13 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
     QColorDialog,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -66,7 +67,6 @@ from qfluentwidgets import (
     SpinBox,
     StrongBodyLabel,
     SubtitleLabel,
-    ToolButton,
 )
 
 from civ_core.domain.schema import PlotRunSettings
@@ -152,6 +152,80 @@ _EMPTY_PRESET_DATA: dict[str, Any] = {
 # ──────────────────────────────────────────────────────────────────
 # 私有控件
 # ──────────────────────────────────────────────────────────────────
+class _SectionHeader(QWidget):
+    """可折叠分组的标题栏 —— 固定宽度箭头 + 弹性标题文字。
+
+    为什么不直接用 `ToolButton.setText(f"{arrow}  {title}")`：
+      • `▾`(U+25BE) 和 `▸`(U+25B8) 是 small white/black 系列字符，**字面宽度
+        和字形粗细都不同**。切换 expand 状态时整段文本（含 title）会左右
+        晃动几像素，肉眼明显"跳"。这是用户报告的 bug。
+      • 把箭头放进固定宽度的 QLabel（`setFixedWidth(14)`），title 在第二个
+        QLabel 里 —— 不管箭头本身字形多大，title 起始位置不动。
+
+    点击交互：mousePressEvent 转发 clicked 信号 + setCursor(PointingHand)。
+    样式（左色条 / 卡片边框 / hover 背景）由 bootstrap._APP_QSS 的选择器
+    `QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader`
+    统一接管，本类不写 inline QSS。
+    """
+
+    clicked = Signal()
+
+    def __init__(
+        self,
+        title: str,
+        *,
+        collapsible: bool = True,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("collapsibleHeader")
+        # WA_StyledBackground：让 QSS 的 background-color / hover 生效（默认
+        # 纯 QWidget 不刷 styled background）
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._collapsible = collapsible
+        self._expanded = True
+
+        layout = QHBoxLayout(self)
+        # padding 由 QSS 控制；本 layout 只留贴边
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # 箭头标签：固定宽度 14px —— 切换字符不会撼动后续 title 的起点
+        self._arrow_label = QLabel(self)
+        self._arrow_label.setObjectName("collapsibleArrow")
+        self._arrow_label.setFixedWidth(14)
+        self._arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._arrow_label)
+
+        # 标题标签
+        self._title_label = QLabel(title, self)
+        self._title_label.setObjectName("collapsibleTitle")
+        self._title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout.addWidget(self._title_label, 1)
+
+        if collapsible:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._refresh_arrow()
+
+    def set_expanded(self, expanded: bool) -> None:
+        """状态切换：仅刷箭头字符，title 起点不动（这是本控件存在的意义）。"""
+        self._expanded = expanded
+        self._refresh_arrow()
+
+    def _refresh_arrow(self) -> None:
+        if not self._collapsible:
+            self._arrow_label.setText("")  # 不可折叠分组：留空但仍占 14px 占位
+            return
+        # 同系列 BLACK TRIANGLE：U+25BC ▼ / U+25B6 ▶
+        # 比 small 系列宽度差异小，且固定宽度容器二次兜底
+        self._arrow_label.setText("▼" if self._expanded else "▶")
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: D401
+        if self._collapsible and event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
 class _CollapsibleSection(QWidget):
     """可折叠分组：标题栏点击 → 展开/收起内容。
 
@@ -178,34 +252,12 @@ class _CollapsibleSection(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # 标题栏：toggle 箭头 + 文字
-        # 样式（背景/边框/字重/字间距）由 bootstrap._APP_QSS 中的
-        # `QWidget[objectName^="collapsibleSection_"] > QToolButton` 选择器统一接管 ——
-        # 不在这里 inline setStyleSheet，避免 inline 优先级把全局 QSS 顶掉。
-        self._header = ToolButton(self)
-        self._header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._header.setText(self._title_text(title))
-<<<<<<< HEAD
-        self._header.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-=======
-        self._header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        # 简洁的视觉：弱化分隔线，避免重边框
-        self._header.setStyleSheet(
-            "QToolButton { "
-            "  text-align: left; "
-            "  padding: 6px 8px; "
-            "  font-weight: 600; "
-            "  border: none; "
-            "  border-bottom: 1px solid #e0e0e0; "
-            "}"
-            "QToolButton:hover { background: rgba(0,0,0,0.04); }"
->>>>>>> 19cb93bafa51866b9d31778389d3c7c33828a7c2
-        )
+        # 标题栏：用 _SectionHeader（固定箭头 + 弹性标题），避免 ToolButton
+        # 拼字符串时 ▾/▸ 字形宽度不同导致 title 起点抖动。
+        self._header = _SectionHeader(title, collapsible=collapsible, parent=self)
+        self._header.set_expanded(initially_expanded)
         if collapsible:
             self._header.clicked.connect(self._toggle)
-        else:
-            self._header.setEnabled(False)
         self._title = title
         outer.addWidget(self._header)
 
@@ -218,16 +270,10 @@ class _CollapsibleSection(QWidget):
         outer.addWidget(self._body)
         self._body.setVisible(initially_expanded)
 
-    def _title_text(self, title: str) -> str:
-        if not self._collapsible:
-            return f"  {title}"
-        arrow = "▾" if self._expanded else "▸"
-        return f"{arrow}  {title}"
-
     def _toggle(self) -> None:
         self._expanded = not self._expanded
         self._body.setVisible(self._expanded)
-        self._header.setText(self._title_text(self._title))
+        self._header.set_expanded(self._expanded)
 
     def body_layout(self) -> QVBoxLayout:
         return self._body_layout

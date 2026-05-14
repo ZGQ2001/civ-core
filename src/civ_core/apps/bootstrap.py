@@ -115,20 +115,28 @@ QWidget[objectName^="collapsibleSection_"] {
     margin: 4px 2px;
 }
 
-/* 分组标题按钮：去掉 Python 字符串里写的 border-bottom（与卡片边框冲突），
-   改为更克制的左侧色条（科技蓝），右侧大字间距 */
-QWidget[objectName^="collapsibleSection_"] > QToolButton {
+/* 分组标题栏：左侧 3px 科技蓝色条 + 内边距 + hover 浅蓝底。
+   注意：标题栏是 _SectionHeader（QWidget），不是 ToolButton —— 这是为了
+   把箭头（固定宽度 QLabel）和文字（弹性 QLabel）分开，避免 ▾/▸ 字符宽度
+   差异让 title 起点跳动。 */
+QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader {
     background: transparent;
     border: none;
     border-left: 3px solid #0078D4;
     padding: 7px 10px;
+}
+QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader:hover {
+    background: rgba(0,120,212,0.06);
+}
+/* 标题文字：粗 weight + 微字间距（轻工业感的版式细节） */
+QLabel#collapsibleTitle {
     font-weight: 600;
     letter-spacing: 0.5px;
     color: #1F2933;
-    text-align: left;
 }
-QWidget[objectName^="collapsibleSection_"] > QToolButton:hover {
-    background: rgba(0,120,212,0.06);
+QLabel#collapsibleArrow {
+    color: #0078D4;
+    font-weight: 700;
 }
 
 /* ── splitter handle：4px 不够明显，改为带中线视觉的细带 ── */

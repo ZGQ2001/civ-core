@@ -160,9 +160,7 @@ class LivePreviewPane(QWidget):
         # 关键 bugfix：QLabel.setPixmap 后 sizeHint/minimumSizeHint 会变成
         # pixmap 实际像素尺寸，外层 splitter / 主窗口右拖时被 hint 顶住缩不回去。
         # 用 Ignored + 显式 minSize=1×1，让 layout 完全忽略 QLabel 的 sizeHint。
-        self._image_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored
-        )
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self._image_label.setMinimumSize(1, 1)
         # 叠加模式下的 hover hit-testing
         self._image_label.hover_at.connect(self._on_image_hover)

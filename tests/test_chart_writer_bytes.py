@@ -87,18 +87,14 @@ class TestPlotTypes:
                 ],
             )
             data = render_plot_to_bytes(job)
-            assert data[:8] == b"\x89PNG\r\n\x1a\n", (
-                f"plot_type={plot_type} 没产出合法 PNG"
-            )
+            assert data[:8] == b"\x89PNG\r\n\x1a\n", f"plot_type={plot_type} 没产出合法 PNG"
 
     def test_invalid_plot_type_rejected_at_schema(self) -> None:
         """CurveSeries 构造时即拦下非法 plot_type。"""
         import pytest
 
         with pytest.raises(ValueError, match="plot_type"):
-            CurveSeries(
-                name="x", xs=[0.0], ys=[0.0], plot_type="invalid_type"
-            )
+            CurveSeries(name="x", xs=[0.0], ys=[0.0], plot_type="invalid_type")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -192,9 +188,7 @@ class TestRenderOverlayToBytes:
         """highlight_row_idx 命中应不崩，输出仍是 PNG。"""
         from civ_core.infra_io.chart_writer import render_overlay_to_bytes
 
-        data = render_overlay_to_bytes(
-            _make_overlay_jobs(4), highlight_row_idx=2
-        )
+        data = render_overlay_to_bytes(_make_overlay_jobs(4), highlight_row_idx=2)
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
 
     def test_highlight_out_of_range_does_not_crash(self) -> None:
@@ -203,9 +197,7 @@ class TestRenderOverlayToBytes:
 
         # 大于 len(jobs) 与负数都允许（容错）
         for idx in (10, -1, 999):
-            data = render_overlay_to_bytes(
-                _make_overlay_jobs(3), highlight_row_idx=idx
-            )
+            data = render_overlay_to_bytes(_make_overlay_jobs(3), highlight_row_idx=idx)
             assert data[:8] == b"\x89PNG\r\n\x1a\n"
 
     def test_more_than_10_jobs_uses_palette_cycle(self) -> None:
@@ -239,9 +231,7 @@ class TestRenderOverlayToBytes:
 
         # 只能间接验证：自定义 title 时不崩 + 是 PNG
         # PNG 字节差异具体值不可移植断言
-        data = render_overlay_to_bytes(
-            _make_overlay_jobs(2), title="自定义对比图"
-        )
+        data = render_overlay_to_bytes(_make_overlay_jobs(2), title="自定义对比图")
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
 
 
@@ -263,9 +253,7 @@ class TestRenderOverlayWithHittest:
         """PNG 宽高 = figsize × dpi（不裁剪，留白保留）。"""
         from civ_core.infra_io.chart_writer import render_overlay_with_hittest
 
-        png, meta = render_overlay_with_hittest(
-            _make_overlay_jobs(2), figsize=(6.0, 4.0), dpi=100
-        )
+        png, meta = render_overlay_with_hittest(_make_overlay_jobs(2), figsize=(6.0, 4.0), dpi=100)
         assert meta.png_width == 600
         assert meta.png_height == 400
 
@@ -273,9 +261,7 @@ class TestRenderOverlayWithHittest:
         """axes bbox 在 PNG 范围内 + x0<x1, y0<y1。"""
         from civ_core.infra_io.chart_writer import render_overlay_with_hittest
 
-        _png, meta = render_overlay_with_hittest(
-            _make_overlay_jobs(2), figsize=(7.0, 4.0), dpi=100
-        )
+        _png, meta = render_overlay_with_hittest(_make_overlay_jobs(2), figsize=(7.0, 4.0), dpi=100)
         x0, y0, x1, y1 = meta.axes_bbox_px
         assert 0 <= x0 < x1 <= meta.png_width
         assert 0 <= y0 < y1 <= meta.png_height
@@ -330,9 +316,7 @@ class TestRenderPlotWithHittest:
     def test_meta_dimensions_match_figsize_dpi(self) -> None:
         from civ_core.infra_io.chart_writer import render_plot_with_hittest
 
-        _png, meta = render_plot_with_hittest(
-            _make_job(), figsize=(7.0, 4.0), dpi=100
-        )
+        _png, meta = render_plot_with_hittest(_make_job(), figsize=(7.0, 4.0), dpi=100)
         assert meta.png_width == 700
         assert meta.png_height == 400
 

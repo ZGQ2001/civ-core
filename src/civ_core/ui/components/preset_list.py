@@ -245,9 +245,7 @@ class PresetListPane(QWidget):
             curves_n = len(entry.data.get("curves", []))
             id_col = entry.data.get("id_column", "?")
             item.setToolTip(
-                f"来源：{_SOURCE_LABEL[entry.source]}\n"
-                f"标识列：{id_col}\n"
-                f"曲线条数：{curves_n}"
+                f"来源：{_SOURCE_LABEL[entry.source]}\n标识列：{id_col}\n曲线条数：{curves_n}"
             )
 
             if entry.source is PresetSource.SYSTEM:

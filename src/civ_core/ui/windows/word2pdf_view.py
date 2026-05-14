@@ -142,9 +142,7 @@ class Word2PdfView(QWidget):
 
     # ── 列表操作 ────────────────────────────────────────────────
     def _on_add(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择 Word 文件", "", "Word (*.doc *.docx)"
-        )
+        paths, _ = QFileDialog.getOpenFileNames(self, "选择 Word 文件", "", "Word (*.doc *.docx)")
         for raw in paths:
             p = Path(raw)
             if p not in self._inputs:
@@ -173,14 +171,16 @@ class Word2PdfView(QWidget):
     def _on_run(self) -> None:
         if not self._inputs:
             show_warning_infobar(
-                self, title="参数未填完",
+                self,
+                title="参数未填完",
                 reason="还没添加任何 Word 文件",
                 hint="点 [➕ 添加 Word] 挑选 .doc / .docx 文件。",
             )
             return
         if self._out_dir is None:
             show_warning_infobar(
-                self, title="参数未填完",
+                self,
+                title="参数未填完",
                 reason="未选择输出目录",
                 hint="点 [选择目录] 指定 PDF 落盘位置。",
             )
@@ -225,15 +225,9 @@ class Word2PdfView(QWidget):
                 content=f"成功转换 {n_ok} 个 Word → PDF。",
             )
         else:
-            self._status_label.setText(
-                f"⚠️ 完成：成功 {n_ok} 个 / 失败 {n_fail} 个"
-            )
+            self._status_label.setText(f"⚠️ 完成：成功 {n_ok} 个 / 失败 {n_fail} 个")
             first_path, first_exc = result.failed[0]
-            extra = (
-                f"，另有 {n_fail - 1} 个失败，详见 logs/app.log"
-                if n_fail > 1
-                else ""
-            )
+            extra = f"，另有 {n_fail - 1} 个失败，详见 logs/app.log" if n_fail > 1 else ""
             show_warning_infobar(
                 self,
                 title="批量转换部分失败",

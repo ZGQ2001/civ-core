@@ -127,9 +127,7 @@ def _check_user_preset_writable() -> str:
                 if not merged:
                     return _fail("没有系统预设可作复制源")
                 source_name = next(iter(merged.keys()))
-                copy_system_to_user(
-                    source_name, "健康检查复制项", tool="plot_curves"
-                )
+                copy_system_to_user(source_name, "健康检查复制项", tool="plot_curves")
                 if "健康检查复制项" not in load_merged_presets_as_dict("plot_curves"):
                     return _fail("用户预设复制后读不到")
                 # 清理
@@ -386,9 +384,7 @@ def _check_gui_constructible() -> str:
             missing.append("实时预览（右栏）")
         if not hasattr(view, "bottom_panel"):
             missing.append("底栏 Tab 面板")
-        if hasattr(view, "bottom_panel") and not hasattr(
-            view.bottom_panel, "data_source_pane"
-        ):
+        if hasattr(view, "bottom_panel") and not hasattr(view.bottom_panel, "data_source_pane"):
             missing.append("数据源 Tab")
 
         view.deleteLater()
@@ -397,7 +393,7 @@ def _check_gui_constructible() -> str:
         if missing:
             return _fail(
                 "GUI 子组件缺失",
-                f"未找到：{ '、'.join(missing) }（可能接线未完成）",
+                f"未找到：{'、'.join(missing)}（可能接线未完成）",
             )
         return _ok("GUI 启动正常（两栏骨架 + 日志面板）")
     except Exception as e:

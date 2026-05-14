@@ -178,4 +178,5 @@ except: pass                           →  except Err as e: logger.error(...); 
 threshold = 0.85                       →  config["evaluation"]["threshold"]
 subprocess.run(f"python {s}")          →  subprocess.run(["python", str(s)])
 def fn(data: dict)                     →  def fn(job: PlotJob)
+重复定义同一样式/常量/魔法值            →  唯一源（dataclass / config / 枚举），引用不复制
 ```

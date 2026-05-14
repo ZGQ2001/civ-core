@@ -40,9 +40,7 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
-def tmp_settings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def tmp_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """让 PresetAccordionPanel._make_settings 走 tmp ini，避免污染。"""
     ini_path = tmp_path / "settings.ini"
 
@@ -51,9 +49,7 @@ def tmp_settings(
     def fake_make_settings(self: Any) -> QSettings:
         return QSettings(str(ini_path), QSettings.Format.IniFormat)
 
-    monkeypatch.setattr(
-        pap.PresetAccordionPanel, "_make_settings", fake_make_settings
-    )
+    monkeypatch.setattr(pap.PresetAccordionPanel, "_make_settings", fake_make_settings)
     return ini_path
 
 
@@ -64,9 +60,7 @@ class TestSliderInputRow:
     def test_two_way_sync(self, qapp: QApplication) -> None:
         from civ_core.ui.components.preset_accordion_panel import _SliderInputRow
 
-        row = _SliderInputRow(
-            minimum=0.0, maximum=10.0, step=0.5, decimals=1, initial=2.0
-        )
+        row = _SliderInputRow(minimum=0.0, maximum=10.0, step=0.5, decimals=1, initial=2.0)
         try:
             assert row.value() == pytest.approx(2.0)
             row._spin.setValue(7.5)
@@ -76,14 +70,10 @@ class TestSliderInputRow:
         finally:
             row.deleteLater()
 
-    def test_initial_emits_no_signal(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_initial_emits_no_signal(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.preset_accordion_panel import _SliderInputRow
 
-        row = _SliderInputRow(
-            minimum=0.0, maximum=10.0, step=1.0, decimals=0, initial=5.0
-        )
+        row = _SliderInputRow(minimum=0.0, maximum=10.0, step=1.0, decimals=0, initial=5.0)
         try:
             # setValue 本身（程序性）不应触发 valueChanged
             with qtbot.assertNotEmitted(row.valueChanged, wait=100):
@@ -133,9 +123,7 @@ class TestCollapsibleSection:
 # PresetAccordionPanel：初始化 + 切预设 + 信号
 # ──────────────────────────────────────────────────────────────────
 class TestPanelInitialization:
-    def test_loads_system_presets(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_loads_system_presets(self, qapp: QApplication, tmp_settings: Path) -> None:
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
         panel = PresetAccordionPanel()
@@ -193,9 +181,7 @@ class TestCurrentDataAggregation:
         finally:
             panel.deleteLater()
 
-    def test_run_settings_carries_preset_name(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_run_settings_carries_preset_name(self, qapp: QApplication, tmp_settings: Path) -> None:
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
         panel = PresetAccordionPanel()
@@ -213,9 +199,7 @@ class TestCurrentDataAggregation:
 # 最近使用预设：QSettings 持久化
 # ──────────────────────────────────────────────────────────────────
 class TestRecentPresets:
-    def test_push_and_load_recent(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_push_and_load_recent(self, qapp: QApplication, tmp_settings: Path) -> None:
         from civ_core.ui.components.preset_accordion_panel import (
             _RECENT_PRESETS_MAX,
             PresetAccordionPanel,
@@ -406,23 +390,17 @@ class TestSheetCombo:
                 ]
             )
             # 还没选 Excel → var_column cell 是 QLineEdit
-            cell_before = panel._curves_editor._points_table.cellWidget(
-                0, _POINT_COL_VAR
-            )
+            cell_before = panel._curves_editor._points_table.cellWidget(0, _POINT_COL_VAR)
             assert isinstance(cell_before, QLineEdit)
 
             # 选 Excel
             panel._on_pick_input_excel()
 
             # var_column cell 升级为 ComboBox
-            cell_after = panel._curves_editor._points_table.cellWidget(
-                0, _POINT_COL_VAR
-            )
+            cell_after = panel._curves_editor._points_table.cellWidget(0, _POINT_COL_VAR)
             assert isinstance(cell_after, FluentComboBox)
             # ComboBox 含 Excel 表头里的项
-            items = [
-                cell_after.itemText(i) for i in range(cell_after.count())
-            ]
+            items = [cell_after.itemText(i) for i in range(cell_after.count())]
             assert "位移 (mm)" in items
             assert "荷载 (kN)" in items
         finally:
@@ -457,9 +435,7 @@ class TestSheetCombo:
 
         panel = pap.PresetAccordionPanel()
         try:
-            with qtbot.waitSignal(
-                panel.data_source_changed, timeout=500
-            ) as blocker:
+            with qtbot.waitSignal(panel.data_source_changed, timeout=500) as blocker:
                 panel._on_pick_input_excel()
             # signal 应携带 (path, sheet) 两个参数
             assert len(blocker.args) == 2
@@ -473,9 +449,7 @@ class TestSheetCombo:
 # 「样式 / 当前曲线」子段：与 CurvesEditor 双向同步
 # ──────────────────────────────────────────────────────────────────
 class TestCurveStyleSubSection:
-    def test_select_curve_loads_style(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_select_curve_loads_style(self, qapp: QApplication, tmp_settings: Path) -> None:
         """CurvesEditor 切曲线 → 样式区控件值跟着变。"""
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
@@ -550,9 +524,7 @@ class TestCurveStyleSubSection:
         finally:
             panel.deleteLater()
 
-    def test_no_curve_disables_style_box(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_no_curve_disables_style_box(self, qapp: QApplication, tmp_settings: Path) -> None:
         """没有曲线时整个"当前曲线"区 disabled。"""
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
@@ -568,9 +540,7 @@ class TestCurveStyleSubSection:
 # 风琴：分组折叠后顶贴
 # ──────────────────────────────────────────────────────────────────
 class TestSectionLayout:
-    def test_sections_are_max_size_policy(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_sections_are_max_size_policy(self, qapp: QApplication, tmp_settings: Path) -> None:
         """六个分组 widget 的 size policy 垂直方向都用 Maximum，
         让外层 addStretch(1) 能把它们推到顶部（折叠时不被均分到中间）。"""
         from PySide6.QtWidgets import QSizePolicy
@@ -587,9 +557,7 @@ class TestSectionLayout:
                 panel._sec_style,
                 panel._sec_out,
             ):
-                assert (
-                    sec.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Maximum
-                )
+                assert sec.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Maximum
         finally:
             panel.deleteLater()
 
@@ -598,9 +566,7 @@ class TestSectionLayout:
 # P1.5-④ 次 Y 轴 UI
 # ──────────────────────────────────────────────────────────────────
 class TestSecondaryYAxis:
-    def test_default_disabled(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_default_disabled(self, qapp: QApplication, tmp_settings: Path) -> None:
         from civ_core.ui.components.preset_accordion_panel import (
             PresetAccordionPanel,
         )
@@ -635,9 +601,7 @@ class TestSecondaryYAxis:
         finally:
             panel.deleteLater()
 
-    def test_apply_preset_data_with_y_axis2(
-        self, qapp: QApplication, tmp_settings: Path
-    ) -> None:
+    def test_apply_preset_data_with_y_axis2(self, qapp: QApplication, tmp_settings: Path) -> None:
         from civ_core.ui.components.preset_accordion_panel import (
             PresetAccordionPanel,
         )

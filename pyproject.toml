@@ -98,7 +98,7 @@ pythonpath = ["src"]
 # tests/test_cross_ref_fix.py 引用了已迁移走的 civ_core.models.schema（旧路径），
 # 整个文件登记在 PROGRESS.md 的 P2 清理项里，待 02_Core 迁移完成后删除。
 # 现在放进 addopts 是为了让本地与 CI 行为一致，不必每次手敲 --ignore。
-addopts = "-q --strict-markers --ignore=tests/test_cross_ref_fix.py"
+addopts = "-q --strict-markers "
 
 [dependency-groups]
 dev = [

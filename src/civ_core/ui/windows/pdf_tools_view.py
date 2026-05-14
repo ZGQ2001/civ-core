@@ -86,8 +86,7 @@ class PdfToolsView(QWidget):
         outer.addWidget(title)
 
         subtitle = BodyLabel(
-            "合并多个 PDF · 按页拆分 · 按页号范围拆分。所有操作走原子写，"
-            "失败不会留半截文件。",
+            "合并多个 PDF · 按页拆分 · 按页号范围拆分。所有操作走原子写，失败不会留半截文件。",
             self,
         )
         subtitle.setStyleSheet("color: #888;")
@@ -181,9 +180,7 @@ class PdfToolsView(QWidget):
         return page
 
     def _on_merge_add(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择 PDF 文件", "", "PDF (*.pdf)"
-        )
+        paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF 文件", "", "PDF (*.pdf)")
         for p_str in paths:
             p = Path(p_str)
             if p not in self._merge_inputs:
@@ -196,7 +193,8 @@ class PdfToolsView(QWidget):
         if row < 0 or not (0 <= new_row < len(self._merge_inputs)):
             return
         self._merge_inputs[row], self._merge_inputs[new_row] = (
-            self._merge_inputs[new_row], self._merge_inputs[row],
+            self._merge_inputs[new_row],
+            self._merge_inputs[row],
         )
         # 同步 ListWidget
         item = self._merge_list.takeItem(row)
@@ -217,9 +215,7 @@ class PdfToolsView(QWidget):
         self._merge_list.clear()
 
     def _on_merge_pick_out(self) -> None:
-        out, _ = QFileDialog.getSaveFileName(
-            self, "保存合并 PDF", "merged.pdf", "PDF (*.pdf)"
-        )
+        out, _ = QFileDialog.getSaveFileName(self, "保存合并 PDF", "merged.pdf", "PDF (*.pdf)")
         if not out:
             return
         self._merge_out_path = Path(out)
@@ -310,9 +306,7 @@ class PdfToolsView(QWidget):
         self._range_edit.setEnabled(self._mode_range.isChecked())
 
     def _on_split_pick_in(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "选择 PDF 文件", "", "PDF (*.pdf)"
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "选择 PDF 文件", "", "PDF (*.pdf)")
         if not path:
             return
         self._split_input = Path(path)
@@ -328,14 +322,16 @@ class PdfToolsView(QWidget):
     def _on_split_run(self) -> None:
         if self._split_input is None:
             show_warning_infobar(
-                self, title="参数未填完",
+                self,
+                title="参数未填完",
                 reason="未选择输入 PDF",
                 hint="点输入 PDF 右侧的 [选择] 按钮挑一个文件。",
             )
             return
         if self._split_out_dir is None:
             show_warning_infobar(
-                self, title="参数未填完",
+                self,
+                title="参数未填完",
                 reason="未选择输出目录",
                 hint="点输出目录右侧的 [选择目录] 按钮指定位置。",
             )
@@ -344,14 +340,13 @@ class PdfToolsView(QWidget):
             expr = self._range_edit.text().strip()
             if not expr:
                 show_warning_infobar(
-                    self, title="参数未填完",
+                    self,
+                    title="参数未填完",
                     reason="按范围拆需要填页号表达式",
                     hint='例如 "1-3,5,7-9"。',
                 )
                 return
-            worker: _BaseWorker = _SplitRangeWorker(
-                self._split_input, self._split_out_dir, expr
-            )
+            worker: _BaseWorker = _SplitRangeWorker(self._split_input, self._split_out_dir, expr)
         else:
             worker = _SplitPerPageWorker(self._split_input, self._split_out_dir)
 

@@ -166,9 +166,7 @@ def _cmd_list_presets(args: argparse.Namespace) -> int:
 
     names = get_preset_names(presets)
     if not names:
-        sys.stderr.write(
-            "⚠️ 预设库为空。请先在 presets/plot_curves/curve_presets.json 添加预设。\n"
-        )
+        sys.stderr.write("⚠️ 预设库为空。请先在 presets/plot_curves/curve_presets.json 添加预设。\n")
         return 0
     for n in names:
         # 走 stdout，便于 `... | head -n 1` 之类的脚本组合

@@ -79,16 +79,12 @@ class TestCollapse:
         assert panel._text.isVisibleTo(panel) is False
         assert panel._toggle_btn.text() == "▶"
 
-    def test_collapse_signal_emits_on_change(
-        self, panel: LogPanel, qtbot
-    ) -> None:
+    def test_collapse_signal_emits_on_change(self, panel: LogPanel, qtbot) -> None:
         with qtbot.waitSignal(panel.collapse_changed, timeout=1000) as blocker:
             panel.set_collapsed(False)
         assert blocker.args == [False]
 
-    def test_collapse_signal_skips_when_already_in_state(
-        self, panel: LogPanel, qtbot
-    ) -> None:
+    def test_collapse_signal_skips_when_already_in_state(self, panel: LogPanel, qtbot) -> None:
         """重复 set_collapsed 同状态 → 不该 emit 信号（防抖动）。"""
         emitted: list[bool] = []
         panel.collapse_changed.connect(lambda v: emitted.append(v))
@@ -96,9 +92,7 @@ class TestCollapse:
         panel.set_collapsed(True)
         assert emitted == []
 
-    def test_toggle_button_click_flips_state(
-        self, panel: LogPanel, qtbot
-    ) -> None:
+    def test_toggle_button_click_flips_state(self, panel: LogPanel, qtbot) -> None:
         assert panel.is_collapsed() is True
         qtbot.mouseClick(panel._toggle_btn, qtbot_mouse_button())
         assert panel.is_collapsed() is False
@@ -128,12 +122,8 @@ class TestOnRecord:
         panel.on_record(_make_record(level=logging.DEBUG, msg="debug noise"))
         assert "debug noise" not in panel._text.toPlainText()
 
-    def test_logger_name_shortened_to_last_segment(
-        self, panel: LogPanel
-    ) -> None:
-        panel.on_record(
-            _make_record(name="civ_core.ui.preset_list", msg="picked")
-        )
+    def test_logger_name_shortened_to_last_segment(self, panel: LogPanel) -> None:
+        panel.on_record(_make_record(name="civ_core.ui.preset_list", msg="picked"))
         text = panel._text.toPlainText()
         # 只显示最后一级 logger 名
         assert "preset_list" in text
@@ -184,9 +174,7 @@ class TestLevelFilter:
         panel.on_record(_make_record(level=logging.WARNING, msg="loud"))
         assert "loud" in panel._text.toPlainText()
 
-    def test_set_level_filter_to_debug_shows_all(
-        self, panel: LogPanel
-    ) -> None:
+    def test_set_level_filter_to_debug_shows_all(self, panel: LogPanel) -> None:
         panel.set_level_filter(logging.DEBUG)
         panel.on_record(_make_record(level=logging.DEBUG, msg="trace"))
         assert "trace" in panel._text.toPlainText()
@@ -209,9 +197,7 @@ class TestClear:
         panel.clear()
         assert panel._text.toPlainText() == ""
 
-    def test_clear_button_emits_to_clear(
-        self, panel: LogPanel, qtbot
-    ) -> None:
+    def test_clear_button_emits_to_clear(self, panel: LogPanel, qtbot) -> None:
         panel.on_record(_make_record(msg="bye"))
         qtbot.mouseClick(panel._clear_btn, qtbot_mouse_button())
         assert panel._text.toPlainText() == ""
@@ -250,9 +236,7 @@ class TestCapacity:
 
         # 取所有"消息后缀"：行格式末尾是 "— msg-N"
         lines = panel._text.toPlainText().splitlines()
-        msg_ids = {
-            line.rsplit("— ", 1)[1] for line in lines if "— msg-" in line
-        }
+        msg_ids = {line.rsplit("— ", 1)[1] for line in lines if "— msg-" in line}
 
         # block count 不超过 _MAX_BLOCKS（Qt 自动丢老）
         assert len(lines) <= _MAX_BLOCKS

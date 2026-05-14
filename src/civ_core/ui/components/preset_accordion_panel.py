@@ -183,12 +183,24 @@ class _CollapsibleSection(QWidget):
         # `QWidget[objectName^="collapsibleSection_"] > QToolButton` 选择器统一接管 ——
         # 不在这里 inline setStyleSheet，避免 inline 优先级把全局 QSS 顶掉。
         self._header = ToolButton(self)
-        self._header.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
+        self._header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._header.setText(self._title_text(title))
+<<<<<<< HEAD
         self._header.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+=======
+        self._header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # 简洁的视觉：弱化分隔线，避免重边框
+        self._header.setStyleSheet(
+            "QToolButton { "
+            "  text-align: left; "
+            "  padding: 6px 8px; "
+            "  font-weight: 600; "
+            "  border: none; "
+            "  border-bottom: 1px solid #e0e0e0; "
+            "}"
+            "QToolButton:hover { background: rgba(0,0,0,0.04); }"
+>>>>>>> 19cb93bafa51866b9d31778389d3c7c33828a7c2
         )
         if collapsible:
             self._header.clicked.connect(self._toggle)
@@ -199,9 +211,7 @@ class _CollapsibleSection(QWidget):
 
         # 内容容器
         self._body = QWidget(self)
-        self._body.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum
-        )
+        self._body.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._body_layout = QVBoxLayout(self._body)
         self._body_layout.setContentsMargins(8, 6, 8, 8)
         self._body_layout.setSpacing(6)
@@ -244,9 +254,7 @@ class _SliderInputRow(QWidget):
         super().__init__(parent)
         self._scale = 10**decimals
         self._slider = Slider(Qt.Orientation.Horizontal, self)
-        self._slider.setRange(
-            int(minimum * self._scale), int(maximum * self._scale)
-        )
+        self._slider.setRange(int(minimum * self._scale), int(maximum * self._scale))
         self._slider.setSingleStep(max(1, int(step * self._scale)))
         self._spin = DoubleSpinBox(self)
         self._spin.setRange(minimum, maximum)
@@ -435,9 +443,7 @@ class PresetAccordionPanel(QWidget):
         # 去掉边框噪音
         self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         # 水平不滚（窗口窄时让内部 widget 自己收缩）
-        self._scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer.addWidget(self._scroll)
 
         # 内容容器
@@ -451,9 +457,7 @@ class PresetAccordionPanel(QWidget):
         layout.setSpacing(6)
 
         # 1. 预设选择（不可折叠）
-        self._sec_preset = _CollapsibleSection(
-            "预设选择", collapsible=False, parent=content
-        )
+        self._sec_preset = _CollapsibleSection("预设选择", collapsible=False, parent=content)
         self._build_preset_section(self._sec_preset.body_layout())
         layout.addWidget(self._sec_preset)
 
@@ -463,36 +467,26 @@ class PresetAccordionPanel(QWidget):
         layout.addWidget(self._sec_data)
 
         # 3. 曲线定义（默认收起，避免初次开屏被巨大编辑器占满）
-        self._sec_curves = _CollapsibleSection(
-            "曲线定义", initially_expanded=False, parent=content
-        )
+        self._sec_curves = _CollapsibleSection("曲线定义", initially_expanded=False, parent=content)
         self._curves_editor = CurvesEditor(self)
         self._curves_editor.changed.connect(self._on_curves_changed)
         # 切曲线 / 增删 → 「样式 / 当前曲线」子段重载
-        self._curves_editor.current_curve_changed.connect(
-            self._on_current_curve_changed
-        )
+        self._curves_editor.current_curve_changed.connect(self._on_current_curve_changed)
         self._sec_curves.body_layout().addWidget(self._curves_editor)
         layout.addWidget(self._sec_curves)
 
         # 4. 坐标轴
-        self._sec_axis = _CollapsibleSection(
-            "坐标轴", initially_expanded=False, parent=content
-        )
+        self._sec_axis = _CollapsibleSection("坐标轴", initially_expanded=False, parent=content)
         self._build_axis_section(self._sec_axis.body_layout())
         layout.addWidget(self._sec_axis)
 
         # 5. 样式
-        self._sec_style = _CollapsibleSection(
-            "样式", initially_expanded=False, parent=content
-        )
+        self._sec_style = _CollapsibleSection("样式", initially_expanded=False, parent=content)
         self._build_style_section(self._sec_style.body_layout())
         layout.addWidget(self._sec_style)
 
         # 6. 输出
-        self._sec_out = _CollapsibleSection(
-            "输出", initially_expanded=False, parent=content
-        )
+        self._sec_out = _CollapsibleSection("输出", initially_expanded=False, parent=content)
         self._build_output_section(self._sec_out.body_layout())
         layout.addWidget(self._sec_out)
 
@@ -536,9 +530,7 @@ class PresetAccordionPanel(QWidget):
         self._input_path_edit.setReadOnly(True)
         btn_browse_in = PushButton("选择…", self)
         btn_browse_in.clicked.connect(self._on_pick_input_excel)
-        layout.addLayout(
-            _vertical_field("Excel 路径", self._input_path_edit, btn_browse_in)
-        )
+        layout.addLayout(_vertical_field("Excel 路径", self._input_path_edit, btn_browse_in))
 
         # Sheet + 表头行号：一行两个字段（栅格 2 列）
         short_grid = QGridLayout()
@@ -570,9 +562,7 @@ class PresetAccordionPanel(QWidget):
         self._output_dir_edit.setReadOnly(True)
         btn_browse_out = PushButton("选择…", self)
         btn_browse_out.clicked.connect(self._on_pick_output_dir)
-        layout.addLayout(
-            _vertical_field("输出目录", self._output_dir_edit, btn_browse_out)
-        )
+        layout.addLayout(_vertical_field("输出目录", self._output_dir_edit, btn_browse_out))
 
     # ── 4. 坐标轴 ────────────────────────────────────────────────
     def _build_axis_section(self, layout: QVBoxLayout) -> None:
@@ -729,9 +719,7 @@ class PresetAccordionPanel(QWidget):
             btn.setProperty("colorHex", hex_color)
             btn.setToolTip(hex_color)
             btn.clicked.connect(
-                lambda _=False, c=hex_color: self._on_curve_style_field_changed(
-                    "color", c
-                )
+                lambda _=False, c=hex_color: self._on_curve_style_field_changed("color", c)
             )
             color_row.addWidget(btn)
             self._curve_color_swatches.append(btn)
@@ -766,9 +754,7 @@ class PresetAccordionPanel(QWidget):
         self._curve_linewidth_spin.setSingleStep(0.5)
         self._curve_linewidth_spin.setDecimals(1)
         self._curve_linewidth_spin.valueChanged.connect(
-            lambda v: self._on_curve_style_field_changed(
-                "linewidth", float(v)
-            )
+            lambda v: self._on_curve_style_field_changed("linewidth", float(v))
         )
         sizes_row.addWidget(self._curve_linewidth_spin)
         self._curve_markersize_spin = DoubleSpinBox(self)
@@ -776,9 +762,7 @@ class PresetAccordionPanel(QWidget):
         self._curve_markersize_spin.setSingleStep(0.5)
         self._curve_markersize_spin.setDecimals(1)
         self._curve_markersize_spin.valueChanged.connect(
-            lambda v: self._on_curve_style_field_changed(
-                "markersize", float(v)
-            )
+            lambda v: self._on_curve_style_field_changed("markersize", float(v))
         )
         sizes_row.addWidget(self._curve_markersize_spin)
         cs_layout.addLayout(sizes_row)
@@ -857,9 +841,7 @@ class PresetAccordionPanel(QWidget):
             self._curve_style_box.setEnabled(False)
             return
         name = str(curve.get("name", f"#{idx + 1}"))
-        self._curve_style_hint.setText(
-            f"当前：#{idx + 1}  {name}（修改下方字段实时反映到该曲线）"
-        )
+        self._curve_style_hint.setText(f"当前：#{idx + 1}  {name}（修改下方字段实时反映到该曲线）")
         self._curve_style_box.setEnabled(True)
         self._load_curve_style(curve)
 
@@ -881,15 +863,11 @@ class PresetAccordionPanel(QWidget):
                     break
             # 线宽 / 点大小
             try:
-                self._curve_linewidth_spin.setValue(
-                    float(curve.get("linewidth", 2.0))
-                )
+                self._curve_linewidth_spin.setValue(float(curve.get("linewidth", 2.0)))
             except (TypeError, ValueError):
                 self._curve_linewidth_spin.setValue(2.0)
             try:
-                self._curve_markersize_spin.setValue(
-                    float(curve.get("markersize", 7.0))
-                )
+                self._curve_markersize_spin.setValue(float(curve.get("markersize", 7.0)))
             except (TypeError, ValueError):
                 self._curve_markersize_spin.setValue(7.0)
             # 颜色快选高亮
@@ -1009,9 +987,7 @@ class PresetAccordionPanel(QWidget):
             return
         self._current_preset_name = entry.name
         src_text = "系统" if entry.source is PresetSource.SYSTEM else "我的"
-        self._preset_status.setText(
-            f"来源：{src_text}（保存后将存为「我的」预设）"
-        )
+        self._preset_status.setText(f"来源：{src_text}（保存后将存为「我的」预设）")
         self._load_entry_into_form(entry.data)
         self.preset_changed.emit(self.current_preset_data())
         self.request_redraw_signal.emit()
@@ -1049,9 +1025,7 @@ class PresetAccordionPanel(QWidget):
             style = data.get("style") or {}
             self._show_grid_chk.setChecked(bool(style.get("grid", True)))
             legend_loc = style.get("legend")
-            self._legend_combo.setCurrentText(
-                legend_loc if legend_loc else "关闭"
-            )
+            self._legend_combo.setCurrentText(legend_loc if legend_loc else "关闭")
 
             self._curves_editor.set_curves(data.get("curves") or [])
         finally:

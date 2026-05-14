@@ -135,9 +135,7 @@ class TestColumnFiltering:
 # 行点击 → row_highlighted
 # ──────────────────────────────────────────────────────────────────
 class TestRowHighlightSignal:
-    def test_select_row_emits_signal(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_select_row_emits_signal(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.data_source_pane import DataSourcePane
 
         pane = DataSourcePane()
@@ -149,9 +147,7 @@ class TestRowHighlightSignal:
         finally:
             pane.deleteLater()
 
-    def test_highlight_row_does_not_recurse(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_highlight_row_does_not_recurse(self, qapp: QApplication, qtbot: Any) -> None:
         """外部调 highlight_row 应当不再发 row_highlighted（防止循环）。"""
         from civ_core.ui.components.data_source_pane import DataSourcePane
 
@@ -163,9 +159,7 @@ class TestRowHighlightSignal:
         finally:
             pane.deleteLater()
 
-    def test_highlight_row_out_of_range_is_noop(
-        self, qapp: QApplication
-    ) -> None:
+    def test_highlight_row_out_of_range_is_noop(self, qapp: QApplication) -> None:
         from civ_core.ui.components.data_source_pane import DataSourcePane
 
         pane = DataSourcePane()

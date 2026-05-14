@@ -93,12 +93,18 @@ class TestErrorBarParsing:
     def test_err_column_collected(self, tmp_path: Path) -> None:
         preset = _preset_base()
         for i, pt in enumerate(preset["curves"][0]["points"]):
-            pt["err_column"] = f"E{i+1}"
-        rows = [{
-            "试件ID": "A",
-            "X1": 0.0, "X2": 5.0, "X3": 10.0,
-            "E1": 0.5, "E2": 1.0, "E3": 0.8,
-        }]
+            pt["err_column"] = f"E{i + 1}"
+        rows = [
+            {
+                "试件ID": "A",
+                "X1": 0.0,
+                "X2": 5.0,
+                "X3": 10.0,
+                "E1": 0.5,
+                "E2": 1.0,
+                "E3": 0.8,
+            }
+        ]
         jobs, _ = build_jobs(preset, rows, tmp_path)
         s = jobs[0].series[0]
         assert s.y_err == [0.5, 1.0, 0.8]
@@ -107,11 +113,15 @@ class TestErrorBarParsing:
         """只配一个 point 的 err_column → 其他点填 0。"""
         preset = _preset_base()
         preset["curves"][0]["points"][1]["err_column"] = "E2"
-        rows = [{
-            "试件ID": "A",
-            "X1": 0.0, "X2": 5.0, "X3": 10.0,
-            "E2": 1.5,
-        }]
+        rows = [
+            {
+                "试件ID": "A",
+                "X1": 0.0,
+                "X2": 5.0,
+                "X3": 10.0,
+                "E2": 1.5,
+            }
+        ]
         jobs, _ = build_jobs(preset, rows, tmp_path)
         s = jobs[0].series[0]
         assert s.y_err == [0.0, 1.5, 0.0]
@@ -127,17 +137,19 @@ class TestErrorBarParsing:
         with pytest.raises(PlotCurvesError, match="找不到"):
             build_jobs(preset, rows, tmp_path)
 
-    def test_err_column_non_numeric_falls_back_to_zero(
-        self, tmp_path: Path
-    ) -> None:
+    def test_err_column_non_numeric_falls_back_to_zero(self, tmp_path: Path) -> None:
         """err 列存在但值不是数字 → 该点误差填 0，其他点照常。"""
         preset = _preset_base()
         preset["curves"][0]["points"][1]["err_column"] = "E2"
-        rows = [{
-            "试件ID": "A",
-            "X1": 0.0, "X2": 5.0, "X3": 10.0,
-            "E2": "n/a",
-        }]
+        rows = [
+            {
+                "试件ID": "A",
+                "X1": 0.0,
+                "X2": 5.0,
+                "X3": 10.0,
+                "E2": "n/a",
+            }
+        ]
         jobs, _ = build_jobs(preset, rows, tmp_path)
         s = jobs[0].series[0]
         # 没有任何 point 拿到合法 err → has_any_err 仍 False → y_err=None
@@ -146,11 +158,15 @@ class TestErrorBarParsing:
     def test_negative_err_clamped_to_zero(self, tmp_path: Path) -> None:
         preset = _preset_base()
         preset["curves"][0]["points"][0]["err_column"] = "E1"
-        rows = [{
-            "试件ID": "A",
-            "X1": 0.0, "X2": 5.0, "X3": 10.0,
-            "E1": -2.0,
-        }]
+        rows = [
+            {
+                "试件ID": "A",
+                "X1": 0.0,
+                "X2": 5.0,
+                "X3": 10.0,
+                "E1": -2.0,
+            }
+        ]
         jobs, _ = build_jobs(preset, rows, tmp_path)
         s = jobs[0].series[0]
         # -2 被 clamp 到 0；其他点本就 0；has_any_err 仍 True 因为列存在

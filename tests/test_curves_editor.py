@@ -168,9 +168,7 @@ class TestDeleteWithConfirmation:
         from civ_core.ui.components import curves_editor as ce
 
         # 把 MessageBox.exec 改成"用户点了确认"
-        monkeypatch.setattr(
-            ce.MessageBox, "exec", lambda self: 1, raising=True
-        )
+        monkeypatch.setattr(ce.MessageBox, "exec", lambda self: 1, raising=True)
 
         ed = ce.CurvesEditor()
         try:
@@ -189,9 +187,7 @@ class TestDeleteWithConfirmation:
         from civ_core.ui.components import curves_editor as ce
 
         # 把 exec 改成"用户取消"
-        monkeypatch.setattr(
-            ce.MessageBox, "exec", lambda self: 0, raising=True
-        )
+        monkeypatch.setattr(ce.MessageBox, "exec", lambda self: 0, raising=True)
 
         ed = ce.CurvesEditor()
         try:
@@ -224,9 +220,7 @@ class TestPointsEditing:
         finally:
             ed.deleteLater()
 
-    def test_delete_point_removes_last_when_no_selection(
-        self, qapp: QApplication
-    ) -> None:
+    def test_delete_point_removes_last_when_no_selection(self, qapp: QApplication) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -274,9 +268,7 @@ class TestPointsEditing:
 # CurvesEditor 减肥后新增的外部 API（供"样式/当前曲线"子段调用）
 # ──────────────────────────────────────────────────────────────────
 class TestExternalStyleApi:
-    def test_current_curve_data_returns_selected(
-        self, qapp: QApplication
-    ) -> None:
+    def test_current_curve_data_returns_selected(self, qapp: QApplication) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -289,9 +281,7 @@ class TestExternalStyleApi:
         finally:
             ed.deleteLater()
 
-    def test_update_current_curve_field_writes_back(
-        self, qapp: QApplication
-    ) -> None:
+    def test_update_current_curve_field_writes_back(self, qapp: QApplication) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -305,18 +295,14 @@ class TestExternalStyleApi:
         finally:
             ed.deleteLater()
 
-    def test_current_curve_changed_signal_on_select(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_current_curve_changed_signal_on_select(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
         try:
             ed.set_curves(_sample_curves())
             # set_curves 已 emit 一次；后续 ComboBox 切换应再 emit
-            with qtbot.waitSignal(
-                ed.current_curve_changed, timeout=500
-            ) as blocker:
+            with qtbot.waitSignal(ed.current_curve_changed, timeout=500) as blocker:
                 ed._curve_combo.setCurrentIndex(1)
             assert blocker.args == [1]
         finally:
@@ -367,9 +353,7 @@ class TestExcelHeadersBinding:
 # changed 信号：编辑时发，程序性刷新时不发
 # ──────────────────────────────────────────────────────────────────
 class TestChangedSignal:
-    def test_set_curves_does_not_emit(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_set_curves_does_not_emit(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -391,9 +375,7 @@ class TestChangedSignal:
         finally:
             ed.deleteLater()
 
-    def test_point_value_change_emits(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_point_value_change_emits(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -464,9 +446,7 @@ class TestErrColumnField:
         finally:
             ed.deleteLater()
 
-    def test_point_err_change_writes_back(
-        self, qapp: QApplication
-    ) -> None:
+    def test_point_err_change_writes_back(self, qapp: QApplication) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()
@@ -492,9 +472,7 @@ class TestErrColumnField:
         finally:
             ed.deleteLater()
 
-    def test_err_column_change_emits(
-        self, qapp: QApplication, qtbot: Any
-    ) -> None:
+    def test_err_column_change_emits(self, qapp: QApplication, qtbot: Any) -> None:
         from civ_core.ui.components.curves_editor import CurvesEditor
 
         ed = CurvesEditor()

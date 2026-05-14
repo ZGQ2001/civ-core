@@ -134,9 +134,7 @@ class PreviewPane(QWidget):
         self._thumb_list.setGridSize(QSize(_THUMB_SIZE + 24, _THUMB_SIZE + 36))
         self._thumb_list.setUniformItemSizes(True)
         self._thumb_list.setMinimumHeight(_THUMB_SIZE + 60)
-        self._thumb_list.setSelectionMode(
-            self._thumb_list.SelectionMode.SingleSelection
-        )
+        self._thumb_list.setSelectionMode(self._thumb_list.SelectionMode.SingleSelection)
         self._thumb_list.currentItemChanged.connect(self._on_current_changed)
         self._splitter.addWidget(self._thumb_list)
 

@@ -66,9 +66,7 @@ def parse_page_ranges(expr: str, total_pages: int) -> list[tuple[int, int]]:
       • 不允许 "1-2-3" / "abc" / 空逗号项
     """
     if total_pages <= 0:
-        raise PdfOpError(
-            "PDF 没有任何页可供拆分", hint="请确认输入 PDF 至少 1 页。"
-        )
+        raise PdfOpError("PDF 没有任何页可供拆分", hint="请确认输入 PDF 至少 1 页。")
     if not expr or not expr.strip():
         raise PdfOpError(
             "页号表达式不能为空",
@@ -130,9 +128,7 @@ def merge_pdfs(inputs: list[Path | str], out_path: Path | str) -> Path:
       FileWriteError   父目录不可写 / 磁盘满
     """
     if not inputs:
-        raise PdfOpError(
-            "合并列表为空", hint="请至少加入 1 个 PDF（建议 ≥ 2 才有意义）。"
-        )
+        raise PdfOpError("合并列表为空", hint="请至少加入 1 个 PDF（建议 ≥ 2 才有意义）。")
 
     out = Path(out_path)
     writer = PdfWriter()
@@ -201,9 +197,7 @@ def split_pdf_per_page(
 
     total = len(reader.pages)
     if total == 0:
-        raise PdfOpError(
-            f"{src.name} 没有任何页", hint="该 PDF 是空白文件，无法拆分。"
-        )
+        raise PdfOpError(f"{src.name} 没有任何页", hint="该 PDF 是空白文件，无法拆分。")
     width = max(2, len(str(total)))  # 至少 2 位（p01..p99）；超 99 用 3 位
 
     written: list[Path] = []

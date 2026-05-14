@@ -81,15 +81,9 @@ class DataSourcePane(QWidget):
 
         self._table = QTableView(self)
         self._table.setObjectName("dataSourceTable")
-        self._table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self._table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self._table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
         # 关键修复：列宽用 Interactive + 固定默认值，不再 ResizeToContents
         # ResizeToContents 会让"15.0kN (0.1Nd) 位移读数"这种长表头把列撑到
@@ -102,20 +96,12 @@ class DataSourcePane(QWidget):
         header.setMinimumSectionSize(60)
 
         # 横向 / 竖向滚动条按需出现（横向是本次修复的关键：列宽超出时能滚）
-        self._table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self._table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 横向滚一格 = 一个像素，比"一格 = 一列"在长表头时手感更好
-        self._table.setHorizontalScrollMode(
-            QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
+        self._table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         # 让表格本身的 sizePolicy 不强求空间：Ignored 让外层 layout 自由分配
-        self._table.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding
-        )
+        self._table.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
 
         self._model = QStandardItemModel(0, 0, self)
         self._table.setModel(self._model)
@@ -204,9 +190,7 @@ class DataSourcePane(QWidget):
                     text = str(v)
                 item = QStandardItem(text)
                 item.setEditable(False)
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
-                )
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 items.append(item)
             self._model.appendRow(items)
 
@@ -221,13 +205,10 @@ class DataSourcePane(QWidget):
         else:
             cols_text = " / ".join(self._displayed_cols)
             self._status.setText(
-                f"{len(self._all_rows)} 行 × {len(self._displayed_cols)} 列"
-                f"（显示列：{cols_text}）"
+                f"{len(self._all_rows)} 行 × {len(self._displayed_cols)} 列（显示列：{cols_text}）"
             )
 
-    def _on_current_row_changed(
-        self, current: QModelIndex, _previous: QModelIndex
-    ) -> None:
+    def _on_current_row_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
         if self._suppress_emit:
             return
         if not current.isValid():

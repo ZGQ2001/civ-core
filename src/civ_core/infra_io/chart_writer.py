@@ -106,9 +106,7 @@ def _draw_series(ax, s) -> None:
     elif s.plot_type == "bar":
         # 柱宽估算：x 间距的 0.6 倍；x 单点时 fallback 1.0
         if len(s.xs) >= 2:
-            spacing = min(
-                abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)
-            ) or 1.0
+            spacing = min(abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)) or 1.0
             width = spacing * 0.6
         else:
             width = 1.0
@@ -156,14 +154,17 @@ def _draw_series(ax, s) -> None:
     # bar 在 ax.bar(yerr=) 已经画过，跳过避免重复
     if s.y_err is not None and s.plot_type != "bar":
         ax.errorbar(
-            s.xs, s.ys, yerr=s.y_err,
-            fmt="none", ecolor="#222222", capsize=3,
+            s.xs,
+            s.ys,
+            yerr=s.y_err,
+            fmt="none",
+            ecolor="#222222",
+            capsize=3,
             zorder=2,
         )
 
 
-def _apply_axis_spec(ax, spec: AxisSpec, *, label_fontsize: int,
-                      axis: str) -> None:
+def _apply_axis_spec(ax, spec: AxisSpec, *, label_fontsize: int, axis: str) -> None:
     """把 AxisSpec 应用到给定 ax 的 X 或 Y 轴。
 
     axis: "x" / "y"（决定调 xlabel/xlim/xticks 还是 ylabel/ylim/yticks）
@@ -221,9 +222,7 @@ def _configure_axes(
 
     # 4) 次轴 spec（如启用）
     if ax2 is not None and job.y_axis2 is not None:
-        _apply_axis_spec(
-            ax2, job.y_axis2, label_fontsize=label_fontsize, axis="y"
-        )
+        _apply_axis_spec(ax2, job.y_axis2, label_fontsize=label_fontsize, axis="y")
 
     # 5) grid：只画主轴 grid（次轴 grid 与主轴叠加会显得乱）
     if job.grid if job.grid is not None else show_grid:
@@ -236,7 +235,8 @@ def _configure_axes(
         h2, l2 = ax2.get_legend_handles_labels()
         if h1 or h2:
             ax.legend(
-                h1 + h2, l1 + l2,
+                h1 + h2,
+                l1 + l2,
                 loc=job.legend_loc or ("best" if show_legend else "best"),
                 frameon=True,
             )
@@ -301,8 +301,16 @@ def render_plot_to_png(
 # 叠加对比图色环（来自 matplotlib tab10，hex 化便于纯字符串处理）。
 # 一根试件 = 一种颜色；超过 10 根循环复用（土木场景一次对比通常 < 20 根）。
 _OVERLAY_PALETTE: list[str] = [
-    "#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD",
-    "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF",
+    "#1F77B4",
+    "#FF7F0E",
+    "#2CA02C",
+    "#D62728",
+    "#9467BD",
+    "#8C564B",
+    "#E377C2",
+    "#7F7F7F",
+    "#BCBD22",
+    "#17BECF",
 ]
 
 
@@ -352,8 +360,9 @@ class HitTestMeta:
     points: list[tuple[int, list[float], list[float]]] = field(default_factory=list)
 
 
-def _draw_overlay_series(ax, s, *, color: str, alpha: float, zorder: int,
-                          lw_mul: float, label: str | None) -> None:
+def _draw_overlay_series(
+    ax, s, *, color: str, alpha: float, zorder: int, lw_mul: float, label: str | None
+) -> None:
     """叠加模式下绘一条 series：颜色 / 透明度 / 层级由调用方覆盖。
 
     与 _draw_series 的差异：
@@ -363,42 +372,64 @@ def _draw_overlay_series(ax, s, *, color: str, alpha: float, zorder: int,
     """
     if s.plot_type == "scatter":
         ax.scatter(
-            s.xs, s.ys,
-            color=color, marker=s.marker,
+            s.xs,
+            s.ys,
+            color=color,
+            marker=s.marker,
             s=max(s.markersize, 1.0) ** 2,
-            edgecolors=color, linewidths=1.0,
-            alpha=alpha, zorder=zorder, label=label,
+            edgecolors=color,
+            linewidths=1.0,
+            alpha=alpha,
+            zorder=zorder,
+            label=label,
         )
     elif s.plot_type == "bar":
         if len(s.xs) >= 2:
-            spacing = min(
-                abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)
-            ) or 1.0
+            spacing = min(abs(s.xs[i + 1] - s.xs[i]) for i in range(len(s.xs) - 1)) or 1.0
             width = spacing * 0.6
         else:
             width = 1.0
         ax.bar(
-            s.xs, s.ys, color=color, width=width,
-            edgecolor=color, linewidth=s.linewidth * lw_mul,
-            alpha=alpha, zorder=zorder, label=label,
+            s.xs,
+            s.ys,
+            color=color,
+            width=width,
+            edgecolor=color,
+            linewidth=s.linewidth * lw_mul,
+            alpha=alpha,
+            zorder=zorder,
+            label=label,
         )
     elif s.plot_type == "step":
         ax.step(
-            s.xs, s.ys, where="post",
-            color=color, linewidth=s.linewidth * lw_mul,
-            marker=s.marker, markersize=s.markersize,
+            s.xs,
+            s.ys,
+            where="post",
+            color=color,
+            linewidth=s.linewidth * lw_mul,
+            marker=s.marker,
+            markersize=s.markersize,
             markerfacecolor="white",
-            markeredgecolor=color, markeredgewidth=1.5,
-            alpha=alpha, zorder=zorder, label=label,
+            markeredgecolor=color,
+            markeredgewidth=1.5,
+            alpha=alpha,
+            zorder=zorder,
+            label=label,
         )
     else:  # line
         ax.plot(
-            s.xs, s.ys,
-            color=color, linewidth=s.linewidth * lw_mul,
-            marker=s.marker, markersize=s.markersize,
+            s.xs,
+            s.ys,
+            color=color,
+            linewidth=s.linewidth * lw_mul,
+            marker=s.marker,
+            markersize=s.markersize,
             markerfacecolor="white",
-            markeredgecolor=color, markeredgewidth=1.5,
-            alpha=alpha, zorder=zorder, label=label,
+            markeredgecolor=color,
+            markeredgewidth=1.5,
+            alpha=alpha,
+            zorder=zorder,
+            label=label,
         )
 
 
@@ -451,9 +482,12 @@ def _render_overlay_core(
             for s_idx, s in enumerate(job.series):
                 label = job.title if s_idx == 0 else None
                 _draw_overlay_series(
-                    ax, s,
-                    color=color, alpha=alpha,
-                    zorder=zorder, lw_mul=lw_mul,
+                    ax,
+                    s,
+                    color=color,
+                    alpha=alpha,
+                    zorder=zorder,
+                    lw_mul=lw_mul,
                     label=label,
                 )
 
@@ -564,9 +598,13 @@ def render_overlay_to_bytes(
     png, _meta = _render_overlay_core(
         jobs,
         highlight_row_idx=highlight_row_idx,
-        figsize=figsize, dpi=dpi, title=title,
-        show_grid=show_grid, show_legend=show_legend,
-        title_fontsize=title_fontsize, label_fontsize=label_fontsize,
+        figsize=figsize,
+        dpi=dpi,
+        title=title,
+        show_grid=show_grid,
+        show_legend=show_legend,
+        title_fontsize=title_fontsize,
+        label_fontsize=label_fontsize,
         collect_hit_test=False,
     )
     return png
@@ -596,9 +634,13 @@ def render_overlay_with_hittest(
     png, meta = _render_overlay_core(
         jobs,
         highlight_row_idx=highlight_row_idx,
-        figsize=figsize, dpi=dpi, title=title,
-        show_grid=show_grid, show_legend=show_legend,
-        title_fontsize=title_fontsize, label_fontsize=label_fontsize,
+        figsize=figsize,
+        dpi=dpi,
+        title=title,
+        show_grid=show_grid,
+        show_legend=show_legend,
+        title_fontsize=title_fontsize,
+        label_fontsize=label_fontsize,
         collect_hit_test=True,
     )
     assert meta is not None  # collect_hit_test=True 保证非空

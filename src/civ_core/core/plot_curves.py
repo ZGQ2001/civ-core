@@ -287,24 +287,17 @@ def build_jobs(
     if missing:
         raise PlotCurvesError(
             f"预设需要的 {len(missing)} 个列在 Excel 表头中找不到：{missing}",
-            hint=(
-                "请先调 preflight_check 拿详细诊断；"
-                "或用[曲线预设编辑器]修正列名后重试。"
-            ),
+            hint=("请先调 preflight_check 拿详细诊断；或用[曲线预设编辑器]修正列名后重试。"),
         )
 
     id_col_actual = col_map[preset["id_column"]]
     fname_tpl = preset["filename_template"]  # 字面字符串模板，保留 template 命名
-    title_tpl = preset["title_template"]     # 同上
+    title_tpl = preset["title_template"]  # 同上
     x_axis = _axis_spec_from_dict(preset["x_axis"])
     y_axis = _axis_spec_from_dict(preset["y_axis"])
     # P1.5-④ 双 Y 轴：预设可选 y_axis2；缺省 / None → 单 Y 轴
     y_axis2_dict = preset.get("y_axis2")
-    y_axis2 = (
-        _axis_spec_from_dict(y_axis2_dict)
-        if y_axis2_dict is not None
-        else None
-    )
+    y_axis2 = _axis_spec_from_dict(y_axis2_dict) if y_axis2_dict is not None else None
     # 图级样式：preset["style"] 可能不存在（旧预设）→ 默认 grid=True / 无 legend
     style = preset.get("style") or {}
     grid = bool(style.get("grid", True))
@@ -369,9 +362,7 @@ def build_jobs(
 # ──────────────────────────────────────────────────────────────────
 # 模块 3：预检（纯计算，给 UI / CLI 出"对用户友好"的诊断报告）
 # ──────────────────────────────────────────────────────────────────
-def preflight_check(
-    preset: dict[str, Any], excel_columns: list[str]
-) -> tuple[bool, str]:
+def preflight_check(preset: dict[str, Any], excel_columns: list[str]) -> tuple[bool, str]:
     """跑批量前体检：检查 Excel 表头是否覆盖预设需要的所有列。
 
     返回 (是否通过, 多行诊断文本)。文本可直接喂给 UI 的 InfoBar 详情区或 CLI 输出。
@@ -381,9 +372,7 @@ def preflight_check(
     n_ok = len(col_map)
 
     lines: list[str] = []
-    lines.append(
-        f"📋 预设需 {needed_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n"
-    )
+    lines.append(f"📋 预设需 {needed_total} 列；已匹配 {n_ok}，缺失 {len(missing)}。\n")
 
     if col_map:
         lines.append("✅ 已匹配的列（左=预设，右=Excel 实际）:")
@@ -519,7 +508,10 @@ def run_plot_curves(
                 failed.append((job, e))
             except Exception as e:
                 log.error(
-                    "   ❌ 第 %d 张失败: %s — %s", i, job.output_path.name, e,
+                    "   ❌ 第 %d 张失败: %s — %s",
+                    i,
+                    job.output_path.name,
+                    e,
                     exc_info=True,
                 )
                 failed.append((job, e))

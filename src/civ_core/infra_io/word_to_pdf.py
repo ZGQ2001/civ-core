@@ -220,25 +220,23 @@ def convert_batch(
                 result.written.append(out_path)
             except Exception as e:
                 # 单文件失败：记下来继续下一个，不中断批量
-                log.error(
-                    "批量转换第 %d/%d 个失败：%s — %s", i, total, src.name, e
-                )
+                log.error("批量转换第 %d/%d 个失败：%s — %s", i, total, src.name, e)
                 result.failed.append((src, e))
 
             if progress_cb is not None:
                 try:
                     progress_cb(i, total, src)
                 except Exception as cb_err:
-                    log.warning(
-                        "progress_cb 抛异常（已忽略）：%s", cb_err
-                    )
+                    log.warning("progress_cb 抛异常（已忽略）：%s", cb_err)
     finally:
         _quit_engine(app)
         pythoncom.CoUninitialize()
 
     log.info(
         "批量 Word→PDF 完成：成功 %d / 失败 %d / 总 %d",
-        len(result.written), len(result.failed), total,
+        len(result.written),
+        len(result.failed),
+        total,
     )
     return result
 

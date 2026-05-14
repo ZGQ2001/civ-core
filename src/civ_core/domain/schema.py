@@ -39,16 +39,12 @@ class AxisSpec:
         if self.range is None:
             return
         if len(self.range) != 3:
-            raise ValueError(
-                f"AxisSpec.range 必须是 (min, max, step) 三元组，得到 {self.range!r}"
-            )
+            raise ValueError(f"AxisSpec.range 必须是 (min, max, step) 三元组，得到 {self.range!r}")
         a_min, a_max, a_step = self.range
         if a_step <= 0:
             raise ValueError(f"AxisSpec.range 的 step 必须 > 0，得到 {a_step}")
         if a_min > a_max:
-            raise ValueError(
-                f"AxisSpec.range 必须 min <= max，得到 ({a_min}, {a_max})"
-            )
+            raise ValueError(f"AxisSpec.range 必须 min <= max，得到 ({a_min}, {a_max})")
 
 
 # 支持的图类型（土木场景覆盖）：
@@ -95,28 +91,21 @@ class CurveSeries:
     def __post_init__(self) -> None:
         if len(self.xs) != len(self.ys):
             raise ValueError(
-                "CurveSeries.xs / ys 长度必须相等，"
-                f"得到 xs={len(self.xs)} / ys={len(self.ys)}"
+                f"CurveSeries.xs / ys 长度必须相等，得到 xs={len(self.xs)} / ys={len(self.ys)}"
             )
         if self.linewidth <= 0:
             raise ValueError(f"CurveSeries.linewidth 必须 > 0，得到 {self.linewidth}")
         if self.markersize < 0:
-            raise ValueError(
-                f"CurveSeries.markersize 必须 >= 0，得到 {self.markersize}"
-            )
+            raise ValueError(f"CurveSeries.markersize 必须 >= 0，得到 {self.markersize}")
         if not _HEX_COLOR_RE.match(self.color):
-            raise ValueError(
-                f"CurveSeries.color 必须是 #RGB 或 #RRGGBB 形式，得到 {self.color!r}"
-            )
+            raise ValueError(f"CurveSeries.color 必须是 #RGB 或 #RRGGBB 形式，得到 {self.color!r}")
         if self.plot_type not in _PLOT_TYPES:
             raise ValueError(
-                f"CurveSeries.plot_type 必须是 {sorted(_PLOT_TYPES)} 之一，"
-                f"得到 {self.plot_type!r}"
+                f"CurveSeries.plot_type 必须是 {sorted(_PLOT_TYPES)} 之一，得到 {self.plot_type!r}"
             )
         if self.y_axis not in _Y_AXES:
             raise ValueError(
-                f"CurveSeries.y_axis 必须是 {sorted(_Y_AXES)} 之一，"
-                f"得到 {self.y_axis!r}"
+                f"CurveSeries.y_axis 必须是 {sorted(_Y_AXES)} 之一，得到 {self.y_axis!r}"
             )
         if self.y_err is not None:
             if len(self.y_err) != len(self.ys):
@@ -126,9 +115,7 @@ class CurveSeries:
                 )
             for i, e in enumerate(self.y_err):
                 if e < 0:
-                    raise ValueError(
-                        f"CurveSeries.y_err[{i}] 必须 >= 0，得到 {e}"
-                    )
+                    raise ValueError(f"CurveSeries.y_err[{i}] 必须 >= 0，得到 {e}")
 
 
 @dataclass(slots=True)
@@ -191,6 +178,4 @@ class PlotRunSettings:
         if self.output_dir is not None and not isinstance(self.output_dir, Path):
             self.output_dir = Path(self.output_dir)
         if self.header_row < 1:
-            raise ValueError(
-                f"PlotRunSettings.header_row 必须 >= 1，得到 {self.header_row}"
-            )
+            raise ValueError(f"PlotRunSettings.header_row 必须 >= 1，得到 {self.header_row}")

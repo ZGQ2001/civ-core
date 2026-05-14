@@ -171,12 +171,7 @@ class LogPanel(QWidget):
         font.setPointSize(9)
         self._text.setFont(font)
         # 简洁视觉：去边框去 margin，让 BottomTabPanel 提供整体边界
-        self._text.setStyleSheet(
-            "QPlainTextEdit { "
-            "  background: #fafafa; "
-            "  border: none; "
-            "} "
-        )
+        self._text.setStyleSheet("QPlainTextEdit {   background: #fafafa;   border: none; } ")
         self._text.setFrameShape(QPlainTextEdit.Shape.NoFrame)
         outer.addWidget(self._text, 1)
 

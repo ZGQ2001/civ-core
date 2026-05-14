@@ -83,7 +83,9 @@ class TestMergeValidation:
             view.deleteLater()
 
     def test_single_file_blocks(
-        self, qapp: QApplication, tmp_path: Path,
+        self,
+        qapp: QApplication,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """只 1 个文件也不让合并。"""
@@ -106,7 +108,9 @@ class TestMergeValidation:
             view.deleteLater()
 
     def test_missing_out_path_blocks(
-        self, qapp: QApplication, tmp_path: Path,
+        self,
+        qapp: QApplication,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from civ_core.ui.windows import pdf_tools_view as ptv
@@ -121,7 +125,8 @@ class TestMergeValidation:
         view = ptv.PdfToolsView(_make_cfg())  # type: ignore[arg-type]
         try:
             view._merge_inputs = [
-                tmp_path / "a.pdf", tmp_path / "b.pdf",
+                tmp_path / "a.pdf",
+                tmp_path / "b.pdf",
             ]
             view._merge_out_path = None
             view._on_merge_run()
@@ -131,9 +136,7 @@ class TestMergeValidation:
 
 
 class TestSplitTab:
-    def test_mode_toggle_enables_range_edit(
-        self, qapp: QApplication
-    ) -> None:
+    def test_mode_toggle_enables_range_edit(self, qapp: QApplication) -> None:
         from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 
         view = PdfToolsView(_make_cfg())  # type: ignore[arg-type]
@@ -147,7 +150,9 @@ class TestSplitTab:
             view.deleteLater()
 
     def test_missing_input_blocks(
-        self, qapp: QApplication, monkeypatch: pytest.MonkeyPatch,
+        self,
+        qapp: QApplication,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from civ_core.ui.windows import pdf_tools_view as ptv
 
@@ -165,7 +170,9 @@ class TestSplitTab:
             view.deleteLater()
 
     def test_range_mode_empty_expr_blocks(
-        self, qapp: QApplication, tmp_path: Path,
+        self,
+        qapp: QApplication,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from civ_core.ui.windows import pdf_tools_view as ptv

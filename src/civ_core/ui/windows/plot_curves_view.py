@@ -131,9 +131,7 @@ class PlotCurvesView(QWidget):
 
         # ── 信号路由 ──
         # 参数面板 → 实时预览
-        self.preset_accordion_panel.preset_changed.connect(
-            self.live_preview_pane.set_preset
-        )
+        self.preset_accordion_panel.preset_changed.connect(self.live_preview_pane.set_preset)
         self.preset_accordion_panel.data_source_changed.connect(
             self.live_preview_pane.set_data_source
         )
@@ -142,29 +140,17 @@ class PlotCurvesView(QWidget):
         )
         # P1.5-② 撤销/重做：监听 preset_changed → 入栈；Ctrl+Z/Y 快捷键
         # 必须在其他 preset_changed 连接之前 / 之后无所谓，控制器只读不改 data
-        self._undo_ctrl = PresetUndoController(
-            self.preset_accordion_panel, parent=self
-        )
-        self.preset_accordion_panel.preset_changed.connect(
-            self._undo_ctrl.on_preset_changed
-        )
+        self._undo_ctrl = PresetUndoController(self.preset_accordion_panel, parent=self)
+        self.preset_accordion_panel.preset_changed.connect(self._undo_ctrl.on_preset_changed)
         # QShortcut 在 view 范围内生效；用 StandardKey 兼容平台（macOS Cmd 自动映射）
-        self._undo_shortcut = QShortcut(
-            QKeySequence(QKeySequence.StandardKey.Undo), self
-        )
+        self._undo_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Undo), self)
         self._undo_shortcut.activated.connect(self._undo_ctrl.undo)
-        self._redo_shortcut = QShortcut(
-            QKeySequence(QKeySequence.StandardKey.Redo), self
-        )
+        self._redo_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Redo), self)
         self._redo_shortcut.activated.connect(self._undo_ctrl.redo)
 
         # 参数面板 → 数据源 Tab
-        self.preset_accordion_panel.preset_changed.connect(
-            self._refresh_data_source_pane
-        )
-        self.preset_accordion_panel.data_source_changed.connect(
-            self._on_data_source_changed
-        )
+        self.preset_accordion_panel.preset_changed.connect(self._refresh_data_source_pane)
+        self.preset_accordion_panel.data_source_changed.connect(self._on_data_source_changed)
         # 数据源行点击 → 预览高亮
         self.bottom_panel.data_source_pane.row_highlighted.connect(
             self.live_preview_pane.highlight_row
@@ -429,7 +415,7 @@ class PlotCurvesView(QWidget):
             show_warning_infobar(
                 self,
                 title="参数未填完",
-                reason=f"还差这些必填项：{ ' / '.join(missing) }",
+                reason=f"还差这些必填项：{' / '.join(missing)}",
                 hint=(
                     "「输入 Excel」「输出目录」在左栏【数据源】分组里选；"
                     "「预设」在左栏【预设选择】分组里下拉。"
@@ -496,9 +482,7 @@ class PlotCurvesView(QWidget):
                     issues.append(f"{axis_label}范围数据格式异常")
                 else:
                     if r[0] >= r[1]:
-                        issues.append(
-                            f"{axis_label}范围 min ({r[0]}) 必须小于 max ({r[1]})"
-                        )
+                        issues.append(f"{axis_label}范围 min ({r[0]}) 必须小于 max ({r[1]})")
                     if r[2] <= 0:
                         issues.append(f"{axis_label}范围 step ({r[2]}) 必须 > 0")
 
@@ -510,9 +494,7 @@ class PlotCurvesView(QWidget):
             # 检查 PresetFormPanel 塞的解析错误标记
             for item in curves:
                 if isinstance(item, dict) and "_parse_error" in item:
-                    issues.append(
-                        f"曲线 JSON 解析失败：{item['_parse_error']}"
-                    )
+                    issues.append(f"曲线 JSON 解析失败：{item['_parse_error']}")
                     break  # 一条错就足够提示，不重复
             else:
                 if curves_text.strip() and not curves:
@@ -575,9 +557,7 @@ class PlotCurvesView(QWidget):
             )
         else:
             # 部分失败：黄色 InfoBar，把首条失败的诊断展开给用户看
-            self._status_label.setText(
-                f"⚠️ 完成：成功 {n_ok} 张 / 失败 {n_fail} 张"
-            )
+            self._status_label.setText(f"⚠️ 完成：成功 {n_ok} 张 / 失败 {n_fail} 张")
             first_job, first_exc = result.failed[0]
             extra_n = n_fail - 1
             extra_tail = f"，另有 {extra_n} 张失败，详见 logs/app.log" if extra_n else ""

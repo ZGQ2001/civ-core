@@ -25,6 +25,16 @@
        和 `▸`(U+25B8 small black) 字面宽度+字形粗细都不同，切换时整段文本左右晃。
    断言：_SectionHeader 内部箭头 QLabel 宽度恒定（fixedWidth=14），且 expand /
         collapse 切换前后 title QLabel 的 x 起点完全相等。
+
+5. **展开分组时 splitter 左栏被内部 sizeHint 撑大**
+   bug：DoubleSpinBox 的默认 setRange(-1e9, 1e9) 让其 sizeHint ≈ 324px（按最长
+       数字串算宽）；`_RangeTrio` 一行横排 3 个 SpinBox + label，加上 CurvesEditor
+       等内部组件，让 content widget 的 minimumSizeHint ≈ 342px。当 splitter
+       左栏宽 < 342 时，content 被自身 minimumSize 撑到 342，按钮 / LineEdit 跟着
+       拉伸到 342 → 但显示区只有 splitter 给的宽度 → 内容溢出被截、字位移。
+   断言：QScrollArea 内的 content widget 的 minimumSizeHint().width() ≤ 220，
+        无论分组展开/折叠状态如何 —— 通过给 DoubleSpinBox 设 setMinimumWidth(50)
+        让控件能压缩到容器宽度。
 """
 
 from __future__ import annotations
@@ -240,6 +250,86 @@ class TestPresetDefaultSelected:
             assert s.preset_name is not None, (
                 "兜底失败：_current_preset_name 缺失时 current_run_settings "
                 "应从 ComboBox 当前选中项的 userData 取回预设名"
+            )
+        finally:
+            panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Bug 5：splitter 左栏被内部 sizeHint 撑大
+# ──────────────────────────────────────────────────────────────────
+class TestPanelMinSizeHintNotInflatedByGroups:
+    """PresetAccordionPanel 的 minimumSizeHint 不能被内部分组撑大。
+
+    用户场景：展开"坐标轴"分组时，里面 _RangeTrio 一行横排 min/max/step
+    三个 SpinBox + label，累加 minimumSizeHint ≈ 400-500px。如果 panel
+    自身把这个 hint 透传给 QSplitter，splitter 会强制左栏 ≥ 该宽度 →
+    "保存为我的预设"按钮被拉伸 / 字体位移 / 右栏被挤压。
+
+    修复方式：PresetAccordionPanel 覆盖 minimumSizeHint() 横向上限 200，
+    让 splitter 完全接管左栏宽度，内部 _RangeTrio 通过 SpinBox 的
+    minimumWidth(60) 实现窄宽下也能完整显示。
+    """
+
+    def test_min_size_hint_width_capped_when_collapsed(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """所有分组都收起时 minSizeHint.width 应 ≤ 200。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            msh = panel.minimumSizeHint()
+            assert msh.width() <= 200, (
+                f"折叠态 minSizeHint.width={msh.width()} > 200，"
+                "splitter 会被撑大"
+            )
+        finally:
+            panel.deleteLater()
+
+    def test_min_size_hint_width_capped_when_axis_expanded(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """展开"坐标轴"分组后 minSizeHint.width 仍应 ≤ 200（用户报告的核心场景）。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            # 坐标轴分组默认收起 → 这里显式 toggle 展开
+            panel._sec_axis._toggle()
+            qapp.processEvents()
+            msh = panel.minimumSizeHint()
+            assert msh.width() <= 200, (
+                f"坐标轴展开后 minSizeHint.width={msh.width()} > 200，"
+                "splitter 会被 _RangeTrio 一行横排撑大 → 「保存为我的预设」按钮位移"
+            )
+        finally:
+            panel.deleteLater()
+
+    def test_min_size_hint_width_capped_when_all_groups_expanded(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        """所有分组（含数据源 / 曲线定义 / 坐标轴 / 样式 / 输出）全展开时也不超 200。"""
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            # 把 5 个可折叠分组都打开（_sec_preset 不可折叠）
+            for sec_name in (
+                "_sec_data",
+                "_sec_curves",
+                "_sec_axis",
+                "_sec_style",
+                "_sec_out",
+            ):
+                sec = getattr(panel, sec_name)
+                if not sec.is_expanded():
+                    sec._toggle()
+            qapp.processEvents()
+            msh = panel.minimumSizeHint()
+            assert msh.width() <= 200, (
+                f"全展开后 minSizeHint.width={msh.width()} > 200，"
+                "压力测试不通过"
             )
         finally:
             panel.deleteLater()

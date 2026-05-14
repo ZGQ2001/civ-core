@@ -22,7 +22,7 @@ legacy_config_dir = "./04_Config"
 
 # ── UI ───────────────────────────────────────────────────────────
 [ui]
-theme = "auto"                      # auto | light | dark
+theme = "dark"                      # auto | light | dark
 language = "zh_CN"
 accent_color = "#0078D4"
 startup_size = [1320, 840]

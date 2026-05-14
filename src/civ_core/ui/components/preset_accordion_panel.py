@@ -490,6 +490,12 @@ class PresetAccordionPanel(QWidget):
         self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         # 水平不滚（窗口窄时让内部 widget 自己收缩）
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # 关键 bugfix：垂直滚动条强制 always-on。
+        # 原因：默认 AsNeeded 在折叠/展开分组时滚动条会突然出现/消失，导致
+        # viewport 宽度发生 ±N 像素跳变（N=滚动条宽度），所有内部 widget 跟着
+        # 重排 —— 视觉表现就是用户报告的"展开列表时输入框宽度抖动、字位置变"。
+        # 始终占位 + QSS 把滚动条做细，视觉影响远小于抖动。
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         outer.addWidget(self._scroll)
 
         # 内容容器

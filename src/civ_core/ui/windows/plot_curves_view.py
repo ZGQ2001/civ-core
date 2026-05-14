@@ -188,6 +188,14 @@ class PlotCurvesView(QWidget):
         self.bottom_panel.collapse_changed.connect(self._on_bottom_collapse_changed)
         self.bottom_panel.set_collapsed(self._restore_bottom_collapsed())
 
+        # 关键 bugfix：PresetAccordionPanel.__init__ 在 refresh() 末尾会
+        # emit 一次 preset_changed（带默认预设的完整数据），但那时 view 层
+        # 的 signal connect 还没建立 —— 这次 emit 是"空喊"，没人收到。
+        # 结果：LivePreviewPane._preset 一直是 None，用户不动预设、直接
+        # 选 Excel 时实时预览会卡在"请先选预设"。
+        # 这里在所有 connect 完成后主动同步一次当前预设给 LivePreviewPane。
+        self.live_preview_pane.set_preset(self.preset_accordion_panel.current_preset_data())
+
     def _build_right_column(self) -> QWidget:
         """右栏：工具栏(生成按钮+状态+进度) → 预览图 → 底栏 Tab。
         预览与底栏之间用垂直 QSplitter 隔开，比例可调，持久化。

@@ -7,13 +7,25 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** P1 + P1.5 + P3 前两个工具 + 全局视觉强化（"卡片化分组 / 等宽数字 / 冷灰底"轻工业感 QSS） + 4 处 UI 体验 bugfix 已交付（2026-05-14）。**410 测试通过**（+7 新覆盖 UI 缩放边界 / 预设默认选中 / 风琴箭头不抖）；ruff 0；healthcheck 9 项全 ✅。
+**当前状态：** P1 + P1.5 + P3 前两个工具 + **深色三层 UI 视觉重做** + 7 处 UI 体验 bugfix 已交付（2026-05-14）。**410 测试通过**；ruff 0；healthcheck 9 项全 ✅。
 
 **2026-05-14 增量交付**：
-- **UI 视觉**：bootstrap 注入应用级 QSS — 分组卡片白底 + 6px 圆角 + 左侧 3px 科技蓝色条；冷灰底 #F4F6F9；数字 SpinBox / 表格用等宽字体（Consolas/Cascadia/Menlo）；splitter handle 4→6px 且 hover 变蓝；实时预览图加细描边"画框"；移除 _CollapsibleSection 内 inline 样式让全局 QSS 接管
-- **Bug 1 缩放修复**：LivePreviewPane 的 QLabel 用 `SizePolicy.Ignored × Ignored` + `minSize(1,1)`，自身 `setMinimumSize(0,0)`；MainWindow 显式 `setMinimumSize(720, 480)` —— splitter 拖大后能缩回、窗口右拖能收缩
-- **Bug 2 预设默认选中**：refresh() 末尾若 currentIndex<0 再补选；`current_run_settings()` 兜底从 ComboBox userData 取预设名 —— 选完数据源直接点"生成"不再被"请先选预设"挡住
-- **Bug 3 风琴标题不再跳动**：原 `ToolButton.setText(f"▾  {title}")` 模式下 `▾`(U+25BE) / `▸`(U+25B8) 字面宽 + 字形粗细都不同切换时 title 起点抖动。重构为 `_SectionHeader` widget = 固定宽度 14px 箭头 QLabel + 弹性 title QLabel + mousePressEvent 触发 toggle；箭头字符换成 BLACK 系列 ▼/▶，固定宽度容器二次兜底
+
+UI 视觉两轮迭代 —— 第一轮"浅色卡片"已废，第二轮采用：
+- **深色三层背景**：L0 `#161A1F`（根/窗口）/ L1 `#1E232A`（面板/卡片底）/ L2 `#262C35`（输入控件/表头）—— 视觉层级 = 深度感
+- **圆角 4px**（从 6px 收小，更工程感）；细分隔线 1px `#2E343D`
+- **蓝色 `#0078D4` 仅用于激活态**：focus / hover / checked / selected / pressed；非激活态用灰阶（去掉左侧蓝色条占位，hover 时才出现 header 背景 + 箭头变蓝）
+- 配套：滚动条做细 8px、hover 蓝；表格选中行蓝；预览图加深色"画框"`#14181D`
+- `config.toml` `theme = dark`，让 qfluentwidgets 跟 QSS 走同一套深色
+
+7 处 UI bugfix（按修复顺序）：
+- **缩放 1**：LivePreviewPane QLabel 用 `SizePolicy.Ignored × Ignored` + `minSize(1,1)`，自身 `setMinimumSize(0,0)` —— splitter 拖大后能缩回
+- **缩放 2**：MainWindow 显式 `setMinimumSize(720, 480)` —— 窗口右拖能收缩
+- **预设 1**：`refresh()` 末尾若 currentIndex<0 再补选；`current_run_settings()` 兜底从 ComboBox userData 取预设名
+- **预设 2**：plot_curves_view 在所有 signal connect 完成后主动调 `live_preview_pane.set_preset(current_preset_data())` —— 修复 PresetAccordionPanel.__init__ 中的 emit 在 connect 之前已丢，导致 LivePreviewPane._preset = None、用户不动预设直接选 Excel 时卡在"请先选预设"
+- **风琴 1**：重构 `_SectionHeader` widget = 固定宽度 14px 箭头 QLabel + 弹性 title QLabel + mousePressEvent 触发 toggle —— 修 `▾`/`▸` 字宽差异导致 title 起点抖
+- **风琴 2**：PresetAccordionPanel 的 QScrollArea 垂直滚动条改 `ScrollBarAlwaysOn` —— 修展开/收起分组时滚动条出现消失导致 viewport 宽度 ±N 像素跳变、所有输入框跟着抖
+- **风琴 3**：箭头字符切到 BLACK 系列 ▼/▶（同系列宽度更接近，固定宽度容器二次兜底）
 
 P1.5 子项交付状态：
 - ✅ **Step1/2/3** 点交互闭环：单行切换 / 叠加对比 / hover hit-testing

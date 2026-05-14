@@ -179,6 +179,9 @@ class _CollapsibleSection(QWidget):
         outer.setSpacing(0)
 
         # 标题栏：toggle 箭头 + 文字
+        # 样式（背景/边框/字重/字间距）由 bootstrap._APP_QSS 中的
+        # `QWidget[objectName^="collapsibleSection_"] > QToolButton` 选择器统一接管 ——
+        # 不在这里 inline setStyleSheet，避免 inline 优先级把全局 QSS 顶掉。
         self._header = ToolButton(self)
         self._header.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
@@ -186,17 +189,6 @@ class _CollapsibleSection(QWidget):
         self._header.setText(self._title_text(title))
         self._header.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        # 简洁的视觉：弱化分隔线，避免重边框
-        self._header.setStyleSheet(
-            "QToolButton { "
-            "  text-align: left; "
-            "  padding: 6px 8px; "
-            "  font-weight: 600; "
-            "  border: none; "
-            "  border-bottom: 1px solid #e0e0e0; "
-            "}"
-            "QToolButton:hover { background: rgba(0,0,0,0.04); }"
         )
         if collapsible:
             self._header.clicked.connect(self._toggle)
@@ -453,8 +445,10 @@ class PresetAccordionPanel(QWidget):
         content.setObjectName("presetAccordionContent")
         self._scroll.setWidget(content)
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(0)  # 分组之间靠边框线分隔，不再加间距
+        layout.setContentsMargins(10, 10, 10, 10)
+        # 卡片化分组之间留 6px 呼吸空间 —— 配合 _APP_QSS 里的圆角白底卡片，
+        # 制造"层叠卡片"的空间感，而不是粘成一坨方块
+        layout.setSpacing(6)
 
         # 1. 预设选择（不可折叠）
         self._sec_preset = _CollapsibleSection(
@@ -984,6 +978,16 @@ class PresetAccordionPanel(QWidget):
             self._suppress = False
 
         if self._preset_combo.count() > 0:
+            # 兜底：suppress 期间的 setCurrentIndex 在某些 qfluentwidgets 版本
+            # 下不会立即生效（内部还未 commit），导致 currentIndex() 返回 -1。
+            # 这里如果发现没选中就再显式选一次，确保 _load_current_combo_entry
+            # 能拿到合法 idx 并把 _current_preset_name 设上。
+            if self._preset_combo.currentIndex() < 0:
+                self._suppress = True
+                try:
+                    self._preset_combo.setCurrentIndex(0)
+                finally:
+                    self._suppress = False
             self._load_current_combo_entry()
 
     def _on_preset_combo_changed(self, _label: str) -> None:
@@ -1102,10 +1106,23 @@ class PresetAccordionPanel(QWidget):
         }
 
     def current_run_settings(self) -> PlotRunSettings:
+        # 兜底：如果 _current_preset_name 由于初始化时序问题没同步上，
+        # 直接从 ComboBox 当前选中项的 userData 取一次 —— 用户在 UI 上看到
+        # ComboBox 已选中某条预设，行为上就该按"已选"处理，而不是回头逼用户再点一次。
+        preset_name = self._current_preset_name
+        if preset_name is None and self._preset_combo.count() > 0:
+            idx = self._preset_combo.currentIndex()
+            if idx < 0:
+                idx = 0
+            fallback = self._preset_combo.itemData(idx)
+            if fallback:
+                preset_name = str(fallback)
+                # 顺手把内部状态修正，避免下一次又走 fallback
+                self._current_preset_name = preset_name
         return PlotRunSettings(
             input_path=self._input_path,
             sheet_name=self._sheet_name,
-            preset_name=self._current_preset_name,
+            preset_name=preset_name,
             output_dir=self._output_dir,
             header_row=int(self._header_row_spin.value()),
         )

@@ -11,8 +11,9 @@
   2. setup_from_config()        ← 控制台/文件/Qt 三 sink 起来；audit logger 也搭好
   3. QApplication()             ← HiDPI 策略要在 QApplication 之前设
   4. setTheme()                 ← qfluentwidgets 的全局主题
-  5. MainWindow(cfg)            ← 此时再 import ui/，确保 QApplication 已存在
-  6. app.exec()                 ← 阻塞主循环
+  5. _apply_global_qss()        ← 注入"空间/层级/轻工业感"应用级 QSS
+  6. MainWindow(cfg)            ← 此时再 import ui/，确保 QApplication 已存在
+  7. app.exec()                 ← 阻塞主循环
 """
 
 from __future__ import annotations
@@ -73,6 +74,10 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
         # 非法颜色字符串：保留默认，不致命
         log.warning("ui.accent_color=%r 无效，保留默认主题色：%s", cfg.ui.accent_color, e)
 
+    # 注入全局 QSS（空间感 + 层级感 + 轻工业感）—— 不替换 qfluentwidgets 内置样式，
+    # 只补充我们 objectName 命名的容器外观（卡片化分组、细线条边框、冷灰背景等）。
+    _apply_global_qss(app)
+
     log.info(
         "QApplication ready | name=%s version=%s theme=%s accent=%s",
         cfg.app.name,
@@ -81,6 +86,99 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
         cfg.ui.accent_color,
     )
     return app, cfg  # type: ignore[return-value]
+
+
+# ──────────────────────────────────────────────────────────────────
+# 视觉风格：空间感 + 层级感 + 轻工业感
+# ──────────────────────────────────────────────────────────────────
+# 设计原则（向用户解释「为什么这么改」）：
+#   1. 空间感 —— splitter handle 加粗 + 分组之间留细分隔线 + 卡片有抬起阴影
+#   2. 层级感 —— 主面板浅冷灰 (#F4F6F9)，卡片白底；分组标题强 weight + 字间距
+#   3. 轻工业感 —— 数字输入框等宽字体（Consolas/Menlo/Cascadia）+ 细线边框
+#                  (#DCE0E5) + 微圆角 (4px) + 表头浅浅描边
+#
+# 选择器都加 objectName，避免误覆盖 qfluentwidgets 内部控件的样式。
+_APP_QSS = """
+/* ── 主面板背景：略冷的金属浅灰（#F4F6F9 比纯白多一丝工业感） ── */
+QWidget#presetAccordionContent,
+QWidget#plotCurvesRightColumn,
+QWidget#bottomTabPanel,
+QWidget#livePreviewPane {
+    background-color: #F4F6F9;
+}
+
+/* ── 分组卡片：白底圆角 + 细线 + 间距，制造"层"的视觉 ── */
+QWidget[objectName^="collapsibleSection_"] {
+    background-color: #FFFFFF;
+    border: 1px solid #DCE0E5;
+    border-radius: 6px;
+    margin: 4px 2px;
+}
+
+/* 分组标题按钮：去掉 Python 字符串里写的 border-bottom（与卡片边框冲突），
+   改为更克制的左侧色条（科技蓝），右侧大字间距 */
+QWidget[objectName^="collapsibleSection_"] > QToolButton {
+    background: transparent;
+    border: none;
+    border-left: 3px solid #0078D4;
+    padding: 7px 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #1F2933;
+    text-align: left;
+}
+QWidget[objectName^="collapsibleSection_"] > QToolButton:hover {
+    background: rgba(0,120,212,0.06);
+}
+
+/* ── splitter handle：4px 不够明显，改为带中线视觉的细带 ── */
+QSplitter#plotCurvesSplitter::handle:horizontal,
+QSplitter#plotCurvesRightSplitter::handle:vertical {
+    background-color: #DCE0E5;
+}
+QSplitter#plotCurvesSplitter::handle:horizontal:hover,
+QSplitter#plotCurvesRightSplitter::handle:vertical:hover {
+    background-color: #0078D4;
+}
+
+/* ── 实时预览图容器：内嵌细描边 + 浅底，给图一个"画框" ── */
+QLabel#livePreviewImage {
+    background-color: #FAFBFC;
+    border: 1px solid #DCE0E5;
+    border-radius: 4px;
+}
+
+/* ── 数字字段：等宽字体（轻工业感最关键的一笔） ── */
+QSpinBox, QDoubleSpinBox {
+    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
+}
+
+/* ── 数据源表格：等宽数字 + 浅灰表头 ── */
+QTableView {
+    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    gridline-color: #E5E8EC;
+}
+QHeaderView::section {
+    background-color: #EEF1F5;
+    border: none;
+    border-right: 1px solid #DCE0E5;
+    border-bottom: 1px solid #DCE0E5;
+    padding: 4px 6px;
+    font-weight: 600;
+    color: #364152;
+}
+"""
+
+
+def _apply_global_qss(app: QApplication) -> None:
+    """把 _APP_QSS 注入 QApplication.styleSheet 之上（追加而非覆盖）。
+
+    追加策略：qfluentwidgets 的内置样式表已经在 setTheme/setThemeColor 之后
+    挂到 app 上。我们用 `existing + _APP_QSS` 而不是 setStyleSheet(_APP_QSS)，
+    避免把 qfluentwidgets 自己的钩刷掉（按钮 hover、滑块滑道等）。
+    """
+    existing = app.styleSheet() or ""
+    app.setStyleSheet(existing + "\n" + _APP_QSS)
 
 
 def run(argv: list[str] | None = None) -> int:

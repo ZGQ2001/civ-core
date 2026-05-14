@@ -117,3 +117,7 @@ class MainWindow(FluentWindow):
         self.setWindowTitle(cfg.app.name)
         w, h = cfg.ui.startup_size
         self.resize(w, h)
+        # 显式给一个保守的最小尺寸：让用户从右下角 / 右边缘往内拖时能真正缩小，
+        # 而不被子组件累加的 sizeHint 顶住。720×480 已能完整看到导航 + 左栏 +
+        # 一个最低限度的预览/底栏；再小排版会塌但 Qt 自身仍能正常处理。
+        self.setMinimumSize(720, 480)

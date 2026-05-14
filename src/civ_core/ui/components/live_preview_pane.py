@@ -37,7 +37,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QPoint, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QMouseEvent, QPixmap
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel
 
 from civ_core.core.data_cache import EXCEL_DATA_CACHE
@@ -102,6 +102,11 @@ class LivePreviewPane(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("livePreviewPane")
+        # 关键：允许容器被 splitter 任意缩小。
+        # QLabel.setPixmap 会让 sizeHint 跟着 pixmap 走，外层 splitter / 主窗口
+        # 在右拖收缩时会被 sizeHint 拒绝 —— 显式 setMinimumSize(0,0) 让外层
+        # 完全接管尺寸决定权（实际显示尺寸来自父容器分配）
+        self.setMinimumSize(0, 0)
 
         # 当前数据源
         self._preset: dict[str, Any] | None = None
@@ -152,6 +157,13 @@ class LivePreviewPane(QWidget):
         # scaledContents=False：用我们自己的 _scaled_pixmap 控制缩放，
         # 不让 QLabel 拉伸（拉伸会失真）
         self._image_label.setScaledContents(False)
+        # 关键 bugfix：QLabel.setPixmap 后 sizeHint/minimumSizeHint 会变成
+        # pixmap 实际像素尺寸，外层 splitter / 主窗口右拖时被 hint 顶住缩不回去。
+        # 用 Ignored + 显式 minSize=1×1，让 layout 完全忽略 QLabel 的 sizeHint。
+        self._image_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored
+        )
+        self._image_label.setMinimumSize(1, 1)
         # 叠加模式下的 hover hit-testing
         self._image_label.hover_at.connect(self._on_image_hover)
         layout.addWidget(self._image_label, 1)

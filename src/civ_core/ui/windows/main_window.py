@@ -16,9 +16,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
+from civ_core.apps.bootstrap import set_theme_runtime
 from civ_core.configs.loader import AppConfig
 from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 from civ_core.ui.windows.plot_curves_view import PlotCurvesView
+from civ_core.ui.windows.settings_view import SettingsView, load_user_theme
 from civ_core.ui.windows.word2pdf_view import Word2PdfView
 from civ_core.utils.logger import get_logger
 
@@ -93,11 +95,14 @@ class MainWindow(FluentWindow):
         self.pdf_tools_page = PdfToolsView(cfg)
         # Word → PDF 批量转换页
         self.word2pdf_page = Word2PdfView(cfg)
-        self.settings_page = _PlaceholderPage(
-            "settingsPage",
-            "设置",
-            "config.toml 编辑器（待补）",
-        )
+        # 设置页：用户级主题覆盖优先；如果 QSettings 有覆盖值就用它，否则用
+        # config.toml 的默认（cfg.ui.theme）。Radio 的初始选中态按当前生效值。
+        effective_theme = load_user_theme(default=cfg.ui.theme)
+        self.settings_page = SettingsView(initial_theme=effective_theme)
+        # 如果用户级覆盖与 config 默认不一致，启动时立即套用一次（避免首屏
+        # 显示出与用户偏好不符的主题）
+        if effective_theme != cfg.ui.theme:
+            set_theme_runtime(effective_theme)
 
     def _register_navigation(self) -> None:
         # 顶部：工具页

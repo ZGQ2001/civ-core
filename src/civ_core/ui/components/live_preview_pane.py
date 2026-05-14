@@ -36,8 +36,8 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QObject, QPoint, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtGui import QMouseEvent, QPixmap
-from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import QCursor, QMouseEvent, QPixmap
+from PySide6.QtWidgets import QLabel, QSizePolicy, QToolTip, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel
 
 from civ_core.core.data_cache import EXCEL_DATA_CACHE
@@ -98,6 +98,9 @@ class LivePreviewPane(QWidget):
 
     # P1.5-Step3c：叠加模式下，鼠标 hover 曲线点 → 通知外部"对应第 row_idx 行"
     point_hovered = Signal(int)
+    # 每次 worker 渲染完成后 emit (jobs_count, current_row_idx)；
+    # 让 view 工具栏知道是否启用"上一张/下一张"按钮 + 显示"3/12"指示
+    jobs_state_changed = Signal(int, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -124,6 +127,8 @@ class LivePreviewPane(QWidget):
         self._hit_test_meta: HitTestMeta | None = None
         # P1.5-④：单行模式的 hit-test 元数据；用于 hover 时显示 tooltip
         self._single_hit_test_meta: SingleRowHitTestMeta | None = None
+        # 当前批次的 jobs 总数（worker 完成时回传）；左右切图按钮根据它启停
+        self._jobs_count: int = 0
 
         # Worker 串行：is_rendering 期间收到的请求仅置 pending
         self._is_rendering: bool = False
@@ -334,8 +339,10 @@ class LivePreviewPane(QWidget):
             self._pending = False
             self._launch_worker()
 
-    def _on_worker_overlay_ready(self, gen: int, png_bytes: bytes, meta: object) -> None:
-        """叠加模式 worker 回主线程：除 png 外还带 hit-test meta。
+    def _on_worker_overlay_ready(
+        self, gen: int, png_bytes: bytes, meta: object, jobs_count: int
+    ) -> None:
+        """叠加模式 worker 回主线程：除 png 外还带 hit-test meta + jobs 数。
 
         与 _on_worker_ready 的差异：保存 meta 供后续 hover 反算；
         渲染逻辑共用 _apply_png（避免两条 ready 路径重复代码）。
@@ -349,14 +356,18 @@ class LivePreviewPane(QWidget):
             self._hit_test_meta = meta
             # 切到叠加 meta → 清单行 meta（避免 tooltip 残留旧数据）
             self._single_hit_test_meta = None
+            self._jobs_count = jobs_count
             self._apply_png(png_bytes)
+            self.jobs_state_changed.emit(jobs_count, self._current_row_idx)
 
         if self._pending:
             self._pending = False
             self._launch_worker()
 
-    def _on_worker_single_hittest_ready(self, gen: int, png_bytes: bytes, meta: object) -> None:
-        """单行模式 worker 回主线程：带 SingleRowHitTestMeta 用于 hover tooltip。"""
+    def _on_worker_single_hittest_ready(
+        self, gen: int, png_bytes: bytes, meta: object, jobs_count: int
+    ) -> None:
+        """单行模式 worker 回主线程：带 SingleRowHitTestMeta + jobs 数。"""
         self._is_rendering = False
         if gen != self._render_gen:
             log.debug("LivePreview 丢弃过期 single hit-test worker gen=%d", gen)
@@ -365,11 +376,28 @@ class LivePreviewPane(QWidget):
             self._single_hit_test_meta = meta
             # 切到单行 meta → 清叠加 meta（避免 hover 误 emit point_hovered）
             self._hit_test_meta = None
+            self._jobs_count = jobs_count
             self._apply_png(png_bytes)
+            self.jobs_state_changed.emit(jobs_count, self._current_row_idx)
 
         if self._pending:
             self._pending = False
             self._launch_worker()
+
+    # ── 左右切图（Windows 相册风格） ─────────────────────────────────
+    def goto_prev_row(self) -> None:
+        """切到上一行（jobs_count > 0 时；循环到末尾，与相册一致）。"""
+        if self._jobs_count <= 0:
+            return
+        new_idx = (self._current_row_idx - 1) % self._jobs_count
+        self.highlight_row(new_idx)
+
+    def goto_next_row(self) -> None:
+        """切到下一行（jobs_count > 0 时；循环到首尾）。"""
+        if self._jobs_count <= 0:
+            return
+        new_idx = (self._current_row_idx + 1) % self._jobs_count
+        self.highlight_row(new_idx)
 
     def _apply_png(self, png_bytes: bytes) -> None:
         """把 PNG 字节流展示到 image_label，更新提示。两条 ready 路径共用。"""
@@ -410,10 +438,30 @@ class LivePreviewPane(QWidget):
             pixmap_size=pixmap_size,
         )
 
+    def _show_floating_tip(self, text: str) -> None:
+        """用 QToolTip.showText 实时显示数据，跟随鼠标位置。
+
+        相比单纯的 self._image_label.setToolTip(text)：
+          • setToolTip 是 Qt 默认延迟弹出（hover 静止 700ms 才出现），鼠标
+            移动就消失 —— 体验上根本看不到数据
+          • showText 是手动调用，跟当前鼠标位置 + 立即显示；mouseMove 频繁
+            调用时 Qt 会自动复用同一个 tooltip window，不闪烁
+        两个都调（双保险）：
+          • showText 提供"实时跟随"的用户体验
+          • setToolTip 保留 widget 的 toolTip() 文本可读（无障碍 / 测试需要）
+        text 为空则隐藏。
+        """
+        self._image_label.setToolTip(text)
+        if not text:
+            QToolTip.hideText()
+            return
+        QToolTip.showText(QCursor.pos(), text, self._image_label)
+
     def _handle_overlay_hover(self, point: QPoint, meta: HitTestMeta) -> None:
-        """叠加模式 hover：label 像素 → row idx → emit point_hovered。"""
+        """叠加模式 hover：label 像素 → row idx → emit point_hovered + 显示该点数据。"""
         pix = self._label_pixel_to_png_pixel(point)
         if pix is None:
+            self._show_floating_tip("")
             return
         data_xy = _pixel_to_data(
             pix[0],
@@ -425,8 +473,9 @@ class LivePreviewPane(QWidget):
             y_log=meta.y_log,
         )
         if data_xy is None:
+            self._show_floating_tip("")
             return
-        found = _find_nearest_row(
+        found = _find_nearest_row_with_xy(
             data_xy[0],
             data_xy[1],
             meta.points,
@@ -434,15 +483,23 @@ class LivePreviewPane(QWidget):
             ylim=meta.ylim,
         )
         if found is None:
+            self._show_floating_tip("")
             return
-        row_idx, _dist = found
+        row_idx, x_val, y_val = found
         self.point_hovered.emit(row_idx)
+        # 叠加模式数据 tooltip：行号 + X/Y 数值（用 meta 已记下的轴标签）
+        tip = (
+            f"行 #{row_idx + 1}\n"
+            f"{meta.x_label or 'X'}: {_fmt_num(x_val)}\n"
+            f"{meta.y_label or 'Y'}: {_fmt_num(y_val)}"
+        )
+        self._show_floating_tip(tip)
 
     def _handle_single_hover(self, point: QPoint, meta: SingleRowHitTestMeta) -> None:
-        """单行模式 hover：label 像素 → 最近曲线点 → 设 tooltip。"""
+        """单行模式 hover：label 像素 → 最近曲线点 → 实时 tooltip。"""
         pix = self._label_pixel_to_png_pixel(point)
         if pix is None:
-            self._image_label.setToolTip("")
+            self._show_floating_tip("")
             return
         data_xy = _pixel_to_data(
             pix[0],
@@ -454,7 +511,7 @@ class LivePreviewPane(QWidget):
             y_log=meta.y_log,
         )
         if data_xy is None:
-            self._image_label.setToolTip("")
+            self._show_floating_tip("")
             return
         # 复用 _find_nearest_row：单行模式 points 用 (curve_idx, xs, ys) 占位
         # 但需要拿到具体的最近 (x, y) 值。这里走专门的查找返回 (curve_name, x, y)
@@ -466,7 +523,7 @@ class LivePreviewPane(QWidget):
             ylim=meta.ylim,
         )
         if found is None:
-            self._image_label.setToolTip("")
+            self._show_floating_tip("")
             return
         curve_name, x_val, y_val = found
         tip = _format_single_hover_tooltip(
@@ -476,7 +533,7 @@ class LivePreviewPane(QWidget):
             y_label=meta.y_label,
             y_value=y_val,
         )
-        self._image_label.setToolTip(tip)
+        self._show_floating_tip(tip)
 
     def _on_worker_failed(self, gen: int, reason: str) -> None:
         self._is_rendering = False
@@ -497,9 +554,11 @@ class _PreviewWorkerSignals(QObject):
     # 信号带 generation：让主线程能识别"这是哪一代请求"，过期就丢
     ready = Signal(int, bytes)
     # P1.5-④：单行模式额外携带 SingleRowHitTestMeta（hover tooltip 用）
-    single_hittest_ready = Signal(int, bytes, object)
+    # 第 4 个 int 是 jobs_count（让 view 工具栏启用上一张/下一张按钮）
+    single_hittest_ready = Signal(int, bytes, object, int)
     # P1.5-Step3c：叠加模式额外携带 HitTestMeta（用 object 避开 Qt 元类型注册）
-    overlay_ready = Signal(int, bytes, object)
+    # 第 4 个 int 是 jobs_count
+    overlay_ready = Signal(int, bytes, object, int)
     failed = Signal(int, str)
 
 
@@ -647,6 +706,45 @@ def _fmt_num(v: float) -> str:
     return s or "0"
 
 
+def _find_nearest_row_with_xy(
+    x_data: float,
+    y_data: float,
+    points: list[tuple[int, list[float], list[float]]],
+    *,
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+) -> tuple[int, float, float] | None:
+    """与 _find_nearest_row 类似，但额外返回该点的原始 (x, y) 数值。
+
+    UI 叠加模式 hover tooltip 用：需要在显示"行号"的同时显示具体数值。
+    返回 (row_idx, x_value, y_value)；空 points → None。
+    """
+    if not points:
+        return None
+    x_span = max(xlim[1] - xlim[0], 1e-12)
+    y_span = max(ylim[1] - ylim[0], 1e-12)
+    qx = (x_data - xlim[0]) / x_span
+    qy = (y_data - ylim[0]) / y_span
+
+    best_row = -1
+    best_x = 0.0
+    best_y = 0.0
+    best_d2 = float("inf")
+    for row_idx, xs, ys in points:
+        for x, y in zip(xs, ys):
+            nx = (x - xlim[0]) / x_span
+            ny = (y - ylim[0]) / y_span
+            d2 = (nx - qx) ** 2 + (ny - qy) ** 2
+            if d2 < best_d2:
+                best_d2 = d2
+                best_row = row_idx
+                best_x = x
+                best_y = y
+    if best_row < 0:
+        return None
+    return best_row, best_x, best_y
+
+
 def _find_nearest_row(
     x_data: float,
     y_data: float,
@@ -747,6 +845,7 @@ class _PreviewWorker(QRunnable):
                 self._safe_emit_failed("数据行都无法生成有效曲线（详见日志）")
                 return
 
+            jobs_count = len(jobs)
             if self._overlay_mode:
                 # 叠加模式：用 with_hittest 同时拿 PNG + 反算 meta
                 png, meta = render_overlay_with_hittest(
@@ -755,7 +854,7 @@ class _PreviewWorker(QRunnable):
                     figsize=_PREVIEW_FIGSIZE,
                     dpi=_PREVIEW_DPI,
                 )
-                self._safe_emit_overlay_ready(png, meta)
+                self._safe_emit_overlay_ready(png, meta, jobs_count)
             else:
                 # 单行模式：render_plot_with_hittest 带 meta，供 hover tooltip
                 png, single_meta = render_plot_with_hittest(
@@ -763,7 +862,7 @@ class _PreviewWorker(QRunnable):
                     figsize=_PREVIEW_FIGSIZE,
                     dpi=_PREVIEW_DPI,
                 )
-                self._safe_emit_single_hittest_ready(png, single_meta)
+                self._safe_emit_single_hittest_ready(png, single_meta, jobs_count)
 
         except PlotCurvesError as e:
             # 业务异常（缺列等）：把 hint 也带上，让用户看到怎么修
@@ -788,15 +887,17 @@ class _PreviewWorker(QRunnable):
             # 主窗口已销毁 —— signals 对象 C++ 部分被回收，忽略
             pass
 
-    def _safe_emit_overlay_ready(self, png: bytes, meta: HitTestMeta) -> None:
+    def _safe_emit_overlay_ready(self, png: bytes, meta: HitTestMeta, jobs_count: int) -> None:
         try:
-            self.signals.overlay_ready.emit(self._gen, png, meta)
+            self.signals.overlay_ready.emit(self._gen, png, meta, jobs_count)
         except RuntimeError:
             pass
 
-    def _safe_emit_single_hittest_ready(self, png: bytes, meta: SingleRowHitTestMeta) -> None:
+    def _safe_emit_single_hittest_ready(
+        self, png: bytes, meta: SingleRowHitTestMeta, jobs_count: int
+    ) -> None:
         try:
-            self.signals.single_hittest_ready.emit(self._gen, png, meta)
+            self.signals.single_hittest_ready.emit(self._gen, png, meta, jobs_count)
         except RuntimeError:
             pass
 

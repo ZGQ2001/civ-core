@@ -43,6 +43,7 @@ from qfluentwidgets import (
     CheckBox,
     PrimaryPushButton,
     ProgressBar,
+    TransparentToolButton,
 )
 
 from civ_core.configs.loader import AppConfig
@@ -148,12 +149,26 @@ class PlotCurvesView(QWidget):
         self._redo_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Redo), self)
         self._redo_shortcut.activated.connect(self._undo_ctrl.redo)
 
+        # 左右切图快捷键（Windows 相册风格）：用 Alt+← / Alt+→ 而非裸 ← / →
+        # —— 裸方向键会和 LineEdit / SpinBox / ComboBox 等文本输入冲突；Alt
+        # 组合让用户能在任何焦点状态下都顺利切图
+        self._prev_shortcut = QShortcut(QKeySequence("Alt+Left"), self)
+        self._prev_shortcut.activated.connect(self.live_preview_pane.goto_prev_row)
+        self._next_shortcut = QShortcut(QKeySequence("Alt+Right"), self)
+        self._next_shortcut.activated.connect(self.live_preview_pane.goto_next_row)
+
         # 参数面板 → 数据源 Tab
         self.preset_accordion_panel.preset_changed.connect(self._refresh_data_source_pane)
         self.preset_accordion_panel.data_source_changed.connect(self._on_data_source_changed)
         # 数据源行点击 → 预览高亮
         self.bottom_panel.data_source_pane.row_highlighted.connect(
             self.live_preview_pane.highlight_row
+        )
+        # 缩略图点击 → 预览高亮（点击切图）
+        self.bottom_panel.thumbnail_pane.row_clicked.connect(self.live_preview_pane.highlight_row)
+        # 反向：每次预览切行后，缩略图列表也高亮对应项（双向联动）
+        self.live_preview_pane.jobs_state_changed.connect(
+            lambda _count, idx: self.bottom_panel.thumbnail_pane.set_current_index(idx)
         )
         # P1.5-Step3c：反向 —— 叠加模式下 hover 曲线 → 表格滚动到对应行
         # DataSourcePane.highlight_row 内有 _suppress_emit 防回环，安全
@@ -186,7 +201,12 @@ class PlotCurvesView(QWidget):
 
         # 底栏折叠态恢复（必须在右栏已 build 后）
         self.bottom_panel.collapse_changed.connect(self._on_bottom_collapse_changed)
-        self.bottom_panel.set_collapsed(self._restore_bottom_collapsed())
+        initial_collapsed = self._restore_bottom_collapsed()
+        self.bottom_panel.set_collapsed(initial_collapsed)
+        # set_collapsed 在状态相同时不 emit 信号；而构造时初始状态可能与默认
+        # 不同（也可能相同），都需要强制同步一次 splitter sizes，避免初始
+        # 显示成"底栏卡在中间"的尴尬状态
+        self._apply_bottom_collapsed_to_splitter(initial_collapsed)
 
         # 关键 bugfix：PresetAccordionPanel.__init__ 在 refresh() 末尾会
         # emit 一次 preset_changed（带默认预设的完整数据），但那时 view 层
@@ -245,6 +265,30 @@ class PlotCurvesView(QWidget):
         )
         self._generate_btn.clicked.connect(self._on_generate_clicked)
         bar.addWidget(self._generate_btn)
+
+        # 左右切图（Windows 相册风格）：按 jobs_count 启停；点击循环切行
+        # 同时支持键盘快捷键（Alt+← / Alt+→），见 _build_layout 末尾的 QShortcut
+        self._prev_btn = TransparentToolButton(self)
+        self._prev_btn.setText("◀")
+        self._prev_btn.setToolTip("上一张 (Alt+←) —— 切到上一行的曲线图")
+        self._prev_btn.clicked.connect(self.live_preview_pane.goto_prev_row)
+        self._prev_btn.setEnabled(False)
+        bar.addWidget(self._prev_btn)
+
+        self._row_indicator = BodyLabel("—/—", self)
+        self._row_indicator.setToolTip("当前预览第几行 / 共多少行")
+        self._row_indicator.setStyleSheet("color: #8B92A0; font-family: Consolas;")
+        bar.addWidget(self._row_indicator)
+
+        self._next_btn = TransparentToolButton(self)
+        self._next_btn.setText("▶")
+        self._next_btn.setToolTip("下一张 (Alt+→) —— 切到下一行的曲线图")
+        self._next_btn.clicked.connect(self.live_preview_pane.goto_next_row)
+        self._next_btn.setEnabled(False)
+        bar.addWidget(self._next_btn)
+
+        # 接 jobs_state_changed 信号 → 更新指示器 + 启停切图按钮
+        self.live_preview_pane.jobs_state_changed.connect(self._on_jobs_state_changed)
 
         # P1.5-Step2：叠加对比开关（默认关）
         # 开 → 预览把所有行的曲线画到一张图，每根试件一种颜色；
@@ -330,6 +374,39 @@ class PlotCurvesView(QWidget):
 
     def _on_bottom_collapse_changed(self, collapsed: bool) -> None:
         self._make_settings().setValue(_SETTINGS_KEY_BOTTOM_COLLAPSED, collapsed)
+        self._apply_bottom_collapsed_to_splitter(collapsed)
+
+    def _apply_bottom_collapsed_to_splitter(self, collapsed: bool) -> None:
+        """同步底栏折叠态到垂直 splitter sizes（VS Code 终端风格）。
+
+        collapsed=True：底栏只剩工具栏高度（≈ 32–40px 一行），预览区吃满剩余空间
+                        —— 不这么做的话 splitter 不会重新分配，底栏控件本身只占
+                        工具栏高度但 splitter 仍分配了原 200px 给它，剩余空白
+                        在视觉上像"底栏卡在中间"。
+        collapsed=False：恢复用户上一次 expand 时的拖动比例（_last_expanded_right_sizes）。
+
+        本方法对外暴露，因为：
+          - signal 路径会调（_on_bottom_collapse_changed）
+          - 构造时如果初始就是 collapsed，必须再调一次同步 splitter 初值
+        """
+        if not hasattr(self, "_right_splitter"):
+            return  # splitter 还没建（构造极早期）
+        if collapsed:
+            cur = self._right_splitter.sizes()
+            bottom_min = max(
+                self.bottom_panel.minimumSizeHint().height(),
+                self.bottom_panel.sizeHint().height(),
+                32,
+            )
+            # 记下"上次 expanded 时的 sizes"，仅当当前确实是 expanded（底栏 >
+            # 工具栏高度）才记录，避免反复 collapse 时把"已折叠 sizes" 误存
+            if sum(cur) > 0 and cur[1] > bottom_min + 4:
+                self._last_expanded_right_sizes = list(cur)
+            total = max(sum(cur), 200)  # 防御性：极端情况 total=0
+            self._right_splitter.setSizes([total - bottom_min, bottom_min])
+        else:
+            sizes = getattr(self, "_last_expanded_right_sizes", None) or list(_INITIAL_RIGHT_SIZES)
+            self._right_splitter.setSizes(sizes)
 
     # ── P1.5-Step2：叠加对比模式持久化 ────────────────────────────
     def _restore_overlay_mode(self) -> bool:
@@ -347,6 +424,18 @@ class PlotCurvesView(QWidget):
         """工具栏复选框 → 预览面板模式切换 + 持久化。"""
         self.live_preview_pane.set_overlay_mode(checked)
         self._make_settings().setValue(_SETTINGS_KEY_OVERLAY_MODE, checked)
+
+    def _on_jobs_state_changed(self, jobs_count: int, current_idx: int) -> None:
+        """LivePreviewPane 渲染完一次 → 更新工具栏指示器 + 启停切图按钮。"""
+        if jobs_count <= 0:
+            self._row_indicator.setText("—/—")
+            self._prev_btn.setEnabled(False)
+            self._next_btn.setEnabled(False)
+            return
+        self._row_indicator.setText(f"{current_idx + 1}/{jobs_count}")
+        enabled = jobs_count > 1
+        self._prev_btn.setEnabled(enabled)
+        self._next_btn.setEnabled(enabled)
 
     # ── 数据源 Tab 数据流 ─────────────────────────────────────────
     def _refresh_data_source_pane(self, *_args: object) -> None:
@@ -553,7 +642,13 @@ class PlotCurvesView(QWidget):
         n_fail = len(result.failed)
         log.info("worker 完成：成功 %d / 失败 %d", n_ok, n_fail)
 
-        # L-2 接入后，这里要把 result.written 推给 LivePreviewPane 展示
+        # 把成功的 PNG 路径喂给底栏「缩略图」Tab，让用户直观看到所有结果
+        # 并能点缩略图切换主预览
+        self.bottom_panel.thumbnail_pane.set_thumbnails(result.written)
+        # 自动展开底栏 + 切到缩略图 Tab —— 用户刚生成完想看结果，这一步省一次点击
+        if result.written:
+            self.bottom_panel.set_collapsed(False)
+            self.bottom_panel.show_thumb_tab()
 
         if n_fail == 0:
             # 完全成功：状态行 + 右上角绿色 InfoBar 双重反馈

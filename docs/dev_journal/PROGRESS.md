@@ -7,7 +7,7 @@
 
 ## 📌 顶部摘要（必读）
 
-**当前状态：** P1 + P1.5 + P3 前两个工具 + **深色三层 UI 视觉重做** + 7 处 UI 体验 bugfix 已交付（2026-05-14）。**410 测试通过**；ruff 0；healthcheck 9 项全 ✅。
+**当前状态：** P1 + P1.5 + P3 前两个工具 + **深浅双主题 + 设置页 + 缩略图视窗 + 左右切图 + hover 实时数据 + VS Code 风格底栏** 已交付（2026-05-14）。**410 测试通过**；ruff 0；healthcheck 9 项全 ✅。
 
 **2026-05-14 增量交付**：
 
@@ -26,6 +26,15 @@ UI 视觉两轮迭代 —— 第一轮"浅色卡片"已废，第二轮采用：
 - **风琴 1**：重构 `_SectionHeader` widget = 固定宽度 14px 箭头 QLabel + 弹性 title QLabel + mousePressEvent 触发 toggle —— 修 `▾`/`▸` 字宽差异导致 title 起点抖
 - **风琴 2**：PresetAccordionPanel 的 QScrollArea 垂直滚动条改 `ScrollBarAlwaysOn` —— 修展开/收起分组时滚动条出现消失导致 viewport 宽度 ±N 像素跳变、所有输入框跟着抖
 - **风琴 3**：箭头字符切到 BLACK 系列 ▼/▶（同系列宽度更接近，固定宽度容器二次兜底）
+
+**2026-05-14 第二轮交付（主题/底栏/切图/缩略图）**：
+
+- **主题三选 + 浅色 QSS 恢复**：bootstrap 拆出 `_APP_QSS_DARK` / `_APP_QSS_LIGHT`，按 `cfg.ui.theme` ('light'/'dark'/'auto') 注入；`auto` 模式借 `qfluentwidgets.isDarkTheme()` 判断系统主题；新增 `set_theme_runtime(name)` API 让运行时立即切换
+- **设置页实装**（`ui/windows/settings_view.py`）：3 个 RadioButton（浅色 / 深色 / 跟随系统）+ 副标题说明；切换立即生效 + QSettings `ui/theme` 持久化（每台机器独立，不污染 config.toml）；主窗口启动时若 QSettings 有覆盖值则立即套用
+- **底栏 VS Code 终端风格**：collapse 时主动调 `vsplit.setSizes([total - bottom_min, bottom_min])` 让预览吃满空间、底栏只剩工具栏一行；记录 `_last_expanded_right_sizes` 让 expand 时恢复用户拖动比例；构造时也强制同步一次，避免初始显示"底栏卡在中间"
+- **hover 实时数据浮动**：`_show_floating_tip` 用 `QToolTip.showText(QCursor.pos(), tip, label)` 替代 `setToolTip` 的延迟弹出；叠加模式也加显示（"行 #N / X标签:值 / Y标签:值"）；新增 `HitTestMeta.x_label/y_label` 字段，让叠加 tooltip 也能用实际轴标签
+- **左右切图（Windows 相册风格）**：预览工具栏加 `◀ / N/Total / ▶` 控件 + 键盘快捷键 `Alt+← / Alt+→`（避开与 LineEdit 方向键冲突）；`LivePreviewPane.goto_prev_row/goto_next_row` 循环切换；新增 `jobs_state_changed(jobs_count, current_idx)` 信号让按钮按 jobs 数自动启停
+- **缩略图视窗**（`ui/components/thumbnail_pane.py`）：BottomTabPanel 加第三个 Tab「缩略图」，QListWidget IconMode 横向列出所有结果 PNG；点缩略图 → highlight_row；预览切行 → 缩略图列表反向高亮；"生成全部曲线 PNG" 完成后自动展开底栏 + 切到该 Tab
 
 P1.5 子项交付状态：
 - ✅ **Step1/2/3** 点交互闭环：单行切换 / 叠加对比 / hover hit-testing

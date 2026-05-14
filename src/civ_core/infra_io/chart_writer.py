@@ -358,6 +358,9 @@ class HitTestMeta:
     x_log: bool = False
     y_log: bool = False
     points: list[tuple[int, list[float], list[float]]] = field(default_factory=list)
+    # 轴标签：UI hover tooltip 用，让"X=5.0 / Y=60.0"换成"位移=5.0 / 荷载=60.0"
+    x_label: str = ""
+    y_label: str = ""
 
 
 def _draw_overlay_series(
@@ -561,6 +564,8 @@ def _render_overlay_core(
                 x_log=base.x_axis.log,
                 y_log=base.y_axis.log,
                 points=points,
+                x_label=base.x_axis.label,
+                y_label=base.y_axis.label,
             )
             fig.savefig(buf, dpi=dpi, format="png")
         else:

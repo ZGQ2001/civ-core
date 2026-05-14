@@ -38,9 +38,11 @@ from qfluentwidgets import Pivot, TransparentToolButton
 
 from civ_core.ui.components.data_source_pane import DataSourcePane
 from civ_core.ui.components.log_panel import LogPanel
+from civ_core.ui.components.thumbnail_pane import ThumbnailPane
 
 _TAB_LOG = "log"
 _TAB_DATA = "data"
+_TAB_THUMB = "thumb"
 
 
 class BottomTabPanel(QWidget):
@@ -67,6 +69,7 @@ class BottomTabPanel(QWidget):
         self.log_panel.set_collapsed(False)
 
         self.data_source_pane = DataSourcePane(self)
+        self.thumbnail_pane = ThumbnailPane(self)
 
         self._build_layout()
         self._apply_collapsed_state()
@@ -87,20 +90,22 @@ class BottomTabPanel(QWidget):
         self._toggle_btn.clicked.connect(self._on_toggle_clicked)
         toolbar.addWidget(self._toggle_btn)
 
-        # Pivot：日志 / 数据源 两项
+        # Pivot：日志 / 数据源 / 缩略图 三项
         self._pivot = Pivot(self)
         self._pivot.addItem(_TAB_LOG, "日志")
         self._pivot.addItem(_TAB_DATA, "数据源")
+        self._pivot.addItem(_TAB_THUMB, "缩略图")
         self._pivot.setCurrentItem(_TAB_LOG)
         self._pivot.currentItemChanged.connect(self._on_tab_changed)
         toolbar.addWidget(self._pivot)
         toolbar.addStretch(1)
         outer.addLayout(toolbar)
 
-        # ── 主体：QStackedWidget ──
+        # ── 主体：QStackedWidget（顺序与 Pivot tab key 对应：log/data/thumb） ──
         self._stack = QStackedWidget(self)
         self._stack.addWidget(self.log_panel)
         self._stack.addWidget(self.data_source_pane)
+        self._stack.addWidget(self.thumbnail_pane)
         outer.addWidget(self._stack, 1)
 
     # ── 公共 API ─────────────────────────────────────────────────
@@ -120,8 +125,16 @@ class BottomTabPanel(QWidget):
     def show_data_tab(self) -> None:
         self._pivot.setCurrentItem(_TAB_DATA)
 
+    def show_thumb_tab(self) -> None:
+        self._pivot.setCurrentItem(_TAB_THUMB)
+
     def current_tab(self) -> str:
-        return _TAB_LOG if self._stack.currentIndex() == 0 else _TAB_DATA
+        idx = self._stack.currentIndex()
+        if idx == 0:
+            return _TAB_LOG
+        if idx == 1:
+            return _TAB_DATA
+        return _TAB_THUMB
 
     # ── 内部 ──────────────────────────────────────────────────────
     def _apply_collapsed_state(self) -> None:
@@ -132,7 +145,9 @@ class BottomTabPanel(QWidget):
         self.set_collapsed(not self._collapsed)
 
     def _on_tab_changed(self, key: str) -> None:
-        self._stack.setCurrentIndex(0 if key == _TAB_LOG else 1)
+        # 三档 tab key 与 stack index 一一对应（与 addWidget 顺序一致）
+        idx_map = {_TAB_LOG: 0, _TAB_DATA: 1, _TAB_THUMB: 2}
+        self._stack.setCurrentIndex(idx_map.get(key, 0))
         # 切到内容 Tab 时如果是折叠态，自动展开（更符合用户预期）
         if self._collapsed:
             self.set_collapsed(False)

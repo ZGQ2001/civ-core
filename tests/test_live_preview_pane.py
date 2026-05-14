@@ -850,7 +850,12 @@ class TestSingleRowHoverTooltip:
 
             pane._on_image_hover(QPoint(300, 200))
             assert seen == [0]  # overlay 路径走了
-            assert pane._image_label.toolTip() == ""  # 单行没走
+            # 叠加路径也设 tooltip（T4 新行为），但格式是"行 #N" 而非单行的
+            # 曲线名 —— 用这点区分两条路径
+            tip = pane._image_label.toolTip()
+            assert "行 #" in tip, f"应走叠加路径设含『行 #』的 tip，实际：{tip!r}"
+            # 单行路径会写曲线名"X"作为 "曲线: X" 一行；这里不应出现
+            assert "曲线:" not in tip, "叠加路径不该走单行格式"
         finally:
             pane.deleteLater()
 
@@ -889,12 +894,16 @@ class TestSingleRowHoverTooltip:
         )
 
         sigs = _PreviewWorkerSignals()
-        # 信号对象存在且能 emit / connect
+        # 信号对象存在且能 emit / connect；签名扩展为 4 参数
+        # (gen, png_bytes, meta, jobs_count) —— jobs_count 是 T5 左右切图按钮
+        # 启停所需，让 view 拿到当前批次的图数量
         assert hasattr(sigs, "single_hittest_ready")
-        seen: list[tuple[int, bytes, object]] = []
-        sigs.single_hittest_ready.connect(lambda g, b, m: seen.append((g, b, m)))
-        sigs.single_hittest_ready.emit(1, b"abc", "fake")
-        assert seen == [(1, b"abc", "fake")]
+        seen: list[tuple[int, bytes, object, int]] = []
+        sigs.single_hittest_ready.connect(
+            lambda g, b, m, c: seen.append((g, b, m, c))
+        )
+        sigs.single_hittest_ready.emit(1, b"abc", "fake", 5)
+        assert seen == [(1, b"abc", "fake", 5)]
 
 
 class TestFindNearestRow:

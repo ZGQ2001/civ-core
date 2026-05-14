@@ -74,9 +74,9 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
         # 非法颜色字符串：保留默认，不致命
         log.warning("ui.accent_color=%r 无效，保留默认主题色：%s", cfg.ui.accent_color, e)
 
-    # 注入全局 QSS（空间感 + 层级感 + 轻工业感）—— 不替换 qfluentwidgets 内置样式，
-    # 只补充我们 objectName 命名的容器外观（卡片化分组、细线条边框、冷灰背景等）。
-    _apply_global_qss(app)
+    # 注入全局 QSS：按 cfg.ui.theme（'auto'/'light'/'dark'）选用深/浅 QSS。
+    # 不替换 qfluentwidgets 内置样式，只追加我们 objectName 命名的容器外观。
+    _apply_global_qss(app, cfg.ui.theme)
 
     log.info(
         "QApplication ready | name=%s version=%s theme=%s accent=%s",
@@ -106,7 +106,7 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
 #   主文字 #D9DEE5（浅灰）/ 次文字 #8B92A0（中灰）/ 占位 #5B6573（深灰）
 #
 # 选择器都加 objectName，避免误覆盖 qfluentwidgets 内部控件的样式。
-_APP_QSS = """
+_APP_QSS_DARK = """
 /* ──────────────────────────────────────────────────────────────
    L0 根背景：窗口主体 / 各页根 widget
    ────────────────────────────────────────────────────────────── */
@@ -293,15 +293,224 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 """
 
 
-def _apply_global_qss(app: QApplication) -> None:
-    """把 _APP_QSS 注入 QApplication.styleSheet 之上（追加而非覆盖）。
+# ──────────────────────────────────────────────────────────────────
+# 浅色版（同结构，三层色与深色对偶）：
+#   L0 #F4F6F9 (根) / L1 #FFFFFF (面板) / L2 #EEF1F5 (输入控件/表头)
+#   分隔线 #DCE0E5；文字主 #1F2933 / 次 #5B6573
+#   蓝色 #0078D4 同样仅用于激活态（focus/hover/checked/selected）
+# 与深色保持对称设计，唯一差别是颜色 token。
+# ──────────────────────────────────────────────────────────────────
+_APP_QSS_LIGHT = """
+QWidget#plotCurvesPage,
+QWidget#pdfToolsPage,
+QWidget#word2pdfPage,
+QWidget#homePage,
+QWidget#settingsPage {
+    background-color: #F4F6F9;
+}
 
-    追加策略：qfluentwidgets 的内置样式表已经在 setTheme/setThemeColor 之后
-    挂到 app 上。我们用 `existing + _APP_QSS` 而不是 setStyleSheet(_APP_QSS)，
-    避免把 qfluentwidgets 自己的钩刷掉（按钮 hover、滑块滑道等）。
+QWidget#presetAccordionContent,
+QWidget#plotCurvesRightColumn,
+QWidget#bottomTabPanel,
+QWidget#livePreviewPane {
+    background-color: #FFFFFF;
+}
+
+QWidget[objectName^="collapsibleSection_"] {
+    background-color: #FAFBFC;
+    border: 1px solid #DCE0E5;
+    border-radius: 4px;
+    margin: 3px 2px;
+}
+
+QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader {
+    background: transparent;
+    border: none;
+    padding: 7px 10px;
+    border-bottom: 1px solid transparent;
+}
+QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader:hover {
+    background: #EEF1F5;
+    border-bottom: 1px solid #DCE0E5;
+}
+QLabel#collapsibleTitle {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #1F2933;
+    background: transparent;
+}
+QLabel#collapsibleArrow {
+    color: #8B92A0;
+    font-weight: 700;
+    background: transparent;
+}
+QWidget#collapsibleHeader:hover QLabel#collapsibleArrow {
+    color: #0078D4;
+}
+
+QSplitter#plotCurvesSplitter::handle:horizontal,
+QSplitter#plotCurvesRightSplitter::handle:vertical {
+    background-color: #DCE0E5;
+}
+QSplitter#plotCurvesSplitter::handle:horizontal:hover,
+QSplitter#plotCurvesRightSplitter::handle:vertical:hover {
+    background-color: #0078D4;
+}
+
+QLabel#livePreviewImage {
+    background-color: #FAFBFC;
+    border: 1px solid #DCE0E5;
+    border-radius: 4px;
+}
+
+QLabel {
+    color: #1F2933;
+    background: transparent;
+}
+
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #FFFFFF;
+    color: #1F2933;
+    border: 1px solid #DCE0E5;
+    border-radius: 4px;
+    padding: 3px 6px;
+    selection-background-color: #0078D4;
+    selection-color: #FFFFFF;
+}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border: 1px solid #0078D4;
+}
+QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
+    color: #8B92A0;
+    background-color: #F4F6F9;
+    border: 1px solid #E5E8EC;
+}
+
+QSpinBox, QDoubleSpinBox {
+    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
+}
+
+QTableView {
+    background-color: #FFFFFF;
+    alternate-background-color: #F8F9FB;
+    color: #1F2933;
+    gridline-color: #E5E8EC;
+    border: 1px solid #DCE0E5;
+    border-radius: 4px;
+    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    selection-background-color: #0078D4;
+    selection-color: #FFFFFF;
+}
+QHeaderView::section {
+    background-color: #EEF1F5;
+    color: #364152;
+    border: none;
+    border-right: 1px solid #DCE0E5;
+    border-bottom: 1px solid #DCE0E5;
+    padding: 4px 8px;
+    font-weight: 600;
+}
+
+QScrollBar:vertical {
+    background: #F4F6F9;
+    width: 8px;
+    margin: 0;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background: #DCE0E5;
+    border-radius: 3px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #0078D4;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    background: transparent;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+QScrollBar:horizontal {
+    background: #F4F6F9;
+    height: 8px;
+    margin: 0;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: #DCE0E5;
+    border-radius: 3px;
+    min-width: 24px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #0078D4;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    background: transparent;
+}
+"""
+
+
+def _resolve_effective_theme(theme_name: str) -> str:
+    """把 cfg.ui.theme（'auto'/'light'/'dark'）解析为实际生效的 'light' 或 'dark'。
+
+    auto 模式下，借 qfluentwidgets.isDarkTheme()（它已读了系统主题 + setTheme
+    的当前值）来判断。这样我们的 QSS 和 qfluentwidgets 内置样式总是同步。
     """
-    existing = app.styleSheet() or ""
-    app.setStyleSheet(existing + "\n" + _APP_QSS)
+    name = (theme_name or "auto").lower()
+    if name == "light":
+        return "light"
+    if name == "dark":
+        return "dark"
+    # auto：跟随 qfluentwidgets 当前状态
+    try:
+        from qfluentwidgets import isDarkTheme
+
+        return "dark" if isDarkTheme() else "light"
+    except Exception:
+        return "dark"  # 极端兜底（默认深色，与之前一致）
+
+
+# 保存原始 qfluentwidgets QSS（不含我们注入的），用于切主题时重新拼接
+_ORIGINAL_FW_QSS: str | None = None
+
+
+def _apply_global_qss(app: QApplication, theme_name: str = "auto") -> None:
+    """把当前主题对应的 QSS 注入 QApplication.styleSheet。
+
+    设计要点：
+      • 第一次调用时记下"qfluentwidgets 已注入的原始 QSS"作为 baseline
+      • 后续每次切主题，先重置回 baseline，再追加目标主题的 QSS ——
+        避免上次主题的 QSS 残留覆盖
+      • 这样 _apply_global_qss(app, "light") → _apply_global_qss(app, "dark")
+        能干净切换，不会越叠越多
+    """
+    global _ORIGINAL_FW_QSS
+    if _ORIGINAL_FW_QSS is None:
+        _ORIGINAL_FW_QSS = app.styleSheet() or ""
+
+    effective = _resolve_effective_theme(theme_name)
+    qss = _APP_QSS_DARK if effective == "dark" else _APP_QSS_LIGHT
+    app.setStyleSheet(_ORIGINAL_FW_QSS + "\n" + qss)
+
+
+def set_theme_runtime(theme_name: str) -> None:
+    """运行时切换主题（深/浅/自动），立即应用到当前 QApplication。
+
+    设置页的 RadioButton 选中后调用本函数。流程：
+      1. setTheme(qfluentwidgets) → 切内置控件配色
+      2. _apply_global_qss → 重置 + 追加新主题的 QSS
+    持久化由调用方负责（QSettings 或 config.toml 写回）。
+    """
+    app = QApplication.instance()
+    if app is None:
+        log.warning("set_theme_runtime: 没有活跃 QApplication，跳过")
+        return
+    setTheme(_THEME_MAP.get(theme_name, Theme.AUTO))
+    _apply_global_qss(app, theme_name)
+    log.info("主题已切换为 %s", theme_name)
 
 
 def run(argv: list[str] | None = None) -> int:

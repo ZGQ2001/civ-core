@@ -35,19 +35,21 @@ plot_curves 模块功能闭环：
 - **Word → PDF 页**（infra_io/word_to_pdf.py + ui/windows/word2pdf_view.py）：批量 .doc/.docx 通过 COM SaveAs(FileFormat=17) 转 PDF。优先 Word，回退 WPS。worker 启 1 个 Word 进程跑完关掉
 - **全局科技蓝主题色 #0078D4** + **主窗口 Win11 Mica 毛玻璃**（旧系统自动 fallback Acrylic / 纯色）
 
-**当前任务：** 无 in-progress。可进 P2（旧代码清理）或 P3 剩余项（auto_filler / bracket_normalize）。
+**📦 项目阶段（2026-05-14 起锁定）：**
+**「维护 + 新功能」模式**。不再做旧代码迁移大重构 —— `old_code/` / `99_old_code/`、未被引用的旧 UI 组件、stale 测试、41 个 pyright 报错全部就地保留作为参考。规则见 [CLAUDE.md → 项目当前阶段](../../CLAUDE.md)。
 
-**下一步（候选，等用户拍板）：**
-1. **P1.5-③ 拖点编辑**（推迟到未来）：要做须用 `FigureCanvasQTAgg` 替代 `Agg→PNG→QLabel` 链路；改动大且会牵连撤销栈与预览防抖，评估为非 P1.5 量级，归到独立"渲染管线重构"专项
-2. **P2（旧代码清理）**：`io/` → `infra_io/` 完成（部分已迁），消除 41 个 pyright 报错（`body_format.py` / `table_format.py` / `sort_photos.py` / `renumber_photos.py`），删除 `02_Core/` / `04_Config/` / `99_old_code/` / `tests/test_cross_ref_fix.py`；旧的 `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 也归 P2
-3. **P3 剩余项**：`auto_filler` / `bracket_normalize` 两个工具（`word2pdf` 已完成 + 加送了 PDF 合并/拆分工具）
+**当前任务：** 无 in-progress。
 
-**遗留问题：**
-- `tests/test_cross_ref_fix.py` 引用旧的 `civ_core.models.schema`，已知 stale，已写到 pyproject.toml addopts 默认 ignore（待 02_Core 整体迁移完成后删除）
-- 41 个 pyright 报错全在未迁移的旧代码中，新代码零报错
-- 旧 Qt QSettings 键名（applicationName=`CivilAuto`）已废，下次启动 GUI 两栏宽度 / 窗口几何会回到默认一次
-- 旧用户存的三栏 splitter_sizes（list[3]）会在首次启动被识别为长度异常 → 回退默认 [600, 400]（一次性丢弃，后续拖动即覆盖）
-- `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 三个旧组件已不被 view 使用但暂留（test_preset_list_buttons / test_preset_form_panel / test_preview_pane 还在测它们 + healthcheck 第 7 项仍依赖 PreviewPane）；P2 阶段一并清理
+**下一步候选（等用户拍板）：**
+1. **新工具开发** — `auto_filler`（Word 报告自动填充，docxtpl + 数据源映射）、`bracket_normalize`（括号/标点规范化）等 P3 剩余项；按现有 domain → core → infra_io → ui 四层架构直接在 `src/civ_core/` 写
+2. **现有功能维护** — 用户反馈的 bug / UX 改进 / 性能 profile / 新预设字段；改动只动 `src/civ_core/`，不去碰 `old_code/`
+3. **P1.5-③ 拖点编辑**（重大重构，暂搁置） — 要做须把渲染从 `Agg → PNG → QLabel` 换成 `FigureCanvasQTAgg`，归"渲染管线重构"专项；只在用户明确发起时启动
+
+**已接受的现状（不主动清理）：**
+- `tests/test_cross_ref_fix.py` 引用旧 `civ_core.models.schema`，stale 已在 `pyproject.toml addopts` ignore
+- 41 个 pyright 报错全在 `old_code/` 旧代码中，新代码零报错
+- 旧 Qt QSettings 键名 / 旧三栏 splitter_sizes：首启回退默认值一次，后续拖动覆盖
+- `preset_list.py` / `preset_form_panel.py` / `preview_pane.py` 三个旧组件不被 view 使用但保留（对应 test_* + healthcheck 第 7 项仍依赖）—— 都属于参考资源
 
 ---
 ### 可用指令（动态更新）

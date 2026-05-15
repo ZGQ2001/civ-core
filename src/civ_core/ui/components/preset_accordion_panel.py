@@ -40,7 +40,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QSettings, Qt, Signal
+from PySide6.QtCore import QSettings, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -147,6 +147,36 @@ _EMPTY_PRESET_DATA: dict[str, Any] = {
     "y_axis": {"label": "Y", "range": None},
     "curves": [],
 }
+
+
+def _compactify_widget(widget: QWidget, min_w: int) -> None:
+    """让 widget 在 layout 中报告的 minimumSizeHint.width = min_w。
+
+    问题背景：
+      qfluentwidgets.ComboBox / qfluentwidgets.SpinBox 等控件默认 minimumSizeHint
+      较大（ComboBox ≈ 212px、DoubleSpinBox（setRange=±1e9）≈ 324px），导致
+      参数面板的 content widget 累加 minimumSize 远超 splitter 给的左栏宽度 →
+      内部 widget 溢出 viewport → 按钮被截、字位移。
+
+      单纯 widget.setMinimumWidth(min_w) 只设了"硬下限"属性，但 layout 在算
+      minimumSize 时还是用 widget.minimumSizeHint()。所以同时需要覆盖
+      minimumSizeHint 返回 (min_w, original_height) 才能真正让 layout 接受窄宽。
+
+    用法：
+      _compactify_widget(self._preset_combo, 100)  # 让 ComboBox 能压到 100px
+      _compactify_widget(self._spin, 60)           # 让 SpinBox 能压到 60px
+
+    实现是 monkey-patch 单个实例的 minimumSizeHint —— 不污染类，仅作用于该实例。
+    """
+    widget.setMinimumWidth(min_w)
+    # 保留原方法获取自然高度；只压横向
+    _orig = widget.minimumSizeHint
+
+    def _capped() -> QSize:
+        h = _orig().height()
+        return QSize(min_w, h)
+
+    widget.minimumSizeHint = _capped  # type: ignore[method-assign]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -370,6 +400,17 @@ class _RangeTrio(QWidget):
         self._step.setRange(0.001, 1e6)
         self._step.setDecimals(3)
         self._step.setValue(1.0)
+        # 关键 bugfix：DoubleSpinBox 默认 sizeHint 按"能显示最长数字"算（≈ 324px
+        # 当 range=(-1e9, 1e9)），3 个 spinbox + label 横排 minSize 累加 ≈ 1000px，
+        # 远超 splitter 给的 280-300px → content widget 被撑大 → 「保存为我的预设」
+        # 按钮被拉伸 / 字体位移。_compactify_widget 同时覆盖 minimumSizeHint 让
+        # layout/splitter 看到 50px 的窄宽。
+        for sb in (self._min, self._max, self._step):
+            _compactify_widget(sb, 50)
+        # 内部 widget 压缩后，_RangeTrio 整体 layout 算 minSize 仍偏大（spinbox 内部
+        # spinner button + label + spacing 累加），需要再给整体设上限。180px 够装下
+        # 3 个 50px spinbox + 3 个短 label + spacing
+        # （在 outer = QVBoxLayout 之后调用，确保 layout 已 attach 才能算）
 
         # 两行布局：复选独占一行；min/max/step 一行（短字段并排）
         outer = QVBoxLayout(self)
@@ -391,6 +432,11 @@ class _RangeTrio(QWidget):
         for sb in (self._min, self._max, self._step):
             sb.valueChanged.connect(self._on_value_changed)
         self._set_enabled(False)
+
+        # 给 _RangeTrio 整体也 compactify：内部 spinbox 压到 50 后，layout 算的
+        # 整体 minSize 还有 spinner button + label 的累加（实测 310px）。直接
+        # 覆盖本 widget 自身的 minimumSizeHint 让父 layout 看到 180px 的窄宽
+        _compactify_widget(self, 180)
 
     def _set_enabled(self, on: bool) -> None:
         for sb in (self._min, self._max, self._step):
@@ -548,11 +594,19 @@ class PresetAccordionPanel(QWidget):
     # ── 1. 预设选择 ─────────────────────────────────────────────
     def _build_preset_section(self, layout: QVBoxLayout) -> None:
         self._preset_combo = ComboBox(self)
+        # 关键 bugfix：qfluentwidgets.ComboBox 默认 minSizeHint ≈ 212px，
+        # setMinimumWidth 单独无效（minSizeHint 仍按内部算）。用 _compactify
+        # 同时覆盖 minimumSizeHint，让 splitter/layout 看到的 min 是 100
+        _compactify_widget(self._preset_combo, 100)
         self._preset_combo.currentTextChanged.connect(self._on_preset_combo_changed)
         layout.addWidget(self._preset_combo)
 
         self._preset_status = BodyLabel("", self)
         self._preset_status.setStyleSheet("color: #888;")
+        # 状态文本可能较长（如"来源：我的（保存后将存为「我的」预设）"），
+        # 开启 wordWrap 让它换行 + 横向能压缩，避免撑大左栏
+        self._preset_status.setWordWrap(True)
+        _compactify_widget(self._preset_status, 0)
         layout.addWidget(self._preset_status)
 
         # 按钮分两行：第一行 新建/复制/删除；第二行 主操作保存
@@ -594,6 +648,8 @@ class PresetAccordionPanel(QWidget):
         self._sheet_combo = ComboBox(self)
         self._sheet_combo.setPlaceholderText("先选 Excel")
         self._sheet_combo.setEnabled(False)
+        # 同 preset_combo：compactify 让 minSizeHint = 80（layout/splitter 看到的）
+        _compactify_widget(self._sheet_combo, 80)
         self._sheet_combo.currentTextChanged.connect(self._on_sheet_changed)
         short_grid.addWidget(self._sheet_combo, 1, 0)
 
@@ -601,6 +657,8 @@ class PresetAccordionPanel(QWidget):
         self._header_row_spin = SpinBox(self)
         self._header_row_spin.setRange(1, 50)
         self._header_row_spin.setValue(1)
+        # SpinBox 默认 minSizeHint=142（按"50"显示宽算）；表头 1-50 范围 60px 够
+        _compactify_widget(self._header_row_spin, 60)
         self._header_row_spin.valueChanged.connect(self._on_header_row_changed)
         short_grid.addWidget(self._header_row_spin, 1, 1)
 
@@ -657,7 +715,11 @@ class PresetAccordionPanel(QWidget):
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(2)
 
-        self._y2_enable_chk = CheckBox("启用次 Y 轴（双 Y 轴对比）", self)
+        # CheckBox 文字尽量短：原"启用次 Y 轴（双 Y 轴对比）"按字宽算 minSize=253px，
+        # 直接撑大左栏 → 按钮拉伸 + 字位移。缩短到"启用次 Y 轴"（≈ 120px），完整
+        # 说明放 tooltip
+        self._y2_enable_chk = CheckBox("启用次 Y 轴", self)
+        self._y2_enable_chk.setToolTip("启用次 Y 轴：双 Y 轴对比图（左右两侧各一条数据轴）")
         self._y2_enable_chk.stateChanged.connect(self._on_y2_enable_changed)
         col.addWidget(self._y2_enable_chk)
 

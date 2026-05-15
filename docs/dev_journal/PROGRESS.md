@@ -20,6 +20,7 @@ UI 视觉两轮迭代 —— 第一轮"浅色卡片"已废，第二轮采用：
 7 处 UI bugfix（按修复顺序）：
 - **缩放 1**：LivePreviewPane QLabel 用 `SizePolicy.Ignored × Ignored` + `minSize(1,1)`，自身 `setMinimumSize(0,0)` —— splitter 拖大后能缩回
 - **缩放 2**：MainWindow 显式 `setMinimumSize(720, 480)` —— 窗口右拖能收缩
+- **缩放 3 (T1) 展开分组按钮变长/字位移**：根因 `DoubleSpinBox.setRange(±1e9)` 让 sizeHint ≈ 324px，`qfluentwidgets.ComboBox.minSizeHint ≈ 212px`，CheckBox "启用次 Y 轴（双 Y 轴对比）" 文字撑到 253px → content widget minSize 累加到 342-1112px，超 splitter 给的 280-300px → 内部 widget 溢出 viewport → 按钮被截、字位移。修复：新增 `_compactify_widget(widget, min_w)` helper（同时 setMinimumWidth + monkey-patch 实例的 `minimumSizeHint`），应用到 `_preset_combo (100)` / `_sheet_combo (80)` / `_header_row_spin (60)` / `_RangeTrio._min/_max/_step (50)` / `_RangeTrio` 整体 (180)；`_preset_status` BodyLabel 加 `setWordWrap(True)`；`_y2_enable_chk` 文字精简到"启用次 Y 轴" + tooltip 详细说明。content widget minSize 从 1112 → 220
 - **预设 1**：`refresh()` 末尾若 currentIndex<0 再补选；`current_run_settings()` 兜底从 ComboBox userData 取预设名
 - **预设 2**：plot_curves_view 在所有 signal connect 完成后主动调 `live_preview_pane.set_preset(current_preset_data())` —— 修复 PresetAccordionPanel.__init__ 中的 emit 在 connect 之前已丢，导致 LivePreviewPane._preset = None、用户不动预设直接选 Excel 时卡在"请先选预设"
 - **风琴 1**：重构 `_SectionHeader` widget = 固定宽度 14px 箭头 QLabel + 弹性 title QLabel + mousePressEvent 触发 toggle —— 修 `▾`/`▸` 字宽差异导致 title 起点抖

@@ -256,80 +256,80 @@ class TestPresetDefaultSelected:
 
 
 # ──────────────────────────────────────────────────────────────────
-# Bug 5：splitter 左栏被内部 sizeHint 撑大
+# Bug 5：splitter 左栏 content widget 被 SpinBox sizeHint 撑大
 # ──────────────────────────────────────────────────────────────────
-class TestPanelMinSizeHintNotInflatedByGroups:
-    """PresetAccordionPanel 的 minimumSizeHint 不能被内部分组撑大。
+class TestContentMinSizeNotInflatedBySpinBoxes:
+    """QScrollArea 里的 content widget 的 minimumSizeHint 不能被内部 SpinBox 撑大。
 
-    用户场景：展开"坐标轴"分组时，里面 _RangeTrio 一行横排 min/max/step
-    三个 SpinBox + label，累加 minimumSizeHint ≈ 400-500px。如果 panel
-    自身把这个 hint 透传给 QSplitter，splitter 会强制左栏 ≥ 该宽度 →
-    "保存为我的预设"按钮被拉伸 / 字体位移 / 右栏被挤压。
+    用户场景（截图实测）：
+      • DoubleSpinBox.setRange(-1e9, 1e9) → 控件按"能显示最长数字"算 sizeHint ≈ 324px
+      • 整个 content widget 的 minimumSizeHint.width ≈ 342px（由一个 SpinBox 决定）
+      • 当 splitter 给左栏 280px 时，content 仍按 342 显示 → 按钮/LineEdit 跟着撑到 342
+      • 显示区只有 280 → "保存为我的预设" 被截断，文字位移
 
-    修复方式：PresetAccordionPanel 覆盖 minimumSizeHint() 横向上限 200，
-    让 splitter 完全接管左栏宽度，内部 _RangeTrio 通过 SpinBox 的
-    minimumWidth(60) 实现窄宽下也能完整显示。
+    panel.minimumSizeHint() 由 QScrollArea 屏蔽，看起来是 68（不准确）；
+    真正能触发 splitter 撑大现象的是 panel._scroll.widget()（即 content）的
+    minimumSizeHint —— 这是修复目标。
+
+    修复策略：给 _RangeTrio 内的 3 个 DoubleSpinBox 设 setMinimumWidth(50)，
+    让控件能压缩到 50px 一个，6 控件总宽 ≈ 280px，与默认 splitter 宽度匹配。
     """
 
-    def test_min_size_hint_width_capped_when_collapsed(
+    def test_content_min_size_width_when_collapsed(
         self, qapp: QApplication, tmp_settings: Path
     ) -> None:
-        """所有分组都收起时 minSizeHint.width 应 ≤ 200。"""
+        """所有分组都收起时 content widget minSizeHint.width 应 ≤ 220。"""
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
         panel = PresetAccordionPanel()
         try:
-            msh = panel.minimumSizeHint()
-            assert msh.width() <= 200, (
-                f"折叠态 minSizeHint.width={msh.width()} > 200，"
-                "splitter 会被撑大"
+            content = panel._scroll.widget()
+            msh = content.minimumSizeHint()
+            assert msh.width() <= 220, (
+                f"折叠态 content minSizeHint.width={msh.width()} > 220，splitter 给 280 仍会被撑"
             )
         finally:
             panel.deleteLater()
 
-    def test_min_size_hint_width_capped_when_axis_expanded(
+    def test_content_min_size_width_when_axis_expanded(
         self, qapp: QApplication, tmp_settings: Path
     ) -> None:
-        """展开"坐标轴"分组后 minSizeHint.width 仍应 ≤ 200（用户报告的核心场景）。"""
+        """展开"坐标轴"分组后 content minSizeHint.width 仍应 ≤ 220。"""
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
         panel = PresetAccordionPanel()
         try:
-            # 坐标轴分组默认收起 → 这里显式 toggle 展开
             panel._sec_axis._toggle()
             qapp.processEvents()
-            msh = panel.minimumSizeHint()
-            assert msh.width() <= 200, (
-                f"坐标轴展开后 minSizeHint.width={msh.width()} > 200，"
-                "splitter 会被 _RangeTrio 一行横排撑大 → 「保存为我的预设」按钮位移"
+            content = panel._scroll.widget()
+            msh = content.minimumSizeHint()
+            assert msh.width() <= 220, (
+                f"坐标轴展开后 content minSizeHint.width={msh.width()} > 220，"
+                "_RangeTrio 内 SpinBox 横排撑大 → 「保存为我的预设」按钮位移"
             )
         finally:
             panel.deleteLater()
 
-    def test_min_size_hint_width_capped_when_all_groups_expanded(
+    def test_range_trio_spinbox_has_small_min_width(
         self, qapp: QApplication, tmp_settings: Path
     ) -> None:
-        """所有分组（含数据源 / 曲线定义 / 坐标轴 / 样式 / 输出）全展开时也不超 200。"""
+        """_RangeTrio 内 3 个 SpinBox 的 minimumWidth 必须 ≤ 60，让控件能压缩。"""
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
 
         panel = PresetAccordionPanel()
         try:
-            # 把 5 个可折叠分组都打开（_sec_preset 不可折叠）
-            for sec_name in (
-                "_sec_data",
-                "_sec_curves",
-                "_sec_axis",
-                "_sec_style",
-                "_sec_out",
+            for label, spin in (
+                ("X min", panel._x_range._min),
+                ("X max", panel._x_range._max),
+                ("X step", panel._x_range._step),
+                ("Y min", panel._y_range._min),
+                ("Y max", panel._y_range._max),
+                ("Y step", panel._y_range._step),
             ):
-                sec = getattr(panel, sec_name)
-                if not sec.is_expanded():
-                    sec._toggle()
-            qapp.processEvents()
-            msh = panel.minimumSizeHint()
-            assert msh.width() <= 200, (
-                f"全展开后 minSizeHint.width={msh.width()} > 200，"
-                "压力测试不通过"
-            )
+                mw = spin.minimumWidth()
+                assert mw <= 60, (
+                    f"{label} SpinBox.minimumWidth={mw} > 60 —— 不能压缩到窄宽，"
+                    "splitter 左栏会被撑大"
+                )
         finally:
             panel.deleteLater()

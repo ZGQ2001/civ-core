@@ -899,9 +899,7 @@ class TestSingleRowHoverTooltip:
         # 启停所需，让 view 拿到当前批次的图数量
         assert hasattr(sigs, "single_hittest_ready")
         seen: list[tuple[int, bytes, object, int]] = []
-        sigs.single_hittest_ready.connect(
-            lambda g, b, m, c: seen.append((g, b, m, c))
-        )
+        sigs.single_hittest_ready.connect(lambda g, b, m, c: seen.append((g, b, m, c)))
         sigs.single_hittest_ready.emit(1, b"abc", "fake", 5)
         assert seen == [(1, b"abc", "fake", 5)]
 

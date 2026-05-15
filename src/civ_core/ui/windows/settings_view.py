@@ -23,7 +23,10 @@ from __future__ import annotations
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QFileDialog,
     QHBoxLayout,
+    QLineEdit,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -43,6 +46,7 @@ log = get_logger(__name__)
 _SETTINGS_ORG = "ZGQ"
 _SETTINGS_APP = "CivCore"
 _SETTINGS_KEY_THEME = "ui/theme"
+_SETTINGS_KEY_PROJECT_DIR = "projects/default_root_dir"
 
 # 三档主题 token 与用户可见标签的映射
 _THEME_OPTIONS: tuple[tuple[str, str, str], ...] = (
@@ -70,6 +74,17 @@ def load_user_theme(default: str = "auto") -> str:
 def save_user_theme(theme: str) -> None:
     """把用户选择写入 QSettings（每台机器独立）。"""
     QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_THEME, theme)
+
+
+def load_project_root_dir(default: str = "") -> str:
+    v = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_PROJECT_DIR)
+    if not v:
+        return default
+    return str(v)
+
+
+def save_project_root_dir(path: str) -> None:
+    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_PROJECT_DIR, path)
 
 
 class SettingsView(QWidget):
@@ -123,16 +138,56 @@ class SettingsView(QWidget):
 
             outer.addLayout(row)
 
+        # ── 项目管理 ─────────────────────────────────────────────
+        proj_label = StrongBodyLabel("项目管理", self)
+        outer.addWidget(proj_label)
+
+        hint2 = BodyLabel("新建项目时的默认保存文件夹。", self)
+        hint2.setStyleSheet("color: #8B92A0;")
+        outer.addWidget(hint2)
+
+        folder_row = QHBoxLayout()
+        folder_row.setContentsMargins(8, 0, 0, 0)
+        folder_row.setSpacing(10)
+
+        self._folder_edit = QLineEdit(self)
+        saved_dir = load_project_root_dir()
+        self._folder_edit.setText(saved_dir)
+        self._folder_edit.setPlaceholderText("未设置（默认创建时不自动生成文件夹）")
+        self._folder_edit.setReadOnly(True)
+        self._folder_edit.setStyleSheet(
+            "QLineEdit { font-size: 12px; padding: 6px; border: 1px solid #E0E0E0; "
+            "border-radius: 4px; background: #F5F5F5; }"
+        )
+        folder_row.addWidget(self._folder_edit)
+
+        btn_browse = QPushButton("浏览...", self)
+        btn_browse.setStyleSheet(
+            "QPushButton { font-size: 11px; padding: 6px 16px; border: 1px solid #E0E0E0; "
+            "border-radius: 4px; } QPushButton:hover { border-color: #1976D2; }"
+        )
+        btn_browse.clicked.connect(self._on_browse_project_dir)
+        folder_row.addWidget(btn_browse)
+
+        outer.addLayout(folder_row)
+
         # 末尾 stretch：内容靠顶
         outer.addStretch(1)
+
+    def _on_browse_project_dir(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, "选择默认项目保存位置", self._folder_edit.text())
+        if d:
+            self._folder_edit.setText(d)
+            save_project_root_dir(d)
+            log.info("默认项目文件夹已更新: %s", d)
 
     def _on_theme_radio(self, checked: bool, token: str) -> None:
         """用户切换主题：QSettings 持久化 + 运行时立即应用。"""
         if not checked:
-            return  # 只关心"被选中"事件；取消选中不动
+            return
         log.info("用户切换主题：%s", token)
         save_user_theme(token)
         set_theme_runtime(token)
 
 
-__all__ = ["SettingsView", "load_user_theme", "save_user_theme"]
+__all__ = ["SettingsView", "load_user_theme", "save_user_theme", "load_project_root_dir", "save_project_root_dir"]

@@ -62,7 +62,7 @@ class ProjectBoardWidget(QWidget):
         board.refresh()
     """
 
-    project_clicked = None  # 占位，实际信号在 ProjectBoardView 层连接
+    card_clicked = None  # callback: (Project) -> None
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -121,8 +121,9 @@ class ProjectBoardWidget(QWidget):
             )
 
     def _make_card(self, proj: Project) -> QFrame:
-        """构造一张紧凑卡片。"""
+        """构造一张可点击紧凑卡片。"""
         card = QFrame()
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setFrameShape(QFrame.Shape.StyledPanel)
         card.setStyleSheet("""
             QFrame {
@@ -133,6 +134,7 @@ class ProjectBoardWidget(QWidget):
             }
             QFrame:hover {
                 border-color: #1976D2;
+                background: #F5F8FF;
             }
         """)
 
@@ -154,5 +156,11 @@ class ProjectBoardWidget(QWidget):
         info = QLabel(f"{proj.inspection_type}  ·  ¥{proj.amount:,.0f}")
         info.setStyleSheet("color: #757575; font-size: 11px; border: none;")
         layout.addWidget(info)
+
+        # 点击卡片 → 打开抽屉
+        def on_click(event, p=proj):
+            if self.card_clicked is not None:
+                self.card_clicked(p)
+        card.mousePressEvent = on_click
 
         return card

@@ -80,7 +80,7 @@ class ProjectDelegate(QStyledItemDelegate):
         # ── 编号 ────────────────────────────────────────────────
         number = index.data(ProjectListModel.ProjectNumberRole) or ""
         font_small = QFont(painter.font())
-        font_small.setPointSize(10)
+        font_small.setPixelSize(12)
         painter.setFont(font_small)
         painter.setPen(_COLOR_TEXT_SECONDARY)
         num_rect = QRect(x, option.rect.top(), 60, option.rect.height())
@@ -90,7 +90,7 @@ class ProjectDelegate(QStyledItemDelegate):
         # ── 名称 ────────────────────────────────────────────────
         name = index.data(ProjectListModel.NameRole) or ""
         font_name = QFont(painter.font())
-        font_name.setPointSize(11)
+        font_name.setPixelSize(13)
         font_name.setBold(True)
         painter.setFont(font_name)
         painter.setPen(_COLOR_TEXT_PRIMARY)

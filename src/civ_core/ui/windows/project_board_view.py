@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from civ_core.core.project_service import ProjectService
+from civ_core.domain.project_schema import Project
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
 from civ_core.ui.components.project_delegate import ProjectDelegate
 from civ_core.ui.components.project_drawer import ProjectDrawer
@@ -128,12 +129,14 @@ class ProjectBoardView(QWidget):
         # 看板视图
         self._board_widget = ProjectBoardWidget()
         self._board_widget.set_service(self._service)
+        self._board_widget.card_clicked = self._on_board_card_clicked
         self._view_stack.addWidget(self._board_widget)
 
         body.addWidget(self._view_stack, 1)
 
         # 右侧 Drawer
         self._drawer = ProjectDrawer()
+        self._drawer.closed = self._on_drawer_closed
         body.addWidget(self._drawer)
 
         layout.addLayout(body, 1)
@@ -168,6 +171,10 @@ class ProjectBoardView(QWidget):
     # ════════════════════════════════════════════════════════════
     # 交互
     # ════════════════════════════════════════════════════════════
+    def _on_board_card_clicked(self, proj: Project) -> None:
+        self._drawer.set_project(proj, self._service)
+        self._drawer.open()
+
     def _on_item_clicked(self, index) -> None:
         proj = self._model.data(index, ProjectListModel.ProjectObjectRole)
         if proj:
@@ -215,6 +222,12 @@ class ProjectBoardView(QWidget):
                 self._board_widget.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "创建失败", str(e))
+
+    def _on_drawer_closed(self) -> None:
+        """抽屉关闭后刷新视图。"""
+        self._model.refresh()
+        if self._view_stack.currentIndex() == 1:
+            self._board_widget.refresh()
 
     def refresh(self) -> None:
         self._model.refresh()

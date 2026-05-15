@@ -94,25 +94,33 @@ class ProjectDrawer(QFrame):
         self._show_summary_page()
         self._populate_summary()
 
+    closed = None  # callback set by ProjectBoardView
+
     def open(self) -> None:
         if self._project is None:
             return
         self._animate_to(self._DRAWER_WIDTH)
 
     def close(self) -> None:
-        self._animate_to(0)
-        # 动画结束后重置 fixedWidth，让主视图恢复全宽
-        if self._animation is not None:
-            self._animation.finished.connect(lambda: self.setFixedWidth(0))
+        # 立即收拢 fixedWidth，动画只负责视觉过渡
+        self.setFixedWidth(0)
+        if self._animation is not None and self._animation.state() == QPropertyAnimation.State.Running:
+            self._animation.stop()
+        self._animation = QPropertyAnimation(self, b"maximumWidth")
+        self._animation.setDuration(80)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._animation.setStartValue(self._DRAWER_WIDTH)
+        self._animation.setEndValue(0)
+        self._animation.start()
+        # 通知外部刷新
+        self._on_closed()
 
-    # ════════════════════════════════════════════════════════════
     # 内部
-    # ════════════════════════════════════════════════════════════
     def _animate_to(self, target: int) -> None:
         if self._animation is not None and self._animation.state() == QPropertyAnimation.State.Running:
             self._animation.stop()
         self._animation = QPropertyAnimation(self, b"maximumWidth")
-        self._animation.setDuration(200)
+        self._animation.setDuration(120)
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._animation.setStartValue(self.maximumWidth())
         self._animation.setEndValue(target)
@@ -121,8 +129,28 @@ class ProjectDrawer(QFrame):
         if target > 0:
             self.setFixedWidth(self._DRAWER_WIDTH)
 
+    def _on_closed(self) -> None:
+        if self.closed is not None:
+            self.closed()
+
     def _show_summary_page(self) -> None:
         self._stack.setCurrentIndex(0)
+
+    def _toggle_original_record(self) -> None:
+        if self._project is None or self._service is None:
+            return
+        p = self._project
+        updated = Project(
+            project_id=p.project_id, project_number=p.project_number,
+            name=p.name, client=p.client, inspection_type=p.inspection_type,
+            amount=p.amount, folder_path=p.folder_path,
+            original_record_done=not p.original_record_done,
+            notes=p.notes, stages=p.stages,
+            created_at=p.created_at, updated_at=p.updated_at,
+        )
+        self._service.update_project(updated)
+        self._project = self._service.get_project(p.project_id)
+        self._populate_summary()
 
     def _toggle_stage(self, project_id: int, stage_name: str, current_status: StageStatus) -> None:
         """点击阶段按钮：循环切换状态。"""
@@ -165,8 +193,14 @@ class ProjectDrawer(QFrame):
         self._summary_info.setStyleSheet("font-size: 12px; color: #757575;")
         layout.addWidget(self._summary_info)
 
-        self._summary_record = QLabel()
-        self._summary_record.setStyleSheet("font-size: 12px;")
+        self._summary_record = QPushButton()
+        self._summary_record.setFlat(True)
+        self._summary_record.setStyleSheet(
+            "QPushButton { text-align: left; font-size: 12px; border: 1px solid #E0E0E0; "
+            "border-radius: 4px; padding: 6px 10px; color: #212121; }"
+            "QPushButton:hover { border-color: #1976D2; }"
+        )
+        self._summary_record.clicked.connect(self._toggle_original_record)
         layout.addWidget(self._summary_record)
 
         # 阶段列表区域
@@ -237,7 +271,7 @@ class ProjectDrawer(QFrame):
             btn.setStyleSheet(
                 "QPushButton { text-align: left; font-size: 12px; padding: 4px 8px; "
                 "border: 1px solid transparent; border-radius: 4px; color: #212121; }"
-                "QPushButton:hover { background: #F0F0F0; border-color: #E0E0E0; }"
+                "QPushButton:hover { color: #1976D2; }"
             )
             # 点击切换阶段状态：NOT_STARTED → IN_PROGRESS → COMPLETED → NOT_STARTED
             btn.clicked.connect(lambda checked, pid=p.project_id, sn=stage.name, ss=stage.status: self._toggle_stage(pid, sn, ss))

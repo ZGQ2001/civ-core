@@ -426,7 +426,7 @@ class _BaseWorker(QRunnable):
 
 
 class _MergeWorker(_BaseWorker):
-    def __init__(self, inputs: list[Path], out_path: Path) -> None:
+    def __init__(self, inputs: list[Path | str], out_path: Path) -> None:
         super().__init__()
         self._inputs = inputs
         self._out = out_path

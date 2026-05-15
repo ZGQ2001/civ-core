@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import LineEdit, MessageBoxBase
+from qfluentwidgets import LineEdit, MessageBoxBase, SubtitleLabel
 
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, ProjectStage
@@ -32,51 +32,55 @@ from civ_core.ui.models.project_list_model import ProjectListModel
 
 
 class NewProjectDialog(MessageBoxBase):
-    """新建项目对话框 — qfluentwidgets 风格，单表单填所有字段。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.titleLabel.setText("新建项目")
+        self.titleLabel = SubtitleLabel("新建检测项目", self)
 
-        form = QFormLayout(self.widget)
-        form.setSpacing(8)
-        form.setContentsMargins(0, 8, 0, 0)
+        self.idLineEdit = LineEdit(self)
+        self.idLineEdit.setPlaceholderText("如: P202605...")
+        self.idLineEdit.setClearButtonEnabled(True)
 
-        self._num_edit = LineEdit()
-        self._num_edit.setPlaceholderText("如 P2024001")
-        self._num_edit.setClearButtonEnabled(True)
-        form.addRow("项目编号 *", self._num_edit)
+        self.nameLineEdit = LineEdit(self)
+        self.nameLineEdit.setPlaceholderText("如: 某某道路桥梁检测")
+        self.nameLineEdit.setClearButtonEnabled(True)
 
-        self._name_edit = LineEdit()
-        self._name_edit.setPlaceholderText("项目名称")
-        self._name_edit.setClearButtonEnabled(True)
-        form.addRow("项目名称 *", self._name_edit)
+        self.clientLineEdit = LineEdit(self)
+        self.clientLineEdit.setPlaceholderText("委托单位")
+        self.clientLineEdit.setClearButtonEnabled(True)
 
-        self._client_edit = LineEdit()
-        self._client_edit.setPlaceholderText("委托方")
-        self._client_edit.setClearButtonEnabled(True)
-        form.addRow("委托方", self._client_edit)
+        self.typeLineEdit = LineEdit(self)
+        self.typeLineEdit.setPlaceholderText("如: 施工质量评价")
+        self.typeLineEdit.setClearButtonEnabled(True)
 
-        self._itype_edit = LineEdit()
-        self._itype_edit.setPlaceholderText("如 施工质量评价")
-        self._itype_edit.setClearButtonEnabled(True)
-        form.addRow("检测类型", self._itype_edit)
+        self.amountLineEdit = LineEdit(self)
+        self.amountLineEdit.setPlaceholderText("0")
+        self.amountLineEdit.setClearButtonEnabled(True)
 
-        self._amount_edit = LineEdit()
-        self._amount_edit.setPlaceholderText("0")
-        self._amount_edit.setClearButtonEnabled(True)
-        form.addRow("项目金额", self._amount_edit)
-
-        # 文件夹
-        folder_row = QHBoxLayout()
-        self._folder_edit = QLineEdit()
-        self._folder_edit.setPlaceholderText("自动生成")
+        self._folder_edit = QLineEdit(self)
+        self._folder_edit.setPlaceholderText("自动生成（或点击浏览选择）")
         self._folder_edit.setReadOnly(True)
+        folder_row = QHBoxLayout()
         folder_row.addWidget(self._folder_edit)
-        btn = QPushButton("浏览...")
-        btn.clicked.connect(self._browse_folder)
-        folder_row.addWidget(btn)
-        form.addRow("保存位置", folder_row)
+        btn_browse = QPushButton("浏览...")
+        btn_browse.clicked.connect(self._browse_folder)
+        folder_row.addWidget(btn_browse)
+
+        self.viewLayout.addWidget(self.titleLabel)
+
+        self.formLayout = QFormLayout()
+        self.formLayout.setVerticalSpacing(12)
+        self.formLayout.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self.formLayout.addRow("项目编号:", self.idLineEdit)
+        self.formLayout.addRow("项目名称:", self.nameLineEdit)
+        self.formLayout.addRow("委托方:", self.clientLineEdit)
+        self.formLayout.addRow("检测类型:", self.typeLineEdit)
+        self.formLayout.addRow("项目金额:", self.amountLineEdit)
+        self.formLayout.addRow("保存位置:", folder_row)
+
+        self.viewLayout.addLayout(self.formLayout)
+        self.widget.setMinimumWidth(400)
 
     def _browse_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
@@ -86,12 +90,18 @@ class NewProjectDialog(MessageBoxBase):
     def get_project(self) -> Project:
         stages = tuple(ProjectStage(name=n) for n in BUILTIN_STAGE_NAMES)
         folder_str = self._folder_edit.text().strip()
+        amount = 0.0
+        if self.amountLineEdit.text().strip():
+            try:
+                amount = float(self.amountLineEdit.text().strip())
+            except ValueError:
+                pass
         return Project(
-            project_number=self._num_edit.text().strip(),
-            name=self._name_edit.text().strip(),
-            client=self._client_edit.text().strip(),
-            inspection_type=self._itype_edit.text().strip(),
-            amount=float(self._amount_edit.text() or 0),
+            project_number=self.idLineEdit.text().strip(),
+            name=self.nameLineEdit.text().strip(),
+            client=self.clientLineEdit.text().strip(),
+            inspection_type=self.typeLineEdit.text().strip(),
+            amount=amount,
             folder_path=Path(folder_str) if folder_str else None,
             stages=stages,
         )

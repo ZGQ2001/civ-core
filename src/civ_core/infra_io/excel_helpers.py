@@ -17,7 +17,7 @@ from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from civ_core.models.schema import ExcelReplaceResult, IOReadError
+from civ_core.domain.schema import ExcelReplaceResult, IOReadError
 from civ_core.utils.logger import get_logger
 from civ_core.utils.patterns import FIG_PATTERN
 from civ_core.utils.word_helpers import make_caption_substitutor

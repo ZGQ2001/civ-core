@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -140,10 +142,11 @@ class ProjectDrawer(QFrame):
         if self._project is None or self._service is None:
             return
         p = self._project
+        folder_text = self._edit_folder.text().strip()
         updated = Project(
             project_id=p.project_id, project_number=p.project_number,
             name=p.name, client=p.client, inspection_type=p.inspection_type,
-            amount=p.amount, folder_path=p.folder_path,
+            amount=p.amount, folder_path=Path(folder_text) if folder_text else None,
             original_record_done=not p.original_record_done,
             notes=p.notes, stages=p.stages,
             created_at=p.created_at, updated_at=p.updated_at,
@@ -169,6 +172,12 @@ class ProjectDrawer(QFrame):
         except ValueError as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "更新失败", str(e))
+
+    def _on_bind_folder(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, "选择项目文件夹", self._edit_folder.text())
+        if d:
+            self._edit_folder.setText(d)
 
     def _show_edit_page(self) -> None:
         if self._service is None:
@@ -341,6 +350,31 @@ class ProjectDrawer(QFrame):
         self._edit_amount.setStyleSheet("font-size: 12px; padding: 4px;")
         layout.addWidget(self._edit_amount)
 
+        # ── 本地工作区绑定 ──────────────────────────────────────
+        lbl_folder = QLabel("本地文件夹")
+        lbl_folder.setStyleSheet("font-size: 11px; color: #757575; margin-top: 8px;")
+        layout.addWidget(lbl_folder)
+
+        folder_row = QHBoxLayout()
+        folder_row.setSpacing(8)
+        self._edit_folder = QLineEdit()
+        self._edit_folder.setReadOnly(True)
+        self._edit_folder.setPlaceholderText("未绑定（点击右侧按钮选择）")
+        self._edit_folder.setStyleSheet(
+            "font-size: 12px; padding: 3px 6px; border: 1px solid #E0E0E0; "
+            "border-radius: 3px; min-height: 26px; background: #F5F5F5;"
+        )
+        folder_row.addWidget(self._edit_folder)
+
+        btn_bind = QPushButton("📁 绑定目录...")
+        btn_bind.setStyleSheet(
+            "QPushButton { font-size: 11px; padding: 4px 12px; border: 1px solid #E0E0E0; "
+            "border-radius: 3px; min-height: 26px; } QPushButton:hover { border-color: #1976D2; }"
+        )
+        btn_bind.clicked.connect(self._on_bind_folder)
+        folder_row.addWidget(btn_bind)
+        layout.addLayout(folder_row)
+
         layout.addStretch()
 
         # 返回 + 保存
@@ -373,11 +407,14 @@ class ProjectDrawer(QFrame):
         self._edit_fields["client"].setText(p.client)
         self._edit_fields["inspection_type"].setText(p.inspection_type)
         self._edit_amount.setText(str(p.amount))
+        self._edit_folder.setText(str(p.folder_path) if p.folder_path else "")
+        self._edit_folder.setText(str(p.folder_path) if p.folder_path else "")
 
     def _on_save(self) -> None:
         if self._project is None or self._service is None:
             return
         p = self._project
+        folder_text = self._edit_folder.text().strip()
         updated = Project(
             project_id=p.project_id,
             project_number=self._edit_fields["number"].text().strip() or p.project_number,
@@ -385,7 +422,7 @@ class ProjectDrawer(QFrame):
             client=self._edit_fields["client"].text().strip(),
             inspection_type=self._edit_fields["inspection_type"].text().strip(),
             amount=float(self._edit_amount.text() or 0),
-            folder_path=p.folder_path,
+            folder_path=Path(folder_text) if folder_text else None,
             original_record_done=p.original_record_done,
             notes=p.notes,
             stages=p.stages,

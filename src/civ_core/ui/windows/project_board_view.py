@@ -5,10 +5,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListView,
     QMessageBox,
     QPushButton,
@@ -16,14 +21,80 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from qfluentwidgets import LineEdit, MessageBoxBase
 
 from civ_core.core.project_service import ProjectService
-from civ_core.domain.project_schema import Project
+from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, ProjectStage
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
 from civ_core.ui.components.project_delegate import ProjectDelegate
 from civ_core.ui.components.project_drawer import ProjectDrawer
 from civ_core.ui.models.project_list_model import ProjectListModel
 
+
+class NewProjectDialog(MessageBoxBase):
+    """新建项目对话框 — qfluentwidgets 风格，单表单填所有字段。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.titleLabel.setText("新建项目")
+
+        form = QFormLayout(self.widget)
+        form.setSpacing(8)
+        form.setContentsMargins(0, 8, 0, 0)
+
+        self._num_edit = LineEdit()
+        self._num_edit.setPlaceholderText("如 P2024001")
+        self._num_edit.setClearButtonEnabled(True)
+        form.addRow("项目编号 *", self._num_edit)
+
+        self._name_edit = LineEdit()
+        self._name_edit.setPlaceholderText("项目名称")
+        self._name_edit.setClearButtonEnabled(True)
+        form.addRow("项目名称 *", self._name_edit)
+
+        self._client_edit = LineEdit()
+        self._client_edit.setPlaceholderText("委托方")
+        self._client_edit.setClearButtonEnabled(True)
+        form.addRow("委托方", self._client_edit)
+
+        self._itype_edit = LineEdit()
+        self._itype_edit.setPlaceholderText("如 施工质量评价")
+        self._itype_edit.setClearButtonEnabled(True)
+        form.addRow("检测类型", self._itype_edit)
+
+        self._amount_edit = LineEdit()
+        self._amount_edit.setPlaceholderText("0")
+        self._amount_edit.setClearButtonEnabled(True)
+        form.addRow("项目金额", self._amount_edit)
+
+        # 文件夹
+        folder_row = QHBoxLayout()
+        self._folder_edit = QLineEdit()
+        self._folder_edit.setPlaceholderText("自动生成")
+        self._folder_edit.setReadOnly(True)
+        folder_row.addWidget(self._folder_edit)
+        btn = QPushButton("浏览...")
+        btn.clicked.connect(self._browse_folder)
+        folder_row.addWidget(btn)
+        form.addRow("保存位置", folder_row)
+
+    def _browse_folder(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
+        if d:
+            self._folder_edit.setText(d)
+
+    def get_project(self) -> Project:
+        stages = tuple(ProjectStage(name=n) for n in BUILTIN_STAGE_NAMES)
+        folder_str = self._folder_edit.text().strip()
+        return Project(
+            project_number=self._num_edit.text().strip(),
+            name=self._name_edit.text().strip(),
+            client=self._client_edit.text().strip(),
+            inspection_type=self._itype_edit.text().strip(),
+            amount=float(self._amount_edit.text() or 0),
+            folder_path=Path(folder_str) if folder_str else None,
+            stages=stages,
+        )
 
 class ProjectBoardView(QWidget):
     """项目管理看板主页。

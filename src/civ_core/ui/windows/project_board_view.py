@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -40,10 +40,12 @@ class NewProjectDialog(MessageBoxBase):
         self.idLineEdit = LineEdit(self)
         self.idLineEdit.setPlaceholderText("如: P202605...")
         self.idLineEdit.setClearButtonEnabled(True)
+        self.idLineEdit.textChanged.connect(lambda: self._clear_error(self.idLineEdit))
 
         self.nameLineEdit = LineEdit(self)
         self.nameLineEdit.setPlaceholderText("如: 某某道路桥梁检测")
         self.nameLineEdit.setClearButtonEnabled(True)
+        self.nameLineEdit.textChanged.connect(lambda: self._clear_error(self.nameLineEdit))
 
         self.clientLineEdit = LineEdit(self)
         self.clientLineEdit.setPlaceholderText("委托单位")
@@ -72,8 +74,8 @@ class NewProjectDialog(MessageBoxBase):
         self.formLayout.setVerticalSpacing(12)
         self.formLayout.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        self.formLayout.addRow("项目编号:", self.idLineEdit)
-        self.formLayout.addRow("项目名称:", self.nameLineEdit)
+        self.formLayout.addRow("项目编号 *:", self.idLineEdit)
+        self.formLayout.addRow("项目名称 *:", self.nameLineEdit)
         self.formLayout.addRow("委托方:", self.clientLineEdit)
         self.formLayout.addRow("检测类型:", self.typeLineEdit)
         self.formLayout.addRow("项目金额:", self.amountLineEdit)
@@ -82,10 +84,51 @@ class NewProjectDialog(MessageBoxBase):
         self.viewLayout.addLayout(self.formLayout)
         self.widget.setMinimumWidth(400)
 
+        # 拦截确定按钮
+        try:
+            self.yesButton.clicked.disconnect()
+        except Exception:
+            pass
+        self.yesButton.clicked.connect(self._validate_and_accept)
+
     def _browse_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
         if d:
             self._folder_edit.setText(d)
+
+    def _validate_and_accept(self) -> None:
+        valid = True
+        if not self.nameLineEdit.text().strip():
+            self._trigger_error(self.nameLineEdit)
+            valid = False
+        if not self.idLineEdit.text().strip():
+            self._trigger_error(self.idLineEdit)
+            valid = False
+        if valid:
+            self.accept()
+
+    def _trigger_error(self, widget: QLineEdit) -> None:
+        widget.setStyleSheet(
+            "QLineEdit { border: 1px solid #E53935; background: #FFF5F5; "
+            "border-radius: 3px; padding: 3px 6px; }"
+        )
+        anim = QPropertyAnimation(widget, b"pos")
+        anim.setDuration(400)
+        base = widget.pos()
+        anim.setKeyValueAt(0.0, base)
+        anim.setKeyValueAt(0.1, base + QPoint(6, 0))
+        anim.setKeyValueAt(0.2, base + QPoint(-6, 0))
+        anim.setKeyValueAt(0.3, base + QPoint(5, 0))
+        anim.setKeyValueAt(0.4, base + QPoint(-5, 0))
+        anim.setKeyValueAt(0.5, base + QPoint(3, 0))
+        anim.setKeyValueAt(0.6, base + QPoint(-3, 0))
+        anim.setKeyValueAt(0.7, base + QPoint(1, 0))
+        anim.setKeyValueAt(0.8, base + QPoint(-1, 0))
+        anim.setKeyValueAt(1.0, base)
+        anim.start()
+
+    def _clear_error(self, widget: QLineEdit) -> None:
+        widget.setStyleSheet("")
 
     def get_project(self) -> Project:
         stages = tuple(ProjectStage(name=n) for n in BUILTIN_STAGE_NAMES)

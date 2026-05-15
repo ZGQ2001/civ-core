@@ -35,6 +35,12 @@
    断言：QScrollArea 内的 content widget 的 minimumSizeHint().width() ≤ 220，
         无论分组展开/折叠状态如何 —— 通过给 DoubleSpinBox 设 setMinimumWidth(50)
         让控件能压缩到容器宽度。
+
+6. **点「+新建」后看不到填写字段的位置**
+   bug：默认 5 个内容分组（数据源/曲线定义/坐标轴/样式/输出）都是收起态。
+       点"+新建"后只是清空表单 + 改提示文字，但不展开任何分组 → 用户看到的
+       UI 只有提示"请填字段"但下面没有任何字段位置。
+   断言：调用 _on_new_preset() 后，5 个内容分组都应处于 expanded 状态。
 """
 
 from __future__ import annotations
@@ -330,6 +336,50 @@ class TestContentMinSizeNotInflatedBySpinBoxes:
                 assert mw <= 60, (
                     f"{label} SpinBox.minimumWidth={mw} > 60 —— 不能压缩到窄宽，"
                     "splitter 左栏会被撑大"
+                )
+        finally:
+            panel.deleteLater()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Bug 6：点"+新建"后看不到字段位置
+# ──────────────────────────────────────────────────────────────────
+class TestNewPresetExpandsGroups:
+    """点"+新建"按钮后，5 个内容分组都应自动展开，让字段可见。"""
+
+    def test_new_preset_expands_all_content_groups(
+        self, qapp: QApplication, tmp_settings: Path
+    ) -> None:
+        from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        panel = PresetAccordionPanel()
+        try:
+            # 先确保 5 个内容分组都收起（模拟默认初始态 + 用户折叠的情况）
+            for sec_name in (
+                "_sec_data",
+                "_sec_curves",
+                "_sec_axis",
+                "_sec_style",
+                "_sec_out",
+            ):
+                sec = getattr(panel, sec_name)
+                if sec.is_expanded():
+                    sec._toggle()
+            qapp.processEvents()
+            # 触发"+新建"
+            panel._on_new_preset()
+            qapp.processEvents()
+            # 5 个内容分组都应展开
+            for sec_name in (
+                "_sec_data",
+                "_sec_curves",
+                "_sec_axis",
+                "_sec_style",
+                "_sec_out",
+            ):
+                sec = getattr(panel, sec_name)
+                assert sec.is_expanded(), (
+                    f"{sec_name} 在点「+新建」后仍是收起态 —— 用户看不到要填的字段位置"
                 )
         finally:
             panel.deleteLater()

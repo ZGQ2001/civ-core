@@ -1300,6 +1300,20 @@ class PresetAccordionPanel(QWidget):
             self._load_entry_into_form(_EMPTY_PRESET_DATA)
         finally:
             self._suppress = False
+        # bugfix: 默认 5 个内容分组都是收起态，用户点"+新建"看到的只是"清空"
+        # 提示，看不到要填的字段位置。这里自动展开所有内容分组，让"哪儿能填什么"
+        # 一目了然
+        for sec in (
+            self._sec_data,
+            self._sec_curves,
+            self._sec_axis,
+            self._sec_style,
+            self._sec_out,
+        ):
+            if not sec.is_expanded():
+                sec._toggle()
+        # 同时把焦点跳到第一个待填的输入框（Excel 路径），引导用户从"选数据源"开始
+        self._input_path_edit.setFocus()
         self._emit_preset_changed()
 
     def _on_copy_preset(self) -> None:

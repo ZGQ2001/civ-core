@@ -348,9 +348,18 @@ class TestNewPresetExpandsGroups:
     """点"+新建"按钮后，5 个内容分组都应自动展开，让字段可见。"""
 
     def test_new_preset_expands_all_content_groups(
-        self, qapp: QApplication, tmp_settings: Path
+        self, qapp: QApplication, tmp_settings: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from civ_core.ui.components import preset_accordion_panel as pap
         from civ_core.ui.components.preset_accordion_panel import PresetAccordionPanel
+
+        # stub: _on_new_preset 会弹 NameDialog → offscreen 模式卡死；跳过
+        monkeypatch.setattr(
+            pap.PresetAccordionPanel, "_ask_new_name",
+            lambda self, default="": "test_new_expand",
+        )
+        # stub: 避免写真实用户预设目录（注意 pap 是直接 import 函数名，要 patch pap 的引用）
+        monkeypatch.setattr(pap, "save_user_preset", lambda *a, **kw: None)
 
         panel = PresetAccordionPanel()
         try:

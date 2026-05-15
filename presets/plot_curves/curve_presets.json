@@ -1,42 +1,91 @@
 {
-    "_comment": "曲线库。2026-05-14 起：每个 key = 一条独立曲线，出图时多选若干条一起画。坐标轴/样式/输出模板等环境字段不再属于预设，走 QSettings 全局自动保存。",
+    "_comment": "曲线模板库。每个模板描述一个 Excel→PNG 批量绘图任务。新项目要新模板时，复制一个并改字段即可。",
     "_field_doc": {
-        "color/marker/linewidth/markersize": "样式（matplotlib）",
-        "plot_type": "line / scatter / bar / step",
-        "y_axis": "primary（主 Y 轴）/ secondary（次 Y 轴）",
-        "y_err": "误差列名（Excel 列），null = 不画误差棒",
-        "points": "点序列；每点 = {fixed_axis: 'x'|'y', fixed_value: 数, var_column: 'Excel 列名'}"
+        "id_column": "用于命名输出文件的标识列表头（每行 = 一张图）",
+        "filename_template": "输出文件名模板，{id} 会被替换为该行的标识列值",
+        "title_template": "图标题模板，{id} 同上",
+        "x_axis / y_axis": "label=轴标签；range=[min,max,step] 或 null=自动",
+        "curves[].name": "曲线名（图例用）",
+        "curves[].color/marker/linewidth/markersize": "样式，参考 matplotlib",
+        "curves[].points": "点序列。每个点 = {fixed_axis: 'x'|'y', fixed_value: 数, var_column: 'Excel 列名'}",
+        "_说明": "fixed_axis='y' 表示该轴值是固定数值（如载荷 60kN），另一个轴的值从 Excel 读"
     },
-    "加载": {
-        "color": "#1F4FE0",
-        "marker": "s",
-        "linewidth": 2.0,
-        "markersize": 7,
-        "plot_type": "line",
-        "y_axis": "primary",
-        "y_err": null,
-        "points": [
-            { "fixed_axis": "y", "fixed_value": 15, "var_column": "15.0kN (0.1Nd) 位移读数" },
-            { "fixed_axis": "y", "fixed_value": 60, "var_column": "60kN (0.4Nd) 位移读数" },
-            { "fixed_axis": "y", "fixed_value": 105, "var_column": "105.0kN (0.70Nd) 位移读数" },
-            { "fixed_axis": "y", "fixed_value": 150, "var_column": "150.0kN (1.0Nd) 位移读数" },
-            { "fixed_axis": "y", "fixed_value": 180, "var_column": "180.0kN (1.2Nd) 5min 位移读数" }
-        ]
-    },
-    "卸载": {
-        "color": "#E03A3A",
-        "marker": "o",
-        "linewidth": 2.0,
-        "markersize": 7,
-        "plot_type": "line",
-        "y_axis": "primary",
-        "y_err": null,
-        "points": [
-            { "fixed_axis": "y", "fixed_value": 150.0, "var_column": "卸载至 150.0kN 时的最终位移读数" },
-            { "fixed_axis": "y", "fixed_value": 105.0, "var_column": "卸载至 105.0kN 时的最终位移读数" },
-            { "fixed_axis": "y", "fixed_value": 60.0, "var_column": "卸载至 60.0kN 时的最终位移读数" },
-            { "fixed_axis": "y", "fixed_value": 15.0, "var_column": "卸载至 15.0kN 时的最终位移读数" },
-            { "fixed_axis": "y", "fixed_value": 0.0, "var_column": "弹性位移量" }
+    "荷载-位移曲线": {
+        "id_column": "构件编号",
+        "filename_template": "{id}_荷载位移曲线.png",
+        "title_template": "{id}：荷载-位移曲线",
+        "x_axis": {
+            "label": "位移 (mm)",
+            "range": null
+        },
+        "y_axis": {
+            "label": "荷载 (KN)",
+            "range": [
+                0,
+                200,
+                20
+            ]
+        },
+        "curves": [
+            {
+                "name": "加载",
+                "color": "#1F4FE0",
+                "marker": "s",
+                "linewidth": 2.0,
+                "markersize": 7,
+                "points": [
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 15,
+                        "var_column": "15.0kN (0.1Nd) 位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 60,
+                        "var_column": "60kN (0.4Nd) 位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 105,
+                        "var_column": "105.0kN (0.70Nd) 位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 150,
+                        "var_column": "150.0kN (1.0Nd) 位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 180,
+                        "var_column": "180.0kN (1.2Nd) 5min 位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 150.0,
+                        "var_column": "卸载至 150.0kN 时的最终位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 105.0,
+                        "var_column": "卸载至 105.0kN 时的最终位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 60.0,
+                        "var_column": "卸载至 60.0kN 时的最终位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 15.0,
+                        "var_column": "卸载至 15.0kN 时的最终位移读数"
+                    },
+                    {
+                        "fixed_axis": "y",
+                        "fixed_value": 0.0,
+                        "var_column": "弹性位移量"
+                    }
+                ]
+            }
         ]
     }
 }

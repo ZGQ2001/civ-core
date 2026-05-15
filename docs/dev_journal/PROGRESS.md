@@ -6,16 +6,7 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** P1 + P1.5 + P3 前两个工具 + **深浅双主题 + 设置页 + 缩略图视窗 + 左右切图 + hover 实时数据 + VS Code 风格底栏 + 去预设化重构 M-1..M-5（数据层 + UI 兼容层 + core 拼合层）** 已交付（2026-05-14）。**424 测试通过**；ruff 0；healthcheck 9 项全 ✅。
-
-**2026-05-14 去预设化重构进度（M-1 ~ M-5 已交付）：**
-- ✅ **M-1 domain**：`GlobalPlotConfig` frozen-like dataclass 封装环境字段 + `to_preset_overlay_dict(curves)` 兼容层
-- ✅ **M-2 infra_io**：`global_plot_config.py` —— QSettings I/O wrapper（key 前缀 `plot_curves/global/*`），类型容错（bool/int/range/legend）
-- ✅ **M-3 JSON 平铺**：`presets/plot_curves/curve_presets.json` 改为"每个 key = 一条曲线"（"加载"/"卸载"两条 demo）；用户 JSON 重置为 `{}`（旧值备份到 `curve_presets.legacy.bak`）；tests/fixtures 同步
-- ✅ **M-4 UI 兼容**：`PresetAccordionPanel._load_entry_into_form` 检测 dict 形态（含 `curves` 键 → 旧完整预设；否则 → 新单曲线）；新增 `_apply_global_config_to_form` / `_collect_global_config`；构造时从 QSettings 加载环境字段；`_emit_preset_changed` 写盘到 QSettings —— 改环境字段一次 → 自动持久化
-- ✅ **M-5 core 拼合**：`run_plot_curves` 内部检测 `"curves" not in preset` → 从 QSettings 取 cfg + 把单曲线包成 list + `cfg.to_preset_overlay_dict([curve])` → build_jobs 不变签名，下游 chart_writer 完全不动
-
-**剩余（M-6 + 未来）：** 多选 UI（当前仍是单选 ComboBox，需要改 QListWidget 才能"出图含 N 条曲线"）；CLI `--curves "名1,名2"` 多选；删除冗余的"曲线定义"分组（功能合并进"曲线库"）。这些视用户后续反馈再做。
+**当前状态：** P1 + P1.5 + P3 前两个工具 + **深浅双主题 + 设置页 + 缩略图视窗 + 左右切图 + hover 实时数据 + VS Code 风格底栏** 已交付（2026-05-14）。**410 测试通过**；ruff 0；healthcheck 9 项全 ✅。
 
 **2026-05-14 增量交付**：
 

@@ -9,6 +9,17 @@ from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
 from civ_core.core.project_service import ProjectService
 
+# 统一列宽（表头和 Delegate 共用，保证像素级对齐）
+COL_WIDTHS: dict[str, int] = {
+    "status":    24,   # 状态圆点
+    "dot_pad":   10,   # 圆点后留白
+    "number":    72,   # 项目编号
+    "name":      200,  # 项目名称
+    "type":      90,   # 检测类型
+    "amount":    80,   # 金额
+    "date":      90,   # 创建日期 (YYYY-MM-DD)
+    "progress":  84,   # 进度条 + 文字
+}
 
 class ProjectListModel(QAbstractListModel):
     """项目列表数据模型。
@@ -29,6 +40,7 @@ class ProjectListModel(QAbstractListModel):
     InspectionTypeRole = Qt.ItemDataRole.UserRole + 4
     AmountRole = Qt.ItemDataRole.UserRole + 5
     ProgressRole = Qt.ItemDataRole.UserRole + 6
+    DateRole = Qt.ItemDataRole.UserRole + 8
     ProjectObjectRole = Qt.ItemDataRole.UserRole + 7
 
     def __init__(self, service: ProjectService, parent=None):
@@ -72,6 +84,8 @@ class ProjectListModel(QAbstractListModel):
             return proj.amount
         elif role == self.ProgressRole:
             return f"{proj.completed_stage_count}/7"
+        elif role == self.DateRole:
+            return proj.created_at.strftime("%Y-%m-%d") if proj.created_at else ""
         elif role == self.ProjectObjectRole:
             return proj
         return None

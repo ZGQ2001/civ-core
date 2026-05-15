@@ -28,7 +28,7 @@ from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, Project
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
 from civ_core.ui.components.project_delegate import ProjectDelegate
 from civ_core.ui.components.project_drawer import ProjectDrawer
-from civ_core.ui.models.project_list_model import ProjectListModel
+from civ_core.ui.models.project_list_model import COL_WIDTHS, ProjectListModel
 
 
 class NewProjectDialog(MessageBoxBase):
@@ -84,6 +84,11 @@ class NewProjectDialog(MessageBoxBase):
         self.viewLayout.addLayout(self.formLayout)
         self.widget.setMinimumWidth(400)
 
+        # 自动路径推导：编号或名称变化 → 更新文件夹预览
+        self.idLineEdit.textChanged.connect(self._update_auto_path)
+        self.nameLineEdit.textChanged.connect(self._update_auto_path)
+        self._manual_folder = False  # 用户手工选了路径则挂起自动推导
+
         # 拦截确定按钮
         try:
             self.yesButton.clicked.disconnect()
@@ -95,6 +100,27 @@ class NewProjectDialog(MessageBoxBase):
         d = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
         if d:
             self._folder_edit.setText(d)
+            self._manual_folder = True
+
+    def _update_auto_path(self) -> None:
+        if self._manual_folder:
+            return
+        from datetime import date
+
+        from PySide6.QtCore import QSettings
+        settings = QSettings("ZGQ", "CivCore")
+        base = settings.value("projects/default_root_dir") or str(Path.home() / "CivProjects")
+        num = self.idLineEdit.text().strip()
+        name = self.nameLineEdit.text().strip()
+        if num or name:
+            today = date.today().strftime("%Y%m%d")
+            parts = [today]
+            if num:
+                parts.append(num)
+            if name:
+                parts.append(name)
+            auto = str(Path(base) / "_".join(parts))
+            self._folder_edit.setText(auto)
 
     def _validate_and_accept(self) -> None:
         valid = True
@@ -246,16 +272,24 @@ class ProjectBoardView(QWidget):
 
         # 表头
         header_row = QHBoxLayout()
-        header_row.setContentsMargins(14, 0, 0, 0)
+        header_row.setContentsMargins(12, 0, 0, 0)
         header_row.setSpacing(0)
         header_style = "font-size: 11px; font-weight: bold; color: #757575; padding: 4px 0;"
-        for text, width in [("状态", 30), ("编号", 64), ("项目名称", 208), ("类型", 98), ("金额", 88), ("进度", 96)]:
+        col_map = [
+            ("", COL_WIDTHS["status"] + COL_WIDTHS["dot_pad"]),
+            ("编号", COL_WIDTHS["number"]),
+            ("项目名称", COL_WIDTHS["name"]),
+            ("类型", COL_WIDTHS["type"]),
+            ("金额", COL_WIDTHS["amount"]),
+            ("日期", COL_WIDTHS["date"]),
+            ("进度", COL_WIDTHS["progress"]),
+        ]
+        for text, w in col_map:
             lbl = QLabel(text)
-            lbl.setFixedWidth(width)
+            lbl.setFixedWidth(w)
             lbl.setStyleSheet(header_style)
             lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             header_row.addWidget(lbl)
-        header_row.addStretch()
         header_widget = QWidget()
         header_widget.setLayout(header_row)
         header_widget.setFixedHeight(28)

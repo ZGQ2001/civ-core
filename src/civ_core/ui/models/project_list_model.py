@@ -9,7 +9,8 @@ from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
 from civ_core.core.project_service import ProjectService
 
-# 统一列宽（表头和 Delegate 共用，保证像素级对齐）
+# 统一列宽 + 左边距
+LEFT_PADDING = 16
 COL_WIDTHS: dict[str, int] = {
     "status":    24,   # 状态圆点
     "dot_pad":   10,   # 圆点后留白

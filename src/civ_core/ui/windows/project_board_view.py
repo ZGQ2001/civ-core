@@ -28,7 +28,7 @@ from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, Project
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
 from civ_core.ui.components.project_delegate import ProjectDelegate
 from civ_core.ui.components.project_drawer import ProjectDrawer
-from civ_core.ui.models.project_list_model import COL_WIDTHS, ProjectListModel
+from civ_core.ui.models.project_list_model import COL_WIDTHS, LEFT_PADDING, ProjectListModel
 
 
 class NewProjectDialog(MessageBoxBase):
@@ -272,7 +272,7 @@ class ProjectBoardView(QWidget):
 
         # 表头
         header_row = QHBoxLayout()
-        header_row.setContentsMargins(12, 0, 0, 0)
+        header_row.setContentsMargins(LEFT_PADDING, 0, 0, 0)
         header_row.setSpacing(0)
         header_style = "font-size: 11px; font-weight: bold; color: #757575; padding: 4px 0;"
         col_map = [

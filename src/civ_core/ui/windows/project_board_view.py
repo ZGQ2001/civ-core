@@ -112,7 +112,8 @@ class NewProjectDialog(MessageBoxBase):
             "QLineEdit { border: 1px solid #E53935; background: #FFF5F5; "
             "border-radius: 3px; padding: 3px 6px; }"
         )
-        anim = QPropertyAnimation(widget, b"pos")
+        widget.setFocus()
+        anim = QPropertyAnimation(widget, b"pos", widget)
         anim.setDuration(400)
         base = widget.pos()
         anim.setKeyValueAt(0.0, base)
@@ -125,6 +126,7 @@ class NewProjectDialog(MessageBoxBase):
         anim.setKeyValueAt(0.7, base + QPoint(1, 0))
         anim.setKeyValueAt(0.8, base + QPoint(-1, 0))
         anim.setKeyValueAt(1.0, base)
+        setattr(widget, "_shake_anim", anim)
         anim.start()
 
     def _clear_error(self, widget: QLineEdit) -> None:

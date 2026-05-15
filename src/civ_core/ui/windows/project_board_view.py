@@ -326,6 +326,7 @@ class ProjectBoardView(QWidget):
         # 右侧 Drawer
         self._drawer = ProjectDrawer()
         self._drawer.closed = self._on_drawer_closed
+        self._drawer.project_deleted = self._on_project_deleted
         body.addWidget(self._drawer)
 
         layout.addLayout(body, 1)
@@ -385,8 +386,12 @@ class ProjectBoardView(QWidget):
                 self._board_widget.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "创建失败", str(e))
+    def _on_project_deleted(self, _project_id: int) -> None:
+        self._model.refresh()
+        if self._view_stack.currentIndex() == 1:
+            self._board_widget.refresh()
+
     def _on_drawer_closed(self) -> None:
-        """抽屉关闭后刷新视图。"""
         self._model.refresh()
         if self._view_stack.currentIndex() == 1:
             self._board_widget.refresh()

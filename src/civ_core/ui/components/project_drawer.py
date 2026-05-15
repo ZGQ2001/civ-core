@@ -10,6 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -20,10 +21,45 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from qfluentwidgets import LineEdit, MessageBoxBase
 
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import Project, StageStatus
 
+
+class DeleteConfirmDialog(MessageBoxBase):
+
+    def __init__(self, project_number: str, parent=None):
+        super().__init__(parent)
+        self.titleLabel = QLabel("确认删除项目？", self)
+        self.titleLabel.setStyleSheet("font-size: 14px; font-weight: bold; color: #212121;")
+        self._target = project_number
+
+        hint = QLabel(f"此操作不可逆。请在下方输入项目编号 <b>{project_number}</b> 以确认删除。", self)
+        hint.setWordWrap(True)
+        hint.setStyleSheet("font-size: 12px; color: #757575;")
+
+        self._confirm_edit = LineEdit(self)
+        self._confirm_edit.setPlaceholderText(f"输入 {project_number}")
+        self._confirm_edit.setClearButtonEnabled(True)
+        self._confirm_edit.textChanged.connect(self._on_text_changed)
+
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(hint)
+        self.viewLayout.addWidget(self._confirm_edit)
+        self.widget.setMinimumWidth(380)
+
+        self.yesButton.setText("确认删除")
+        self.yesButton.setStyleSheet(
+            "QPushButton { background: #E53935; color: white; border: none; "
+            "border-radius: 4px; padding: 6px 20px; }"
+            "QPushButton:hover { background: #C62828; }"
+            "QPushButton:disabled { background: #EF9A9A; }"
+        )
+        self.yesButton.setEnabled(False)
+
+    def _on_text_changed(self) -> None:
+        self.yesButton.setEnabled(self._confirm_edit.text().strip() == self._target)
 
 class ProjectDrawer(QFrame):
     """右侧滑出抽屉。
@@ -96,7 +132,8 @@ class ProjectDrawer(QFrame):
         self._show_summary_page()
         self._populate_summary()
 
-    closed = None  # callback set by ProjectBoardView
+    closed = None       # callback set by ProjectBoardView
+    project_deleted = None  # callback: (int) -> None
 
     def open(self) -> None:
         if self._project is None:
@@ -174,7 +211,6 @@ class ProjectDrawer(QFrame):
             QMessageBox.warning(self, "更新失败", str(e))
 
     def _on_bind_folder(self) -> None:
-        from PySide6.QtWidgets import QFileDialog
         d = QFileDialog.getExistingDirectory(self, "选择项目文件夹", self._edit_folder.text())
         if d:
             self._edit_folder.setText(d)
@@ -248,6 +284,15 @@ class ProjectDrawer(QFrame):
         btn_folder.clicked.connect(self._on_open_folder)
         layout.addWidget(btn_folder)
 
+        btn_delete = QPushButton("删除项目")
+        btn_delete.setStyleSheet(
+            "QPushButton { background: transparent; color: #E53935; border: 1px solid #E53935; "
+            "border-radius: 4px; padding: 8px; font-size: 12px; }"
+            "QPushButton:hover { background: #FFEBEE; }"
+        )
+        btn_delete.clicked.connect(self._on_delete)
+        layout.addWidget(btn_delete)
+
         return page
 
     @staticmethod
@@ -307,6 +352,18 @@ class ProjectDrawer(QFrame):
             btn.clicked.connect(lambda checked, pid=p.project_id, sn=stage.name, ss=stage.status: self._toggle_stage(pid, sn, ss))
             row.addWidget(btn, 1)
             self._stages_layout.addLayout(row)
+
+    def _on_delete(self) -> None:
+        if self._project is None or self._service is None:
+            return
+        dlg = DeleteConfirmDialog(self._project.project_number, self.window())
+        if not dlg.exec():
+            return
+        self._service.delete_project(self._project.project_id)
+        pid = self._project.project_id
+        self.close()
+        if self.project_deleted is not None:
+            self.project_deleted(pid)
 
     def _on_open_folder(self) -> None:
         if self._project is None:

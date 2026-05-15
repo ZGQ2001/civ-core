@@ -179,3 +179,76 @@ class PlotRunSettings:
             self.output_dir = Path(self.output_dir)
         if self.header_row < 1:
             raise ValueError(f"PlotRunSettings.header_row 必须 >= 1，得到 {self.header_row}")
+
+
+# ──────────────────────────────────────────────────────────────────
+# 全局绘图配置（2026-05-14 去预设化重构）
+# ──────────────────────────────────────────────────────────────────
+# 设计：用户原话"预设=曲线列表"。把原来打包在预设里的"环境字段"（坐标轴 /
+# 样式 / 输出模板）拆出来作为全局唯一项，走 QSettings 自动保存。预设 JSON
+# 收窄到仅含"曲线"（一个 key = 一条曲线，平铺）。
+@dataclass
+class GlobalPlotConfig:
+    """全局绘图环境（与预设解耦，QSettings 自动保存）。
+
+    与 build_jobs 内部用的旧 preset dict 字段一一对应；UI 改造期间用一个
+    `to_preset_overlay_dict()` 助手把本对象 + curves[] 拼成"build_jobs 兼容"
+    的临时 dict，让 core 模块的 build_jobs 签名可以保持不动。
+    """
+
+    # 输出模板
+    id_column: str = "编号"
+    filename_template: str = "{id}.png"
+    title_template: str = "{id}"
+    dpi: int = 150
+    # 坐标轴
+    x_label: str = "X"
+    y_label: str = "Y"
+    x_range: tuple[float, float, float] | None = None
+    y_range: tuple[float, float, float] | None = None
+    x_log: bool = False
+    y_log: bool = False
+    # 次 Y 轴（双 Y 对比）
+    y2_enabled: bool = False
+    y2_label: str = ""
+    y2_range: tuple[float, float, float] | None = None
+    y2_log: bool = False
+    # 样式
+    grid: bool = True
+    legend_loc: str | None = None  # None = 不显示图例
+
+    def to_preset_overlay_dict(self, curves: list[dict]) -> dict:
+        """把本对象 + curves 列表拼成"build_jobs 兼容"的 dict。
+
+        作用：让 core/plot_curves.build_jobs 的现有签名（接 preset dict + rows）
+        在去预设化重构后仍然可用 —— 上游构造一个临时的"伪 preset"喂进去即可。
+        """
+        return {
+            "id_column": self.id_column,
+            "filename_template": self.filename_template,
+            "title_template": self.title_template,
+            "x_axis": {
+                "label": self.x_label,
+                "range": list(self.x_range) if self.x_range is not None else None,
+                "log": self.x_log,
+            },
+            "y_axis": {
+                "label": self.y_label,
+                "range": list(self.y_range) if self.y_range is not None else None,
+                "log": self.y_log,
+            },
+            "y_axis2": (
+                {
+                    "label": self.y2_label,
+                    "range": list(self.y2_range) if self.y2_range is not None else None,
+                    "log": self.y2_log,
+                }
+                if self.y2_enabled
+                else None
+            ),
+            "style": {
+                "grid": self.grid,
+                "legend": self.legend_loc,
+            },
+            "curves": curves,
+        }

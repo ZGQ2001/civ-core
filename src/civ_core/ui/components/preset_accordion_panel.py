@@ -69,11 +69,15 @@ from qfluentwidgets import (
     SubtitleLabel,
 )
 
-from civ_core.domain.schema import PlotRunSettings
+from civ_core.domain.schema import GlobalPlotConfig, PlotRunSettings
 from civ_core.infra_io.excel_reader import (
     ExcelReadError,
     get_column_headers,
     read_sheet_names,
+)
+from civ_core.infra_io.global_plot_config import (
+    load_global_plot_config,
+    save_global_plot_config,
 )
 from civ_core.infra_io.preset_manager import (
     PresetEntry,
@@ -520,6 +524,14 @@ class PresetAccordionPanel(QWidget):
         self._sheet_name: str | None = None
 
         self._build_layout()
+        # 启动时从 QSettings 加载环境字段（去预设化：环境字段不再属于预设）。
+        # 必须在 _build_layout 之后（控件已建）+ refresh 之前（避免被 refresh
+        # 触发的 _load_entry_into_form 覆盖）。包 _suppress 防回路写 QSettings
+        self._suppress = True
+        try:
+            self._apply_global_config_to_form(load_global_plot_config())
+        finally:
+            self._suppress = False
         self.refresh()
 
     # ── 顶层布局：QScrollArea 包内容容器 ─────────────────────────
@@ -923,6 +935,13 @@ class PresetAccordionPanel(QWidget):
     def _emit_preset_changed(self) -> None:
         if self._suppress:
             return
+        # 去预设化：环境字段（坐标轴/样式/输出/dpi）→ 立即 save 到 QSettings；
+        # 切预设时不会触发本 emit（_suppress 拦截），所以这里写盘只发生在用户
+        # 真正改 UI 字段的时候
+        try:
+            save_global_plot_config(self._collect_global_config())
+        except Exception as e:  # noqa: BLE001 —— 写盘失败不能阻断 emit
+            log.warning("写 QSettings 全局绘图配置失败：%s", e)
         self.preset_changed.emit(self.current_preset_data())
         self.request_redraw_signal.emit()
 
@@ -1107,43 +1126,120 @@ class PresetAccordionPanel(QWidget):
         self.request_redraw_signal.emit()
 
     def _load_entry_into_form(self, data: dict[str, Any]) -> None:
+        """加载预设数据到 UI 字段。
+
+        支持两种 data 形态（去预设化重构期）：
+          • **新格式（单条曲线）**：含 "color"/"marker"/"points" 等字段，**不含**
+            "curves" 键。环境字段不被这种 data 触动（保留当前 QSettings 全局
+            配置在 UI 上的值）；curves[] 用 [data] 喂 CurvesEditor。
+          • **旧格式（完整预设）**：含 "curves" 键。整套环境字段 + 曲线列表
+            从 data 还原 —— 用于 PresetUndoController（撤销/重做完整 preset
+            快照）。这条路径保留向后兼容。
+        """
         self._suppress = True
         try:
-            self._id_column_edit.setText(str(data.get("id_column", "")))
-            self._fname_edit.setText(str(data.get("filename_template", "")))
-            self._title_edit.setText(str(data.get("title_template", "")))
+            if "curves" in data:
+                # 旧格式：完整预设 dict（Undo 用）
+                self._id_column_edit.setText(str(data.get("id_column", "")))
+                self._fname_edit.setText(str(data.get("filename_template", "")))
+                self._title_edit.setText(str(data.get("title_template", "")))
 
-            xa = data.get("x_axis") or {}
-            ya = data.get("y_axis") or {}
-            self._x_label_edit.setText(str(xa.get("label", "")))
-            self._y_label_edit.setText(str(ya.get("label", "")))
-            self._x_range.set_range(xa.get("range"))
-            self._y_range.set_range(ya.get("range"))
-            self._x_log_chk.setChecked(bool(xa.get("log", False)))
-            self._y_log_chk.setChecked(bool(ya.get("log", False)))
+                xa = data.get("x_axis") or {}
+                ya = data.get("y_axis") or {}
+                self._x_label_edit.setText(str(xa.get("label", "")))
+                self._y_label_edit.setText(str(ya.get("label", "")))
+                self._x_range.set_range(xa.get("range"))
+                self._y_range.set_range(ya.get("range"))
+                self._x_log_chk.setChecked(bool(xa.get("log", False)))
+                self._y_log_chk.setChecked(bool(ya.get("log", False)))
 
-            # P1.5-④ 次 Y 轴：data.y_axis2 为 None / 缺失 → 关闭
-            y2 = data.get("y_axis2")
-            y2_enabled = isinstance(y2, dict)
-            self._y2_enable_chk.setChecked(y2_enabled)
-            self._y2_fields_widget.setVisible(y2_enabled)
-            if y2_enabled and isinstance(y2, dict):
-                self._y2_label_edit.setText(str(y2.get("label", "")))
-                self._y2_range.set_range(y2.get("range"))
-                self._y2_log_chk.setChecked(bool(y2.get("log", False)))
+                # P1.5-④ 次 Y 轴：data.y_axis2 为 None / 缺失 → 关闭
+                y2 = data.get("y_axis2")
+                y2_enabled = isinstance(y2, dict)
+                self._y2_enable_chk.setChecked(y2_enabled)
+                self._y2_fields_widget.setVisible(y2_enabled)
+                if y2_enabled and isinstance(y2, dict):
+                    self._y2_label_edit.setText(str(y2.get("label", "")))
+                    self._y2_range.set_range(y2.get("range"))
+                    self._y2_log_chk.setChecked(bool(y2.get("log", False)))
+                else:
+                    self._y2_label_edit.setText("")
+                    self._y2_range.set_range(None)
+                    self._y2_log_chk.setChecked(False)
+
+                style = data.get("style") or {}
+                self._show_grid_chk.setChecked(bool(style.get("grid", True)))
+                legend_loc = style.get("legend")
+                self._legend_combo.setCurrentText(legend_loc if legend_loc else "关闭")
+
+                self._curves_editor.set_curves(data.get("curves") or [])
             else:
-                self._y2_label_edit.setText("")
-                self._y2_range.set_range(None)
-                self._y2_log_chk.setChecked(False)
-
-            style = data.get("style") or {}
-            self._show_grid_chk.setChecked(bool(style.get("grid", True)))
-            legend_loc = style.get("legend")
-            self._legend_combo.setCurrentText(legend_loc if legend_loc else "关闭")
-
-            self._curves_editor.set_curves(data.get("curves") or [])
+                # 新格式：单条曲线 dict。环境字段保持当前 UI 值（来自 QSettings），
+                # 不被切预设触动。把单曲线包成 list 喂 CurvesEditor。
+                single = dict(data)
+                if "name" not in single:
+                    single["name"] = self._current_preset_name or "未命名曲线"
+                self._curves_editor.set_curves([single])
         finally:
             self._suppress = False
+
+    def _apply_global_config_to_form(self, cfg: GlobalPlotConfig) -> None:
+        """把 GlobalPlotConfig 字段铺到 UI 控件。
+
+        启动时从 QSettings 读回上次值用。在 _suppress 区间内调用，避免
+        触发回写 QSettings 形成回路。
+        """
+        self._id_column_edit.setText(cfg.id_column)
+        self._fname_edit.setText(cfg.filename_template)
+        self._title_edit.setText(cfg.title_template)
+        self._x_label_edit.setText(cfg.x_label)
+        self._y_label_edit.setText(cfg.y_label)
+        self._x_range.set_range(list(cfg.x_range) if cfg.x_range is not None else None)
+        self._y_range.set_range(list(cfg.y_range) if cfg.y_range is not None else None)
+        self._x_log_chk.setChecked(cfg.x_log)
+        self._y_log_chk.setChecked(cfg.y_log)
+        self._y2_enable_chk.setChecked(cfg.y2_enabled)
+        self._y2_fields_widget.setVisible(cfg.y2_enabled)
+        self._y2_label_edit.setText(cfg.y2_label)
+        self._y2_range.set_range(list(cfg.y2_range) if cfg.y2_range is not None else None)
+        self._y2_log_chk.setChecked(cfg.y2_log)
+        self._show_grid_chk.setChecked(cfg.grid)
+        self._legend_combo.setCurrentText(cfg.legend_loc if cfg.legend_loc else "关闭")
+        try:
+            self._dpi_row.setValue(float(cfg.dpi))
+        except (AttributeError, ValueError):
+            # _dpi_row 可能在某些测试构造路径下不存在 / 值范围外，兜底忽略
+            pass
+
+    def _collect_global_config(self) -> GlobalPlotConfig:
+        """从 UI 字段读取当前全局配置（用于 QSettings 写盘）。"""
+        legend_text = self._legend_combo.currentText()
+        legend_loc = None if legend_text == "关闭" else legend_text
+        x_r = self._x_range.get_range()
+        y_r = self._y_range.get_range()
+        y2_r = self._y2_range.get_range()
+        try:
+            dpi_v = int(self._dpi_row.value())
+        except (AttributeError, ValueError):
+            dpi_v = 150
+        return GlobalPlotConfig(
+            id_column=self._id_column_edit.text().strip(),
+            filename_template=self._fname_edit.text(),
+            title_template=self._title_edit.text(),
+            dpi=dpi_v,
+            x_label=self._x_label_edit.text(),
+            y_label=self._y_label_edit.text(),
+            x_range=(x_r[0], x_r[1], x_r[2]) if x_r is not None else None,
+            y_range=(y_r[0], y_r[1], y_r[2]) if y_r is not None else None,
+            x_log=self._x_log_chk.isChecked(),
+            y_log=self._y_log_chk.isChecked(),
+            y2_enabled=self._y2_enable_chk.isChecked(),
+            y2_label=self._y2_label_edit.text(),
+            y2_range=(y2_r[0], y2_r[1], y2_r[2]) if y2_r is not None else None,
+            y2_log=self._y2_log_chk.isChecked(),
+            grid=self._show_grid_chk.isChecked(),
+            legend_loc=legend_loc,
+        )
 
     def apply_preset_data(self, data: dict[str, Any]) -> None:
         """对外公共版的 _load_entry_into_form。

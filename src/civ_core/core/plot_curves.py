@@ -470,6 +470,19 @@ def run_plot_curves(
         preset = presets[preset_name]
         log.info("   ↳ 选用预设: %s", preset_name)
 
+        # 去预设化兼容层（2026-05-14）：新格式下 presets[name] 是单条曲线
+        # dict（含 color/marker/points 等），不含 "curves" / 环境字段；旧格式
+        # 则是完整预设 dict（含 curves[] + x_axis 等）。这里检测格式：新格式
+        # 时从 QSettings 加载全局环境配置 + 把单曲线包成 list → 拼成 build_jobs
+        # 兼容的"伪预设"dict，让下游 build_jobs 签名不变
+        if "curves" not in preset:
+            from civ_core.infra_io.global_plot_config import load_global_plot_config
+
+            curve = dict(preset)
+            curve.setdefault("name", preset_name)
+            preset = load_global_plot_config().to_preset_overlay_dict([curve])
+            log.info("   ↳ 新格式：已套用 QSettings 全局环境配置")
+
         log.info("📊 读取 Excel: %s  Sheet: %s", excel, sheet_name or "<默认第一个>")
         rows = read_rows(excel, sheet_name, header_row=header_row)
         log.info("   ↳ 共 %d 行数据", len(rows))

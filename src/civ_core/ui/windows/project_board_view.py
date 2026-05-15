@@ -292,39 +292,13 @@ class ProjectBoardView(QWidget):
             self._drawer.open()
 
     def _on_new_project(self) -> None:
-        """简化版新建对话框。"""
-        msg = QMessageBox(self)
-        msg.setWindowTitle("新建项目")
-        msg.setText("输入项目编号：")
-        # 简陋实现：用一个 QInputDialog 代替
-        from PySide6.QtWidgets import QInputDialog
-        number, ok = QInputDialog.getText(
-            self, "新建项目", "项目编号（如 P2024001）："
-        )
-        if not ok or not number.strip():
+        dlg = NewProjectDialog(self.window())
+        if not dlg.exec():
             return
-        name, ok = QInputDialog.getText(self, "新建项目", "项目名称：")
-        if not ok or not name.strip():
+        proj = dlg.get_project()
+        if not proj.project_number or not proj.name:
+            QMessageBox.warning(self, "创建失败", "项目编号和名称不能为空")
             return
-        client, ok = QInputDialog.getText(self, "新建项目", "委托方：")
-        if not ok:
-            return
-        itype, ok = QInputDialog.getText(self, "新建项目", "检测类型：")
-        if not ok:
-            return
-        amount_str, ok = QInputDialog.getText(self, "新建项目", "项目金额：")
-        amount = float(amount_str) if ok and amount_str else 0.0
-
-        from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, ProjectStage
-        stages = tuple(ProjectStage(name=n) for n in BUILTIN_STAGE_NAMES)
-        proj = Project(
-            project_number=number.strip(),
-            name=name.strip(),
-            client=client.strip() if client else "",
-            inspection_type=itype.strip() if itype else "",
-            amount=amount,
-            stages=stages,
-        )
         try:
             self._service.create_project(proj, create_folder=False)
             self._model.refresh()
@@ -332,7 +306,6 @@ class ProjectBoardView(QWidget):
                 self._board_widget.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "创建失败", str(e))
-
     def _on_drawer_closed(self) -> None:
         """抽屉关闭后刷新视图。"""
         self._model.refresh()

@@ -82,6 +82,7 @@ from civ_core.infra_io.preset_manager import (
     copy_system_to_user,
     delete_user_preset,
     load_merged_presets,
+    rename_user_preset,
     save_user_preset,
 )
 from civ_core.ui.components.curves_editor import CurvesEditor
@@ -609,17 +610,29 @@ class PresetAccordionPanel(QWidget):
         _compactify_widget(self._preset_status, 0)
         layout.addWidget(self._preset_status)
 
-        # 按钮分两行：第一行 新建/复制/删除；第二行 主操作保存
+        # 按钮分两行：第一行 新建/复制/重命名/删除；第二行 主操作保存
+        # 注意：4 个按钮的默认 minSizeHint 累计 ≈ 280+px，会把整个左栏 content
+        # 的 minimumSizeHint.width 撑到 splitter 默认宽度（280）以上 → 触发
+        # T1 类型的"按钮拉伸/字位移"。这里给每个按钮做 compactify，让它们能
+        # 压缩到 40px/个，行宽极限 ≈ 4*40+spacing ≈ 175，回到 <220 安全区。
         btn_row = QHBoxLayout()
         btn_row.setSpacing(4)
         self._btn_new = PushButton("+新建", self)
         self._btn_new.clicked.connect(self._on_new_preset)
+        _compactify_widget(self._btn_new, 40)
         btn_row.addWidget(self._btn_new)
         self._btn_copy = PushButton("复制", self)
         self._btn_copy.clicked.connect(self._on_copy_preset)
+        _compactify_widget(self._btn_copy, 40)
         btn_row.addWidget(self._btn_copy)
+        # 重命名：只对「我的」预设可用，系统预设里用户应先复制为「我的」再改名
+        self._btn_rename = PushButton("重命名", self)
+        self._btn_rename.clicked.connect(self._on_rename_preset)
+        _compactify_widget(self._btn_rename, 40)
+        btn_row.addWidget(self._btn_rename)
         self._btn_del = PushButton("删除", self)
         self._btn_del.clicked.connect(self._on_delete_preset)
+        _compactify_widget(self._btn_del, 40)
         btn_row.addWidget(self._btn_del)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
@@ -1291,15 +1304,42 @@ class PresetAccordionPanel(QWidget):
 
     # ── 预设按钮 ─────────────────────────────────────────────────
     def _on_new_preset(self) -> None:
-        log.info("新建预设：清空表单")
-        self._suppress = True
+        # 新行为（2026-05-15）：点击「+新建」立刻弹名称对话框，让用户先确定
+        # 新预设的名字。旧行为是只清空表单、不弹窗，名字留到"保存"时再问，
+        # 用户反映"看不出在新建什么"。
+        new_name = self._ask_new_name(default="新预设")
+        if not new_name:
+            log.info("新建预设：用户取消")
+            return
+
+        # 名字冲突：与已存在的「用户」预设撞名 → 拒绝（避免误覆盖）。
+        # 与「系统」预设撞名是允许的——等同于"我要做一个覆盖系统预设的同名版本"，
+        # 和 copy_system_to_user 的语义保持一致。
+        user_names = {e.name for e in self._entries if e.source is PresetSource.USER}
+        if new_name in user_names:
+            MessageBox(
+                "名称重复",
+                f"「我的」预设里已经有「{new_name}」，请换个名字。\n"
+                "（如果想替换那条，请直接选中它编辑后保存。）",
+                self.window(),
+            ).exec()
+            return
+
+        # 先把"空预设"原子落盘，让它立刻出现在下拉框里 + 可被随后的保存/重命名
+        # /删除直接命中。这样即使用户没点"保存"就退出，名字也已经持久化，符合
+        # "我刚新建了一个叫 XX 的预设"的直观心智。
         try:
-            self._current_preset_name = None
-            self._preset_combo.setCurrentIndex(-1)
-            self._preset_status.setText("新建预设（请填字段并点「保存为我的预设」）")
-            self._load_entry_into_form(_EMPTY_PRESET_DATA)
-        finally:
-            self._suppress = False
+            save_user_preset(new_name, _EMPTY_PRESET_DATA, tool="plot_curves")
+        except PresetError as e:
+            log.error("新建预设失败：%s", e)
+            MessageBox("新建失败", str(e), self.window()).exec()
+            return
+        log.info("新建预设：已落盘空预设 %r", new_name)
+
+        # 刷新列表并选中新建项；这一步会触发 _load_current_combo_entry，
+        # 把表单切到"新预设"对应的空字段
+        self.refresh(select_name=new_name)
+
         # bugfix: 默认 5 个内容分组都是收起态，用户点"+新建"看到的只是"清空"
         # 提示，看不到要填的字段位置。这里自动展开所有内容分组，让"哪儿能填什么"
         # 一目了然
@@ -1314,7 +1354,6 @@ class PresetAccordionPanel(QWidget):
                 sec._toggle()
         # 同时把焦点跳到第一个待填的输入框（Excel 路径），引导用户从"选数据源"开始
         self._input_path_edit.setFocus()
-        self._emit_preset_changed()
 
     def _on_copy_preset(self) -> None:
         src = self._current_preset_name
@@ -1329,6 +1368,53 @@ class PresetAccordionPanel(QWidget):
             log.error("复制预设失败：%s", e)
             MessageBox("复制失败", str(e), self.window()).exec()
             return
+        self.refresh(select_name=new_name)
+
+    def _on_rename_preset(self) -> None:
+        # 重命名只对「我的」预设可用。系统预设要改名必须先复制为我的，
+        # 这与 preset_manager.rename_user_preset 的限制保持一致。
+        name = self._current_preset_name
+        if not name:
+            return
+        entry = next((e for e in self._entries if e.name == name), None)
+        if entry is None:
+            return
+        if entry.source is PresetSource.SYSTEM:
+            MessageBox(
+                "无法重命名",
+                f"「{name}」是系统预设，不能直接改名。\n"
+                "如果想给它换个名字，请先点「复制」做一份「我的」预设，再对副本重命名。",
+                self.window(),
+            ).exec()
+            return
+
+        new_name = self._ask_new_name(default=name)
+        if not new_name:
+            return
+        if new_name == name:
+            # 同名等于没改，提示一下避免用户疑惑"我点了确定但没动静"
+            return
+
+        # 冲突检查：和已存在的「我的」预设撞名（且不是自己）→ 拒绝
+        user_names = {
+            e.name for e in self._entries if e.source is PresetSource.USER and e.name != name
+        }
+        if new_name in user_names:
+            MessageBox(
+                "名称重复",
+                f"「我的」预设里已经有「{new_name}」，请换个名字。\n"
+                "（重命名不会合并两条预设；如要替换那条请先删除它。）",
+                self.window(),
+            ).exec()
+            return
+
+        try:
+            rename_user_preset(name, new_name, tool="plot_curves")
+        except PresetError as e:
+            log.error("重命名预设失败：%s", e)
+            MessageBox("重命名失败", str(e), self.window()).exec()
+            return
+        log.info("重命名预设：%r → %r", name, new_name)
         self.refresh(select_name=new_name)
 
     def _on_delete_preset(self) -> None:

@@ -422,3 +422,68 @@ def copy_system_to_user(
         new_name,
         tool,
     )
+
+
+def rename_user_preset(
+    old_name: str,
+    new_name: str,
+    *,
+    tool: str = "plot_curves",
+) -> None:
+    """重命名一条用户预设，原位（保留在 dict 里原有的顺序位置）。
+
+    语义：
+      • 只能重命名「用户」预设；系统预设不可改名（要改名请先 copy_system_to_user
+        到一个新名，再删原"系统覆盖项"）
+      • old_name 不在用户文件里 → PresetError（"找不到要重命名的"）
+      • new_name 与 old_name 相同 → 视为 no-op，直接返回
+      • new_name 已经在用户文件里（且不是 old_name 本身）→ PresetError（防误覆盖）
+      • new_name 与系统预设同名 → 允许（与 copy_system_to_user 一致：用户主动覆盖系统预设）
+
+    为什么要原位重建 dict 而不是 pop+赋值：
+      • pop 后再赋值会把新 key 排到末尾，UI 的 ComboBox 顺序会跳，对用户视觉体验差
+      • 这里手动遍历重建一份新 dict，保留原始插入位置
+    """
+    if not new_name or new_name.startswith("_"):
+        raise PresetError(
+            f"非法新预设名：{new_name!r}",
+            hint="预设名不能为空，也不能以下划线开头（保留给注释 key）",
+        )
+
+    if new_name == old_name:
+        # 同名重命名：不改任何东西，直接返回，避免没必要的写盘
+        log.info("rename_user_preset: 新旧同名 %r，no-op", new_name)
+        return
+
+    path = get_user_presets_path(tool)
+    raw = _read_json_lenient(path)
+    if old_name not in raw:
+        raise PresetError(
+            f"用户预设里找不到要重命名的 {old_name!r}",
+            hint=(
+                "可能的原因：(1) 这是系统预设，系统预设不可改名（请改用复制）；"
+                "(2) 名字拼错；(3) 用户文件已被外部改动。"
+            ),
+        )
+    if new_name in raw:
+        # 注意：上面已经处理过 new_name == old_name 的情况，这里能命中说明
+        # new_name 是另一条已存在的用户预设
+        raise PresetError(
+            f"用户预设里已经有 {new_name!r}，请换个名字",
+            hint="重命名不会合并两条预设；如果想替换那条，请先删除它再重命名。",
+        )
+
+    # 原位重建：保留 old_name 的位置，只把 key 换成 new_name
+    new_raw: dict[str, Any] = {}
+    for k, v in raw.items():
+        if k == old_name:
+            new_raw[new_name] = v
+        else:
+            new_raw[k] = v
+    _write_user_raw(path, new_raw)
+    log.info(
+        "rename_user_preset: %r → %r tool=%r",
+        old_name,
+        new_name,
+        tool,
+    )

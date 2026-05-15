@@ -623,3 +623,112 @@ class TestWriteAPIs:
 
         sys_raw = json.loads(sys_file.read_text(encoding="utf-8"))
         assert sys_raw["锚杆"]["x_axis"]["label"] == "位移"
+
+    # ── rename_user_preset ───────────────────────────────────────
+    def test_rename_user_preset_happy_path(self, patched_paths: tuple[Path, Path]) -> None:
+        """正常重命名：旧 key 移除，新 key 出现，data 不变。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"我的A": {"v": 1}, "我的B": {"v": 2}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        preset_manager.rename_user_preset("我的A", "我的A2")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert "我的A" not in raw
+        assert "我的A2" in raw
+        assert raw["我的A2"] == {"v": 1}
+
+    def test_rename_preserves_dict_order(self, patched_paths: tuple[Path, Path]) -> None:
+        """重命名应保留原位置（不把新 key 排到末尾）。
+
+        UI 的 ComboBox 严格按 dict 顺序展示，如果 rename 把项目跳到末尾会
+        让用户看到列表"跳"了，体验差。
+        """
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps(
+                {"A": {"v": 1}, "B": {"v": 2}, "C": {"v": 3}},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        preset_manager.rename_user_preset("B", "B2")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        # Python 3.7+ dict 保证插入序；json.loads 也保留同样顺序
+        assert list(raw.keys()) == ["A", "B2", "C"]
+
+    def test_rename_missing_old_name_raises(self, patched_paths: tuple[Path, Path]) -> None:
+        """old_name 不在用户文件里（含系统预设场景）→ PresetError。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
+
+        # "锚杆" 是系统预设，不在用户文件里 → 拒绝
+        with pytest.raises(PresetError) as ei:
+            preset_manager.rename_user_preset("锚杆", "锚杆2")
+        assert "找不到" in str(ei.value)
+
+    def test_rename_to_existing_user_name_raises(self, patched_paths: tuple[Path, Path]) -> None:
+        """new_name 已是另一条用户预设 → 拒绝，防误覆盖。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(
+            json.dumps({"我的A": {"v": 1}, "我的B": {"v": 2}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(PresetError) as ei:
+            preset_manager.rename_user_preset("我的A", "我的B")
+        assert "已经有" in str(ei.value)
+
+    def test_rename_same_name_is_noop(self, patched_paths: tuple[Path, Path]) -> None:
+        """new_name == old_name → 静默 no-op，不报错也不改文件。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        original = json.dumps({"我的A": {"v": 1}}, ensure_ascii=False)
+        user_file.write_text(original, encoding="utf-8")
+        mtime_before = user_file.stat().st_mtime_ns
+
+        preset_manager.rename_user_preset("我的A", "我的A")
+
+        # 文件内容和 mtime 都不变（确认根本没走写盘路径）
+        assert user_file.read_text(encoding="utf-8") == original
+        assert user_file.stat().st_mtime_ns == mtime_before
+
+    def test_rename_rejects_empty_new_name(self, patched_paths: tuple[Path, Path]) -> None:
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
+        with pytest.raises(PresetError):
+            preset_manager.rename_user_preset("我的A", "")
+
+    def test_rename_rejects_underscore_new_name(self, patched_paths: tuple[Path, Path]) -> None:
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
+        with pytest.raises(PresetError):
+            preset_manager.rename_user_preset("我的A", "_注释")
+
+    def test_rename_to_system_name_allowed(self, patched_paths: tuple[Path, Path]) -> None:
+        """new_name 与系统预设同名是允许的——等同于"用户主动覆盖系统预设"。"""
+        _, user_file = patched_paths
+        user_file.parent.mkdir(parents=True)
+        user_file.write_text(json.dumps({"我的A": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
+
+        # "锚杆" 在系统里、不在用户文件里 → 允许重命名为这个名字
+        preset_manager.rename_user_preset("我的A", "锚杆")
+
+        raw = json.loads(user_file.read_text(encoding="utf-8"))
+        assert "锚杆" in raw
+        assert raw["锚杆"] == {"v": 1}
+
+    def test_rename_when_user_file_missing(self, patched_paths: tuple[Path, Path]) -> None:
+        """用户文件根本不存在 → 抛 PresetError（按"找不到"处理）。"""
+        with pytest.raises(PresetError):
+            preset_manager.rename_user_preset("任何", "新名")

@@ -31,7 +31,7 @@ class _BoardColumn(QWidget):
 
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet(
-            "font-size: 11px; font-weight: bold; color: #424242; padding: 4px 0;"
+            "font-size: 13px; font-weight: bold; color: #424242; padding: 4px 0;"
         )
         layout.addWidget(self.title_label)
 
@@ -142,17 +142,17 @@ class ProjectBoardWidget(QWidget):
 
         # 编号 + 名称
         number = QLabel(proj.project_number)
-        number.setStyleSheet("color: #757575; font-size: 8px; border: none;")
+        number.setStyleSheet("color: #757575; font-size: 11px; border: none;")
         layout.addWidget(number)
 
         name = QLabel(proj.name)
         name.setWordWrap(True)
-        name.setStyleSheet("color: #212121; font-size: 10px; font-weight: bold; border: none;")
+        name.setStyleSheet("color: #212121; font-size: 12px; font-weight: bold; border: none;")
         layout.addWidget(name)
 
         # 类型 + 金额
         info = QLabel(f"{proj.inspection_type}  ·  ¥{proj.amount:,.0f}")
-        info.setStyleSheet("color: #757575; font-size: 8px; border: none;")
+        info.setStyleSheet("color: #757575; font-size: 11px; border: none;")
         layout.addWidget(info)
 
         return card

@@ -27,7 +27,7 @@ _COLOR_BAR = QColor("#1976D2")              # 左侧色条
 class ProjectDelegate(QStyledItemDelegate):
     """项目列表行委托：40px 行高，Linear 极简风格。"""
 
-    _ROW_HEIGHT = 40
+    _ROW_HEIGHT = 44
 
     def row_height(self) -> int:
         return self._ROW_HEIGHT
@@ -80,7 +80,7 @@ class ProjectDelegate(QStyledItemDelegate):
         # ── 编号 ────────────────────────────────────────────────
         number = index.data(ProjectListModel.ProjectNumberRole) or ""
         font_small = QFont(painter.font())
-        font_small.setPointSize(8)
+        font_small.setPointSize(10)
         painter.setFont(font_small)
         painter.setPen(_COLOR_TEXT_SECONDARY)
         num_rect = QRect(x, option.rect.top(), 60, option.rect.height())
@@ -90,7 +90,7 @@ class ProjectDelegate(QStyledItemDelegate):
         # ── 名称 ────────────────────────────────────────────────
         name = index.data(ProjectListModel.NameRole) or ""
         font_name = QFont(painter.font())
-        font_name.setPointSize(9)
+        font_name.setPointSize(11)
         font_name.setBold(True)
         painter.setFont(font_name)
         painter.setPen(_COLOR_TEXT_PRIMARY)

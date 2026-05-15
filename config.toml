@@ -60,3 +60,8 @@ log_panel_lines = 5000              # 日志面板最大保留行数
 [dev]
 enabled = false
 user_presets_dir = "tests/fixtures/presets"
+
+# ── 项目管理 ─────────────────────────────────────────────────────
+[projects]
+db_path = "~/.civ-core/projects.db"                               # 项目数据库位置
+default_root_dir = ""                                             # 新建项目默认文件夹根目录（空=每次询问）

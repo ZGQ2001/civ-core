@@ -101,6 +101,9 @@ class ProjectDrawer(QFrame):
 
     def close(self) -> None:
         self._animate_to(0)
+        # 动画结束后重置 fixedWidth，让主视图恢复全宽
+        if self._animation is not None:
+            self._animation.finished.connect(lambda: self.setFixedWidth(0))
 
     # ════════════════════════════════════════════════════════════
     # 内部
@@ -120,6 +123,24 @@ class ProjectDrawer(QFrame):
 
     def _show_summary_page(self) -> None:
         self._stack.setCurrentIndex(0)
+
+    def _toggle_stage(self, project_id: int, stage_name: str, current_status: StageStatus) -> None:
+        """点击阶段按钮：循环切换状态。"""
+        if self._service is None:
+            return
+        # NOT_STARTED → IN_PROGRESS → COMPLETED → NOT_STARTED
+        next_status = {
+            StageStatus.NOT_STARTED: StageStatus.IN_PROGRESS,
+            StageStatus.IN_PROGRESS: StageStatus.COMPLETED,
+            StageStatus.COMPLETED: StageStatus.NOT_STARTED,
+        }[current_status]
+        try:
+            updated = self._service.update_stage(project_id, stage_name, next_status)
+            self._project = updated
+            self._populate_summary()
+        except ValueError as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "更新失败", str(e))
 
     def _show_edit_page(self) -> None:
         if self._service is None:
@@ -141,16 +162,16 @@ class ProjectDrawer(QFrame):
         layout.addWidget(self._summary_name)
 
         self._summary_info = QLabel()
-        self._summary_info.setStyleSheet("font-size: 11px; color: #757575;")
+        self._summary_info.setStyleSheet("font-size: 12px; color: #757575;")
         layout.addWidget(self._summary_info)
 
         self._summary_record = QLabel()
-        self._summary_record.setStyleSheet("font-size: 10px;")
+        self._summary_record.setStyleSheet("font-size: 12px;")
         layout.addWidget(self._summary_record)
 
         # 阶段列表区域
         stages_label = QLabel("进度")
-        stages_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #424242; margin-top:8px;")
+        stages_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #424242; margin-top:8px;")
         layout.addWidget(stages_label)
 
         scroll = QScrollArea()
@@ -169,7 +190,7 @@ class ProjectDrawer(QFrame):
         btn_edit = QPushButton("进入完整管理")
         btn_edit.setStyleSheet(
             "QPushButton { background: #1976D2; color: white; border: none; "
-            "border-radius: 4px; padding: 8px; font-size: 11px; }"
+            "border-radius: 4px; padding: 8px; font-size: 12px; }"
             "QPushButton:hover { background: #1565C0; }"
         )
         btn_edit.clicked.connect(self._show_edit_page)
@@ -178,7 +199,7 @@ class ProjectDrawer(QFrame):
         btn_folder = QPushButton("📁 打开文件夹")
         btn_folder.setStyleSheet(
             "QPushButton { background: #F5F5F5; color: #424242; border: 1px solid #E0E0E0; "
-            "border-radius: 4px; padding: 8px; font-size: 11px; }"
+            "border-radius: 4px; padding: 8px; font-size: 12px; }"
             "QPushButton:hover { background: #EEEEEE; }"
         )
         btn_folder.clicked.connect(self._on_open_folder)
@@ -211,16 +232,28 @@ class ProjectDrawer(QFrame):
             indicator = "✅" if stage.status == StageStatus.COMPLETED else (
                 "●" if stage.status == StageStatus.IN_PROGRESS else "○"
             )
-            label = QLabel(f"{indicator}  {stage.name}")
-            label.setStyleSheet("font-size: 10px;")
-            row.addWidget(label)
+            btn = QPushButton(f"{indicator}  {stage.name}")
+            btn.setFlat(True)
+            btn.setStyleSheet(
+                "QPushButton { text-align: left; font-size: 12px; padding: 4px 8px; "
+                "border: 1px solid transparent; border-radius: 4px; color: #212121; }"
+                "QPushButton:hover { background: #F0F0F0; border-color: #E0E0E0; }"
+            )
+            # 点击切换阶段状态：NOT_STARTED → IN_PROGRESS → COMPLETED → NOT_STARTED
+            btn.clicked.connect(lambda checked, pid=p.project_id, sn=stage.name, ss=stage.status: self._toggle_stage(pid, sn, ss))
+            row.addWidget(btn)
             row.addStretch()
             self._stages_layout.addLayout(row)
 
     def _on_open_folder(self) -> None:
-        if self._project and self._project.folder_path:
+        if self._project is None:
+            return
+        if self._project.folder_path:
             from civ_core.infra_io.project_folder import open_project_folder
             open_project_folder(self._project.folder_path)
+        else:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "提示", "该项目尚未绑定本地文件夹。\n请在「进入完整管理」中设置文件夹路径。")
 
     # ── 编辑页 ──────────────────────────────────────────────────
     def _build_edit_page(self) -> QWidget:
@@ -239,19 +272,19 @@ class ProjectDrawer(QFrame):
 
         for label_text, key in fields:
             lbl = QLabel(label_text)
-            lbl.setStyleSheet("font-size: 10px; color: #757575;")
+            lbl.setStyleSheet("font-size: 12px; color: #757575;")
             layout.addWidget(lbl)
             edit = QLineEdit()
-            edit.setStyleSheet("font-size: 11px; padding: 4px;")
+            edit.setStyleSheet("font-size: 12px; padding: 4px;")
             layout.addWidget(edit)
             self._edit_fields[key] = edit
 
         # 金额独立
         lbl_amt = QLabel("项目金额")
-        lbl_amt.setStyleSheet("font-size: 10px; color: #757575;")
+        lbl_amt.setStyleSheet("font-size: 12px; color: #757575;")
         layout.addWidget(lbl_amt)
         self._edit_amount = QLineEdit()
-        self._edit_amount.setStyleSheet("font-size: 11px; padding: 4px;")
+        self._edit_amount.setStyleSheet("font-size: 12px; padding: 4px;")
         layout.addWidget(self._edit_amount)
 
         layout.addStretch()

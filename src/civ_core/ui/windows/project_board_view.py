@@ -45,7 +45,7 @@ class ProjectBoardView(QWidget):
 
         title = QLabel("项目看板")
         title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #212121;"
+            "font-size: 18px; font-weight: bold; color: #212121;"
         )
         top.addWidget(title)
 
@@ -60,7 +60,7 @@ class ProjectBoardView(QWidget):
             btn.setFixedHeight(28)
             btn.setStyleSheet(
                 "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
-                "padding: 0 12px; font-size: 11px; background: #FFF; }"
+                "padding: 0 12px; font-size: 12px; background: #FFF; }"
                 "QPushButton:checked { background: #1976D2; color: white; border-color: #1976D2; }"
             )
             top.addWidget(btn)
@@ -80,7 +80,7 @@ class ProjectBoardView(QWidget):
             btn.setFixedHeight(28)
             btn.setStyleSheet(
                 "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
-                "padding: 0 10px; font-size: 10px; background: #FFF; }"
+                "padding: 0 10px; font-size: 12px; background: #FFF; }"
                 "QPushButton:checked { background: #424242; color: white; }"
             )
         self._btn_list.setChecked(True)

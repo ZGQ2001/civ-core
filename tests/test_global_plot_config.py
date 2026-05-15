@@ -152,8 +152,9 @@ class TestTypeCoercion:
         self, qapp: QApplication, tmp_qsettings: Path
     ) -> None:
         """range 字段如果存的不是 3 元数字列表 → None。"""
-        from civ_core.infra_io import global_plot_config as gpc
         from civ_core.infra_io.global_plot_config import load_global_plot_config
+
+        from civ_core.infra_io import global_plot_config as gpc
 
         s = gpc._make_settings()
         s.setValue(gpc._KEY_PREFIX + "x_range", "garbage")
@@ -168,8 +169,9 @@ class TestTypeCoercion:
         self, qapp: QApplication, tmp_qsettings: Path
     ) -> None:
         """legend_loc 存空串 → None（不显示图例）。"""
-        from civ_core.infra_io import global_plot_config as gpc
         from civ_core.infra_io.global_plot_config import load_global_plot_config
+
+        from civ_core.infra_io import global_plot_config as gpc
 
         s = gpc._make_settings()
         s.setValue(gpc._KEY_PREFIX + "legend_loc", "")
@@ -181,8 +183,9 @@ class TestTypeCoercion:
         self, qapp: QApplication, tmp_qsettings: Path
     ) -> None:
         """QSettings 后端可能把 bool 存成 'true'/'false'/'1'/'0'。"""
-        from civ_core.infra_io import global_plot_config as gpc
         from civ_core.infra_io.global_plot_config import load_global_plot_config
+
+        from civ_core.infra_io import global_plot_config as gpc
 
         s = gpc._make_settings()
         s.setValue(gpc._KEY_PREFIX + "x_log", "true")

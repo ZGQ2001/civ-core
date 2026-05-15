@@ -27,7 +27,7 @@ _COLOR_BAR = QColor("#1976D2")              # 左侧色条
 class ProjectDelegate(QStyledItemDelegate):
     """项目列表行委托：40px 行高，Linear 极简风格。"""
 
-    _ROW_HEIGHT = 44
+    _ROW_HEIGHT = 48
 
     def row_height(self) -> int:
         return self._ROW_HEIGHT

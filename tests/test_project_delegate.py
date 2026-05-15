@@ -50,11 +50,11 @@ def delegate() -> ProjectDelegate:
 
 
 class TestSizeHint:
-    def test_returns_44px_height(
+    def test_returns_48px_height(
         self, delegate: ProjectDelegate, model: ProjectListModel
     ) -> None:
         size = delegate.sizeHint(QStyleOptionViewItem(), model.index(0))
-        assert size.height() == 44
+        assert size.height() == 48
 
     def test_width_is_zero(
         self, delegate: ProjectDelegate, model: ProjectListModel
@@ -65,11 +65,11 @@ class TestSizeHint:
 
 class TestRowHeight:
     def test_row_height_constant(self, delegate: ProjectDelegate) -> None:
-        assert delegate.row_height() == 44
+        assert delegate.row_height() == 48
 
 
 class TestConstructible:
     def test_create_without_parent(self) -> None:
         d = ProjectDelegate()
         assert d is not None
-        assert d.row_height() == 44
+        assert d.row_height() == 48

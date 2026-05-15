@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -42,9 +43,11 @@ class ProjectBoardView(QWidget):
 
         # ── 顶栏 ────────────────────────────────────────────────
         top = QHBoxLayout()
+        top.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         top.setSpacing(8)
 
         title = QLabel("项目看板")
+        title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         title.setStyleSheet(
             "font-size: 18px; font-weight: bold; color: #212121;"
         )
@@ -58,7 +61,7 @@ class ProjectBoardView(QWidget):
         self._btn_backlog = QPushButton("团队积压")
         for btn in (self._btn_all, self._btn_active, self._btn_backlog):
             btn.setCheckable(True)
-            btn.setFixedHeight(28)
+            btn.setFixedHeight(30)
             btn.setStyleSheet(
                 "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
                 "padding: 0 12px; font-size: 12px; background: #FFF; }"
@@ -78,7 +81,7 @@ class ProjectBoardView(QWidget):
         self._btn_board = QPushButton("看板")
         for btn in (self._btn_list, self._btn_board):
             btn.setCheckable(True)
-            btn.setFixedHeight(28)
+            btn.setFixedHeight(30)
             btn.setStyleSheet(
                 "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
                 "padding: 0 10px; font-size: 12px; background: #FFF; }"
@@ -93,7 +96,7 @@ class ProjectBoardView(QWidget):
 
         # 新建
         self._btn_new = QPushButton("＋ 新建项目")
-        self._btn_new.setFixedHeight(28)
+        self._btn_new.setFixedHeight(30)
         self._btn_new.setStyleSheet(
             "QPushButton { background: #1976D2; color: white; border: none; "
             "border-radius: 4px; padding: 0 16px; font-size: 11px; }"
@@ -114,6 +117,29 @@ class ProjectBoardView(QWidget):
 
         # 列表视图
         self._model = ProjectListModel(self._service)
+
+        # 表头
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(14, 0, 0, 0)
+        header_row.setSpacing(0)
+        header_style = "font-size: 11px; font-weight: bold; color: #757575; padding: 4px 0;"
+        for text, width in [("状态", 30), ("编号", 64), ("项目名称", 208), ("类型", 98), ("金额", 88), ("进度", 96)]:
+            lbl = QLabel(text)
+            lbl.setFixedWidth(width)
+            lbl.setStyleSheet(header_style)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+            header_row.addWidget(lbl)
+        header_row.addStretch()
+        header_widget = QWidget()
+        header_widget.setLayout(header_row)
+        header_widget.setFixedHeight(28)
+        header_widget.setStyleSheet("background: #F8F9FA; border-bottom: 1px solid #E8E8E8;")
+
+        self._list_container = QVBoxLayout()
+        self._list_container.setContentsMargins(0, 0, 0, 0)
+        self._list_container.setSpacing(0)
+        self._list_container.addWidget(header_widget)
+
         self._list_view = QListView()
         self._list_view.setModel(self._model)
         delegate = ProjectDelegate()
@@ -124,7 +150,10 @@ class ProjectBoardView(QWidget):
             "QListView { border: none; background: #FFFFFF; }"
         )
         self._list_view.clicked.connect(self._on_item_clicked)
-        self._view_stack.addWidget(self._list_view)
+        self._list_container.addWidget(self._list_view)
+        list_page = QWidget()
+        list_page.setLayout(self._list_container)
+        self._view_stack.addWidget(list_page)
 
         # 看板视图
         self._board_widget = ProjectBoardWidget()

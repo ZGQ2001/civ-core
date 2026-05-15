@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -214,7 +214,7 @@ class ProjectDrawer(QFrame):
         stages_container = QWidget()
         self._stages_layout = QVBoxLayout(stages_container)
         self._stages_layout.setContentsMargins(0, 0, 0, 0)
-        self._stages_layout.setSpacing(4)
+        self._stages_layout.setSpacing(2)
         scroll.setWidget(stages_container)
         layout.addWidget(scroll)
 
@@ -271,23 +271,32 @@ class ProjectDrawer(QFrame):
             elif item.layout() is not None:
                 self._clear_sub_layout(item.layout())
 
-        for i, stage in enumerate(p.stages):
+        status_map = {
+            StageStatus.NOT_STARTED: ("○", "#9E9E9E"),
+            StageStatus.IN_PROGRESS: ("●", "#1976D2"),
+            StageStatus.COMPLETED: ("✓", "#4CAF50"),
+        }
+        for stage in p.stages:
             row = QHBoxLayout()
-            row.setSpacing(8)
-            indicator = "✅" if stage.status == StageStatus.COMPLETED else (
-                "●" if stage.status == StageStatus.IN_PROGRESS else "○"
-            )
-            btn = QPushButton(f"{indicator}  {stage.name}")
+            row.setContentsMargins(4, 0, 4, 0)
+            row.setSpacing(10)
+
+            indicator, color = status_map[stage.status]
+            dot = QLabel(indicator)
+            dot.setFixedWidth(20)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dot.setStyleSheet(f"font-size: 14px; color: {color}; font-weight: bold;")
+            row.addWidget(dot)
+
+            btn = QPushButton(stage.name)
             btn.setFlat(True)
             btn.setStyleSheet(
-                "QPushButton { text-align: left; font-size: 12px; padding: 4px 8px; "
-                "border: 1px solid transparent; border-radius: 4px; color: #212121; }"
+                "QPushButton { text-align: left; font-size: 12px; padding: 4px 0; "
+                "border: none; color: #212121; }"
                 "QPushButton:hover { color: #1976D2; }"
             )
-            # 点击切换阶段状态：NOT_STARTED → IN_PROGRESS → COMPLETED → NOT_STARTED
             btn.clicked.connect(lambda checked, pid=p.project_id, sn=stage.name, ss=stage.status: self._toggle_stage(pid, sn, ss))
-            row.addWidget(btn)
-            row.addStretch()
+            row.addWidget(btn, 1)
             self._stages_layout.addLayout(row)
 
     def _on_open_folder(self) -> None:
@@ -305,7 +314,7 @@ class ProjectDrawer(QFrame):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         fields = [
             ("项目编号", "number"),

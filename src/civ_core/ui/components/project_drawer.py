@@ -241,6 +241,14 @@ class ProjectDrawer(QFrame):
 
         return page
 
+    @staticmethod
+    def _clear_sub_layout(layout: QHBoxLayout | QVBoxLayout) -> None:
+        while layout.count():
+            sub = layout.takeAt(0)
+            sw = sub.widget()
+            if sw is not None:
+                sw.deleteLater()
+
     def _populate_summary(self) -> None:
         if self._project is None:
             return
@@ -254,11 +262,14 @@ class ProjectDrawer(QFrame):
             f"原始记录 {'✅ 已写完' if p.original_record_done else '○ 未写完'}"
         )
 
-        # 重建阶段列表
+        # 安全清空旧阶段组件（递归处理 widget 和子 layout）
         while self._stages_layout.count():
             item = self._stages_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+            elif item.layout() is not None:
+                self._clear_sub_layout(item.layout())
 
         for i, stage in enumerate(p.stages):
             row = QHBoxLayout()

@@ -8,19 +8,22 @@ from __future__ import annotations
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
 from civ_core.core.project_service import ProjectService
+from civ_core.domain.project_schema import Project
 
 # 统一列宽 + 左边距
 LEFT_PADDING = 16
 COL_WIDTHS: dict[str, int] = {
-    "status":    24,   # 状态圆点
-    "dot_pad":   10,   # 圆点后留白
-    "number":    72,   # 项目编号
-    "name":      200,  # 项目名称
-    "type":      90,   # 检测类型
-    "amount":    80,   # 金额
-    "date":      90,   # 创建日期 (YYYY-MM-DD)
-    "progress":  84,   # 进度条 + 文字
+    "status":    24,
+    "dot_pad":   10,
+    "number":    90,
+    "name":      260,  # 名称（可拉伸）
+    "type":      90,
+    "amount":    80,
+    "date":      100,
+    "progress":  84,
 }
+
+TOTAL_WIDTH = LEFT_PADDING + sum(COL_WIDTHS.values())
 
 class ProjectListModel(QAbstractListModel):
     """项目列表数据模型。
@@ -89,9 +92,46 @@ class ProjectListModel(QAbstractListModel):
             return proj.created_at.strftime("%Y-%m-%d") if proj.created_at else ""
         elif role == self.ProjectObjectRole:
             return proj
+        elif role == Qt.ItemDataRole.EditRole:
+            # 日期列返回 QDate
+            if self.DateRole == Qt.ItemDataRole.UserRole + 8:
+                from datetime import date as dt_date
+                return proj.created_at.date() if proj.created_at else dt_date.today()
         return None
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if not index.isValid():
+            return False
+        row = index.row()
+        if row < 0 or row >= len(self._projects):
+            return False
+        proj = self._projects[row]
+        if role == Qt.ItemDataRole.EditRole:
+            # 更新 created_at 日期部分
+            from datetime import datetime as dt_datetime
+            if hasattr(value, 'year'):
+                new_dt = dt_datetime(value.year, value.month, value.day,
+                                     tzinfo=proj.created_at.tzinfo if proj.created_at else None)
+                updated = Project(
+                    project_id=proj.project_id, project_number=proj.project_number,
+                    name=proj.name, client=proj.client, inspection_type=proj.inspection_type,
+                    amount=proj.amount, folder_path=proj.folder_path,
+                    original_record_done=proj.original_record_done,
+                    notes=proj.notes, stages=proj.stages,
+                    created_at=new_dt, updated_at=proj.updated_at,
+                )
+                self.service.update_project(updated)
+                self._projects[row] = self.service.get_project(proj.project_id)
+                self.dataChanged.emit(index, index, [role])
+                return True
+        return False
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
-        return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
+        flags = Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
+        # 日期列可编辑
+        col = index.column()
+        if col == 0:  # date is the only editable column
+            flags |= Qt.ItemFlag.ItemIsEditable
+        return flags

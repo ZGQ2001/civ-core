@@ -28,12 +28,9 @@ dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.9",
     # PDF / image
-    "pymupdf>=1.24",
     "pypdf>=4.0",
     "pillow>=10.4",
-    "handright==8.2.0",
     # Utils
-    "lxml>=5.0",
     "python-dateutil>=2.9",
 ]
 

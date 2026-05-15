@@ -74,7 +74,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 INSERT_STAGE_SQL = """
 INSERT INTO project_stages (project_id, stage_name, status, note, updated_at)
-VALUES (?, ?, 'not_started', '', NULL)
+VALUES (?, ?, ?, ?, ?)
 """
 
 SELECT_PROJECT_SQL = """
@@ -217,9 +217,12 @@ class ProjectDB:
             )
             project_id = cur.lastrowid
 
-            # 插入 7 条初始阶段记录
-            for name in BUILTIN_STAGE_NAMES:
-                self.conn.execute(INSERT_STAGE_SQL, (project_id, name))
+            # 插入 7 条阶段记录（使用 Project 对象中的实际状态）
+            for stage in project.stages:
+                self.conn.execute(
+                    INSERT_STAGE_SQL,
+                    (project_id, stage.name, stage.status.value, stage.note, _dt_to_iso(stage.updated_at))
+                )
 
         # 从 DB 重新读取以确保一致性
         return self.get_project(project_id)

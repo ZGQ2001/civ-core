@@ -12,12 +12,13 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
-    QListView,
     QMessageBox,
     QPushButton,
     QStackedWidget,
+    QTableView,
     QVBoxLayout,
     QWidget,
 )
@@ -26,9 +27,9 @@ from qfluentwidgets import LineEdit, MessageBoxBase, SubtitleLabel
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, ProjectStage
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
-from civ_core.ui.components.project_delegate import ProjectDelegate
 from civ_core.ui.components.project_drawer import ProjectDrawer
-from civ_core.ui.models.project_list_model import COL_WIDTHS, LEFT_PADDING, ProjectListModel
+from civ_core.ui.components.project_table_delegate import ProjectTableDelegate
+from civ_core.ui.models.project_table_model import ProjectTableModel
 
 
 class NewProjectDialog(MessageBoxBase):
@@ -267,54 +268,43 @@ class ProjectBoardView(QWidget):
         # 主视图栈
         self._view_stack = QStackedWidget()
 
-        # 列表视图
-        self._model = ProjectListModel(self._service)
+        # 表格视图
+        self._model = ProjectTableModel(self._service)
 
-        # 表头
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(LEFT_PADDING, 0, 0, 0)
-        header_row.setSpacing(0)
-        header_style = "font-size: 11px; font-weight: bold; color: #757575; padding: 4px 0;"
-        col_map = [
-            ("", COL_WIDTHS["status"] + COL_WIDTHS["dot_pad"]),
-            ("编号", COL_WIDTHS["number"]),
-            ("项目名称", COL_WIDTHS["name"]),
-            ("类型", COL_WIDTHS["type"]),
-            ("金额", COL_WIDTHS["amount"]),
-            ("日期", COL_WIDTHS["date"]),
-            ("进度", COL_WIDTHS["progress"]),
-        ]
-        for text, w in col_map:
-            lbl = QLabel(text)
-            lbl.setFixedWidth(w)
-            lbl.setStyleSheet(header_style)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-            header_row.addWidget(lbl)
-        header_widget = QWidget()
-        header_widget.setLayout(header_row)
-        header_widget.setFixedHeight(28)
-        header_widget.setStyleSheet("background: #F8F9FA; border-bottom: 1px solid #E8E8E8;")
-
-        self._list_container = QVBoxLayout()
-        self._list_container.setContentsMargins(0, 0, 0, 0)
-        self._list_container.setSpacing(0)
-        self._list_container.addWidget(header_widget)
-
-        self._list_view = QListView()
-        self._list_view.setModel(self._model)
-        delegate = ProjectDelegate()
-        self._list_view.setItemDelegate(delegate)
-        self._list_view.setSpacing(0)
-        self._list_view.setMinimumHeight(200)
-        self._list_view.setStyleSheet(
-            "QListView { border: none; background: #FFFFFF; }"
+        self._table_view = QTableView()
+        self._table_view.setModel(self._model)
+        self._table_view.setItemDelegate(ProjectTableDelegate())
+        self._table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        self._table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self._table_view.setShowGrid(False)
+        self._table_view.verticalHeader().setVisible(False)
+        self._table_view.horizontalHeader().setStretchLastSection(False)
+        self._table_view.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self._table_view.setAlternatingRowColors(True)
+        self._table_view.setStyleSheet(
+            "QTableView { border: none; background: #FFFFFF; alternate-background-color: #F8F9FA; }"
+            "QTableView::item { padding: 4px 6px; }"
+            "QHeaderView::section { background: #F0F0F0; border: none; border-bottom: 1px solid #E0E0E0; "
+            "padding: 6px 6px; font-size: 11px; font-weight: bold; color: #616161; }"
         )
-        self._list_view.clicked.connect(self._on_item_clicked)
-        self._list_container.addWidget(self._list_view)
-        list_page = QWidget()
-        list_page.setLayout(self._list_container)
-        self._view_stack.addWidget(list_page)
 
+        hdr = self._table_view.horizontalHeader()
+        hdr.setSectionResizeMode(ProjectTableModel.StatusCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.NumberCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.NameCol, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(ProjectTableModel.TypeCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.AmountCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.DateCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.ProgressCol, QHeaderView.ResizeMode.Fixed)
+        self._table_view.setColumnWidth(ProjectTableModel.StatusCol, 40)
+        self._table_view.setColumnWidth(ProjectTableModel.NumberCol, 90)
+        self._table_view.setColumnWidth(ProjectTableModel.TypeCol, 90)
+        self._table_view.setColumnWidth(ProjectTableModel.AmountCol, 80)
+        self._table_view.setColumnWidth(ProjectTableModel.DateCol, 100)
+        self._table_view.setColumnWidth(ProjectTableModel.ProgressCol, 80)
+
+        self._table_view.clicked.connect(self._on_table_row_clicked)
+        self._view_stack.addWidget(self._table_view)
         # 看板视图
         self._board_widget = ProjectBoardWidget()
         self._board_widget.set_service(self._service)
@@ -354,22 +344,20 @@ class ProjectBoardView(QWidget):
         self._btn_active.setChecked(filter_type == "正在进行")
         self._btn_backlog.setChecked(filter_type == "团队积压")
 
-        projects = self._service.filter_projects(filter_type)
-        self._model._projects = projects
-        self._model.layoutChanged.emit()
+        self._model.refresh()  # TODO: add filter support to ProjectTableModel
 
     # ════════════════════════════════════════════════════════════
     # 交互
     # ════════════════════════════════════════════════════════════
-    def _on_board_card_clicked(self, proj: Project) -> None:
-        self._drawer.set_project(proj, self._service)
-        self._drawer.open()
-
-    def _on_item_clicked(self, index) -> None:
-        proj = self._model.data(index, ProjectListModel.ProjectObjectRole)
+    def _on_table_row_clicked(self, index) -> None:
+        proj = self._model.data(self._model.index(index.row(), 0), Qt.ItemDataRole.UserRole)
         if proj:
             self._drawer.set_project(proj, self._service)
             self._drawer.open()
+
+    def _on_board_card_clicked(self, proj: Project) -> None:
+        self._drawer.set_project(proj, self._service)
+        self._drawer.open()
 
     def _on_new_project(self) -> None:
         dlg = NewProjectDialog(self.window())

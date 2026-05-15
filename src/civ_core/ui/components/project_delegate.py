@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter
-from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
+from PySide6.QtWidgets import QDateEdit, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolTip
 
 from civ_core.ui.models.project_list_model import COL_WIDTHS, LEFT_PADDING, ProjectListModel
 
@@ -29,6 +29,32 @@ class ProjectDelegate(QStyledItemDelegate):
 
     def row_height(self) -> int:
         return self._ROW_HEIGHT
+
+    # ── 日期列编辑器 ──────────────────────────────────────────
+    def createEditor(self, parent, option, index):
+        # 日期列提供 QDateEdit
+        date_x = option.rect.x() + LEFT_PADDING
+        for k in ("status", "dot_pad", "number", "name", "type", "amount"):
+            date_x += COL_WIDTHS[k]
+        if date_x <= option.rect.width():
+            editor = QDateEdit(parent)
+            editor.setCalendarPopup(True)
+            editor.setDisplayFormat("yyyy-MM-dd")
+            return editor
+        return None
+
+    def setEditorData(self, editor, index):
+        value = index.data(ProjectListModel.DateRole) or ""
+        if value and hasattr(editor, 'setDate'):
+            from PySide6.QtCore import QDate
+            qd = QDate.fromString(value, "yyyy-MM-dd")
+            if qd.isValid():
+                editor.setDate(qd)
+
+    def setModelData(self, editor, model, index):
+        if hasattr(editor, 'date'):
+            qd = editor.date()
+            model.setData(index, qd)
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
         return QSize(0, self._ROW_HEIGHT)
@@ -93,7 +119,7 @@ class ProjectDelegate(QStyledItemDelegate):
         font_name.setBold(True)
         painter.setFont(font_name)
         painter.setPen(_COLOR_TEXT_PRIMARY)
-        elided = painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight, COL_WIDTHS["name"])
+        elided = painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideMiddle, COL_WIDTHS["name"])
         painter.drawText(QRect(current_x, y_mid, COL_WIDTHS["name"], row_h),
                          Qt.AlignmentFlag.AlignVCenter, elided)
         current_x += COL_WIDTHS["name"]
@@ -143,3 +169,15 @@ class ProjectDelegate(QStyledItemDelegate):
                          Qt.AlignmentFlag.AlignVCenter, stage_text)
 
         painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        if event.type() == event.Type.ToolTip and index.isValid():
+            # 名称列区域显示完整名称
+            name_x = option.rect.x() + LEFT_PADDING + COL_WIDTHS["status"] + COL_WIDTHS["dot_pad"] + COL_WIDTHS["number"]
+            name_w = COL_WIDTHS["name"]
+            if name_x <= event.pos().x() <= name_x + name_w:
+                name = index.data(ProjectListModel.NameRole) or ""
+                if name:
+                    QToolTip.showText(event.globalPos(), name)
+                    return True
+        return super().helpEvent(event, view, option, index)

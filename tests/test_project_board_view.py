@@ -51,7 +51,7 @@ def svc() -> ProjectService:
 class TestBoardViewConstruct:
     def test_create_view(self, qapp: QApplication, svc: ProjectService) -> None:
         view = ProjectBoardView(svc)
-        assert view._list_view is not None
+        assert view._table_view is not None
         assert view._board_widget is not None
         assert view._drawer is not None
 

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import LineEdit, MessageBoxBase
+from qfluentwidgets import CalendarPicker, LineEdit, MessageBoxBase
 
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import Project, StageStatus
@@ -407,6 +408,15 @@ class ProjectDrawer(QFrame):
         self._edit_amount.setStyleSheet("font-size: 12px; padding: 4px;")
         layout.addWidget(self._edit_amount)
 
+        # ── 创建日期 ─────────────────────────────────────────
+        lbl_date = QLabel("创建日期")
+        lbl_date.setStyleSheet("font-size: 11px; color: #757575; margin-top: 8px;")
+        layout.addWidget(lbl_date)
+
+        self._edit_date = CalendarPicker(self)
+        self._edit_date.setDateFormat("yyyy-MM-dd")
+        layout.addWidget(self._edit_date)
+
         # ── 本地工作区绑定 ──────────────────────────────────────
         lbl_folder = QLabel("本地文件夹")
         lbl_folder.setStyleSheet("font-size: 11px; color: #757575; margin-top: 8px;")
@@ -465,7 +475,15 @@ class ProjectDrawer(QFrame):
         self._edit_fields["inspection_type"].setText(p.inspection_type)
         self._edit_amount.setText(str(p.amount))
         self._edit_folder.setText(str(p.folder_path) if p.folder_path else "")
+        if hasattr(p.created_at, 'date'):
+            from PySide6.QtCore import QDate
+            d = p.created_at.date()
+            self._edit_date.setDate(QDate(d.year, d.month, d.day))
         self._edit_folder.setText(str(p.folder_path) if p.folder_path else "")
+        if hasattr(p.created_at, 'date'):
+            from PySide6.QtCore import QDate
+            d = p.created_at.date()
+            self._edit_date.setDate(QDate(d.year, d.month, d.day))
 
     def _on_save(self) -> None:
         if self._project is None or self._service is None:
@@ -479,11 +497,13 @@ class ProjectDrawer(QFrame):
             client=self._edit_fields["client"].text().strip(),
             inspection_type=self._edit_fields["inspection_type"].text().strip(),
             amount=float(self._edit_amount.text() or 0),
+            created_at=datetime.combine(
+                self._edit_date.date, p.created_at.time().replace(tzinfo=p.created_at.tzinfo)
+            ) if hasattr(self._edit_date, 'date') and p.created_at else p.created_at,
             folder_path=Path(folder_text) if folder_text else None,
             original_record_done=p.original_record_done,
             notes=p.notes,
             stages=p.stages,
-            created_at=p.created_at,
             updated_at=p.updated_at,
         )
         self._service.update_project(updated)

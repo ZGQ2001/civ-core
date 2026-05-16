@@ -39,7 +39,8 @@
 | `presets/`                  | 系统预设（静态只读）                  | **禁止程序运行时写入**                               |
 | `tests/fixtures/presets/`   | 开发期测试预设                     | 仅 DEV_MODE 下使用，随仓库但不打包                      |
 | `scripts/`                  | 辅助脚本（`healthcheck.py`）      | 每次验收必跑                                      |
-| `templates/`                | 报告模板（docx/xlsx 空白模板）        | 不是预设；docxtpl 填充用                            |                                   
+| `templates/`                | 报告模板（docx/xlsx 空白模板）        | 不是预设；docxtpl 填充用                            | 
+| `docs/civil_kb/`            | 文档资料（Markdown 格式）            | 包含土木工程各种计算公式和规范要求                          |
 
 ---
 

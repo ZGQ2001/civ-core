@@ -1,5 +1,6 @@
 """提取 docx 文本到 txt"""
 from pathlib import Path
+
 from docx import Document
 
 src_dir = Path(r"D:\CodeProjects\civ-core\data\training_materials")

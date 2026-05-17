@@ -26,7 +26,7 @@
 - `plot_curves` — 曲线图 GUI，六分组风琴面板 + 实时预览 + 叠加对比 + 4 图类型 + 双 Y 轴/误差棒
 - `pdf_tools` — PDF 合并/拆分
 - `word2pdf` — 批量 Word/WPS → PDF（COM）
-- `docs/civil_kb/` — 土木检测知识库（3 公式 + 3 SOP + 鉴定评级/精度/报告质量/抽样参数/审核清单/FAQ/表述模板 共 12 个文档）
+- `docs/civil_kb/` — 土木检测知识库（3 公式 + 5 SOP + 鉴定评级/精度/报告质量/抽样参数/审核清单/FAQ/表述模板 + _MASTER扩容 共 14 个文档）
 
 **搁置：** 图形化拖点编辑（需渲染管线重构）、bracket_normalize（不做）、旧代码迁移（不主动清理）
 

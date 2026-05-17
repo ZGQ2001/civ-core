@@ -1,5 +1,4 @@
 """批量提取培训目录下所有 PDF/PPTX 文本到 data/training_materials/"""
-import os, sys
 from pathlib import Path
 
 SRC = Path(r"G:\我的云端硬盘\工作\培训")
@@ -23,7 +22,7 @@ for fpath in sorted(SRC.iterdir()):
         continue
     name = fpath.name
     print(f"Processing: {name}")
-    
+
     text = ""
     if fpath.suffix.lower() == ".pdf" and fitz:
         doc = fitz.open(str(fpath))
@@ -41,7 +40,7 @@ for fpath in sorted(SRC.iterdir()):
     else:
         print(f"  SKIP: no extractor for {fpath.suffix}")
         continue
-    
+
     out_path = DST / f"{fpath.stem}.txt"
     out_path.write_text(text, encoding="utf-8")
     print(f"  -> {out_path} ({len(text)} chars)")

@@ -1,4 +1,4 @@
-import shutil, os
+import shutil
 from pathlib import Path
 
 src = Path(r"G:\我的云端硬盘\工作\培训")

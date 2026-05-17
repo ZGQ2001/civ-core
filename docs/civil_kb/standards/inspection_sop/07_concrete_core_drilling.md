@@ -2,7 +2,7 @@
 
 > **适用范围**：混凝土构件抗压强度检测，适用于回弹法有争议、龄期超出回弹曲线适用范围、或需精确评定的场景。
 > **涵盖方法**：钻芯法直接检测、回弹法+钻芯修正。
-> **关联文档**：`_MASTER_inspection_standards_reference.md`（检测项目 §12）、`precision_rules.md`（数据处理精度）、`inspection_sop/04_rebound_concrete_testing.md`（回弹法基础 SOP）。
+> **关联文档**：`_MASTER_inspection_standards_reference.md`（检测项目 §12）、`precision_rules.md`（数据处理精度）、`inspection_sop/04_rebound_concrete_testing.md`（回弹法基础 SOP）、`../../formulas/INSP-002_core_drilling_concrete_strength.md`（钻芯法计算公式）。
 
 ---
 

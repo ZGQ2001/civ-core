@@ -409,3 +409,36 @@
 | **操作要点** | 1) 配制过饱和硫酸铜溶液；2) 混凝土表面浸湿处理；3) 局部剔凿钢筋连接电压仪负端；4) 记录环境温度进行修正（22±5℃）；5) 绘制电位等值线图（间隔 ≤100mV） |
 | **判定标准** | **JGJ/T 152-2019**：电位 > -200 mV → 不发生锈蚀概率 > 90%；-200~-350 mV → 锈蚀性状不确定；< -350 mV → 发生锈蚀概率 > 90%。辅以局部剔凿验证 |
 | **设备维护** | 铜棒用稀盐酸轻擦清洗（禁用钢毛刷）；硫酸铜溶液约半年更换一次，更换后甘汞电极校准 |
+
+---
+
+## 九、关联文档索引
+
+> 本手册中的各检测项目配套有详细 SOP 文档，按需跳转查阅完整检测流程、报告模板和常见错误。
+
+### 检测 SOP
+
+| SOP 编号 | 文档 | 涵盖内容 |
+|---------|------|---------|
+| SOP-01 | [inspection_sop/01_steel_section_dimensions.md](inspection_sop/01_steel_section_dimensions.md) | 钢构件截面尺寸检测（焊接H型钢/热轧H型钢/工字钢/角钢） |
+| SOP-02 | [inspection_sop/02_leeb_hardness_testing.md](inspection_sop/02_leeb_hardness_testing.md) | 钢材里氏硬度检测 |
+| SOP-03 | [inspection_sop/03_coating_thickness_testing.md](inspection_sop/03_coating_thickness_testing.md) | 涂层厚度检测（防火涂层+防腐涂层） |
+| SOP-04 | [inspection_sop/04_rebound_concrete_testing.md](inspection_sop/04_rebound_concrete_testing.md) | 回弹法检测混凝土抗压强度 |
+| SOP-05 | [inspection_sop/05_rebar_testing.md](inspection_sop/05_rebar_testing.md) | 混凝土中钢筋检测（位置/间距/保护层/直径/锈蚀） |
+| SOP-06 | [inspection_sop/06_masonry_material_testing.md](inspection_sop/06_masonry_material_testing.md) | 砌体材料强度检测：回弹法（砖+砂浆）、贯入法（砂浆） |
+| SOP-07 | [inspection_sop/07_concrete_core_drilling.md](inspection_sop/07_concrete_core_drilling.md) | 钻芯法检测混凝土强度 + 回弹法钻芯修正 |
+| 补充 | [inspection_sop/08_rebar_report_templates.md](inspection_sop/08_rebar_report_templates.md) | 钢筋检测报告模板（配套 SOP-05） |
+
+### 参考文档
+
+| 文档 | 用途 |
+|------|------|
+| [sampling_tables.md](sampling_tables.md) | 各结构类型检测抽样数量表汇总 |
+| [seismic_appraisal_forms.md](seismic_appraisal_forms.md) | 抗震鉴定评级表模板汇总（砌体/混凝土/钢结构 × A/B/C/CA/CB 类） |
+| [rating_rules.md](rating_rules.md) | 鉴定评级规则速查 |
+| [precision_rules.md](precision_rules.md) | 数据处理精度规范 |
+| [template_phrases.md](template_phrases.md) | 报告标准化表述模板 |
+| [report_quality_checklist.md](report_quality_checklist.md) | 报告编写质量管控要点 |
+| [review_checklist.md](review_checklist.md) | 报告审查提问清单 |
+| [faq.md](faq.md) | 检测鉴定常见技术问题 |
+| [standards_library.md](standards_library.md) | 公司标准规范库 |

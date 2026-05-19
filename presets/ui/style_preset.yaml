@@ -1,0 +1,51 @@
+# civ-core 全局 UI 样式预设（系统默认）
+#
+# 用法：
+#   • 此文件为系统默认值，受 git 管理，运行时只读
+#   • 用户可在 ~/.civ-core/presets/ui/style_preset.yaml 覆盖部分字段
+#   • 任何字段缺失都会回退到 src/civ_core/domain/style_schema.py 的 dataclass 默认值
+#   • 修改后需重启程序（或调 reload_style_preset() 清缓存）
+
+typography:
+  # 中文比例字体：用于名称、按钮、标题
+  font_family_ui: "'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif"
+  # 等宽字体：用于编号、金额、日期、进度这类对齐敏感的数据列
+  font_family_mono: "'JetBrains Mono', 'Consolas', monospace"
+  size_title: 18      # 看板大标题
+  size_subtitle: 14   # 抽屉副标题
+  size_body: 12       # 正文（表格行、卡片名）
+  size_caption: 11    # 次要信息（编号、金额等）
+  size_small: 10      # 最小（页脚 / hint）
+
+colors:
+  # 主色 / 强调
+  primary: "#1976D2"
+  primary_hover: "#1565C0"
+  danger: "#E53935"
+  danger_hover: "#C62828"
+  # 文字色
+  text_primary: "#212121"
+  text_secondary: "#757575"
+  text_tertiary: "#9E9E9E"
+  # 描边 / 背景
+  border: "#E0E0E0"
+  bg: "#FFFFFF"
+  bg_alt: "#F8F9FA"
+  bg_header: "#F0F0F0"
+  bg_drawer: "#FAFAFA"
+  bg_hover: "#F5F8FF"
+  # 项目状态色
+  status_pending: "#9E9E9E"    # ○ 未开始
+  status_active: "#1976D2"     # ● 进行中
+  status_done: "#43A047"       # ✓ 已完成
+  status_on_hold: "#FB8C00"    # ⏸ 暂存
+  status_archived: "#616161"   # ▣ 已归档
+
+dimensions:
+  radius: 4
+  spacing_sm: 4
+  spacing_md: 8
+  spacing_lg: 12
+  spacing_xl: 16
+  button_height: 30
+  header_height: 32

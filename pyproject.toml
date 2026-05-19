@@ -33,6 +33,7 @@ dependencies = [
     # Utils
     "python-dateutil>=2.9",
     "javaobj-py3>=0.4.4",
+    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]

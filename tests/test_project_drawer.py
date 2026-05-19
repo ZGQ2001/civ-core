@@ -67,6 +67,58 @@ class TestDrawerConstruct:
         assert drawer._stack.currentIndex() == 0
 
 
+class TestStatusFlagToggles:
+    """暂存/归档按钮：点击 → 调 service 切换 → 按钮态同步。"""
+
+    def test_buttons_exist_after_set_project(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        drawer = ProjectDrawer()
+        drawer.set_project(inserted, svc)
+        assert drawer._btn_on_hold is not None
+        assert drawer._btn_archived is not None
+
+    def test_initial_state_unchecked(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        drawer = ProjectDrawer()
+        drawer.set_project(inserted, svc)
+        assert drawer._btn_on_hold.isChecked() is False
+        assert drawer._btn_archived.isChecked() is False
+
+    def test_initial_state_reflects_project_flags(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        svc.set_on_hold(inserted.project_id, True)
+        updated = svc.get_project(inserted.project_id)
+        drawer = ProjectDrawer()
+        drawer.set_project(updated, svc)
+        assert drawer._btn_on_hold.isChecked() is True
+        assert drawer._btn_archived.isChecked() is False
+
+    def test_toggle_on_hold_persists(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        drawer = ProjectDrawer()
+        drawer.set_project(inserted, svc)
+        drawer._toggle_on_hold()
+        reloaded = svc.get_project(inserted.project_id)
+        assert reloaded.is_on_hold is True
+
+    def test_toggle_archived_persists(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        drawer = ProjectDrawer()
+        drawer.set_project(inserted, svc)
+        drawer._toggle_archived()
+        reloaded = svc.get_project(inserted.project_id)
+        assert reloaded.is_archived is True
+
+    def test_toggle_on_hold_off(self, qapp: QApplication, svc: ProjectService) -> None:
+        inserted = svc.create_project(_project(), create_folder=False)
+        svc.set_on_hold(inserted.project_id, True)
+        drawer = ProjectDrawer()
+        drawer.set_project(svc.get_project(inserted.project_id), svc)
+        drawer._toggle_on_hold()  # True -> False
+        reloaded = svc.get_project(inserted.project_id)
+        assert reloaded.is_on_hold is False
+
+
 class TestAnimation:
     def test_open_creates_animation(self, qapp: QApplication) -> None:
         drawer = ProjectDrawer()

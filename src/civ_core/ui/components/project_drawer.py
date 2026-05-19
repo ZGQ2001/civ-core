@@ -193,6 +193,32 @@ class ProjectDrawer(QFrame):
         self._project = self._service.get_project(p.project_id)
         self._populate_summary()
 
+    def _toggle_on_hold(self) -> None:
+        """切换暂存态。以 _project.is_on_hold 为单一真值源（按钮态由 populate 同步）。"""
+        if self._project is None or self._service is None:
+            return
+        new_value = not self._project.is_on_hold
+        try:
+            updated = self._service.set_on_hold(self._project.project_id, new_value)
+            self._project = updated
+            self._populate_summary()
+        except ValueError as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "更新失败", str(e))
+
+    def _toggle_archived(self) -> None:
+        """切换归档态（独立于 7 阶段完成度）。"""
+        if self._project is None or self._service is None:
+            return
+        new_value = not self._project.is_archived
+        try:
+            updated = self._service.set_archived(self._project.project_id, new_value)
+            self._project = updated
+            self._populate_summary()
+        except ValueError as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "更新失败", str(e))
+
     def _toggle_stage(self, project_id: int, stage_name: str, current_status: StageStatus) -> None:
         """点击阶段按钮：循环切换状态。"""
         if self._service is None:
@@ -248,6 +274,30 @@ class ProjectDrawer(QFrame):
         )
         self._summary_record.clicked.connect(self._toggle_original_record)
         layout.addWidget(self._summary_record)
+
+        # ── 状态标志：暂存 / 归档（两个可勾选按钮，水平并排） ─────
+        # 设计：与 4 档筛选呼应。is_archived 优先级 > is_on_hold（service 层规则）
+        flags_row = QHBoxLayout()
+        flags_row.setContentsMargins(0, 0, 0, 0)
+        flags_row.setSpacing(8)
+        self._btn_on_hold = QPushButton("⏸ 暂存")
+        self._btn_archived = QPushButton("▣ 归档")
+        flag_style = (
+            "QPushButton { font-size: 12px; border: 1px solid #E0E0E0; "
+            "border-radius: 4px; padding: 6px 10px; color: #424242; background: #FFFFFF; }"
+            "QPushButton:hover { border-color: #1976D2; }"
+            "QPushButton:checked { background: %s; color: white; border-color: %s; }"
+        )
+        # 暂存 = 橙色，归档 = 深灰
+        self._btn_on_hold.setCheckable(True)
+        self._btn_on_hold.setStyleSheet(flag_style % ("#FB8C00", "#FB8C00"))
+        self._btn_on_hold.clicked.connect(self._toggle_on_hold)
+        self._btn_archived.setCheckable(True)
+        self._btn_archived.setStyleSheet(flag_style % ("#616161", "#616161"))
+        self._btn_archived.clicked.connect(self._toggle_archived)
+        flags_row.addWidget(self._btn_on_hold, 1)
+        flags_row.addWidget(self._btn_archived, 1)
+        layout.addLayout(flags_row)
 
         # 阶段列表区域
         stages_label = QLabel("进度")
@@ -316,6 +366,13 @@ class ProjectDrawer(QFrame):
         self._summary_record.setText(
             f"原始记录 {'✅ 已写完' if p.original_record_done else '○ 未写完'}"
         )
+        # 同步两个标志位的勾选态（blockSignals 防止 setChecked 触发 clicked）
+        self._btn_on_hold.blockSignals(True)
+        self._btn_on_hold.setChecked(p.is_on_hold)
+        self._btn_on_hold.blockSignals(False)
+        self._btn_archived.blockSignals(True)
+        self._btn_archived.setChecked(p.is_archived)
+        self._btn_archived.blockSignals(False)
 
         # 安全清空旧阶段组件（递归处理 widget 和子 layout）
         while self._stages_layout.count():

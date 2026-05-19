@@ -82,7 +82,9 @@ class PdfToolsView(QWidget):
         outer.setSpacing(10)
 
         title = StrongBodyLabel("PDF 工具", self)
-        title.setStyleSheet("font-size: 22px; font-weight: 600;")
+        # 统一走 style_helper（与项目看板等其他页面 H1 一致）
+        from civ_core.ui.style_helper import qss_title_label
+        title.setStyleSheet(qss_title_label())
         outer.addWidget(title)
 
         subtitle = BodyLabel(

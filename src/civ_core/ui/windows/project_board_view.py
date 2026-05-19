@@ -86,7 +86,8 @@ class NewProjectDialog(MessageBoxBase):
         self.viewLayout.addWidget(self.titleLabel)
 
         self.formLayout = QFormLayout()
-        self.formLayout.setVerticalSpacing(12)
+        # 紧凑垂直间距：12→6，确保整个对话框高度不会遮挡父窗标题栏 / 关闭按钮
+        self.formLayout.setVerticalSpacing(6)
         self.formLayout.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self.formLayout.addRow("项目编号 *:", self.idLineEdit)
@@ -97,7 +98,11 @@ class NewProjectDialog(MessageBoxBase):
         self.formLayout.addRow("保存位置:", folder_row)
 
         self.viewLayout.addLayout(self.formLayout)
-        self.widget.setMinimumWidth(400)
+        self.widget.setMinimumWidth(420)
+        # 限制最大高度：父窗 80%，避免对话框比父窗还高、把窗口标题栏顶出屏幕
+        if parent is not None:
+            parent_h = parent.height() if parent.height() > 0 else 720
+            self.widget.setMaximumHeight(int(parent_h * 0.8))
 
         # 自动路径推导：编号或名称变化 → 更新文件夹预览
         self.idLineEdit.textChanged.connect(self._update_auto_path)
@@ -110,6 +115,10 @@ class NewProjectDialog(MessageBoxBase):
         except Exception:
             pass
         self.yesButton.clicked.connect(self._validate_and_accept)
+
+        # ESC 快捷键关闭（MessageBoxBase 默认不绑 ESC，用户被对话框卡住时的最后退路）
+        from PySide6.QtGui import QKeySequence, QShortcut
+        QShortcut(QKeySequence("Escape"), self, activated=self.reject)
 
     def _browse_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
@@ -205,7 +214,8 @@ class ProjectBoardView(QWidget):
         self._service = service
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 0, 0)
+        # 四边都留间距：右边给"+新建项目"按钮透气；上下避免标题贴到 Tab 栏
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
 
         # ── 顶栏 ────────────────────────────────────────────────
@@ -378,11 +388,28 @@ class ProjectBoardView(QWidget):
             return
         try:
             self._service.create_project(proj, create_folder=False)
-            self._model.refresh()
-            if self._view_stack.currentIndex() == 1:
-                self._board_widget.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "创建失败", str(e))
+            return
+
+        # 默认按对话框选定的 folder_path 物理建文件夹 + 4 个标准子文件夹。
+        # 失败不阻断 DB 记录已创建；用户可手动在抽屉里改路径再点"打开文件夹"补建。
+        if proj.folder_path is not None:
+            try:
+                from civ_core.infra_io.project_folder import SUBFOLDER_NAMES
+                proj.folder_path.mkdir(parents=True, exist_ok=True)
+                for sub in SUBFOLDER_NAMES:
+                    (proj.folder_path / sub).mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                QMessageBox.warning(
+                    self, "文件夹创建警告",
+                    f"项目已保存到数据库，但本地文件夹创建失败：\n{e}\n\n"
+                    f"可以在右侧抽屉里手动修改路径再点「打开文件夹」补建。",
+                )
+
+        self._model.refresh()
+        if self._view_stack.currentIndex() == 1:
+            self._board_widget.refresh()
     def _on_project_deleted(self, _project_id: int) -> None:
         self._model.refresh()
         if self._view_stack.currentIndex() == 1:

@@ -77,7 +77,9 @@ class Word2PdfView(QWidget):
         outer.setSpacing(10)
 
         title = StrongBodyLabel("Word → PDF 批量转换", self)
-        title.setStyleSheet("font-size: 22px; font-weight: 600;")
+        # 统一走 style_helper（与项目看板等其他页面 H1 一致）
+        from civ_core.ui.style_helper import qss_title_label
+        title.setStyleSheet(qss_title_label())
         outer.addWidget(title)
 
         subtitle = BodyLabel(

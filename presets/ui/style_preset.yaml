@@ -11,11 +11,13 @@ typography:
   font_family_ui: "'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif"
   # 等宽字体：用于编号、金额、日期、进度这类对齐敏感的数据列
   font_family_mono: "'JetBrains Mono', 'Consolas', monospace"
-  size_title: 18      # 看板大标题
-  size_subtitle: 14   # 抽屉副标题
-  size_body: 12       # 正文（表格行、卡片名）
-  size_caption: 11    # 次要信息（编号、金额等）
-  size_small: 10      # 最小（页脚 / hint）
+  # 字号阶梯参考 Claude app：body=14（正文最舒服），title=22（页面级 H1），
+  # subtitle=16（区块级 H2），caption=13（次要标签），small=12（页脚 hint）
+  size_title: 22
+  size_subtitle: 16
+  size_body: 14
+  size_caption: 13
+  size_small: 12
 
 colors:
   # 主色 / 强调

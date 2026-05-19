@@ -27,11 +27,12 @@ class Typography:
 
     font_family_ui: str = "'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif"
     font_family_mono: str = "'JetBrains Mono', 'Consolas', monospace"
-    size_title: int = 18
-    size_subtitle: int = 14
-    size_body: int = 12
-    size_caption: int = 11
-    size_small: int = 10
+    # 字号阶梯参考 Claude app（body=14 最舒服，title=22 当页面 H1）
+    size_title: int = 22
+    size_subtitle: int = 16
+    size_body: int = 14
+    size_caption: int = 13
+    size_small: int = 12
 
 
 @dataclass(frozen=True, slots=True)

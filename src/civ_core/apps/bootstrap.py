@@ -21,7 +21,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import Theme, setTheme, setThemeColor
 
@@ -63,6 +63,11 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
     app.setApplicationName(cfg.app.name)
     app.setApplicationVersion(cfg.app.version)
     app.setOrganizationName("CivCore")
+
+    # 全局默认字体（从 style_preset 取 body 字号 + UI 字体族）。
+    # 之后所有未显式 setFont/setStyleSheet 的控件都会跟随此值，
+    # 实现"全局字号统一"——业务代码只需要写 size_subtitle / size_caption 等增量。
+    _apply_global_font(app)
 
     setTheme(_THEME_MAP.get(cfg.ui.theme, Theme.AUTO))
     # 主题色：把 config.toml 里的 ui.accent_color (科技蓝 #0078D4) 应用到全局
@@ -451,6 +456,32 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     background: transparent;
 }
 """
+
+
+def _apply_global_font(app: QApplication) -> None:
+    """把 style_preset.yaml 里的 body 字号 + UI 字体族设为 QApplication 默认。
+
+    为什么不直接写 QSS 选择器 `* { font: ... }`：QSS 通配符性能差且会被 qfluentwidgets
+    内部样式覆盖；QApplication.setFont 是 Qt 推荐的"全局默认"入口，
+    优先级低于任何具体 setFont/setStyleSheet，能被局部样式干净覆盖。
+    """
+    try:
+        # 延迟 import：style_loader 链路涉及 config + yaml，启动早期 import 安全但不强求
+        from civ_core.infra_io.style_loader import load_style_preset
+
+        sty = load_style_preset()
+        families = [s.strip().strip("'\"") for s in sty.typography.font_family_ui.split(",")]
+        f = QFont()
+        f.setFamilies(families)
+        f.setPointSize(sty.typography.size_body)
+        app.setFont(f)
+        log.info(
+            "全局字体应用：family=%s size=%dpt",
+            ", ".join(families[:2]),
+            sty.typography.size_body,
+        )
+    except Exception as e:
+        log.warning("应用全局字体失败（保留 Qt 默认）：%s", e)
 
 
 def _resolve_effective_theme(theme_name: str) -> str:

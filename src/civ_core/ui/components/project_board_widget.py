@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import Project
+from civ_core.infra_io.style_loader import load_style_preset
+from civ_core.ui.style_helper import qss_card
 
 
 class _BoardColumn(QWidget):
@@ -29,9 +31,11 @@ class _BoardColumn(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
+        sty = load_style_preset()
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet(
-            "font-size: 13px; font-weight: bold; color: #424242; padding: 4px 0;"
+            f"font-size: {sty.typography.size_subtitle - 1}px; font-weight: bold; "
+            f"color: {sty.colors.text_primary}; padding: 4px 0;"
         )
         layout.addWidget(self.title_label)
 
@@ -122,39 +126,39 @@ class ProjectBoardWidget(QWidget):
 
     def _make_card(self, proj: Project) -> QFrame:
         """构造一张可点击紧凑卡片。"""
+        sty = load_style_preset()
         card = QFrame()
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setFrameShape(QFrame.Shape.StyledPanel)
-        card.setStyleSheet("""
-            QFrame {
-                background: #FFFFFF;
-                border: 1px solid #E0E0E0;
-                border-radius: 4px;
-                padding: 8px;
-            }
-            QFrame:hover {
-                border-color: #1976D2;
-                background: #F5F8FF;
-            }
-        """)
+        card.setStyleSheet(qss_card())
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
 
+        sub_qss = (
+            f"color: {sty.colors.text_secondary}; "
+            f"font-size: {sty.typography.size_caption}px; border: none;"
+        )
+        name_qss = (
+            f"color: {sty.colors.text_primary}; "
+            f"font-size: {sty.typography.size_body}px; "
+            "font-weight: bold; border: none;"
+        )
+
         # 编号 + 名称
         number = QLabel(proj.project_number)
-        number.setStyleSheet("color: #757575; font-size: 11px; border: none;")
+        number.setStyleSheet(sub_qss)
         layout.addWidget(number)
 
         name = QLabel(proj.name)
         name.setWordWrap(True)
-        name.setStyleSheet("color: #212121; font-size: 12px; font-weight: bold; border: none;")
+        name.setStyleSheet(name_qss)
         layout.addWidget(name)
 
         # 类型 + 金额
         info = QLabel(f"{proj.inspection_type}  ·  ¥{proj.amount:,.0f}")
-        info.setStyleSheet("color: #757575; font-size: 11px; border: none;")
+        info.setStyleSheet(sub_qss)
         layout.addWidget(info)
 
         # 点击卡片 → 打开抽屉

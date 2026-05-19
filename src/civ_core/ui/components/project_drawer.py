@@ -26,6 +26,7 @@ from qfluentwidgets import CalendarPicker, LineEdit, MessageBoxBase
 
 from civ_core.core.project_service import ProjectService
 from civ_core.domain.project_schema import Project, StageStatus
+from civ_core.infra_io.style_loader import load_style_preset
 
 
 class DeleteConfirmDialog(MessageBoxBase):
@@ -255,14 +256,20 @@ class ProjectDrawer(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
+        sty = load_style_preset()
         # 项目信息区
         self._summary_name = QLabel()
         self._summary_name.setWordWrap(True)
-        self._summary_name.setStyleSheet("font-size: 14px; font-weight: bold; color: #212121;")
+        self._summary_name.setStyleSheet(
+            f"font-size: {sty.typography.size_subtitle}px; font-weight: bold; "
+            f"color: {sty.colors.text_primary};"
+        )
         layout.addWidget(self._summary_name)
 
         self._summary_info = QLabel()
-        self._summary_info.setStyleSheet("font-size: 12px; color: #757575;")
+        self._summary_info.setStyleSheet(
+            f"font-size: {sty.typography.size_body}px; color: {sty.colors.text_secondary};"
+        )
         layout.addWidget(self._summary_info)
 
         self._summary_record = QPushButton()
@@ -277,23 +284,30 @@ class ProjectDrawer(QFrame):
 
         # ── 状态标志：暂存 / 归档（两个可勾选按钮，水平并排） ─────
         # 设计：与 4 档筛选呼应。is_archived 优先级 > is_on_hold（service 层规则）
+        sty = load_style_preset()
         flags_row = QHBoxLayout()
         flags_row.setContentsMargins(0, 0, 0, 0)
         flags_row.setSpacing(8)
         self._btn_on_hold = QPushButton("⏸ 暂存")
         self._btn_archived = QPushButton("▣ 归档")
-        flag_style = (
-            "QPushButton { font-size: 12px; border: 1px solid #E0E0E0; "
-            "border-radius: 4px; padding: 6px 10px; color: #424242; background: #FFFFFF; }"
-            "QPushButton:hover { border-color: #1976D2; }"
+        flag_qss_tmpl = (
+            f"QPushButton {{ font-size: {sty.typography.size_body}px; "
+            f"border: 1px solid {sty.colors.border}; "
+            f"border-radius: {sty.dimensions.radius}px; padding: 6px 10px; "
+            f"color: {sty.colors.text_primary}; background: {sty.colors.bg}; }}"
+            f"QPushButton:hover {{ border-color: {sty.colors.primary}; }}"
             "QPushButton:checked { background: %s; color: white; border-color: %s; }"
         )
-        # 暂存 = 橙色，归档 = 深灰
+        # 暂存 = status_on_hold（橙系），归档 = status_archived（深灰）
         self._btn_on_hold.setCheckable(True)
-        self._btn_on_hold.setStyleSheet(flag_style % ("#FB8C00", "#FB8C00"))
+        self._btn_on_hold.setStyleSheet(
+            flag_qss_tmpl % (sty.colors.status_on_hold, sty.colors.status_on_hold)
+        )
         self._btn_on_hold.clicked.connect(self._toggle_on_hold)
         self._btn_archived.setCheckable(True)
-        self._btn_archived.setStyleSheet(flag_style % ("#616161", "#616161"))
+        self._btn_archived.setStyleSheet(
+            flag_qss_tmpl % (sty.colors.status_archived, sty.colors.status_archived)
+        )
         self._btn_archived.clicked.connect(self._toggle_archived)
         flags_row.addWidget(self._btn_on_hold, 1)
         flags_row.addWidget(self._btn_archived, 1)
@@ -316,29 +330,34 @@ class ProjectDrawer(QFrame):
 
         layout.addStretch()
 
-        # 底部按钮
+        # 底部按钮（主操作 + 次要 + 危险）
         btn_edit = QPushButton("进入完整管理")
         btn_edit.setStyleSheet(
-            "QPushButton { background: #1976D2; color: white; border: none; "
-            "border-radius: 4px; padding: 8px; font-size: 12px; }"
-            "QPushButton:hover { background: #1565C0; }"
+            f"QPushButton {{ background: {sty.colors.primary}; color: white; border: none; "
+            f"border-radius: {sty.dimensions.radius}px; padding: 8px; "
+            f"font-size: {sty.typography.size_body}px; }}"
+            f"QPushButton:hover {{ background: {sty.colors.primary_hover}; }}"
         )
         btn_edit.clicked.connect(self._show_edit_page)
         layout.addWidget(btn_edit)
 
         btn_folder = QPushButton("📁 打开文件夹")
         btn_folder.setStyleSheet(
-            "QPushButton { background: #F5F5F5; color: #424242; border: 1px solid #E0E0E0; "
-            "border-radius: 4px; padding: 8px; font-size: 12px; }"
-            "QPushButton:hover { background: #EEEEEE; }"
+            f"QPushButton {{ background: {sty.colors.bg_alt}; color: {sty.colors.text_primary}; "
+            f"border: 1px solid {sty.colors.border}; "
+            f"border-radius: {sty.dimensions.radius}px; padding: 8px; "
+            f"font-size: {sty.typography.size_body}px; }}"
+            f"QPushButton:hover {{ background: {sty.colors.bg_header}; }}"
         )
         btn_folder.clicked.connect(self._on_open_folder)
         layout.addWidget(btn_folder)
 
         btn_delete = QPushButton("删除项目")
         btn_delete.setStyleSheet(
-            "QPushButton { background: transparent; color: #E53935; border: 1px solid #E53935; "
-            "border-radius: 4px; padding: 8px; font-size: 12px; }"
+            f"QPushButton {{ background: transparent; color: {sty.colors.danger}; "
+            f"border: 1px solid {sty.colors.danger}; "
+            f"border-radius: {sty.dimensions.radius}px; padding: 8px; "
+            f"font-size: {sty.typography.size_body}px; }}"
             "QPushButton:hover { background: #FFEBEE; }"
         )
         btn_delete.clicked.connect(self._on_delete)

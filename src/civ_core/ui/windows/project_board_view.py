@@ -37,6 +37,13 @@ from civ_core.ui.models.project_filter_sort_proxy import (
     ProjectFilterSortProxy,
 )
 from civ_core.ui.models.project_table_model import ProjectTableModel
+from civ_core.ui.style_helper import (
+    qss_primary_button,
+    qss_segmented_button,
+    qss_table,
+    qss_title_label,
+    qss_view_toggle_button,
+)
 
 
 class NewProjectDialog(MessageBoxBase):
@@ -208,9 +215,7 @@ class ProjectBoardView(QWidget):
 
         title = QLabel("项目看板")
         title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        title.setStyleSheet(
-            "font-size: 18px; font-weight: bold; color: #212121;"
-        )
+        title.setStyleSheet(qss_title_label())
         top.addWidget(title)
 
         top.addSpacing(16)
@@ -229,11 +234,7 @@ class ProjectBoardView(QWidget):
         for btn in self._filter_buttons.values():
             btn.setCheckable(True)
             btn.setFixedHeight(30)
-            btn.setStyleSheet(
-                "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
-                "padding: 0 12px; font-size: 12px; background: #FFF; }"
-                "QPushButton:checked { background: #1976D2; color: white; border-color: #1976D2; }"
-            )
+            btn.setStyleSheet(qss_segmented_button())
             top.addWidget(btn)
         self._btn_all.setChecked(True)
 
@@ -248,11 +249,7 @@ class ProjectBoardView(QWidget):
         for btn in (self._btn_list, self._btn_board):
             btn.setCheckable(True)
             btn.setFixedHeight(30)
-            btn.setStyleSheet(
-                "QPushButton { border: 1px solid #E0E0E0; border-radius: 4px; "
-                "padding: 0 10px; font-size: 12px; background: #FFF; }"
-                "QPushButton:checked { background: #424242; color: white; }"
-            )
+            btn.setStyleSheet(qss_view_toggle_button())
         self._btn_list.setChecked(True)
         self._btn_list.clicked.connect(self._show_list_view)
         self._btn_board.clicked.connect(self._switch_to_board)
@@ -263,11 +260,7 @@ class ProjectBoardView(QWidget):
         # 新建
         self._btn_new = QPushButton("＋ 新建项目")
         self._btn_new.setFixedHeight(30)
-        self._btn_new.setStyleSheet(
-            "QPushButton { background: #1976D2; color: white; border: none; "
-            "border-radius: 4px; padding: 0 16px; font-size: 11px; }"
-            "QPushButton:hover { background: #1565C0; }"
-        )
+        self._btn_new.setStyleSheet(qss_primary_button())
         self._btn_new.clicked.connect(self._on_new_project)
         top.addWidget(self._btn_new)
 
@@ -299,12 +292,7 @@ class ProjectBoardView(QWidget):
         # 启用点击表头排序；默认按创建日期倒序
         self._table_view.setSortingEnabled(True)
         self._table_view.sortByColumn(ProjectTableModel.DateCol, Qt.SortOrder.DescendingOrder)
-        self._table_view.setStyleSheet(
-            "QTableView { border: none; background: #FFFFFF; alternate-background-color: #F8F9FA; }"
-            "QTableView::item { padding: 4px 6px; }"
-            "QHeaderView::section { background: #F0F0F0; border: none; border-bottom: 1px solid #E0E0E0; "
-            "padding: 6px 6px; font-size: 11px; font-weight: bold; color: #616161; }"
-        )
+        self._table_view.setStyleSheet(qss_table())
 
         hdr = self._table_view.horizontalHeader()
         hdr.setSectionResizeMode(ProjectTableModel.StatusCol, QHeaderView.ResizeMode.Fixed)

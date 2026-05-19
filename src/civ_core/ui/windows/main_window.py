@@ -15,7 +15,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
@@ -137,3 +138,26 @@ class MainWindow(FluentWindow):
         # 而不被子组件累加的 sizeHint 顶住。720×480 已能完整看到导航 + 左栏 +
         # 一个最低限度的预览/底栏；再小排版会塌但 Qt 自身仍能正常处理。
         self.setMinimumSize(720, 480)
+        # 优先从 QSettings 恢复上次的窗口几何；首次启动则居中主屏
+        settings = QSettings("ZGQ", "CivCore")
+        geom = settings.value("mainwindow/geometry")
+        if geom:
+            self.restoreGeometry(geom)
+        else:
+            self._center_on_primary_screen()
+
+    def _center_on_primary_screen(self) -> None:
+        """把窗口移到主屏可用区域中心（任务栏 / Dock 之外的区域）。"""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        avail = screen.availableGeometry()
+        x = avail.x() + (avail.width() - self.width()) // 2
+        y = avail.y() + (avail.height() - self.height()) // 2
+        self.move(max(avail.x(), x), max(avail.y(), y))
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        """保存窗口几何到 QSettings，供下次启动 restoreGeometry 恢复。"""
+        settings = QSettings("ZGQ", "CivCore")
+        settings.setValue("mainwindow/geometry", self.saveGeometry())
+        super().closeEvent(event)

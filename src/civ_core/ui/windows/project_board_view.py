@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QPropertyAnimation, QSettings, Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -15,8 +16,10 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QStackedWidget,
     QTableView,
     QVBoxLayout,
@@ -246,7 +249,12 @@ class ProjectBoardView(QWidget):
             btn.setFixedHeight(30)
             btn.setStyleSheet(qss_segmented_button())
             top.addWidget(btn)
-        self._btn_all.setChecked(True)
+        # 启动时恢复上次筛选档（默认全部）
+        _saved_filter = QSettings("ZGQ", "CivCore").value("projects/filter_type", FILTER_ALL)
+        if _saved_filter not in self._filter_buttons:
+            _saved_filter = FILTER_ALL
+        for ftype, btn in self._filter_buttons.items():
+            btn.setChecked(ftype == _saved_filter)
 
         for ftype, btn in self._filter_buttons.items():
             btn.clicked.connect(lambda _checked=False, t=ftype: self._on_filter_changed(t))
@@ -271,15 +279,20 @@ class ProjectBoardView(QWidget):
         self._btn_new = QPushButton("＋ 新建项目")
         self._btn_new.setFixedHeight(30)
         self._btn_new.setStyleSheet(qss_primary_button())
+        self._btn_new.setToolTip("新建检测项目 (Ctrl+N)")
         self._btn_new.clicked.connect(self._on_new_project)
         top.addWidget(self._btn_new)
 
+        # 全局快捷键：Ctrl+N 新建项目（工程软件惯例）
+        from PySide6.QtGui import QKeySequence, QShortcut
+        QShortcut(QKeySequence("Ctrl+N"), self, activated=self._on_new_project)
+
         layout.addLayout(top)
 
-        # ── 主体（横向：视图 + Drawer） ─────────────────────────
-        body = QHBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
+        # ── 主体：QSplitter（左视图 / 右抽屉），用户可拖动手柄调整抽屉宽度 ────
+        self._body_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._body_splitter.setHandleWidth(4)
+        self._body_splitter.setChildrenCollapsible(False)
 
         # 主视图栈
         self._view_stack = QStackedWidget()
@@ -299,43 +312,87 @@ class ProjectBoardView(QWidget):
         self._table_view.horizontalHeader().setStretchLastSection(False)
         self._table_view.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         self._table_view.setAlternatingRowColors(True)
-        # 启用点击表头排序；默认按创建日期倒序
+        # 启用点击表头排序；从 QSettings 恢复上次排序状态，默认按创建日期倒序
         self._table_view.setSortingEnabled(True)
-        self._table_view.sortByColumn(ProjectTableModel.DateCol, Qt.SortOrder.DescendingOrder)
+        self._restore_sort_state()
         self._table_view.setStyleSheet(qss_table())
 
         hdr = self._table_view.horizontalHeader()
-        # 状态列固定（图标列，不让用户拖）；名称列 Stretch 占满剩余；其余 Interactive 可拖
+        # 全部 Interactive：拖动任一分隔线只影响该分隔线两侧的列，符合
+        # Excel / 资源管理器等工程软件惯例。
+        # 注：不再用 Stretch（之前用 Stretch 会让"中间列"吸收所有变化，
+        # 导致用户拖动 Type|Amount 时反而看到 NameCol 在收缩，反直觉）。
         hdr.setSectionResizeMode(ProjectTableModel.StatusCol, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(ProjectTableModel.NumberCol, QHeaderView.ResizeMode.Interactive)
-        hdr.setSectionResizeMode(ProjectTableModel.NameCol, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(ProjectTableModel.TypeCol, QHeaderView.ResizeMode.Interactive)
-        hdr.setSectionResizeMode(ProjectTableModel.AmountCol, QHeaderView.ResizeMode.Interactive)
-        hdr.setSectionResizeMode(ProjectTableModel.DateCol, QHeaderView.ResizeMode.Interactive)
-        hdr.setSectionResizeMode(ProjectTableModel.ProgressCol, QHeaderView.ResizeMode.Interactive)
+        for col in (
+            ProjectTableModel.NumberCol,
+            ProjectTableModel.NameCol,
+            ProjectTableModel.TypeCol,
+            ProjectTableModel.AmountCol,
+            ProjectTableModel.DateCol,
+            ProjectTableModel.ProgressCol,
+        ):
+            hdr.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
         # 应用初始列宽（用户预设优先；没存过则用默认）
         self._apply_default_column_widths()
         self._restore_column_widths()
         # 列宽变化时持久化（仅 user 主动拖动触发，初始化期间也会触发但写入一致值无害）
         hdr.sectionResized.connect(self._on_section_resized)
+        # 表格 viewport 大小变化 → 让 NameCol 自动吸收剩余空间（不用 Stretch 避免拖动反向）
+        self._table_view.installEventFilter(self)
 
         self._table_view.clicked.connect(self._on_table_row_clicked)
-        self._view_stack.addWidget(self._table_view)
+        # 右键菜单（工程软件惯例：表格行右键 → 快捷操作）
+        self._table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table_view.customContextMenuRequested.connect(self._on_table_context_menu)
+
+        # 表格内嵌一个 stack：表格 / 空状态 二选一
+        self._table_stack = QStackedWidget()
+        self._table_stack.addWidget(self._table_view)
+        self._table_stack.addWidget(self._build_empty_state())
+        self._view_stack.addWidget(self._table_stack)
+
+        # proxy 行数变化 → 自动切换 table / empty
+        self._proxy.modelReset.connect(self._refresh_empty_state)
+        self._proxy.rowsInserted.connect(self._refresh_empty_state)
+        self._proxy.rowsRemoved.connect(self._refresh_empty_state)
+        self._refresh_empty_state()
+        # 应用启动时恢复的筛选档（持久化值不等于默认时立即生效）
+        if _saved_filter != FILTER_ALL:
+            self._proxy.set_filter_type(_saved_filter)
+
         # 看板视图
         self._board_widget = ProjectBoardWidget()
         self._board_widget.set_service(self._service)
         self._board_widget.card_clicked = self._on_board_card_clicked
         self._view_stack.addWidget(self._board_widget)
 
-        body.addWidget(self._view_stack, 1)
+        self._body_splitter.addWidget(self._view_stack)
 
-        # 右侧 Drawer
+        # 右侧 Drawer（放进 splitter，用户可拖左侧手柄调整宽度）
         self._drawer = ProjectDrawer()
+        self._drawer.opened = self._on_drawer_opened
         self._drawer.closed = self._on_drawer_closed
         self._drawer.project_deleted = self._on_project_deleted
-        body.addWidget(self._drawer)
+        self._body_splitter.addWidget(self._drawer)
+        # 关闭态：splitter sizes = [view, 0]；打开态：[view, saved_drawer_w or 400]
+        self._body_splitter.setSizes([1, 0])
+        self._body_splitter.setStretchFactor(0, 1)
+        self._body_splitter.setStretchFactor(1, 0)
+        self._body_splitter.splitterMoved.connect(self._on_drawer_resized)
 
-        layout.addLayout(body, 1)
+        layout.addWidget(self._body_splitter, 1)
+
+        # ── 底部状态栏：项目数 + DB 路径 ─────────────────────────────
+        self._status_label = QLabel()
+        self._status_label.setStyleSheet(
+            "color: #757575; font-size: 12px; padding: 2px 6px; "
+            "border-top: 1px solid #E0E0E0;"
+        )
+        layout.addWidget(self._status_label)
+        self._proxy.modelReset.connect(self._refresh_status_bar)
+        self._proxy.rowsInserted.connect(self._refresh_status_bar)
+        self._proxy.rowsRemoved.connect(self._refresh_status_bar)
+        self._refresh_status_bar()
 
     # ════════════════════════════════════════════════════════════
     # 视图切换
@@ -355,10 +412,12 @@ class ProjectBoardView(QWidget):
     # 筛选
     # ════════════════════════════════════════════════════════════
     def _on_filter_changed(self, filter_type: str) -> None:
-        """4 档筛选切换：联动按钮态 + 通知 Proxy 立即重过滤。"""
+        """4 档筛选切换：联动按钮态 + 通知 Proxy 立即重过滤 + 持久化到 QSettings。"""
         for ftype, btn in self._filter_buttons.items():
             btn.setChecked(ftype == filter_type)
         self._proxy.set_filter_type(filter_type)
+        settings = QSettings("ZGQ", "CivCore")
+        settings.setValue("projects/filter_type", filter_type)
 
     # ════════════════════════════════════════════════════════════
     # 交互
@@ -373,6 +432,86 @@ class ProjectBoardView(QWidget):
         if proj:
             self._drawer.set_project(proj, self._service)
             self._drawer.open()
+
+    def _project_at_proxy_index(self, proxy_index) -> Project | None:
+        """proxy 索引 → Project 对象。"""
+        if not proxy_index.isValid():
+            return None
+        source_idx = self._proxy.mapToSource(proxy_index)
+        return self._model.data(
+            self._model.index(source_idx.row(), 0),
+            Qt.ItemDataRole.UserRole,
+        )
+
+    def _on_table_context_menu(self, pos) -> None:
+        """表格右键菜单：打开详情 / 暂存切换 / 归档切换 / 打开文件夹 / 删除。"""
+        index = self._table_view.indexAt(pos)
+        proj = self._project_at_proxy_index(index)
+        if proj is None:
+            return
+
+        menu = QMenu(self._table_view)
+        act_open = QAction("打开详情", menu)
+        act_hold = QAction("取消暂存" if proj.is_on_hold else "暂存", menu)
+        act_arch = QAction("取消归档" if proj.is_archived else "归档", menu)
+        act_folder = QAction("打开文件夹", menu)
+        act_delete = QAction("删除项目…", menu)
+
+        act_open.triggered.connect(lambda: self._open_drawer_for(proj))
+        act_hold.triggered.connect(lambda: self._ctx_toggle_on_hold(proj))
+        act_arch.triggered.connect(lambda: self._ctx_toggle_archived(proj))
+        act_folder.triggered.connect(lambda: self._ctx_open_folder(proj))
+        act_delete.triggered.connect(lambda: self._ctx_delete(proj))
+
+        menu.addAction(act_open)
+        menu.addSeparator()
+        menu.addAction(act_hold)
+        menu.addAction(act_arch)
+        menu.addSeparator()
+        menu.addAction(act_folder)
+        menu.addAction(act_delete)
+        # 文件夹未绑定时禁用打开
+        if proj.folder_path is None:
+            act_folder.setEnabled(False)
+
+        menu.exec(self._table_view.viewport().mapToGlobal(pos))
+
+    def _open_drawer_for(self, proj: Project) -> None:
+        self._drawer.set_project(proj, self._service)
+        self._drawer.open()
+
+    def _ctx_toggle_on_hold(self, proj: Project) -> None:
+        try:
+            self._service.set_on_hold(proj.project_id, not proj.is_on_hold)
+            self._model.refresh()
+        except ValueError as e:
+            QMessageBox.warning(self, "操作失败", str(e))
+
+    def _ctx_toggle_archived(self, proj: Project) -> None:
+        try:
+            self._service.set_archived(proj.project_id, not proj.is_archived)
+            self._model.refresh()
+        except ValueError as e:
+            QMessageBox.warning(self, "操作失败", str(e))
+
+    def _ctx_open_folder(self, proj: Project) -> None:
+        if proj.folder_path is None:
+            return
+        from civ_core.infra_io.project_folder import open_project_folder
+        try:
+            open_project_folder(proj.folder_path)
+        except FileNotFoundError:
+            QMessageBox.warning(self, "打开失败", f"文件夹不存在：\n{proj.folder_path}")
+
+    def _ctx_delete(self, proj: Project) -> None:
+        from civ_core.ui.components.project_drawer import DeleteConfirmDialog
+        dlg = DeleteConfirmDialog(proj.project_number, self.window())
+        if not dlg.exec():
+            return
+        self._service.delete_project(proj.project_id)
+        self._model.refresh()
+        if self._view_stack.currentIndex() == 1:
+            self._board_widget.refresh()
 
     def _on_board_card_clicked(self, proj: Project) -> None:
         self._drawer.set_project(proj, self._service)
@@ -416,9 +555,39 @@ class ProjectBoardView(QWidget):
             self._board_widget.refresh()
 
     def _on_drawer_closed(self) -> None:
+        # 收起 drawer：splitter 第二格设为 0
+        sizes = self._body_splitter.sizes()
+        total = sum(sizes) if sum(sizes) > 0 else 1
+        self._body_splitter.setSizes([total, 0])
         self._model.refresh()
         if self._view_stack.currentIndex() == 1:
             self._board_widget.refresh()
+
+    _DRAWER_DEFAULT_WIDTH = 400
+    _DRAWER_MIN_WIDTH = 280
+
+    def _on_drawer_opened(self) -> None:
+        """展开 drawer：从 QSettings 取上次宽度（默认 400），splitter setSizes。"""
+        settings = QSettings("ZGQ", "CivCore")
+        raw = settings.value("projects/drawer_width")
+        try:
+            drawer_w = int(raw) if raw is not None else self._DRAWER_DEFAULT_WIDTH
+        except (TypeError, ValueError):
+            drawer_w = self._DRAWER_DEFAULT_WIDTH
+        drawer_w = max(self._DRAWER_MIN_WIDTH, drawer_w)
+        total = sum(self._body_splitter.sizes())
+        if total <= 0:
+            total = self._body_splitter.width() or 1000
+        view_w = max(200, total - drawer_w)
+        self._body_splitter.setSizes([view_w, drawer_w])
+
+    def _on_drawer_resized(self, _pos: int, _index: int) -> None:
+        """用户拖动 splitter 手柄 → 保存 drawer 宽度到 QSettings。"""
+        sizes = self._body_splitter.sizes()
+        if len(sizes) < 2 or sizes[1] < self._DRAWER_MIN_WIDTH:
+            return
+        settings = QSettings("ZGQ", "CivCore")
+        settings.setValue("projects/drawer_width", int(sizes[1]))
 
     def refresh(self) -> None:
         self._model.refresh()
@@ -426,16 +595,82 @@ class ProjectBoardView(QWidget):
             self._board_widget.refresh()
 
     # ════════════════════════════════════════════════════════════
+    # 空状态
+    # ════════════════════════════════════════════════════════════
+    def _build_empty_state(self) -> QWidget:
+        """构造空状态占位页（无项目 / 筛选无结果时显示）。"""
+        from civ_core.infra_io.style_loader import load_style_preset
+        sty = load_style_preset()
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.setSpacing(12)
+
+        icon = QLabel("📂")
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon.setStyleSheet("font-size: 56px;")
+        v.addWidget(icon)
+
+        self._empty_title = QLabel("还没有项目")
+        self._empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_title.setStyleSheet(
+            f"font-size: {sty.typography.size_subtitle}px; font-weight: 600; "
+            f"color: {sty.colors.text_primary};"
+        )
+        v.addWidget(self._empty_title)
+
+        self._empty_hint = QLabel("点击右上角「+ 新建项目」开始（Ctrl+N）")
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet(
+            f"font-size: {sty.typography.size_body}px; color: {sty.colors.text_secondary};"
+        )
+        v.addWidget(self._empty_hint)
+
+        return page
+
+    def _refresh_status_bar(self, *_args) -> None:
+        """更新底部状态栏：总数 / 进行中 / 暂存 / 已归档 + DB 路径 tooltip。"""
+        all_projects = self._service.list_projects()
+        total = len(all_projects)
+        active = sum(1 for p in all_projects if not p.is_on_hold and not p.is_archived)
+        on_hold = sum(1 for p in all_projects if p.is_on_hold and not p.is_archived)
+        archived = sum(1 for p in all_projects if p.is_archived)
+        showing = self._proxy.rowCount()
+        self._status_label.setText(
+            f"显示 {showing} / 共 {total} 个项目  ·  正在进行 {active}  ·  "
+            f"暂存 {on_hold}  ·  已归档 {archived}"
+        )
+        from pathlib import Path
+        db_path = Path("~/.civ-core/projects.db").expanduser()
+        self._status_label.setToolTip(f"数据库：{db_path}")
+
+    def _refresh_empty_state(self, *_args) -> None:
+        """proxy 行数 0 → 切到空状态；> 0 → 切回表格。"""
+        is_empty = self._proxy.rowCount() == 0
+        self._table_stack.setCurrentIndex(1 if is_empty else 0)
+        if is_empty:
+            # 区分两种空：DB 真的没数据 vs 仅当前筛选无匹配
+            db_total = self._model.rowCount()
+            if db_total == 0:
+                self._empty_title.setText("还没有项目")
+                self._empty_hint.setText("点击右上角「+ 新建项目」开始（Ctrl+N）")
+            else:
+                self._empty_title.setText("没有匹配当前筛选的项目")
+                self._empty_hint.setText("切换上方筛选档查看更多")
+
+    # ════════════════════════════════════════════════════════════
     # 列宽持久化（QSettings("ZGQ", "CivCore") / projects/column_width/<col>）
     # ════════════════════════════════════════════════════════════
     _COLUMN_WIDTH_DEFAULTS = {
         ProjectTableModel.StatusCol: 40,
         ProjectTableModel.NumberCol: 110,
+        ProjectTableModel.NameCol: 280,
         ProjectTableModel.TypeCol: 100,
         ProjectTableModel.AmountCol: 100,
         ProjectTableModel.DateCol: 110,
         ProjectTableModel.ProgressCol: 80,
     }
+    _NAME_COL_MIN_WIDTH = 160  # NameCol 自动填充时的最小宽度
 
     def _apply_default_column_widths(self) -> None:
         for col, w in self._COLUMN_WIDTH_DEFAULTS.items():
@@ -455,6 +690,30 @@ class ProjectBoardView(QWidget):
             if 20 <= w <= 800:  # 防御越界值
                 self._table_view.setColumnWidth(col, w)
 
+    def _restore_sort_state(self) -> None:
+        """从 QSettings 恢复排序列 / 顺序，默认 DateCol 倒序。"""
+        settings = QSettings("ZGQ", "CivCore")
+        try:
+            col = int(settings.value("projects/sort_column", ProjectTableModel.DateCol))
+        except (TypeError, ValueError):
+            col = ProjectTableModel.DateCol
+        order_raw = settings.value("projects/sort_order", "desc")
+        order = Qt.SortOrder.AscendingOrder if order_raw == "asc" else Qt.SortOrder.DescendingOrder
+        # 越界保护
+        if not (0 <= col < self._model.columnCount()):
+            col = ProjectTableModel.DateCol
+        self._table_view.sortByColumn(col, order)
+        # 监听后续变更并持久化
+        self._table_view.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
+
+    def _on_sort_changed(self, col: int, order: Qt.SortOrder) -> None:
+        settings = QSettings("ZGQ", "CivCore")
+        settings.setValue("projects/sort_column", int(col))
+        settings.setValue(
+            "projects/sort_order",
+            "asc" if order == Qt.SortOrder.AscendingOrder else "desc",
+        )
+
     def _on_section_resized(self, col: int, _old: int, new_size: int) -> None:
         """用户拖动列宽 → 写 QSettings。仅持久化我们关心的列。"""
         if col not in self._COLUMN_WIDTH_DEFAULTS:
@@ -463,3 +722,33 @@ class ProjectBoardView(QWidget):
             return  # 太窄当作误触不写
         settings = QSettings("ZGQ", "CivCore")
         settings.setValue(f"projects/column_width/{col}", int(new_size))
+
+    def eventFilter(self, watched, event) -> bool:
+        """监听表格 viewport resize：自动让 NameCol 吸收剩余宽度。
+
+        策略：仅在「表格本身变宽 & NameCol 当前宽度小于理想填充宽度」时
+        扩展 NameCol。不在用户主动拖窄 NameCol 时反弹（尊重用户操作）。
+        """
+        from PySide6.QtCore import QEvent
+        if watched is self._table_view and event.type() == QEvent.Type.Resize:
+            self._autofit_name_column()
+        return super().eventFilter(watched, event)
+
+    def _autofit_name_column(self) -> None:
+        """NameCol 自动填充剩余可视宽度（仅在剩余 > NameCol 当前宽度时扩展）。"""
+        viewport_w = self._table_view.viewport().width()
+        other_w = sum(
+            self._table_view.columnWidth(c)
+            for c in self._COLUMN_WIDTH_DEFAULTS
+            if c != ProjectTableModel.NameCol
+        )
+        ideal_name_w = max(self._NAME_COL_MIN_WIDTH, viewport_w - other_w)
+        current = self._table_view.columnWidth(ProjectTableModel.NameCol)
+        # 仅当理想宽度比当前大时扩展（避免反复抢用户拖动）；
+        # 收窄场景由 sectionResized 持久化机制兜底。
+        if ideal_name_w > current:
+            # 暂时阻断信号，避免触发 _on_section_resized 把自动填充值当用户操作存
+            hdr = self._table_view.horizontalHeader()
+            hdr.blockSignals(True)
+            self._table_view.setColumnWidth(ProjectTableModel.NameCol, ideal_name_w)
+            hdr.blockSignals(False)

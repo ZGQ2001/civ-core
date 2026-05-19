@@ -1,6 +1,7 @@
-"""ProjectDrawer：右侧滑出抽屉面板。
+"""ProjectDrawer：右侧抽屉面板。
 
-覆盖主区域约 40%，QPropertyAnimation 控制滑入/滑出。
+宽度由父 QSplitter 控制（用户可拖动手柄无级调整）；本类只负责内容渲染
++ 打开/关闭事件通知（opened / closed 回调），不再自己管动画 / 宽度。
 内部 QStackedWidget 两层：摘要页 ↔ 完整编辑页。
 """
 
@@ -9,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -82,11 +83,10 @@ class ProjectDrawer(QFrame):
         super().__init__(parent)
         self._project: Project | None = None
         self._service: ProjectService | None = None
-        self._animation: QPropertyAnimation | None = None
 
         self.setObjectName("ProjectDrawer")
-        self.setFixedWidth(0)
-        self.setMaximumWidth(0)
+        # 宽度由外部 QSplitter 控制（不再 setFixedWidth/maximumWidth 动画）
+        self.setMinimumWidth(0)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet("""
             #ProjectDrawer {
@@ -134,41 +134,20 @@ class ProjectDrawer(QFrame):
         self._show_summary_page()
         self._populate_summary()
 
-    closed = None       # callback set by ProjectBoardView
+    closed = None       # callback set by ProjectBoardView：drawer 关闭时调用
+    opened = None       # callback set by ProjectBoardView：drawer 打开时调用
     project_deleted = None  # callback: (int) -> None
 
     def open(self) -> None:
+        """通知外部展开抽屉（实际宽度由父 QSplitter 控制）。"""
         if self._project is None:
             return
-        self._animate_to(self._DRAWER_WIDTH)
+        if self.opened is not None:
+            self.opened()
 
     def close(self) -> None:
-        # 立即收拢 fixedWidth，动画只负责视觉过渡
-        self.setFixedWidth(0)
-        if self._animation is not None and self._animation.state() == QPropertyAnimation.State.Running:
-            self._animation.stop()
-        self._animation = QPropertyAnimation(self, b"maximumWidth")
-        self._animation.setDuration(80)
-        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._animation.setStartValue(self._DRAWER_WIDTH)
-        self._animation.setEndValue(0)
-        self._animation.start()
-        # 通知外部刷新
+        """通知外部收起抽屉（实际宽度由父 QSplitter 控制）。"""
         self._on_closed()
-
-    # 内部
-    def _animate_to(self, target: int) -> None:
-        if self._animation is not None and self._animation.state() == QPropertyAnimation.State.Running:
-            self._animation.stop()
-        self._animation = QPropertyAnimation(self, b"maximumWidth")
-        self._animation.setDuration(120)
-        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._animation.setStartValue(self.maximumWidth())
-        self._animation.setEndValue(target)
-        self._animation.start()
-
-        if target > 0:
-            self.setFixedWidth(self._DRAWER_WIDTH)
 
     def _on_closed(self) -> None:
         if self.closed is not None:

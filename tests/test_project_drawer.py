@@ -119,16 +119,29 @@ class TestStatusFlagToggles:
         assert reloaded.is_on_hold is False
 
 
-class TestAnimation:
-    def test_open_creates_animation(self, qapp: QApplication) -> None:
-        drawer = ProjectDrawer()
-        drawer.set_project(_project(), None)
-        drawer.open()
-        assert drawer._animation is not None
+class TestOpenCloseCallbacks:
+    """drawer 改成由 QSplitter 控制宽度后，open/close 只通知外部回调。"""
 
-    def test_close_animates_to_zero(self, qapp: QApplication) -> None:
+    def test_open_triggers_opened_callback(self, qapp: QApplication) -> None:
         drawer = ProjectDrawer()
         drawer.set_project(_project(), None)
+        called = []
+        drawer.opened = lambda: called.append(1)
         drawer.open()
+        assert called == [1]
+
+    def test_close_triggers_closed_callback(self, qapp: QApplication) -> None:
+        drawer = ProjectDrawer()
+        drawer.set_project(_project(), None)
+        called = []
+        drawer.closed = lambda: called.append(1)
         drawer.close()
-        assert drawer._animation is not None
+        assert called == [1]
+
+    def test_open_without_project_no_callback(self, qapp: QApplication) -> None:
+        # 没 set_project 就 open 不应触发 opened
+        drawer = ProjectDrawer()
+        called = []
+        drawer.opened = lambda: called.append(1)
+        drawer.open()
+        assert called == []

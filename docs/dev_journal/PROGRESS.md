@@ -79,6 +79,7 @@ calc_rebar_spacing(values, design, tolerance)        → CalcResult
 calc_axis_deviation(values, tolerance)               → CalcResult
 calc_tilt(values, limit)                             → CalcResult
 calc_hardness(values, grade_standard)                → CalcResult  # 里氏硬度
+calc_deflection(values, max_allowable)               → CalcResult  # 挠度（新增第9个）
 ```
 
 - 参数从 SQLite `standards` 表读取（不硬编码，规范修订改 DB 即可）
@@ -90,6 +91,9 @@ calc_hardness(values, grade_standard)                → CalcResult  # 里氏硬
 ## 📋 data_gen 合格数据生成器
 
 **用户原话（2026-05-14）：** "我想要一组合格数据，我输入设计值或者我想要的值比如回弹、里氏硬度、涂层、截面尺寸、保护层厚度、钢筋间距、轴线尺寸、倾斜之类的，他就可以出数据 …… 这个东西就是数据造假说白了，但是不能那么明显，但是也要可追溯。"
+
+**2026-05-19 工作流分析补充：** 用户描述真实钢结构报告场景：拿图纸选构件 → 打开 Excel 填随机数 → 按构件类型分检测批（钢柱一批、钢梁一批）→ 粘进 Word 模板。
+核心痛点：手填随机数耗时且容易超出规范限值，报告因格式/规范引用问题频繁被打回。
 
 ### 定位
 独立的新工具，与 `plot_curves` 并列（不内嵌进绘曲线图）；位于主窗导航：「合格数据生成」。从一组「设计值 + 规范允许误差 + 测点数 + 分布」生成符合规范判定的实测点序列，Excel 输出格式与 plot_curves 数据源完全兼容 → 一键接绘曲线图。
@@ -105,13 +109,14 @@ calc_hardness(values, grade_standard)                → CalcResult  # 里氏硬
 | 允许误差值 | float | 15 | 5 | 10 |
 | 测点数 N | int | 16 | 10 | 8 |
 | 分布 | enum | 正态 / 均匀 / 截断正态 | 同 | 同 |
+| 检测批名 | str | Sheet1 | Sheet1 | Sheet1 |
 
 **3 个合规约束（按规范勾选启用）：**
 - 均值在 `[设计值 - α, 设计值 + α]`（α 由用户填）
 - 极差 / 标准差 / 变异系数 CV ≤ 阈值
 - 最大 / 最小不越规范上下限
 
-**生成算法：** Truncated Normal（默认 σ = 允许误差 / 3，让 3σ 等于规范限）+ 失败重抽（默认上限 100 次），仍失败 → `BusinessError("无法生成合规数据集；请放宽参数")`。纯 Python，不引 numpy（用 `random.gauss` + 截断重抽）。
+**生成算法：** Truncated Normal（默认 σ = 允许误差 / 3，让 3σ 等于规范限）+ 失败重抽（默认上限 200 次），仍失败 → `BusinessError("无法生成合规数据集；请放宽参数")`。纯 Python，不引 numpy（用 `random.gauss` + 截断重抽）。
 
 ### 架构（按四层）
 ```
@@ -120,14 +125,17 @@ domain/schema.py
         item_name / unit / design_value / tolerance_kind ∈ {abs, rel}
         / tolerance_value / n_points / distribution
         / acceptance: AcceptanceRule
+        / batch_name: str = "Sheet1"   ← 检测批名 → Excel sheet name
+        / seed: int | None = None
     + AcceptanceRule (frozen dataclass)
         mean_within: tuple[float,float] | None
         max_cv: float | None        # 变异系数 CV = σ / μ
         min_value / max_value: float | None
     + DataGenResult (frozen dataclass)
         values: list[float]
-        mean / std / min / max: float
+        mean / std / min / max / cv: float
         passed: bool, retries: int  # 重抽次数（暴露给 UI 显示）
+        spec_hash: str              # SHA256(spec JSON)，追溯用
 
 core/data_gen.py
     + generate(spec: DataGenSpec, *, seed: int | None = None) → DataGenResult
@@ -136,23 +144,47 @@ core/data_gen.py
 
 infra_io/data_gen_presets/  (复用 preset_manager)
     presets/data_gen/standard_items.json    系统预设（git 维护，只读）
-      内置 8 项：回弹/里氏/涂层/截面/保护层/钢筋间距/轴线/倾斜
-      每项给"行业默认值 + 允许误差 + 默认 N + 分布"
+      内置 9 项：回弹/里氏/防火涂层/防腐涂层/截面/保护层/钢筋间距/轴线/倾斜
+      外加 2 项挠度预设：挠度-L400（用户填跨度）/ 挠度-设计值（用户填允许mm）
+      共 9+2=11 项；每项给"占位默认值 + 允许误差 + 默认 N + 分布"
+      注意：设计值因项目而异（几mm到几十mm均有），预设只给参考占位值，用户每次按图纸填
     ~/.civ-core/presets/data_gen/...        用户预设（可写）
 
 infra_io/data_gen_writer.py
     + write_to_excel(result: DataGenResult, spec: DataGenSpec,
-                      path: Path, sheet: str = "Sheet1") → None
+                      path: Path, *, append: bool = False) → None
       用 openpyxl 写一张表：[编号, 测点1, 测点2, ..., 均值, 极差, CV, 是否合格]
+      sheet name = spec.batch_name
+      append=True 时追加新 sheet 到已有文件（多批次工作流：不覆盖已有 sheet）
       列名与 plot_curves 数据源兼容（用户可直接接绘曲线图）
 
 ui/windows/data_gen_view.py  (新工具页)
-    左栏：项目预设 ComboBox + 4 输入字段 + 3 约束 CheckBox
+    左栏：项目预设 ComboBox + 4 输入字段 + 3 约束 CheckBox + 检测批名输入框
     右栏上：实时预览（散点 + 均值水平线 + 上下限红线 + "16/16 合格"指示）
             渲染走 chart_writer 现有管线（复用即可）
-    右栏下：数据表（QTableView 显示生成的 N 个值）+ 「导出 Excel」按钮
+    右栏下：数据表（QTableView 显示生成的 N 个值）
+            [生成数据] [导出 Excel] 按钮 + 「追加模式」CheckBox（多批次时勾选）
     支持 Ctrl+Z/Y 撤销（沿用 PresetUndoController）
 ```
+
+### 挠度特殊处理（2026-05-19 确认）
+
+挠度既可能有 L/N 限值（如 L/400），也可能设计图直接给出允许值（mm）。
+**实现方案**：不新增 tolerance_kind，统一用 `AcceptanceRule.max_value` 作为上限。
+- 预设 `挠度-L400`：设计值字段改为"跨度 L（mm）"，UI 层计算 `max_value = L / 400` 后写入 spec
+- 预设 `挠度-设计值`：设计值字段即允许挠度（mm），直接写入 `max_value`
+- 生成逻辑：`design_value = max_value * 0.6`，值域 `[max_value * 0.1, max_value]`
+
+### 外观检测处理（2026-05-19 确认）
+
+外观检测是文字套话（"经现场检测，外观质量合格"），无数值，**不纳入 data_gen**。
+由 Word 模板预置标准表述 → 属于后续 auto_filler 阶段。
+
+### 检测批工作流（2026-05-19 确认）
+
+用户按构件类型分批（如钢柱一批、钢梁一批、槽钢一批）。
+MVP 方案：每次生成设置 `batch_name`（如"钢柱-截面尺寸"），导出时该批成为一个 Excel sheet。
+多批次：勾选「追加模式」→ writer 的 `append=True` 把新 sheet 追加到同一 xlsx，不覆盖已有 sheet。
 
 ### 追溯机制（"低可见度 + 可追溯"，按用户要求）
 
@@ -165,9 +197,8 @@ ui/windows/data_gen_view.py  (新工具页)
 2. **Excel customProperty（隐藏）**：自定义命名 `_civcore_meta` 存完整 JSON
    spec（项目名 / 设计值 / 允许误差 / N / seed / 时间戳）—— 用户在 Excel 里看不到，
    但 openpyxl / 第三方审计工具能读
-3. **审计日志**：`logs/data_gen_audit.log` 每次生成写一行
-   `{时间戳} {输出路径} {sha256(values)} {spec_json}` —— logs/ 已 gitignore，
-   不进仓库但本机可查
+3. **审计日志**：`logs/data_gen_audit.log` 每次生成写一行（与 app.log 同目录）
+   `{时间戳} {输出路径} {sha256(values)} {spec_json}` —— logs/ 已 gitignore，不进仓库但本机可查
 4. **CLI 反查工具**：`uv run python -m civ_core.main --tool data_gen_audit
    --file path/to.xlsx` → 解析上述元数据并打印审计信息
 
@@ -176,22 +207,22 @@ ui/windows/data_gen_view.py  (新工具页)
 ### CLI 入口（开发期可用）
 ```bash
 uv run python -m civ_core.main --tool data_gen \
-    --preset 回弹值-C30 \
-    --output data/output/回弹_测点.xlsx
+    --preset 防火涂层厚度 \
+    --output data/output/涂层_测点.xlsx
 uv run python -m civ_core.main --tool data_gen_audit \
-    --file data/output/回弹_测点.xlsx
+    --file data/output/涂层_测点.xlsx
 ```
 
 ### 工作流（实施时按 CLAUDE.md 四层架构 + 工作流推进）
 
 | Step | 改动 | 测试 |
 |---|---|---|
-| D-0 | `infra_io/standards_db.py` SQLite `standards` 表 + 8 项初始参数录入 | `tests/test_standards_db.py` |
-| D-0b | `core/calc_functions.py` 8 个检测类型计算函数（从 standards 表读参数）| `tests/test_calc_functions.py` 合格/临界/不合格边界 |
+| D-0 | `infra_io/standards_db.py` SQLite `standards` 表 + 9 项初始参数录入 | `tests/test_standards_db.py` |
+| D-0b | `core/calc_functions.py` 9 个检测类型计算函数（从 standards 表读参数）| `tests/test_calc_functions.py` 合格/临界/不合格边界 |
 | D-1 | `domain/schema.py` 加 `DataGenSpec` / `AcceptanceRule` / `DataGenResult`（含 `__post_init__` 字段校验） | `tests/test_data_gen_schema.py` |
 | D-2 | `core/data_gen.py` 算法实现 + 调用 calc_functions 验证 + 失败抛 `BusinessError` | `tests/test_core_data_gen.py` 覆盖正态 / 均匀 / 截断 / 失败路径 |
-| D-3 | `infra_io/data_gen_writer.py` Excel 输出 + 4 层追溯元数据 | `tests/test_data_gen_writer.py` 覆盖 round-trip + 追溯字段读取 |
-| D-4 | `presets/data_gen/standard_items.json` 8 项预设（引用 standards 表参数，不硬编码数值）| healthcheck 新加一项 |
+| D-3 | `infra_io/data_gen_writer.py` Excel 输出 + 4 层追溯元数据 + append 多批次 | `tests/test_data_gen_writer.py` 覆盖 round-trip + 追溯字段读取 + append |
+| D-4 | `presets/data_gen/standard_items.json` 11 项预设（9 常规 + 2 挠度）| healthcheck 新加一项 |
 | D-5 | `ui/windows/data_gen_view.py` 工具页 + main_window 导航注册 | `tests/test_data_gen_view.py` constructible + 关键路径 |
 | D-6 | `main.py` CLI 路径 `--tool data_gen` / `--tool data_gen_audit` | 沿用现有 CLI 测试结构 |
 
@@ -201,16 +232,18 @@ uv run python -m civ_core.main --tool data_gen_audit \
 
 - domain + core: 2 h
 - infra_io（含追溯）: 2 h
-- 8 项预设 JSON: 30 min（占位默认值；用户后续按规范填值）
+- 11 项预设 JSON: 45 min（占位默认值；用户每次按图纸填实际设计值）
 - ui: 3 h（沿用 plot_curves 模式，预设面板 + 实时预览复用度高）
 - 测试 + 文档: 1.5 h
-- **总计 ~9 h，分 6 个 commit**
+- **总计 ~9.5 h，分 6 个 commit**
 
-### 待用户提供的信息（开工前）
+### 已确认信息（2026-05-19）
 
-1. **8 项预设默认值**：每项的"行业典型设计值 / 允许误差 / 推荐测点数"，我用占位值起步，等你跑通框架后填实际数；或者你提供一份 Excel/文档我录入
-2. **审计 log 写哪**：默认 `logs/data_gen_audit.log`（与 app.log 同目录），或单独到 `~/.civ-core/audit/`
-3. **是否提供 CLI `--tool data_gen_audit` 反查工具** —— 默认提供，方便日后回溯
+1. **审计 log 路径**：`logs/data_gen_audit.log`（与 app.log 同目录）✓
+2. **设计值**：因项目而异（几mm到几十mm均有），预设只给参考占位值，用户每次按图纸修改 ✓
+3. **外观检测**：不纳入 data_gen，由 Word 模板处理 ✓
+4. **检测批**：batch_name → Excel sheet name，writer 支持 append 模式 ✓
+5. **挠度**：AcceptanceRule.max_value 统一处理，提供 L/400 和设计值两种预设 ✓
 
 ---
 
@@ -390,6 +423,24 @@ P1 plot_curves 模块完成可用性交付：两栏布局 + 实时预览 + curve
 - `CLAUDE.md`（同步更新）
 
 **下一步：** data_gen 合格数据生成器（方案见上方专章）
+
+-----
+
+### [2026-05-19] data_gen 方案细化（工作流分析）
+
+**完成内容：**
+- 用户描述真实钢结构检测报告工作流（拿图纸→选构件→填随机数→分批→粘Word→审核被打回）
+- 针对工作流分析出 5 项设计决策并全部确认：
+  1. 外观检测不纳入 data_gen（套话，归 auto_filler）
+  2. 挠度增为第 9 个检测类型，提供 L/400 和设计值两种预设
+  3. 检测批 = batch_name → Excel sheet name，writer 支持 append 多批次
+  4. 审计 log 放 `logs/data_gen_audit.log`
+  5. 设计值因项目而异（几mm到几十mm），预设只给占位参考值
+
+**涉及文件：**
+- `docs/dev_journal/PROGRESS.md`（更新 data_gen 方案章节 + 本条记录）
+
+**下一步：** 开工 D-0（standards_db.py）
 
 -----
 

@@ -13,14 +13,32 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtGui import QFont
 
 from civ_core.core.project_service import ProjectService
+from civ_core.infra_io.style_loader import load_style_preset
 
 HEADERS = ["状态", "编号", "项目名称", "类型", "金额", "日期", "进度"]
 
 # 自定义 SortRole（避开 Qt 内置 Display / Edit / UserRole）。
 # 必须大于 UserRole(0x100)。proxy.setSortRole(SortRole) 用此值。
 SortRole = Qt.ItemDataRole.UserRole + 100
+
+
+def _mono_font() -> QFont:
+    """从 style_preset 取等宽字体（用于数据列）。
+
+    备选族写在 yaml 里（'JetBrains Mono', 'Consolas', monospace），
+    Qt 会按顺序回退到第一个可用的本地字体。
+    """
+    sty = load_style_preset()
+    f = QFont()
+    # setFamilies 接受备选列表；解析 yaml 里的逗号分隔字符串
+    families = [s.strip().strip("'\"") for s in sty.typography.font_family_mono.split(",")]
+    f.setFamilies(families)
+    f.setPointSize(sty.typography.size_body)
+    f.setStyleHint(QFont.StyleHint.Monospace)
+    return f
 
 
 class ProjectTableModel(QAbstractTableModel):
@@ -89,6 +107,12 @@ class ProjectTableModel(QAbstractTableModel):
                 return Qt.GlobalColor.darkBlue
             elif col == self.DateCol:
                 return Qt.GlobalColor.darkGray
+
+        elif role == Qt.ItemDataRole.FontRole:
+            # 数据列用等宽字体确保数字 / 编号 / 日期对齐
+            if col in (self.NumberCol, self.AmountCol, self.DateCol, self.ProgressCol):
+                return _mono_font()
+            return None
 
         elif role == Qt.ItemDataRole.UserRole:
             return p  # 返回完整 Project 对象

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QPropertyAnimation, Qt
+from PySide6.QtCore import QPoint, QPropertyAnimation, QSettings, Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -295,19 +295,19 @@ class ProjectBoardView(QWidget):
         self._table_view.setStyleSheet(qss_table())
 
         hdr = self._table_view.horizontalHeader()
+        # 状态列固定（图标列，不让用户拖）；名称列 Stretch 占满剩余；其余 Interactive 可拖
         hdr.setSectionResizeMode(ProjectTableModel.StatusCol, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(ProjectTableModel.NumberCol, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(ProjectTableModel.NumberCol, QHeaderView.ResizeMode.Interactive)
         hdr.setSectionResizeMode(ProjectTableModel.NameCol, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(ProjectTableModel.TypeCol, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(ProjectTableModel.AmountCol, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(ProjectTableModel.DateCol, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(ProjectTableModel.ProgressCol, QHeaderView.ResizeMode.Fixed)
-        self._table_view.setColumnWidth(ProjectTableModel.StatusCol, 40)
-        self._table_view.setColumnWidth(ProjectTableModel.NumberCol, 90)
-        self._table_view.setColumnWidth(ProjectTableModel.TypeCol, 90)
-        self._table_view.setColumnWidth(ProjectTableModel.AmountCol, 80)
-        self._table_view.setColumnWidth(ProjectTableModel.DateCol, 100)
-        self._table_view.setColumnWidth(ProjectTableModel.ProgressCol, 80)
+        hdr.setSectionResizeMode(ProjectTableModel.TypeCol, QHeaderView.ResizeMode.Interactive)
+        hdr.setSectionResizeMode(ProjectTableModel.AmountCol, QHeaderView.ResizeMode.Interactive)
+        hdr.setSectionResizeMode(ProjectTableModel.DateCol, QHeaderView.ResizeMode.Interactive)
+        hdr.setSectionResizeMode(ProjectTableModel.ProgressCol, QHeaderView.ResizeMode.Interactive)
+        # 应用初始列宽（用户预设优先；没存过则用默认）
+        self._apply_default_column_widths()
+        self._restore_column_widths()
+        # 列宽变化时持久化（仅 user 主动拖动触发，初始化期间也会触发但写入一致值无害）
+        hdr.sectionResized.connect(self._on_section_resized)
 
         self._table_view.clicked.connect(self._on_table_row_clicked)
         self._view_stack.addWidget(self._table_view)
@@ -397,3 +397,42 @@ class ProjectBoardView(QWidget):
         self._model.refresh()
         if self._view_stack.currentIndex() == 1:
             self._board_widget.refresh()
+
+    # ════════════════════════════════════════════════════════════
+    # 列宽持久化（QSettings("ZGQ", "CivCore") / projects/column_width/<col>）
+    # ════════════════════════════════════════════════════════════
+    _COLUMN_WIDTH_DEFAULTS = {
+        ProjectTableModel.StatusCol: 40,
+        ProjectTableModel.NumberCol: 110,
+        ProjectTableModel.TypeCol: 100,
+        ProjectTableModel.AmountCol: 100,
+        ProjectTableModel.DateCol: 110,
+        ProjectTableModel.ProgressCol: 80,
+    }
+
+    def _apply_default_column_widths(self) -> None:
+        for col, w in self._COLUMN_WIDTH_DEFAULTS.items():
+            self._table_view.setColumnWidth(col, w)
+
+    def _restore_column_widths(self) -> None:
+        """从 QSettings 恢复用户上次拖动的列宽。"""
+        settings = QSettings("ZGQ", "CivCore")
+        for col in self._COLUMN_WIDTH_DEFAULTS:
+            raw = settings.value(f"projects/column_width/{col}")
+            if raw is None:
+                continue
+            try:
+                w = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if 20 <= w <= 800:  # 防御越界值
+                self._table_view.setColumnWidth(col, w)
+
+    def _on_section_resized(self, col: int, _old: int, new_size: int) -> None:
+        """用户拖动列宽 → 写 QSettings。仅持久化我们关心的列。"""
+        if col not in self._COLUMN_WIDTH_DEFAULTS:
+            return
+        if new_size < 20:
+            return  # 太窄当作误触不写
+        settings = QSettings("ZGQ", "CivCore")
+        settings.setValue(f"projects/column_width/{col}", int(new_size))

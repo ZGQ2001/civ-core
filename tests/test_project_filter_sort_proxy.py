@@ -90,6 +90,35 @@ class TestSortRoleValues:
 
 
 # ────────────────────────────────────────────────────────────────
+class TestFontRole:
+    """数据列（编号/金额/日期/进度）必须返回等宽 QFont。"""
+
+    def test_amount_uses_mono_font(self, svc: ProjectService) -> None:
+        from PySide6.QtGui import QFont
+        svc.create_project(_project(), create_folder=False)
+        model = ProjectTableModel(svc)
+        idx = model.index(0, ProjectTableModel.AmountCol)
+        font = model.data(idx, Qt.ItemDataRole.FontRole)
+        assert isinstance(font, QFont)
+        assert font.styleHint() == QFont.StyleHint.Monospace
+
+    def test_name_col_no_explicit_font(self, svc: ProjectService) -> None:
+        svc.create_project(_project(), create_folder=False)
+        model = ProjectTableModel(svc)
+        idx = model.index(0, ProjectTableModel.NameCol)
+        # 名称列不返回字体（用比例字体默认）
+        assert model.data(idx, Qt.ItemDataRole.FontRole) is None
+
+    def test_number_date_progress_use_mono(self, svc: ProjectService) -> None:
+        from PySide6.QtGui import QFont
+        svc.create_project(_project(), create_folder=False)
+        model = ProjectTableModel(svc)
+        for col in (ProjectTableModel.NumberCol, ProjectTableModel.DateCol, ProjectTableModel.ProgressCol):
+            font = model.data(model.index(0, col), Qt.ItemDataRole.FontRole)
+            assert isinstance(font, QFont)
+
+
+# ────────────────────────────────────────────────────────────────
 class TestFilter:
     def test_default_filter_all(self, proxy: ProjectFilterSortProxy) -> None:
         # 默认 "全部"：3 行都可见

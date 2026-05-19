@@ -18,6 +18,10 @@ from civ_core.core.project_service import ProjectService
 
 HEADERS = ["状态", "编号", "项目名称", "类型", "金额", "日期", "进度"]
 
+# 自定义 SortRole（避开 Qt 内置 Display / Edit / UserRole）。
+# 必须大于 UserRole(0x100)。proxy.setSortRole(SortRole) 用此值。
+SortRole = Qt.ItemDataRole.UserRole + 100
+
 
 class ProjectTableModel(QAbstractTableModel):
     """项目表格模型（只读）。"""
@@ -88,6 +92,29 @@ class ProjectTableModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.UserRole:
             return p  # 返回完整 Project 对象
+
+        elif role == SortRole:
+            # 排序专用：返回未格式化的原始值（datetime / float / int / str），
+            # 让 QSortFilterProxyModel.lessThan 直接比较。
+            if col == self.StatusCol:
+                # 状态权重：未开始 0 / 进行中 1 / 全完成 2
+                if p.is_all_completed:
+                    return 2
+                if p.completed_stage_count > 0 or p.in_progress_count > 0:
+                    return 1
+                return 0
+            if col == self.NumberCol:
+                return p.project_number
+            if col == self.NameCol:
+                return p.name
+            if col == self.TypeCol:
+                return p.inspection_type
+            if col == self.AmountCol:
+                return float(p.amount)
+            if col == self.DateCol:
+                return p.created_at  # datetime 直接可比较
+            if col == self.ProgressCol:
+                return int(p.completed_stage_count)
 
         elif role == Qt.ItemDataRole.TextAlignmentRole:
             if col == self.StatusCol:

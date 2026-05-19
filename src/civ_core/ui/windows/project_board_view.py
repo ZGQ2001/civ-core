@@ -29,6 +29,13 @@ from civ_core.domain.project_schema import BUILTIN_STAGE_NAMES, Project, Project
 from civ_core.ui.components.project_board_widget import ProjectBoardWidget
 from civ_core.ui.components.project_drawer import ProjectDrawer
 from civ_core.ui.components.project_table_delegate import ProjectTableDelegate
+from civ_core.ui.models.project_filter_sort_proxy import (
+    FILTER_ACTIVE,
+    FILTER_ALL,
+    FILTER_ARCHIVED,
+    FILTER_ON_HOLD,
+    ProjectFilterSortProxy,
+)
 from civ_core.ui.models.project_table_model import ProjectTableModel
 
 
@@ -208,11 +215,18 @@ class ProjectBoardView(QWidget):
 
         top.addSpacing(16)
 
-        # 筛选: 简单用三个按钮模拟 SegmentedWidget
-        self._btn_all = QPushButton("全部")
-        self._btn_active = QPushButton("正在进行")
-        self._btn_backlog = QPushButton("团队积压")
-        for btn in (self._btn_all, self._btn_active, self._btn_backlog):
+        # 筛选：4 档（全部 / 正在进行 / 暂存 / 已归档），通过 Proxy 生效
+        self._btn_all = QPushButton(FILTER_ALL)
+        self._btn_active = QPushButton(FILTER_ACTIVE)
+        self._btn_on_hold = QPushButton(FILTER_ON_HOLD)
+        self._btn_archived = QPushButton(FILTER_ARCHIVED)
+        self._filter_buttons = {
+            FILTER_ALL: self._btn_all,
+            FILTER_ACTIVE: self._btn_active,
+            FILTER_ON_HOLD: self._btn_on_hold,
+            FILTER_ARCHIVED: self._btn_archived,
+        }
+        for btn in self._filter_buttons.values():
             btn.setCheckable(True)
             btn.setFixedHeight(30)
             btn.setStyleSheet(
@@ -223,9 +237,8 @@ class ProjectBoardView(QWidget):
             top.addWidget(btn)
         self._btn_all.setChecked(True)
 
-        self._btn_all.clicked.connect(lambda: self._on_filter_changed("全部"))
-        self._btn_active.clicked.connect(lambda: self._on_filter_changed("正在进行"))
-        self._btn_backlog.clicked.connect(lambda: self._on_filter_changed("团队积压"))
+        for ftype, btn in self._filter_buttons.items():
+            btn.clicked.connect(lambda _checked=False, t=ftype: self._on_filter_changed(t))
 
         top.addStretch()
 
@@ -268,11 +281,13 @@ class ProjectBoardView(QWidget):
         # 主视图栈
         self._view_stack = QStackedWidget()
 
-        # 表格视图
+        # 表格视图 —— 套一层 ProjectFilterSortProxy 实现筛选 + 排序
         self._model = ProjectTableModel(self._service)
+        self._proxy = ProjectFilterSortProxy(self)
+        self._proxy.setSourceModel(self._model)
 
         self._table_view = QTableView()
-        self._table_view.setModel(self._model)
+        self._table_view.setModel(self._proxy)
         self._table_view.setItemDelegate(ProjectTableDelegate())
         self._table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self._table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
@@ -281,6 +296,9 @@ class ProjectBoardView(QWidget):
         self._table_view.horizontalHeader().setStretchLastSection(False)
         self._table_view.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         self._table_view.setAlternatingRowColors(True)
+        # 启用点击表头排序；默认按创建日期倒序
+        self._table_view.setSortingEnabled(True)
+        self._table_view.sortByColumn(ProjectTableModel.DateCol, Qt.SortOrder.DescendingOrder)
         self._table_view.setStyleSheet(
             "QTableView { border: none; background: #FFFFFF; alternate-background-color: #F8F9FA; }"
             "QTableView::item { padding: 4px 6px; }"
@@ -339,18 +357,21 @@ class ProjectBoardView(QWidget):
     # 筛选
     # ════════════════════════════════════════════════════════════
     def _on_filter_changed(self, filter_type: str) -> None:
-        # 更新按钮状态
-        self._btn_all.setChecked(filter_type == "全部")
-        self._btn_active.setChecked(filter_type == "正在进行")
-        self._btn_backlog.setChecked(filter_type == "团队积压")
-
-        self._model.refresh()  # TODO: add filter support to ProjectTableModel
+        """4 档筛选切换：联动按钮态 + 通知 Proxy 立即重过滤。"""
+        for ftype, btn in self._filter_buttons.items():
+            btn.setChecked(ftype == filter_type)
+        self._proxy.set_filter_type(filter_type)
 
     # ════════════════════════════════════════════════════════════
     # 交互
     # ════════════════════════════════════════════════════════════
     def _on_table_row_clicked(self, index) -> None:
-        proj = self._model.data(self._model.index(index.row(), 0), Qt.ItemDataRole.UserRole)
+        # index 来自 proxy，需要映射回 source 再取 Project 对象
+        source_idx = self._proxy.mapToSource(index)
+        proj = self._model.data(
+            self._model.index(source_idx.row(), 0),
+            Qt.ItemDataRole.UserRole,
+        )
         if proj:
             self._drawer.set_project(proj, self._service)
             self._drawer.open()

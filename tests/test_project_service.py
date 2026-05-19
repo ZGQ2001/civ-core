@@ -129,25 +129,75 @@ class TestArchiveProject:
 
 
 class TestFilterProjects:
+    """4 档筛选：全部 / 正在进行 / 暂存 / 已归档（严格互斥）。
+
+    判定规则（优先级从高到低）：
+      已归档 = is_archived
+      暂存   = is_on_hold AND NOT is_archived
+      正在进行 = NOT is_on_hold AND NOT is_archived
+    """
+
     def test_all_returns_everything(self, svc: ProjectService) -> None:
         svc.create_project(_new_project(project_number="P001"), create_folder=False)
-        svc.create_project(_new_project(project_number="P002"), create_folder=False)
+        p2 = svc.create_project(_new_project(project_number="P002"), create_folder=False)
+        svc.set_on_hold(p2.project_id, True)
         assert len(svc.filter_projects("全部")) == 2
 
-    def test_backlog_only_not_started(self, svc: ProjectService) -> None:
+    def test_active_excludes_on_hold_and_archived(self, svc: ProjectService) -> None:
         svc.create_project(_new_project(project_number="P001"), create_folder=False)
-        inserted = svc.create_project(_new_project(project_number="P002"), create_folder=False)
-        svc.update_stage(inserted.project_id, "现场检测", StageStatus.COMPLETED)
-        result = svc.filter_projects("团队积压")
-        assert len(result) == 1
-
-    def test_in_progress_only_active(self, svc: ProjectService) -> None:
-        svc.create_project(_new_project(project_number="P001"), create_folder=False)
-        inserted = svc.create_project(_new_project(project_number="P002"), create_folder=False)
-        svc.update_stage(inserted.project_id, "现场检测", StageStatus.COMPLETED)
+        p2 = svc.create_project(_new_project(project_number="P002"), create_folder=False)
+        p3 = svc.create_project(_new_project(project_number="P003"), create_folder=False)
+        svc.set_on_hold(p2.project_id, True)
+        svc.set_archived(p3.project_id, True)
         result = svc.filter_projects("正在进行")
         assert len(result) == 1
+        assert result[0].project_number == "P001"
+
+    def test_on_hold_filter(self, svc: ProjectService) -> None:
+        svc.create_project(_new_project(project_number="P001"), create_folder=False)
+        p2 = svc.create_project(_new_project(project_number="P002"), create_folder=False)
+        svc.set_on_hold(p2.project_id, True)
+        result = svc.filter_projects("暂存")
+        assert len(result) == 1
         assert result[0].project_number == "P002"
+
+    def test_archived_filter(self, svc: ProjectService) -> None:
+        svc.create_project(_new_project(project_number="P001"), create_folder=False)
+        p2 = svc.create_project(_new_project(project_number="P002"), create_folder=False)
+        svc.set_archived(p2.project_id, True)
+        result = svc.filter_projects("已归档")
+        assert len(result) == 1
+        assert result[0].project_number == "P002"
+
+    def test_archived_takes_priority_over_on_hold(self, svc: ProjectService) -> None:
+        # 同时 is_on_hold + is_archived → 归档优先，不算暂存
+        p = svc.create_project(_new_project(project_number="P001"), create_folder=False)
+        svc.set_on_hold(p.project_id, True)
+        svc.set_archived(p.project_id, True)
+        assert len(svc.filter_projects("已归档")) == 1
+        assert len(svc.filter_projects("暂存")) == 0
+
+
+class TestStatusFlagWrappers:
+    """set_on_hold / set_archived service wrapper。"""
+
+    def test_set_on_hold_true(self, svc: ProjectService) -> None:
+        p = svc.create_project(_new_project(), create_folder=False)
+        result = svc.set_on_hold(p.project_id, True)
+        assert result.is_on_hold is True
+
+    def test_set_archived_true(self, svc: ProjectService) -> None:
+        p = svc.create_project(_new_project(), create_folder=False)
+        result = svc.set_archived(p.project_id, True)
+        assert result.is_archived is True
+
+    def test_set_on_hold_not_found_raises(self, svc: ProjectService) -> None:
+        with pytest.raises(ValueError):
+            svc.set_on_hold(999, True)
+
+    def test_set_archived_not_found_raises(self, svc: ProjectService) -> None:
+        with pytest.raises(ValueError):
+            svc.set_archived(999, True)
 
 
 class TestStatistics:

@@ -80,19 +80,25 @@ class ProjectService:
         return self._db.list_projects()
 
     def filter_projects(self, filter_type: str) -> list[Project]:
+        """4 档筛选：全部 / 正在进行 / 暂存 / 已归档。
+
+        判定规则（已归档优先级最高，严格互斥）：
+          已归档   = is_archived
+          暂存     = is_on_hold AND NOT is_archived
+          正在进行 = NOT is_on_hold AND NOT is_archived
+        """
         all_projects = self._db.list_projects()
-        if filter_type == "团队积压":
+        if filter_type == "已归档":
+            return [p for p in all_projects if p.is_archived]
+        if filter_type == "暂存":
+            return [p for p in all_projects if p.is_on_hold and not p.is_archived]
+        if filter_type == "正在进行":
             return [
                 p for p in all_projects
-                if p.completed_stage_count == 0 and p.in_progress_count == 0
+                if not p.is_on_hold and not p.is_archived
             ]
-        elif filter_type == "正在进行":
-            return [
-                p for p in all_projects
-                if not p.is_all_completed and (p.completed_stage_count > 0 or p.in_progress_count > 0)
-            ]
-        else:
-            return [p for p in all_projects if not p.is_all_completed]
+        # "全部" 或未知类型 → 全部返回
+        return list(all_projects)
 
     def update_project(self, project: Project) -> Project:
         try:
@@ -114,6 +120,20 @@ class ProjectService:
     def archive_project(self, project_id: int) -> Project:
         try:
             return self._db.archive_project(project_id)
+        except ProjectNotFoundError as e:
+            raise ValueError(str(e)) from e
+
+    def set_on_hold(self, project_id: int, value: bool) -> Project:
+        """切换暂存标志。"""
+        try:
+            return self._db.set_on_hold(project_id, value)
+        except ProjectNotFoundError as e:
+            raise ValueError(str(e)) from e
+
+    def set_archived(self, project_id: int, value: bool) -> Project:
+        """切换归档标志（独立于阶段完成状态）。"""
+        try:
+            return self._db.set_archived(project_id, value)
         except ProjectNotFoundError as e:
             raise ValueError(str(e)) from e
 

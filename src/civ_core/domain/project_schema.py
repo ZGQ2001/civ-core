@@ -92,6 +92,12 @@ class Project:
     original_record_done: bool = False
     notes: str = ""
 
+    # ── 状态标志位（看板 4 档筛选用） ────────────────────────
+    # 设计：is_on_hold / is_archived 完全独立，与 7 阶段进度互不关联。
+    # 用户手动点「暂存」/「归档」才会切换；7 阶段全完成 ≠ 自动归档。
+    is_on_hold: bool = False
+    is_archived: bool = False
+
     # ── 进度 ────────────────────────────────────────────────
     stages: tuple[ProjectStage, ...] = field(default_factory=tuple)
 

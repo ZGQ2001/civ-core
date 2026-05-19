@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS projects (
     folder_path       TEXT,
     original_record_done INTEGER NOT NULL DEFAULT 0,
     notes             TEXT NOT NULL DEFAULT '',
+    is_on_hold        INTEGER NOT NULL DEFAULT 0,
+    is_archived       INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
 );
@@ -68,8 +70,9 @@ CREATE TABLE IF NOT EXISTS project_stages (
 INSERT_PROJECT_SQL = """
 INSERT INTO projects (project_number, name, client, inspection_type,
                        amount, folder_path, original_record_done,
-                       notes, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       notes, is_on_hold, is_archived,
+                       created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 INSERT_STAGE_SQL = """
@@ -80,6 +83,7 @@ VALUES (?, ?, ?, ?, ?)
 SELECT_PROJECT_SQL = """
 SELECT id, project_number, name, client, inspection_type,
        amount, folder_path, original_record_done, notes,
+       is_on_hold, is_archived,
        created_at, updated_at
 FROM projects WHERE id = ?
 """
@@ -92,6 +96,7 @@ FROM project_stages WHERE project_id = ? ORDER BY id
 LIST_ALL_SQL = """
 SELECT id, project_number, name, client, inspection_type,
        amount, folder_path, original_record_done, notes,
+       is_on_hold, is_archived,
        created_at, updated_at
 FROM projects ORDER BY created_at DESC, id DESC
 """
@@ -100,8 +105,17 @@ UPDATE_PROJECT_SQL = """
 UPDATE projects SET
     name = ?, client = ?, inspection_type = ?,
     amount = ?, folder_path = ?, original_record_done = ?,
-    notes = ?, updated_at = ?
+    notes = ?, is_on_hold = ?, is_archived = ?, updated_at = ?
 WHERE id = ?
+"""
+
+# 单独切换两个布尔状态，不动其他字段（避免 update_project 把别处的草稿覆盖掉）
+UPDATE_ON_HOLD_SQL = """
+UPDATE projects SET is_on_hold = ?, updated_at = ? WHERE id = ?
+"""
+
+UPDATE_ARCHIVED_SQL = """
+UPDATE projects SET is_archived = ?, updated_at = ? WHERE id = ?
 """
 
 UPDATE_STAGE_SQL = """
@@ -145,6 +159,8 @@ def _row_to_project(row: sqlite3.Row, stages: Sequence[ProjectStage]) -> Project
         folder_path=Path(row["folder_path"]) if row["folder_path"] else None,
         original_record_done=bool(row["original_record_done"]),
         notes=row["notes"],
+        is_on_hold=bool(row["is_on_hold"]),
+        is_archived=bool(row["is_archived"]),
         stages=tuple(stages),
         created_at=_iso_to_dt(row["created_at"]) or datetime.now(timezone.utc),
         updated_at=_iso_to_dt(row["updated_at"]) or datetime.now(timezone.utc),
@@ -185,9 +201,29 @@ class ProjectDB:
 
     # ── 建表 ────────────────────────────────────────────────────
     def create_tables(self) -> None:
-        """幂等建表（IF NOT EXISTS）。"""
+        """幂等建表（IF NOT EXISTS）+ 老 DB 自动补列迁移。
+
+        老版本 DB 没有 is_on_hold/is_archived，启动时用 PRAGMA table_info
+        探查并 ALTER 补列。SQLite 不支持 ADD COLUMN IF NOT EXISTS。
+        """
         with self.conn:
             self.conn.executescript(CREATE_TABLES_SQL)
+            self._migrate_add_status_flags()
+
+    def _migrate_add_status_flags(self) -> None:
+        """补列：is_on_hold / is_archived（老 DB 升级路径）。"""
+        cur = self.conn.execute("PRAGMA table_info(projects)")
+        existing = {row[1] for row in cur.fetchall()}  # row[1] = name
+        if "is_on_hold" not in existing:
+            self.conn.execute(
+                "ALTER TABLE projects ADD COLUMN is_on_hold INTEGER NOT NULL DEFAULT 0"
+            )
+            log.info("DB 迁移：projects 表补列 is_on_hold")
+        if "is_archived" not in existing:
+            self.conn.execute(
+                "ALTER TABLE projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0"
+            )
+            log.info("DB 迁移：projects 表补列 is_archived")
 
     # ── 插入 ────────────────────────────────────────────────────
     def insert_project(self, project: Project) -> Project:
@@ -211,6 +247,8 @@ class ProjectDB:
                     folder_path_str,
                     1 if project.original_record_done else 0,
                     project.notes,
+                    1 if project.is_on_hold else 0,
+                    1 if project.is_archived else 0,
                     now_iso,
                     now_iso,
                 ),
@@ -278,12 +316,31 @@ class ProjectDB:
                     folder_path_str,
                     1 if project.original_record_done else 0,
                     project.notes,
+                    1 if project.is_on_hold else 0,
+                    1 if project.is_archived else 0,
                     now_iso,
                     project.project_id,
                 ),
             )
 
         return self.get_project(project.project_id)
+
+    # ── 状态标志切换 ─────────────────────────────────────────────
+    def set_on_hold(self, project_id: int, value: bool) -> Project:
+        """切换 is_on_hold 标志；不影响其他字段。"""
+        self.get_project(project_id)  # 确认存在
+        now_iso = _dt_to_iso(datetime.now(timezone.utc))
+        with self.conn:
+            self.conn.execute(UPDATE_ON_HOLD_SQL, (1 if value else 0, now_iso, project_id))
+        return self.get_project(project_id)
+
+    def set_archived(self, project_id: int, value: bool) -> Project:
+        """切换 is_archived 标志；不影响其他字段。"""
+        self.get_project(project_id)  # 确认存在
+        now_iso = _dt_to_iso(datetime.now(timezone.utc))
+        with self.conn:
+            self.conn.execute(UPDATE_ARCHIVED_SQL, (1 if value else 0, now_iso, project_id))
+        return self.get_project(project_id)
 
     # ── 更新单阶段 ──────────────────────────────────────────────
     def update_stage(

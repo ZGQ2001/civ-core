@@ -243,6 +243,44 @@ class TestProjectHelperProperties:
         assert p.in_progress_count == 3
 
 
+class TestProjectStatusFlags:
+    """is_on_hold / is_archived 两个独立布尔标志位。
+
+    为什么独立而非耦合 is_all_completed：
+      • 用户可能想暂存一个刚开工的项目（is_on_hold=True, 7 阶段未完成）
+      • 用户可能想保留 7 阶段都完成的活动项目而不归档
+      • 两者在筛选 UI 里互斥（暂存 / 已归档 / 正在进行 / 全部）
+    """
+
+    def test_default_is_on_hold_false(self) -> None:
+        p = _project()
+        assert p.is_on_hold is False
+
+    def test_default_is_archived_false(self) -> None:
+        p = _project()
+        assert p.is_archived is False
+
+    def test_is_on_hold_true_accepted(self) -> None:
+        p = _project(is_on_hold=True)
+        assert p.is_on_hold is True
+
+    def test_is_archived_true_accepted(self) -> None:
+        p = _project(is_archived=True)
+        assert p.is_archived is True
+
+    def test_both_flags_independent(self) -> None:
+        # 暂存 + 已归档同时为 True 在 schema 层不拒绝（UI 互斥靠业务层）
+        p = _project(is_on_hold=True, is_archived=True)
+        assert p.is_on_hold is True
+        assert p.is_archived is True
+
+    def test_archived_independent_of_all_completed(self) -> None:
+        # 7 阶段未完成的项目也可以 is_archived=True
+        p = _project(is_archived=True)
+        assert p.is_archived is True
+        assert p.is_all_completed is False
+
+
 class TestProjectColumnOrder:
     """Board 看板分列所需的状态判断。"""
 

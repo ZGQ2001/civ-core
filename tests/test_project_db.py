@@ -242,3 +242,118 @@ class TestArchiveProject:
     def test_archive_not_found(self, db: ProjectDB) -> None:
         with pytest.raises(ProjectNotFoundError):
             db.archive_project(999)
+
+
+# ────────────────────────────────────────────────────────────────
+class TestStatusFlags:
+    """is_on_hold / is_archived 持久化 + set_on_hold / set_archived 方法。"""
+
+    def test_default_flags_false(self, db: ProjectDB) -> None:
+        result = db.insert_project(_new_project())
+        assert result.is_on_hold is False
+        assert result.is_archived is False
+
+    def test_insert_preserves_on_hold(self, db: ProjectDB) -> None:
+        result = db.insert_project(_new_project(is_on_hold=True))
+        assert result.is_on_hold is True
+        assert result.is_archived is False
+
+    def test_insert_preserves_archived(self, db: ProjectDB) -> None:
+        result = db.insert_project(_new_project(is_archived=True))
+        assert result.is_archived is True
+
+    def test_set_on_hold_true(self, db: ProjectDB) -> None:
+        inserted = db.insert_project(_new_project())
+        result = db.set_on_hold(inserted.project_id, True)
+        assert result.is_on_hold is True
+
+    def test_set_on_hold_false_toggle(self, db: ProjectDB) -> None:
+        inserted = db.insert_project(_new_project(is_on_hold=True))
+        result = db.set_on_hold(inserted.project_id, False)
+        assert result.is_on_hold is False
+
+    def test_set_archived_true(self, db: ProjectDB) -> None:
+        inserted = db.insert_project(_new_project())
+        result = db.set_archived(inserted.project_id, True)
+        assert result.is_archived is True
+
+    def test_set_on_hold_not_found(self, db: ProjectDB) -> None:
+        with pytest.raises(ProjectNotFoundError):
+            db.set_on_hold(999, True)
+
+    def test_set_archived_not_found(self, db: ProjectDB) -> None:
+        with pytest.raises(ProjectNotFoundError):
+            db.set_archived(999, True)
+
+    def test_flags_persist_across_update_project(self, db: ProjectDB) -> None:
+        # update_project 不应该重置状态标志
+        inserted = db.insert_project(_new_project(is_on_hold=True))
+        updated = Project(
+            project_id=inserted.project_id,
+            project_number=inserted.project_number,
+            name="改个名",
+            client=inserted.client,
+            inspection_type=inserted.inspection_type,
+            amount=inserted.amount,
+            notes=inserted.notes,
+            original_record_done=inserted.original_record_done,
+            stages=inserted.stages,
+            folder_path=inserted.folder_path,
+            is_on_hold=inserted.is_on_hold,
+            is_archived=inserted.is_archived,
+            created_at=inserted.created_at,
+            updated_at=inserted.updated_at,
+        )
+        result = db.update_project(updated)
+        assert result.is_on_hold is True
+
+
+class TestLegacyMigration:
+    """老 DB（不含 is_on_hold/is_archived 列）能自动迁移。
+
+    背景：用户本地已有 projects.db，create_tables 必须幂等地补列。
+    """
+
+    def test_migrate_adds_missing_columns(self) -> None:
+        # 1) 用「老版本」DDL 建一个 DB（不含 2 个新列）
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("""
+            CREATE TABLE projects (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_number    TEXT NOT NULL UNIQUE,
+                name              TEXT NOT NULL,
+                client            TEXT NOT NULL DEFAULT '',
+                inspection_type   TEXT NOT NULL DEFAULT '',
+                amount            REAL NOT NULL DEFAULT 0.0,
+                folder_path       TEXT,
+                original_record_done INTEGER NOT NULL DEFAULT 0,
+                notes             TEXT NOT NULL DEFAULT '',
+                created_at        TEXT NOT NULL,
+                updated_at        TEXT NOT NULL
+            );
+            CREATE TABLE project_stages (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                stage_name  TEXT NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'not_started',
+                note        TEXT NOT NULL DEFAULT '',
+                updated_at  TEXT,
+                UNIQUE(project_id, stage_name)
+            );
+        """)
+        conn.commit()
+
+        # 2) 用新 ProjectDB 接管 → create_tables 应补列
+        db = ProjectDB(conn)
+        db.create_tables()
+
+        # 3) 验证两个新列已存在
+        cur = conn.execute("PRAGMA table_info(projects)")
+        cols = {row["name"] for row in cur.fetchall()}
+        assert "is_on_hold" in cols
+        assert "is_archived" in cols
+
+        # 4) 验证可正常插入查询新字段
+        result = db.insert_project(_new_project(is_on_hold=True))
+        assert result.is_on_hold is True

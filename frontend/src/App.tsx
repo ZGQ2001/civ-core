@@ -12,6 +12,7 @@ import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
 import { EditorArea } from "./components/EditorArea";
 import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
+import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
 
 const TOP_TOOLS: ActivityItem[] = [
@@ -48,8 +49,14 @@ export default function App() {
     })();
   }, []);
 
+  const workspaceName = workspacePath
+    ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
+    : null;
+
   return (
     <div className="flex h-screen w-screen flex-col">
+      <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
+
       {/* 主区：Activity Bar + 可拖动两栏 */}
       <div className="flex flex-1 min-h-0">
         <ActivityBar

@@ -6,7 +6,9 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** ① 画图、② 里氏硬度（INSP-001）多批 GUI 完整可用（含原始数据模板 + 报告插入表 + 格式规范文档，钢结构厂房项目实战可用）、INSP-002 钻芯法可用、INSP-003 骨架（691 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+**当前状态：** 🚧 **UI 技术栈转型进行中（Tauri + React + Python sidecar）**。Qt + qfluentwidgets 视觉差距过不去（用户实测后明确反馈"过家家"），2026-05-20 决策转 Tauri。当前进度 T3/7：T1 Python JSON-RPC server / T2 前端骨架 / T3 Tauri 桥已交付，端到端 ping 通；T4-T7 待做（文件树/工具页迁移/打包/删旧 Qt UI）。Python 业务底座 `domain/ core/ infra_io/` 完全保留；旧 `ui/` 暂不删，T7 阶段统一清。
+
+**主管线（业务功能）：** ① 画图、② 里氏硬度（INSP-001）多批 GUI 完整可用、INSP-002 钻芯法可用、INSP-003 骨架（583 pytest / ruff 0 / healthcheck 10/10）。
 
 **2026-05-20 里氏硬度格式固化 + 多批支持：**
 - 修角度语义反掉的 bug：-90° = 向下垂直（基线档）、+90° = 向上垂直、0° = 水平（默认）
@@ -422,6 +424,30 @@ P-B5 建议在 data_gen 交付后单独开一个会话规划架构。
 ## 🗂️ 会话历史
 
 > 当本节超过 50 条记录或文件总长超过 800 行时，归档到 `PROGRESS_ARCHIVE.md`，本节只保留最近 10 条。
+
+### [2026-05-20] UI 技术栈转型：Qt → Tauri + React + Python sidecar
+
+**起因：** Qt 渲染层视觉天花板太低，用户实测多轮调整（B1 / Fix / Polish / Refit）后仍不满意 ——"完全不像 VSCode"、"过家家"。技术栈本身的字体抗锯齿/动画质感/图标风格差距不可弥补。
+
+**决策（与用户对齐）：** 走 Tauri + Web 路线：
+- 业务底座 Python 完全保留：`domain/ core/ infra_io/` 一行不动
+- 新增 `src/civ_core/api/`：暴露 JSON-RPC over stdin/stdout
+- 新增 `frontend/`：Vite + React 19 + TypeScript + Tailwind v4 + @vscode/codicons + react-resizable-panels
+- 新增 `frontend/src-tauri/`：Tauri 2.11，spawn Python sidecar，转发前端 `invoke('rpc_call', ...)` 到 sidecar 行协议
+
+**已交付（commit）：**
+- `084033e` T1：Python JSON-RPC server（stdin/stdout）+ workspace/files handlers + 25 测试
+- `6af15b3` T2：Vite/React/Tailwind/codicons 前端骨架（Activity Bar 上下分组 / Side Bar header / Editor / Status Bar）
+- `dc1f53a` T3：Tauri 主进程 + sidecar.rs（PythonSidecar mutex 串行 RPC）+ 字节 rsproxy 镜像
+- 自画标题栏（decorations=false + TitleBar.tsx，VSCode 风 30px 顶栏，data-tauri-drag-region 拖动，codicon chrome-minimize/maximize/close 按钮）
+
+**待做：** T4 文件树端到端 / T5 工具页迁移 / T6 PyInstaller 打包 / T7 删旧 Qt UI
+
+**启动方式（开发模式）：** `bash run.sh`（仓库根，一键起 Tauri + Vite + sidecar）；或 `cd frontend && npm run tauri:dev`
+
+涉及文件：`src/civ_core/api/**`、`frontend/**`、`run.sh`、`CLAUDE.md`、本文档
+
+-----
 
 ### [2026-05-14] 管线定调 + PROGRESS 大裁
 

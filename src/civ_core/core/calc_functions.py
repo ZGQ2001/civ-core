@@ -6,7 +6,7 @@
 
 设计要点：
   - 纯 Python（不引 numpy/scipy）：用 statistics + 手写线性插值
-  - StandardsDB 由外部传入（沿用 project_db / chart_writer 等的模式）
+  - StandardsDB 由外部传入（沿用 chart_writer 等的模式）
   - 出参全部走 domain/calc_schema 的 frozen dataclass
   - 异常用 utils/exceptions 的 InputError（用户输入不合规）
   - 数据精度严格按公式文档要求做 round（避免下游再 round 一遍）

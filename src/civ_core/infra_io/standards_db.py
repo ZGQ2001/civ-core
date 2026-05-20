@@ -20,7 +20,7 @@
       uniq_1d (table_name, key1)        WHERE key2 IS NULL
 
 设计要点：
-  - 连接生命周期不由本层管理（沿用 project_db 的模式：外部传入 conn）
+  - 连接生命周期不由本层管理（外部传入 conn，跟 chart_writer 等一致）
   - ON CONFLICT REPLACE：同 (table_name, key1, key2) 重复 put 直接覆盖，
     便于 seed_* 函数幂等执行
   - 用 partial index 而不是表级 UNIQUE 约束，因 SQLite 把 NULL 视作各不相等，

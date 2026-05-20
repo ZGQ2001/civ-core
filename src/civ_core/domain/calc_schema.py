@@ -1,8 +1,8 @@
 """检测计算函数的结果契约（INSP-001/002/003）。
 
-为什么和 schema.py / project_schema.py 平级独立一份：
-  - 绘曲线图（PlotJob 等）走 schema.py，项目看板走 project_schema.py，
-    检测计算属于"业务计算结果"独立维度；放一起会让 schema.py 变成杂物筐
+为什么和 schema.py 平级独立一份：
+  - 绘曲线图（PlotJob 等）走 schema.py，检测计算属于"业务计算结果"
+    独立维度；放一起会让 schema.py 变成杂物筐
   - 后续 calc_functions 计算函数模块只 import 这一份契约，
     UI / 报告填充层也只看这一份，分层清晰
 

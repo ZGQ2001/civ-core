@@ -12,9 +12,6 @@
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
@@ -22,13 +19,10 @@ from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
 from civ_core.apps.bootstrap import set_theme_runtime
 from civ_core.configs.loader import AppConfig
-from civ_core.core.project_service import ProjectService
-from civ_core.infra_io.project_db import ProjectDB
 from civ_core.infra_io.standards_db import init_standards_db
 from civ_core.ui.windows.leeb_hardness_view import LeebHardnessView
 from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 from civ_core.ui.windows.plot_curves_view import PlotCurvesView
-from civ_core.ui.windows.project_board_view import ProjectBoardView
 from civ_core.ui.windows.settings_view import SettingsView, load_user_theme
 from civ_core.ui.windows.word2pdf_view import Word2PdfView
 from civ_core.utils.logger import get_logger
@@ -93,22 +87,18 @@ class MainWindow(FluentWindow):
 
     # ── 构造 ──────────────────────────────────────────────────────
     def _build_pages(self, cfg: AppConfig) -> None:
-        # 项目看板：默认主页（Linear 风格，列表/看板可切换）
-        db_path = Path("~/.civ-core/projects.db").expanduser()
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        db = ProjectDB(conn)
-        db.create_tables()
-
         # 规范库 standards.db：建表 + seed 全部规范表（INSP-001/002）
         # 持有 conn 让生命周期跟 MainWindow 一致，避免被 GC 关掉。
         # 即使当前没有 UI 直接用它，未来 calc UI 上来就能直接调，不需要重 seed。
         self._standards_db, self._standards_conn = init_standards_db()
 
-        svc = ProjectService(db)
-        self.home_page = ProjectBoardView(svc)
-        self.home_page.setObjectName("homePage")
+        # Step A 已删项目看板；工作区（文件树）由 Step B 的 shell 重构接入。
+        # 此处仅放占位页，让 FluentWindow 导航第一项不空。
+        self.home_page = _PlaceholderPage(
+            "homePage",
+            "工作区",
+            "文件树工作区视图将由 shell 重构接入",
+        )
         # 绘曲线图页：三栏视图（步骤 9 已接入；子面板内容在 step 10/11/13 渐进填充）
         self.plot_curves_page = PlotCurvesView(cfg)
         # 里氏硬度（INSP-001）批级计算：钢结构厂房项目用
@@ -128,7 +118,7 @@ class MainWindow(FluentWindow):
 
     def _register_navigation(self) -> None:
         # 顶部：工具页
-        self.addSubInterface(self.home_page, FluentIcon.HOME, "项目看板")
+        self.addSubInterface(self.home_page, FluentIcon.FOLDER, "工作区")
         self.addSubInterface(self.plot_curves_page, FluentIcon.MARKET, "绘曲线图")
         self.addSubInterface(self.leeb_hardness_page, FluentIcon.ROBOT, "里氏硬度")
         self.addSubInterface(self.pdf_tools_page, FluentIcon.DOCUMENT, "PDF 工具")

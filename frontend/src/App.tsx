@@ -5,13 +5,14 @@
  * T2 阶段：纯前端骨架，无 Tauri/Python 接入；工作区路径暂时 null。
  * T3 阶段：接 Tauri rpc_call 调 Python sidecar，文件树/工作区都打通。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
 import { EditorArea } from "./components/EditorArea";
 import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
+import { rpc, type WorkspaceLast } from "./lib/rpc";
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
@@ -27,10 +28,25 @@ const ALL_TOOLS = [...TOP_TOOLS, ...BOTTOM_TOOLS];
 
 export default function App() {
   const [activeToolId, setActiveToolId] = useState<string>("plot_curves");
-  const [workspacePath] = useState<string | null>(null); // T3 后接 Tauri
+  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+  const [sidecarStatus, setSidecarStatus] = useState<string>("连接中…");
 
   const toolLabel =
     ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
+
+  // 启动时：ping 确认 sidecar 通了，再读 last_workspace 自动加载
+  useEffect(() => {
+    (async () => {
+      try {
+        const pong = await rpc<string>("ping");
+        setSidecarStatus(`后端就绪 (${pong})`);
+        const ws = await rpc<WorkspaceLast>("workspace.last");
+        if (ws.path) setWorkspacePath(ws.path);
+      } catch (e) {
+        setSidecarStatus(`后端连接失败：${String(e)}`);
+      }
+    })();
+  }, []);
 
   return (
     <div className="flex h-screen w-screen flex-col">
@@ -66,7 +82,7 @@ export default function App() {
         </Group>
       </div>
 
-      <StatusBar workspacePath={workspacePath} toolLabel={toolLabel} />
+      <StatusBar workspacePath={workspacePath} toolLabel={toolLabel} sidecarStatus={sidecarStatus} />
     </div>
   );
 }

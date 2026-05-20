@@ -46,8 +46,8 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 # Tauri 构建产物（T3 之后会出现）
-src-tauri/target/
-src-tauri/Cargo.lock
+frontend/src-tauri/target/
+# 注：Cargo.lock 对应用项目应该提交（锁依赖版本，保证可重现 build），不 ignore
 # Python sidecar 打包产物（T6 之后会出现）
 build/
 dist/

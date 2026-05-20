@@ -1,0 +1,17 @@
+# cargo 镜像配置（项目级，仅本目录及其子目录生效，不污染全局）
+# 字节 rsproxy.cn 中国镜像 —— 直连 crates.io 在国内常超时。
+
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+# sparse 协议（HTTP/2，比 git 索引快得多，cargo 1.68+ 支持）
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+# 旧 git 索引兜底（万一 sparse 出问题）
+[source.rsproxy]
+registry = "https://rsproxy.cn/crates.io-index"
+
+[net]
+# 用系统 git 拉 crate（默认走 libgit2，国内某些环境不稳）
+git-fetch-with-cli = true

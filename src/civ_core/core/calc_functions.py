@@ -321,8 +321,8 @@ def calc_leeb_hardness_steel(
         test_areas_raw: 多测区原始 HL 列表，每测区固定 9 个 int 测点。
         thickness: 构件厚度（mm），用于查厚度修正表 leeb_thickness_correction。
         angle_degrees: 测量角度（必须是 -90 / -45 / 0 / +45 / +90 之一）。
-                       -90° = 向上垂直 ↑；-45° = 向上 45°；0° = 水平 →；
-                       +45° = 向下 45°；+90° = 向下垂直 ↓
+                       +90° = 竖直向上 ↑；+45° = 向上 45°；0° = 水平 →；
+                      -45° = 向下 45°；-90° = 竖直向下 ↓
         db: 已 seed 过 leeb_thickness / leeb_angle / leeb_strength 三表的 StandardsDB。
         design_fb_min: 设计抗拉强度下限（MPa）。当前版本暂不写回 result（结果 dataclass
                        未带 passed 字段，由调用方拿 comp_fb_est 自行判定）。

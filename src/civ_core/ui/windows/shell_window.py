@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QStatusBar,
@@ -145,6 +146,12 @@ class ShellWindow(QMainWindow):
 
         self._tool_container = QStackedWidget(self._splitter)
         self._tool_container.setObjectName("toolContainer")
+        # 关键 fix：让 splitter 完全无视 ToolContainer 的 sizeHint，
+        # 否则切工具时新工具页的 sizeHint 会反向挤压 Side Bar 宽度，
+        # 表现为"切工具后树拖不大"。
+        self._tool_container.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding
+        )
         self._setup_lazy_tools(cfg)
         self._splitter.addWidget(self._tool_container)
 
@@ -229,14 +236,25 @@ class ShellWindow(QMainWindow):
         if factory is None:
             return None
         log.info("延迟构造工具页：%s", name)
+
+        # 第二道防线：记录 splitter 当前 sizes，替换 widget 后恢复
+        # （即便 sizePolicy=Ignored 也保险一手 —— 某些工具页内部第一次
+        # show 时仍可能触发 splitter 重新分配）
+        sizes_before = self._splitter.sizes()
+
         page = factory()
         self._pages[name] = page
+        # 让工具页自己也无视 sizeHint，splitter 完全由用户拖动控制
+        page.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         idx = self._page_indices[name]
         old = self._tool_container.widget(idx)
         self._tool_container.removeWidget(old)
         if old is not None:
             old.deleteLater()
         self._tool_container.insertWidget(idx, page)
+
+        # 恢复 splitter sizes：把"切工具后 Side Bar 被挤回去"问题根治
+        self._splitter.setSizes(sizes_before)
         return page
 
     # ── 几何 / 持久化 ──────────────────────────────────────

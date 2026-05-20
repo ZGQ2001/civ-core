@@ -26,6 +26,8 @@ from typing import Literal, Sequence
 
 from civ_core.domain.calc_schema import (
     CoreDrillingResult,
+    LeebHardnessBatchResult,
+    LeebHardnessComponentInput,
     LeebHardnessResult,
     LeebHardnessTestArea,
     ReboundResult,
@@ -399,6 +401,53 @@ def calc_leeb_hardness_steel(
         comp_fb_max_avg=comp_fb_max_avg,
         comp_fb_est=comp_fb_est,
         batch_fb_char_avg=batch_fb_char_avg,
+    )
+
+
+def calc_leeb_hardness_batch(
+    components: Sequence[LeebHardnessComponentInput],
+    *,
+    db: StandardsDB,
+) -> LeebHardnessBatchResult:
+    """多构件批级计算（INSP-001 §3 检验批/全局计算）。
+
+    遍历每个构件调 calc_leeb_hardness_steel，把构件级结果按输入顺序收集，
+    再用所有构件的 comp_fb_min_avg 取平均得批级特征值平均（batch_fb_char_avg）。
+
+    参数:
+        components: 构件输入列表（≥1 个）；每个构件含自己的 厚度/角度/N 测区
+        db: 已 seed 三表的 StandardsDB
+
+    返回:
+        LeebHardnessBatchResult；输入顺序在 components_with_results 里保持
+
+    异常:
+        InputError —— components 为空 / 任意构件计算失败（直接向上抛）
+    """
+    if not components:
+        raise InputError(
+            cause="批级计算至少需要 1 个构件",
+            location="calc_leeb_hardness_batch",
+            hint="GB/T 50621-2010 §3.4.4 钢结构抽样要求按总数 10% 且不少于 3 个构件",
+        )
+
+    pairs: list[tuple[LeebHardnessComponentInput, LeebHardnessResult]] = []
+    for comp in components:
+        r = calc_leeb_hardness_steel(
+            test_areas_raw=list(comp.test_areas_raw),
+            thickness=comp.thickness,
+            angle_degrees=comp.angle_degrees,
+            db=db,
+        )
+        pairs.append((comp, r))
+
+    # 批级 = 所有构件 comp_fb_min_avg 的平均（INSP-001 §3）
+    batch_fb_char_avg = sum(r.comp_fb_min_avg for _, r in pairs) / len(pairs)
+
+    return LeebHardnessBatchResult(
+        components_with_results=tuple(pairs),
+        batch_fb_char_avg=batch_fb_char_avg,
+        n_components=len(pairs),
     )
 
 

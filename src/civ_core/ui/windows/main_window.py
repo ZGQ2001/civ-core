@@ -25,6 +25,7 @@ from civ_core.configs.loader import AppConfig
 from civ_core.core.project_service import ProjectService
 from civ_core.infra_io.project_db import ProjectDB
 from civ_core.infra_io.standards_db import init_standards_db
+from civ_core.ui.windows.leeb_hardness_view import LeebHardnessView
 from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 from civ_core.ui.windows.plot_curves_view import PlotCurvesView
 from civ_core.ui.windows.project_board_view import ProjectBoardView
@@ -110,6 +111,8 @@ class MainWindow(FluentWindow):
         self.home_page.setObjectName("homePage")
         # 绘曲线图页：三栏视图（步骤 9 已接入；子面板内容在 step 10/11/13 渐进填充）
         self.plot_curves_page = PlotCurvesView(cfg)
+        # 里氏硬度（INSP-001）批级计算：钢结构厂房项目用
+        self.leeb_hardness_page = LeebHardnessView(self._standards_db)
         # PDF 工具页（合并 + 拆分）
         self.pdf_tools_page = PdfToolsView(cfg)
         # Word → PDF 批量转换页
@@ -127,6 +130,7 @@ class MainWindow(FluentWindow):
         # 顶部：工具页
         self.addSubInterface(self.home_page, FluentIcon.HOME, "项目看板")
         self.addSubInterface(self.plot_curves_page, FluentIcon.MARKET, "绘曲线图")
+        self.addSubInterface(self.leeb_hardness_page, FluentIcon.ROBOT, "里氏硬度")
         self.addSubInterface(self.pdf_tools_page, FluentIcon.DOCUMENT, "PDF 工具")
         self.addSubInterface(self.word2pdf_page, FluentIcon.SEND, "Word→PDF")
         # 底部：辅助项

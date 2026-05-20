@@ -89,6 +89,67 @@ class LeebHardnessResult:
             raise ValueError("LeebHardnessResult.test_areas 不少于 1 个测区")
 
 
+@dataclass(slots=True, frozen=True)
+class LeebHardnessComponentInput:
+    """单构件输入数据（批级计算的最小单元，对应报检单 Excel 中一个构件的 3 行）。
+
+    字段:
+        seq             序号（来自报检单 Excel）
+        name            构件位置/名称（如「地上一层2×H钢柱」）
+        thickness       构件厚度（mm），全部测区共用
+        angle_degrees   测量角度（必须 ∈ {-90, -45, 0, 45, 90}）
+        test_areas_raw  N 个测区，每测区 9 个 HL 测点（常见 N=3）
+        batch_name      检测批名（可选，便于 UI 分组显示）
+    """
+
+    seq: int
+    name: str
+    thickness: float
+    angle_degrees: float
+    test_areas_raw: tuple[tuple[int, ...], ...]
+    batch_name: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("LeebHardnessComponentInput.name 不可为空")
+        if self.thickness <= 0:
+            raise ValueError(
+                f"LeebHardnessComponentInput.thickness 必须 > 0，得到 {self.thickness}"
+            )
+        if not self.test_areas_raw:
+            raise ValueError("LeebHardnessComponentInput.test_areas_raw 至少 1 个测区")
+        for i, area in enumerate(self.test_areas_raw):
+            if len(area) != 9:
+                raise ValueError(
+                    f"LeebHardnessComponentInput.test_areas_raw[{i}] 必须 9 个测点，"
+                    f"得到 {len(area)}"
+                )
+
+
+@dataclass(slots=True, frozen=True)
+class LeebHardnessBatchResult:
+    """多构件批级计算结果。
+
+    components_with_results: (输入构件, 该构件的 LeebHardnessResult) 元组列表，
+                             保持输入顺序，方便 UI 表格按序号渲染
+    batch_fb_char_avg:       全部构件 comp_fb_min_avg 的平均（INSP-001 §3 批级特征值）
+    n_components:            构件总数
+    """
+
+    components_with_results: tuple[tuple[LeebHardnessComponentInput, LeebHardnessResult], ...]
+    batch_fb_char_avg: float
+    n_components: int
+
+    def __post_init__(self) -> None:
+        if self.n_components != len(self.components_with_results):
+            raise ValueError(
+                f"LeebHardnessBatchResult.n_components ({self.n_components}) 与列表长度不一致 "
+                f"({len(self.components_with_results)})"
+            )
+        if self.n_components < 1:
+            raise ValueError("LeebHardnessBatchResult.n_components 必须 >= 1")
+
+
 # ════════════════════════════════════════════════════════════════
 # INSP-002 钻芯法混凝土抗压强度推定
 # ════════════════════════════════════════════════════════════════

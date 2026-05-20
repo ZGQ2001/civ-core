@@ -6,7 +6,20 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** ① 画图、② 计算函数 INSP-001/002 完整可用、INSP-003 骨架（670 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+**当前状态：** ① 画图、② 里氏硬度（INSP-001）批级 GUI 完整可用（钢结构厂房项目实战可用）、INSP-002 钻芯法可用、INSP-003 骨架（687 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+
+**2026-05-20 里氏硬度批级 GUI 交付：** 端到端打通"报检单 Excel → 计算 → 导出"流程。
+- `domain/calc_schema.py` 加 `LeebHardnessComponentInput` + `LeebHardnessBatchResult` 批级契约
+- `core/calc_functions.calc_leeb_hardness_batch`：多构件批级聚合（INSP-001 §3 批级特征值 = 各构件下限均值的算术平均）
+- `infra_io/leeb_excel.py`：报检单 Excel 导入器（按 D 号站房格式，每构件 3 行 9 列，自动跳过 mid-sheet 子表头）+ 计算结果导出器（"原始数据 + 计算结果"两 sheet）
+- `ui/windows/leeb_hardness_view.py` 新工具页 LeebHardnessView：
+  - 顶栏：导入 Excel / 5 档角度下拉（默认 +90° 钢柱常用）/ 计算 / 导出 / 清空
+  - 左栏：构件清单表（序号 / 构件位置 / 厚度 / 测区数 / 检测批）
+  - 右栏：批级 fb_char_avg 醒目大字号 + 详细结果表（每测区 HL_m/HL_t/HL_a/HL_corr/fb_min/fb_max + 构件推定）
+  - 角度切换自动作废结果、要求重算
+  - 错误用三段式 InfoBar 弹出
+- MainWindow 导航加「里氏硬度」（FluentIcon.ROBOT）
+- 端到端测试用真实「防火厚度报检单(D号站房)新.xlsx / 里氏硬度（钢柱）」sheet 跑通：28 个钢柱 → 84 测区 → 批级特征值落在合理区间
 
 **2026-05-20 ② 计算函数底座 + 里氏硬度完整可用：** 按 INSP-001/002/003 三份公式文档实现。
 - `infra_io/standards_db.py` SQLite 通用查表层（standards_tables + partial unique index 区分 1D/2D，ON CONFLICT REPLACE 上挂）。已 seed：

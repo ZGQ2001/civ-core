@@ -97,28 +97,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_presets or args.tool is not None:
         return _run_cli(args)
 
-    # 默认分支：启动 GUI（第二阶段任务，未就绪时给清晰提示）
-    return _launch_gui()
-
-
-# ──────────────────────────────────────────────────────────────────
-# GUI 分支（懒导入）
-# ──────────────────────────────────────────────────────────────────
-def _launch_gui() -> int:
-    """启动 PySide6 主窗口。装配细节全部在 app.bootstrap 里。"""
-    try:
-        from civ_core.apps.bootstrap import run as run_gui
-    except ImportError as e:
-        # 这里走到说明 PySide6 / qfluentwidgets 没装。提示用户切 CLI 跑工具。
-        sys.stderr.write(
-            f"GUI 启动失败：{e}\n"
-            "请确认 PySide6 / qfluentwidgets 已安装，或改用 CLI 跑工具：\n"
-            "  python -m civ_core.main --list-presets\n"
-            "  python -m civ_core.main --tool plot_curves --input <xlsx>\n"
-        )
-        return 2
-
-    return run_gui(sys.argv)
+    # 默认分支：旧 Qt GUI 已弃用（2026-05-20 转 Tauri）。引导用户走新路径。
+    sys.stderr.write(
+        "Qt GUI 已弃用。当前 UI 走 Tauri + Web 路线：\n"
+        "  仓库根执行：bash run.sh   （一键启动 Tauri + Vite + Python sidecar）\n"
+        "  或：cd frontend && npm run tauri:dev\n"
+        "\nCLI 工具仍可用：\n"
+        "  python -m civ_core.main --list-presets\n"
+        "  python -m civ_core.main --tool plot_curves --input <xlsx>\n"
+        "\n后端 RPC 服务（Tauri 自动调用，也可手动跑测试）：\n"
+        "  python -m civ_core.api\n"
+    )
+    return 2
 
 
 # ──────────────────────────────────────────────────────────────────

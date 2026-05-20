@@ -15,10 +15,8 @@ authors = [
 keywords = ["civil-engineering", "automation", "word-com", "fluent-ui"]
 
 dependencies = [
-    # UI
-    "pyside6>=6.7,<7.0",
-    "PySide6-Fluent-Widgets>=1.7.0",
-    # Config & validation
+    # UI 已转 Tauri + Web（2026-05-20），删了 pyside6 + PySide6-Fluent-Widgets。
+    # Python 端只剩业务计算 + JSON-RPC sidecar；GUI 完全在 frontend/ 下。
     # Office automation
     "pywin32>=306",
     "python-docx==1.2.0",
@@ -39,7 +37,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-qt>=4.4",
     "ruff>=0.5",
 ]
 
@@ -102,6 +99,5 @@ addopts = "-q --strict-markers "
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "pytest-qt>=4.4",
     "ruff>=0.15.12",
 ]

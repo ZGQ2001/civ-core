@@ -29,13 +29,20 @@ class BreadcrumbBar(QFrame):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
 
+        # leading 区：常驻按钮位（shell 装"打开文件夹/新建"），在面包屑左边
+        self._leading = QWidget(self)
+        self._leading_layout = QHBoxLayout(self._leading)
+        self._leading_layout.setContentsMargins(0, 0, 0, 0)
+        self._leading_layout.setSpacing(4)
+        h.addWidget(self._leading)
+
         self._crumb = QLabel(self)
         self._crumb.setObjectName("breadcrumbText")
         self._crumb.setStyleSheet("color: #B8BFC9; font-size: 12px;")
         h.addWidget(self._crumb)
         h.addStretch(1)
 
-        # action 容器：每次 clear_actions 重建子布局更稳，但用单一容器布局直接 take/delete 也行
+        # trailing 区：工具页自定义主操作按钮位（切工具时 shell 清空 → 新页填）
         self._actions = QWidget(self)
         self._actions_layout = QHBoxLayout(self._actions)
         self._actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -59,9 +66,17 @@ class BreadcrumbBar(QFrame):
                 w.deleteLater()
 
     def add_action(self, button: QPushButton) -> None:
-        """追加一个操作按钮到右侧 action 区。"""
+        """追加一个操作按钮到右侧 trailing 区。"""
         self._actions_layout.addWidget(button)
 
     def action_count(self) -> int:
-        """当前 action 区按钮数（测试 + 调试用）。"""
+        """当前 trailing 区按钮数（测试 + 调试用）。"""
         return self._actions_layout.count()
+
+    # ── leading 常驻按钮（"打开文件夹"等，跨工具不变） ──────────────
+    def add_leading_action(self, button: QPushButton) -> None:
+        """追加一个常驻按钮到左侧 leading 区（面包屑文本之前）。"""
+        self._leading_layout.addWidget(button)
+
+    def leading_count(self) -> int:
+        return self._leading_layout.count()

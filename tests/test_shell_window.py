@@ -1,4 +1,4 @@
-"""ShellWindow + resolve_workspace_or_prompt：构造 + 启动门槛 + 工具切换。"""
+"""ShellWindow + initial_workspace：构造 + 空状态 + 工作区加载 + 工具切换。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _ensure_app() -> QApplication:
 
 
 def _isolate_settings(tmp_path, monkeypatch) -> None:
-    """让 workspace_settings 的 QSettings 走临时目录，避免污染用户家目录。"""
+    """把 workspace_settings 的 QSettings 走临时目录，避免污染用户家目录。"""
     ini = tmp_path / "ws.ini"
     monkeypatch.setattr(
         ws,
@@ -29,66 +29,88 @@ def _isolate_settings(tmp_path, monkeypatch) -> None:
     )
 
 
-def test_resolve_uses_cached_when_valid(tmp_path, monkeypatch) -> None:
+def test_initial_workspace_returns_cached(tmp_path, monkeypatch) -> None:
     _ensure_app()
     _isolate_settings(tmp_path, monkeypatch)
-
     workspace = tmp_path / "cached_ws"
     create_standard_structure(workspace)
     ws.save_last_workspace(workspace)
-
-    got = sw.resolve_workspace_or_prompt()
-    assert got == workspace
+    assert sw.initial_workspace() == workspace
 
 
-def test_resolve_returns_none_when_cancelled(tmp_path, monkeypatch) -> None:
-    """缓存无效 → 弹对话框；monkeypatch 对话框直接 reject → 返回 None。"""
+def test_initial_workspace_none_when_unset(tmp_path, monkeypatch) -> None:
     _ensure_app()
     _isolate_settings(tmp_path, monkeypatch)
-    # 无缓存
     ws.clear_last_workspace()
-
-    # monkeypatch 对话框：构造完直接 reject
-    from civ_core.ui.dialogs.workspace_picker import WorkspacePickerDialog
-
-    class _CancelDialog(WorkspacePickerDialog):
-        def exec(self) -> int:  # type: ignore[override]
-            return WorkspacePickerDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(sw, "WorkspacePickerDialog", _CancelDialog)
-    assert sw.resolve_workspace_or_prompt() is None
+    assert sw.initial_workspace() is None
 
 
-def test_shell_construct(tmp_path, monkeypatch) -> None:
-    """ShellWindow 能在一个合法 workspace 上构造起来，工具页全部就位。"""
+def test_shell_construct_with_workspace(tmp_path, monkeypatch) -> None:
+    """传入有效 workspace → 文件树自动加载，empty state 不显示。"""
     _ensure_app()
     _isolate_settings(tmp_path, monkeypatch)
-
     workspace = tmp_path / "ws_shell"
     create_standard_structure(workspace)
 
     cfg = load_config()
     win = sw.ShellWindow(cfg, workspace)
     try:
-        # 各核心组件就位
-        assert hasattr(win, "_activity_bar")
-        assert hasattr(win, "_project_tree")
-        assert hasattr(win, "_tool_container")
-        assert hasattr(win, "_agent_panel")
-        assert hasattr(win, "_breadcrumb")
-
-        # 工具页齐全
+        # 核心组件就位
+        for attr in ("_activity_bar", "_project_tree", "_tool_container", "_agent_panel", "_breadcrumb"):
+            assert hasattr(win, attr), f"缺组件 {attr}"
+        # 5 个工具页齐全
         for name in ("plot_curves", "leeb_hardness", "pdf_tools", "word2pdf", "settings"):
             assert name in win._pages
 
-        # 默认 activity_bar 选中 plot_curves
+        # workspace 加载成功
+        assert win._workspace == workspace
+        assert not win._project_tree.is_empty_state()
+        # AgentPanel 也接到了 workspace
+        assert win._agent_panel.workspace() == workspace
+
+        # 默认选中 plot_curves
         assert win._activity_bar.current() == "plot_curves"
 
-        # 切到 settings 后 stacked currentWidget 应同步
+        # 切到 settings
         win._activity_bar.set_current("settings")
         assert win._tool_container.currentWidget() is win._pages["settings"]
+    finally:
+        win.deleteLater()
 
-        # 面包屑包含工作区名和工具名
-        win._breadcrumb._crumb.text()  # 不为空足矣
+
+def test_shell_construct_without_workspace_shows_empty_state(tmp_path, monkeypatch) -> None:
+    """workspace=None → 项目树栏显示 empty state，shell 仍然能正常构造。"""
+    _ensure_app()
+    _isolate_settings(tmp_path, monkeypatch)
+    ws.clear_last_workspace()
+
+    cfg = load_config()
+    win = sw.ShellWindow(cfg, None)
+    try:
+        assert win._workspace is None
+        assert win._project_tree.is_empty_state(), "无 workspace 时应显示 empty state"
+        # 工具页仍然都在
+        assert win._activity_bar.current() == "plot_curves"
+    finally:
+        win.deleteLater()
+
+
+def test_load_workspace_updates_state(tmp_path, monkeypatch) -> None:
+    """从 empty state 切到有 workspace → 项目树 + breadcrumb + QSettings 都应更新。"""
+    _ensure_app()
+    _isolate_settings(tmp_path, monkeypatch)
+    ws.clear_last_workspace()
+
+    cfg = load_config()
+    win = sw.ShellWindow(cfg, None)
+    try:
+        assert win._project_tree.is_empty_state()
+        new_ws = tmp_path / "ws_new"
+        create_standard_structure(new_ws)
+        win._load_workspace(new_ws)
+        assert win._workspace == new_ws
+        assert not win._project_tree.is_empty_state()
+        # QSettings 也应被写入
+        assert ws.load_last_workspace() == new_ws
     finally:
         win.deleteLater()

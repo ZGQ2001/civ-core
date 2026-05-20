@@ -8,7 +8,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
 from civ_core.infra_io.workspace_scaffold import create_standard_structure  # noqa: E402
 from civ_core.ui.components.project_tree import ProjectTree  # noqa: E402
@@ -18,10 +18,40 @@ def _ensure_app() -> QApplication:
     return QApplication.instance() or QApplication([])
 
 
-def test_construct() -> None:
+def test_construct_starts_in_empty_state() -> None:
+    """无 workspace 时项目树栏显示 empty state（VSCode 风欢迎页）。"""
     _ensure_app()
     t = ProjectTree()
     assert t.root() is None
+    assert t.is_empty_state()
+
+
+def test_clear_root_returns_to_empty(qtbot, tmp_path: Path) -> None:
+    _ensure_app()
+    root = tmp_path / "ws"
+    create_standard_structure(root)
+    t = ProjectTree()
+    qtbot.addWidget(t)
+    t.set_root(root)
+    assert not t.is_empty_state()
+    t.clear_root()
+    assert t.is_empty_state()
+    assert t.root() is None
+
+
+def test_empty_state_buttons_emit_signals(qtbot) -> None:
+    """empty state 的两个按钮应分别发出对应信号。"""
+    _ensure_app()
+    t = ProjectTree()
+    qtbot.addWidget(t)
+    open_btn = t._empty.findChild(QPushButton, "projectTreeOpenBtn")
+    new_btn = t._empty.findChild(QPushButton, "projectTreeNewBtn")
+    assert open_btn is not None and new_btn is not None
+
+    with qtbot.waitSignal(t.open_folder_requested, timeout=200):
+        open_btn.click()
+    with qtbot.waitSignal(t.create_workspace_requested, timeout=200):
+        new_btn.click()
 
 
 def test_set_root_emits(qtbot, tmp_path: Path) -> None:

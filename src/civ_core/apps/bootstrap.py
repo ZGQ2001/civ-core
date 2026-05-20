@@ -554,17 +554,10 @@ def run(argv: list[str] | None = None) -> int:
 
     # shell 在 create_app 之后再 import：确保 QApplication 已存在 +
     # 避免 ui/ 模块在配置错误时被加载（错误信息更干净）
-    from civ_core.ui.windows.shell_window import (
-        ShellWindow,
-        resolve_workspace_or_prompt,
-    )
+    from civ_core.ui.windows.shell_window import ShellWindow, initial_workspace
 
-    workspace = resolve_workspace_or_prompt()
-    if workspace is None:
-        log.info("用户取消打开工作区，退出。")
-        return 0
-
-    window = ShellWindow(cfg, workspace)
+    # VSCode 风：不弹模态对话框；有上次 workspace 就加载，没有就进 empty state
+    window = ShellWindow(cfg, initial_workspace())
     window.show()
 
     # QtLogBridge 已经在 setup_from_config 里建好了；

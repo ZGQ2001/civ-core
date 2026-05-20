@@ -38,3 +38,17 @@ data/training_materials/
 # .idea/  # 如果使用 JetBrains 系列 IDE，可以取消注释
 !handwrite_config.json
 !pyproject.toml
+
+# ==========================================
+# 5. 前端（Vite + React + Tauri）
+# ==========================================
+node_modules/
+frontend/dist/
+frontend/.vite/
+# Tauri 构建产物（T3 之后会出现）
+src-tauri/target/
+src-tauri/Cargo.lock
+# Python sidecar 打包产物（T6 之后会出现）
+build/
+dist/
+*.spec

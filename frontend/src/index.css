@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* VSCode 官方 codicon 字体（@vscode/codicons 提供） */
+@import "@vscode/codicons/dist/codicon.css";
+
+/* VSCode Dark+ 主题 token —— Tailwind v4 通过 @theme 注册成可在 className 里写的 utility */
+@theme {
+  --color-vscode-activity: #181818;
+  --color-vscode-bg: #1f1f1f;
+  --color-vscode-input: #313131;
+  --color-vscode-border: #2b2b2b;
+  --color-vscode-hover: #2a2d2e;
+  --color-vscode-selected: #094771;
+  --color-vscode-focus: #007fd4;
+  --color-vscode-button: #0e639c;
+  --color-vscode-button-hover: #1177bb;
+  --color-vscode-text: #cccccc;
+  --color-vscode-text-dim: #969696;
+  --color-vscode-text-faint: #6e7681;
+  --color-vscode-status: #007acc;
+
+  --font-ui:
+    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-vscode-text);
+  background: var(--color-vscode-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 全局滚动条：VSCode 风极细透明 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #424242;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+::selection {
+  background: var(--color-vscode-selected);
+  color: white;
+}
+
+/* codicons：用法 <i class="codicon codicon-folder" />（codicon.css 已自动 inject 字体） */
+.codicon {
+  display: inline-block;
+  vertical-align: middle;
+}

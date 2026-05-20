@@ -38,8 +38,9 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import FluentIcon
 
-# 项目树最小宽度（VSCode Side Bar 一般 200-260）
-MIN_WIDTH = 170
+# 项目树最小宽度（设小一点让 shell splitter 拖动空间更大）
+# VSCode Side Bar 实际可拖到很小；这里给 100 防止完全没法显示文件名
+MIN_WIDTH = 100
 
 
 class _SidebarHeader(QWidget):

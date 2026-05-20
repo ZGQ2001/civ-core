@@ -430,6 +430,26 @@ QScrollBar::handle:horizontal:hover { background: #4F4F4F; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 
 /* ============================================================
+   状态栏（VSCode 风：底部 #007ACC 蓝条 / 白文字 / 22px 高）
+   ============================================================ */
+QStatusBar#shellStatusBar {
+    background-color: #007ACC;
+    color: #FFFFFF;
+    border: none;
+    min-height: 22px;
+    max-height: 22px;
+}
+QStatusBar#shellStatusBar::item {
+    border: none;
+}
+QStatusBar#shellStatusBar QLabel {
+    color: #FFFFFF;
+    background: transparent;
+    font-size: 11px;
+    padding: 0 8px;
+}
+
+/* ============================================================
    QTabWidget（B2 底部 Tab 会用到，先打底）
    ============================================================ */
 QTabWidget::pane {

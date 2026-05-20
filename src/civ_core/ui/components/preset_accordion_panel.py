@@ -507,8 +507,10 @@ class PresetAccordionPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("presetAccordionPanel")
-        # 整个面板可以被压缩；最小宽度限到一个合理值即可
-        self.setMinimumWidth(280)
+        # 整个面板可以被压缩；最小宽度收到 180，让外层 shell 的 Side Bar
+        # 拖动空间不被工具内部最小宽度卡死（之前 280 导致外层 splitter
+        # 拖动出现"一跳一跳"的视觉跳变）
+        self.setMinimumWidth(180)
 
         # 内部状态
         self._entries: list[PresetEntry] = []

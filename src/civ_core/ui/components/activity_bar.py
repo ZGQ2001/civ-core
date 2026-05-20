@@ -1,9 +1,21 @@
-"""ActivityBar：左侧 48px 工具切换栏（VSCode 风）。
+"""ActivityBar：左侧 48px 工具切换栏（VSCode Activity Bar 风）。
 
-为什么独立成组件：
-  - shell 的常驻第一栏，跨工具页不重建；切工具是发信号让 stacked 换页
-  - 工具列表由 shell 装配时注入，本组件只管按钮渲染 / 选中态 / 信号
-  - 按钮用 QButtonGroup 的 exclusive 模式保证"同时只有一个高亮"
+布局（纵向）：
+  ┌────┐
+  │ T1 │ ← 顶部组：Explorer / Search / SCM 等普通工具
+  │ T2 │
+  │ T3 │
+  │ T4 │
+  │ .  │
+  │ .  │
+  │ .  │   stretch（自动占满中间）
+  │ B1 │ ← 底部组：Accounts / Settings（gear icon）—— VSCode 风
+  └────┘
+
+按钮间用 QButtonGroup exclusive 互斥（同一时刻只有一个选中）。
+
+Signals:
+    current_tool_changed(str): 用户切换工具时发出（编程 set_current 也触发）。
 """
 
 from __future__ import annotations
@@ -19,19 +31,12 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import FluentIcon
 
-# 模块级常量：栏宽 + 按钮尺寸（保持 VSCode 接近的视觉比例）
 BAR_WIDTH = 48
 BTN_SIZE = 40
 ICON_SIZE = 22
 
 
 class ActivityBar(QFrame):
-    """纵向工具切换栏。
-
-    Signals:
-        current_tool_changed(str): 用户点选工具名时发出。
-    """
-
     current_tool_changed = Signal(str)
 
     def __init__(
@@ -40,7 +45,8 @@ class ActivityBar(QFrame):
         parent=None,
     ) -> None:
         """Args:
-        items: [(tool_name, icon, tooltip), ...]，按显示顺序排列；可后续 add_tool 追加。
+        items: [(tool_name, icon, tooltip), ...]，按显示顺序排（全进顶部组）；
+               用 add_tool / add_bottom_tool 可继续追加。
         """
         super().__init__(parent)
         self.setObjectName("activityBar")
@@ -48,8 +54,8 @@ class ActivityBar(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 8, 4, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 8, 0, 8)
+        layout.setSpacing(2)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._layout = layout
 
@@ -57,47 +63,61 @@ class ActivityBar(QFrame):
         self._group.setExclusive(True)
         self._buttons: dict[str, QToolButton] = {}
 
+        # 顶部组 + stretch + 底部组（VSCode 风分区）
+        # stretch 在 _layout 中间，addStretch 返回的是 spacer item 没法精确索引；
+        # 所以维护一个"stretch 在 layout 里的位置 index"
+        self._stretch_index: int = 0
+        # 先把可能的 items 全部 add 到顶部
         if items:
             for name, icon, tooltip in items:
                 self.add_tool(name, icon, tooltip)
-
-        # 末尾留一个 stretch 让所有按钮顶到上方（即便后续 add_tool 也仍在 stretch 之前）
+        # 然后加 stretch（位置变成当前最末，记下来）
         layout.addStretch(1)
+        self._stretch_index = layout.count() - 1
 
-    def add_tool(self, name: str, icon: FluentIcon, tooltip: str) -> QToolButton:
-        """追加一个工具按钮。"""
+    def _make_btn(self, name: str, icon: FluentIcon, tooltip: str) -> QToolButton:
         btn = QToolButton(self)
         btn.setObjectName(f"activityBtn_{name}")
         btn.setCheckable(True)
         btn.setToolTip(tooltip)
         btn.setIcon(icon.icon())
         btn.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
-        btn.setFixedSize(BTN_SIZE, BTN_SIZE)
-        # 用 toggled 而非 clicked：QButtonGroup exclusive 切换时 setChecked 也会触发，
-        # 这样外部调 set_current 也能同步发信号
+        btn.setFixedSize(BAR_WIDTH, BTN_SIZE)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.toggled.connect(
             lambda checked, n=name: checked and self.current_tool_changed.emit(n)
         )
         self._group.addButton(btn)
         self._buttons[name] = btn
-        # 插到末尾 stretch 之前；首次构造时 stretch 还没加，count() 为 0，insertWidget 等价于 addWidget
-        insert_at = max(0, self._layout.count() - 1)
+        return btn
+
+    def add_tool(self, name: str, icon: FluentIcon, tooltip: str) -> QToolButton:
+        """追加到顶部组（在 stretch 之前）。"""
+        btn = self._make_btn(name, icon, tooltip)
+        # stretch 在末尾时 _stretch_index = count-1；插入位置就是 stretch 之前
+        insert_at = self._stretch_index if self._stretch_index else self._layout.count()
         self._layout.insertWidget(insert_at, btn)
+        if self._stretch_index:
+            self._stretch_index += 1
+        return btn
+
+    def add_bottom_tool(self, name: str, icon: FluentIcon, tooltip: str) -> QToolButton:
+        """追加到底部组（在 stretch 之后）—— VSCode 的 settings/accounts 区。"""
+        btn = self._make_btn(name, icon, tooltip)
+        # 直接 addWidget 加到最末（stretch 之后）
+        self._layout.addWidget(btn)
         return btn
 
     def set_current(self, name: str) -> None:
-        """编程切换当前工具（不会重复触发信号，QToolButton.setChecked 已有去重）。"""
         btn = self._buttons.get(name)
         if btn is not None and not btn.isChecked():
             btn.setChecked(True)
 
     def current(self) -> str | None:
-        """返回当前选中的工具名；都没选则 None。"""
         for name, btn in self._buttons.items():
             if btn.isChecked():
                 return name
         return None
 
     def tools(self) -> list[str]:
-        """按添加顺序返回所有已注册的工具名。"""
         return list(self._buttons.keys())

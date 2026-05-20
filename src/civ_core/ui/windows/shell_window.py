@@ -33,10 +33,12 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QSplitter,
     QStackedWidget,
+    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
@@ -58,14 +60,18 @@ from civ_core.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-# 工具清单：(name, icon, tooltip)
-_TOOLS: list[tuple[str, FluentIcon, str]] = [
+# 顶部组工具（普通工具）
+_TOP_TOOLS: list[tuple[str, FluentIcon, str]] = [
     ("plot_curves", FluentIcon.MARKET, "绘曲线图"),
     ("leeb_hardness", FluentIcon.ROBOT, "里氏硬度"),
     ("pdf_tools", FluentIcon.DOCUMENT, "PDF 工具"),
     ("word2pdf", FluentIcon.SEND, "Word→PDF"),
+]
+# 底部组（VSCode gear 位）—— 设置类
+_BOTTOM_TOOLS: list[tuple[str, FluentIcon, str]] = [
     ("settings", FluentIcon.SETTING, "设置"),
 ]
+_TOOLS = _TOP_TOOLS + _BOTTOM_TOOLS  # 仅用于面包屑 label 查找等
 
 _SETTINGS_ORG = "ZGQ"
 _SETTINGS_APP = "CivCore"
@@ -119,18 +125,20 @@ class ShellWindow(QMainWindow):
         mid_h.setContentsMargins(0, 0, 0, 0)
         mid_h.setSpacing(0)
 
-        self._activity_bar = ActivityBar(_TOOLS, mid)
+        self._activity_bar = ActivityBar(_TOP_TOOLS, mid)
+        # 底部组：settings（VSCode gear 位）
+        for name, icon, tooltip in _BOTTOM_TOOLS:
+            self._activity_bar.add_bottom_tool(name, icon, tooltip)
         mid_h.addWidget(self._activity_bar)
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal, mid)
         self._splitter.setObjectName("shellMainSplitter")
         self._splitter.setHandleWidth(1)
-        self._splitter.setChildrenCollapsible(False)
-        # opaqueResize=False：拖动时只显示分隔条幻影，松手才更新内容；
-        # 这是修复 B1 拖动卡顿的关键 —— 工具页内部还有自己的 QSplitter +
-        # matplotlib canvas 等重控件，实时 resize 在 Qt 下会很卡。
-        # VSCode 看似实时是 Web 渲染层效率，Qt 做不到同等性能，退让到松手刷新。
-        self._splitter.setOpaqueResize(False)
+        # 允许 Side Bar 拖到 0（VSCode 风：拖到底就折叠）；ToolContainer 不折叠
+        self._splitter.setChildrenCollapsible(True)
+        # 实时拖动（B1 polish 之前 False 是为绕开拖动卡顿；现在 lazy 工具页 +
+        # 内部 min 缩到 180 后，工具内部 layout 计算量小，实时拖动应该流畅）
+        self._splitter.setOpaqueResize(True)
 
         self._project_tree = ProjectTree(self._splitter)
         self._splitter.addWidget(self._project_tree)
@@ -140,12 +148,27 @@ class ShellWindow(QMainWindow):
         self._setup_lazy_tools(cfg)
         self._splitter.addWidget(self._tool_container)
 
+        # ToolContainer 不允许折叠（折叠成 0 就没法用了）；Side Bar 可折叠
+        self._splitter.setCollapsible(0, True)
+        self._splitter.setCollapsible(1, False)
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
-        self._splitter.setSizes([240, 1000])
+        self._splitter.setSizes([220, 1000])
 
         mid_h.addWidget(self._splitter, 1)
         outer.addWidget(mid, 1)
+
+        # 底部状态栏（VSCode 风蓝色 #007ACC 横条）
+        self._status_bar = QStatusBar(self)
+        self._status_bar.setObjectName("shellStatusBar")
+        self._status_bar.setSizeGripEnabled(False)
+        self._status_label_workspace = QLabel("无工作区", self._status_bar)
+        self._status_label_workspace.setObjectName("statusLabelWorkspace")
+        self._status_bar.addWidget(self._status_label_workspace)
+        self._status_label_tool = QLabel("", self._status_bar)
+        self._status_label_tool.setObjectName("statusLabelTool")
+        self._status_bar.addPermanentWidget(self._status_label_tool)
+        self.setStatusBar(self._status_bar)
 
         # 信号接线
         self._activity_bar.current_tool_changed.connect(self._on_tool_changed)
@@ -255,6 +278,12 @@ class ShellWindow(QMainWindow):
         tool_label = next((t[2] for t in _TOOLS if t[0] == tool_name), tool_name)
         ws_label = self._workspace.name if self._workspace is not None else "未打开工作区"
         self._breadcrumb.set_breadcrumb(ws_label, tool_label)
+        # 同步状态栏
+        if hasattr(self, "_status_label_workspace"):
+            self._status_label_workspace.setText(
+                str(self._workspace) if self._workspace else "无工作区"
+            )
+            self._status_label_tool.setText(tool_label or "")
 
     # ── 工作区切换 ────────────────────────────────────────
     def _load_workspace(self, root: Path) -> None:

@@ -6,24 +6,33 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** ① 画图模块已闭环（597 测试 / ruff 0 / healthcheck 9/9）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销全部交付。2026-05-14 起锁定「维护 + 新功能」模式。
+**当前状态：** ① 画图、② 计算函数底座已闭环（659 测试 / ruff 0 / healthcheck 9/9）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
 
-**2026-05-19 项目看板 UI/UX 整改完成：** Project schema 加 `is_on_hold`/`is_archived` 独立布尔位（DB 幂等迁移）；`QSortFilterProxyModel` + 自定义 `SortRole` 实现表头点击排序（默认 DateCol 倒序）；筛选按钮 3 档（全部/正在进行/团队积压）→ 4 档（全部/正在进行/暂存/已归档）严格互斥；Drawer 加 ⏸暂存 / ▣归档 双切换按钮；新建 `presets/ui/style_preset.yaml` + `style_loader.py` lru_cache 单例 + `style_helper.py` QSS 拼装，所有项目看板 UI 的字号/颜色/圆角可通过 yaml 全局调整；数据列（编号/金额/日期/进度）改等宽字体；列宽 Interactive 可拖且 QSettings 持久化。新增依赖 `pyyaml 6.0.3`。
+**2026-05-20 ② 计算函数底座交付：** 按 INSP-001/002/003 三份公式文档实现。
+- `infra_io/standards_db.py` SQLite 通用查表层（standards_tables + partial unique index 区分 1D/2D，ON CONFLICT REPLACE 上挂），已 seed INSP-002 钻芯法 k1/k2 系数表共 60 行（JGJ/T 384-2016 表 A.0.2）
+- `domain/calc_schema.py` 3 类 frozen 结果契约 + __post_init__ 强制规范不变量（9/16 点测区、n>=10、fb_max=fb_min+150、batch 模式要求 n>=10 等）
+- `core/calc_functions.py` 三函数：
+  - `calc_core_drilling_concrete`：**完整可用**（k1/k2 表已 seed，含线性插值 / take=upper/lower / 小直径芯样 / design_fcu 判定）
+  - `calc_leeb_hardness_steel`：**骨架就绪**（截尾平均 + 厚度/角度修正 + 强度查表 + 构件聚合），等用户录入 GB/T 17394.4-2014 与 GB/T 50344-2019 附录 N 的厚度/角度/强度三张表
+  - `calc_rebound_concrete`：**骨架就绪**（截尾平均 + 碳化归一化 + 二维测强曲线查表 + single/batch 双模式），等用户录入 JGJ/T 23-2011 附录 A 测强曲线表
+- 通用工具 `_lookup_with_interp`（1D）+ `_lookup_2d_fixed_key1_interp_key2`（分类+插值）覆盖所有规范查表模式
 
 **主管线（已更正依赖顺序）：**
 
 ```
-① 画图 ✅  →  ② 计算函数  →  ②.5 数据生成  →  ③ 规范评定  →  ④ 数据填充  →  ⑤ Word 报告
-  (已交付)    (calc_funcs)    (data_gen)       (calc UI)     (auto_filler)  (模板+输出)
+① 画图 ✅  →  ② 计算函数 ⛹  →  ②.5 数据生成  →  ③ 规范评定  →  ④ 数据填充  →  ⑤ Word 报告
+  (已交付)    (底座+002可用)     (data_gen)       (calc UI)     (auto_filler)  (模板+输出)
                   ↑
           data_gen 的前置依赖：
           生成数据需调用计算函数验证合规性；
           规范评定复用同一套函数评定真实数据
 ```
 
-**当前进度条：** `████████░░░░░░░░░░░░` ① 完成，②待开工
+**当前进度条：** `██████████░░░░░░░░░░` ① 完成，② 底座完成（INSP-002 全通；001/003 待表数据）
 
-**下一步：** 先建 `core/calc_functions.py`（各检测项的规范计算函数），再做 `data_gen`（调用计算函数验证生成数据合规）。
+**下一步（择一）：**
+1. 用户提供 GB/T 17394.4-2014 表 + GB/T 50344-2019 附录 N + JGJ/T 23-2011 附录 A 数据 → 录入 standards_db 让 INSP-001/003 切到「完整可用」
+2. 直接进 `data_gen`（调用 INSP-002 验证生成的钻芯数据，等其他表就位再扩到 001/003）
 
 主页项目看板 UI/UX 整改已闭环（2026-05-19），剩余可选优化（不阻塞 data_gen 启动）：
 - 编辑页表单的细粒度样式仍保留硬编码（drawer 第 380 行以下），未来如有视觉需求再统一抽取

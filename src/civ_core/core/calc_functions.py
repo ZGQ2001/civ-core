@@ -28,12 +28,15 @@ from civ_core.domain.calc_schema import (
     CoreDrillingResult,
     LeebHardnessResult,
     LeebHardnessTestArea,
+    ReboundResult,
+    ReboundTestArea,
 )
 from civ_core.infra_io.standards_db import (
     TABLE_CORE_DRILLING_K,
     TABLE_LEEB_ANGLE,
     TABLE_LEEB_STRENGTH,
     TABLE_LEEB_THICKNESS,
+    TABLE_REBOUND_STRENGTH,
     StandardsDB,
 )
 from civ_core.utils.exceptions import InputError
@@ -395,7 +398,124 @@ def calc_leeb_hardness_steel(
 
 
 # ════════════════════════════════════════════════════════════════
-# INSP-003 回弹法（骨架占位）
-# 等用户提供 JGJ/T 23-2011 附录 A（测强曲线表）+ 附录 C（角度/表面修正）
-# 数据后，按 _lookup_2d_fixed_key1_interp_key2 接口实现并加 seed_rebound_*_table。
+# INSP-003 回弹法
 # ════════════════════════════════════════════════════════════════
+_REBOUND_BATCH_THRESHOLD = 10
+# JGJ/T 23-2011 §7.3.5：批量推定区间上限的标准正态分位数（95% 单侧）
+_REBOUND_K_QUANTILE = 1.645
+# §3：碳化深度归一化阈值
+_CARB_MIN = 0.5
+_CARB_MAX = 6.0
+
+
+def _trim_mean_rebound(values: Sequence[int]) -> float:
+    """INSP-003 §1.1 截尾平均：16 个回弹值剔 3 高 3 低取 10 个均值，精确至 0.1。"""
+    if len(values) != 16:
+        raise InputError(
+            cause=f"回弹法截尾平均需 16 个测点，得到 {len(values)}",
+            location="_trim_mean_rebound",
+            hint="JGJ/T 23-2011 §4.2.1 规定每测区 16 测点",
+        )
+    sorted_vals = sorted(values)
+    middle = sorted_vals[3:13]  # 剔 3 高 3 低，剩 10
+    return round(sum(middle) / 10.0, 1)
+
+
+def _normalize_carbonation_depth(d: float) -> float:
+    """INSP-003 §2：碳化深度归一化（< 0.5 → 0；≥ 6 → 6；其余原样）。"""
+    if d < 0:
+        raise InputError(
+            cause=f"碳化深度不能为负数，得到 {d}",
+            location="_normalize_carbonation_depth",
+        )
+    if d < _CARB_MIN:
+        return 0.0
+    if d >= _CARB_MAX:
+        return _CARB_MAX
+    return d
+
+
+def calc_rebound_concrete(
+    test_areas_raw: Sequence[Sequence[int]],
+    *,
+    carbonation_depth: float,
+    db: StandardsDB,
+    angle_correction: float = 0.0,
+    surface_correction: float = 0.0,
+) -> ReboundResult:
+    """回弹法混凝土抗压强度推定（INSP-003 / JGJ/T 23-2011 §7）。
+
+    参数:
+        test_areas_raw: 多测区原始回弹值列表，每测区固定 16 个 int 测点。
+        carbonation_depth: 碳化深度 d_m（mm），函数内部按 §2 归一化（< 0.5→0; ≥6→6）。
+        db: 已 seed 过 rebound_strength_curve 表的 StandardsDB 实例。
+        angle_correction: 角度修正量 ΔR_α（mm），用户传入；不传则视为水平方向（=0）。
+                          后续如启用 rebound_angle_correction 查表，可在外层包装计算。
+        surface_correction: 表面修正量 ΔR_s（mm），同上。
+
+    返回:
+        ReboundResult：n<10 → mode=single, f_cu_e=min(f_cu_i)；
+                       n>=10 → mode=batch, f_cu_e = m_fcu - 1.645·s_fcu。
+
+    异常:
+        InputError —— 测区为空 / R_m 超出测强曲线表范围 / 碳化深度负数。
+
+    注意:
+        JGJ/T 23-2011 附录 A 测强曲线（R_m × d_m 二维表）目前需要由用户录入；
+        附录 C 角度/表面修正表暂用用户直接传值替代。骨架已就绪，加 seed 即上线。
+    """
+    if not test_areas_raw:
+        raise InputError(
+            cause="至少需要 1 个测区",
+            location="calc_rebound_concrete",
+            hint="JGJ/T 23-2011 §4.1.3 要求批量检测测区数 >= 10 且 >= 30% 总数",
+        )
+
+    d_m = _normalize_carbonation_depth(carbonation_depth)
+
+    areas: list[ReboundTestArea] = []
+    for raw in test_areas_raw:
+        r_m_raw = _trim_mean_rebound(raw)
+        # 应用用户提供的角度 + 表面修正（INSP-003 §1.2、§1.3）
+        r_m = round(r_m_raw + angle_correction + surface_correction, 1)
+        # 测强曲线查表：d_m 分档精确匹配 + R_m 插值
+        f_cu_i = round(
+            _lookup_2d_fixed_key1_interp_key2(
+                db,
+                TABLE_REBOUND_STRENGTH,
+                key1=d_m,
+                key2=r_m,
+                value_idx="value1",
+                key1_label="碳化深度档",
+            ),
+            1,
+        )
+        areas.append(
+            ReboundTestArea(
+                raw_rebound_values=tuple(raw),
+                r_m=r_m,
+                d_m=d_m,
+                f_cu_i=f_cu_i,
+            )
+        )
+
+    fcus = [a.f_cu_i for a in areas]
+    n = len(areas)
+    m_fcu = round(statistics.mean(fcus), 1)
+    s_fcu = round(_stdev_sample(fcus), 2)
+
+    if n < _REBOUND_BATCH_THRESHOLD:
+        mode = "single"
+        f_cu_e = round(min(fcus), 1)
+    else:
+        mode = "batch"
+        f_cu_e = round(m_fcu - _REBOUND_K_QUANTILE * s_fcu, 1)
+
+    return ReboundResult(
+        test_areas=tuple(areas),
+        n=n,
+        mode=mode,
+        m_fcu=m_fcu,
+        s_fcu=s_fcu,
+        f_cu_e=f_cu_e,
+    )

@@ -545,18 +545,30 @@ def set_theme_runtime(theme_name: str) -> None:
 
 
 def run(argv: list[str] | None = None) -> int:
-    """启动 GUI 主循环，返回事件循环退出码（与 sys.exit 兼容）。"""
+    """启动 GUI 主循环，返回事件循环退出码（与 sys.exit 兼容）。
+
+    Obsidian 启动门槛：进 shell 之前必须先解析出一个合法 workspace 路径；
+    用户取消则 return 0 而不进 app.exec()（不显示空壳窗口）。
+    """
     app, cfg = create_app(argv)
 
-    # 主窗口在 create_app 之后再 import：确保 QApplication 已存在 +
+    # shell 在 create_app 之后再 import：确保 QApplication 已存在 +
     # 避免 ui/ 模块在配置错误时被加载（错误信息更干净）
-    from civ_core.ui.windows.main_window import MainWindow
+    from civ_core.ui.windows.shell_window import (
+        ShellWindow,
+        resolve_workspace_or_prompt,
+    )
 
-    window = MainWindow(cfg)
+    workspace = resolve_workspace_or_prompt()
+    if workspace is None:
+        log.info("用户取消打开工作区，退出。")
+        return 0
+
+    window = ShellWindow(cfg, workspace)
     window.show()
 
     # QtLogBridge 已经在 setup_from_config 里建好了；
-    # PlotCurvesView 在构造时通过 get_qt_bridge() 自取并接到 LogPanel.on_record。
+    # 各工具页在构造时通过 get_qt_bridge() 自取并接到 LogPanel.on_record。
     bridge = get_qt_bridge()
     if bridge is not None:
         log.info("QtLogBridge 就绪（已接到日志面板）")

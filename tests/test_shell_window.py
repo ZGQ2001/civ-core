@@ -55,25 +55,26 @@ def test_shell_construct_with_workspace(tmp_path, monkeypatch) -> None:
     cfg = load_config()
     win = sw.ShellWindow(cfg, workspace)
     try:
-        # 核心组件就位
-        for attr in ("_activity_bar", "_project_tree", "_tool_container", "_agent_panel", "_breadcrumb"):
+        # 核心组件就位（Agent 侧栏 B1 阶段已移除）
+        for attr in ("_activity_bar", "_project_tree", "_tool_container", "_breadcrumb"):
             assert hasattr(win, attr), f"缺组件 {attr}"
-        # 5 个工具页齐全
-        for name in ("plot_curves", "leeb_hardness", "pdf_tools", "word2pdf", "settings"):
-            assert name in win._pages
 
         # workspace 加载成功
         assert win._workspace == workspace
         assert not win._project_tree.is_empty_state()
-        # AgentPanel 也接到了 workspace
-        assert win._agent_panel.workspace() == workspace
 
-        # 默认选中 plot_curves
+        # 默认选中 plot_curves（lazy 构造已完成）
         assert win._activity_bar.current() == "plot_curves"
+        assert "plot_curves" in win._pages
 
-        # 切到 settings
+        # 5 个工具名都注册了 factory
+        for name in ("plot_curves", "leeb_hardness", "pdf_tools", "word2pdf", "settings"):
+            assert name in win._page_factories
+
+        # 切到 settings 触发 lazy 构造
         win._activity_bar.set_current("settings")
-        assert win._tool_container.currentWidget() is win._pages["settings"]
+        assert "settings" in win._pages
+        assert win._tool_container.currentIndex() == win._page_indices["settings"]
     finally:
         win.deleteLater()
 

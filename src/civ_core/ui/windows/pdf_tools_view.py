@@ -143,16 +143,16 @@ class PdfToolsView(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
-        b_add = PushButton("➕ 添加 PDF", page)
+        b_add = PushButton("添加 PDF", page)
         b_add.clicked.connect(self._on_merge_add)
         btn_row.addWidget(b_add)
-        b_up = PushButton("↑ 上移", page)
+        b_up = PushButton("上移", page)
         b_up.clicked.connect(lambda: self._on_merge_move(-1))
         btn_row.addWidget(b_up)
-        b_down = PushButton("↓ 下移", page)
+        b_down = PushButton("下移", page)
         b_down.clicked.connect(lambda: self._on_merge_move(1))
         btn_row.addWidget(b_down)
-        b_del = PushButton("× 删除选中", page)
+        b_del = PushButton("删除选中", page)
         b_del.clicked.connect(self._on_merge_remove)
         btn_row.addWidget(b_del)
         b_clear = PushButton("清空", page)
@@ -229,7 +229,7 @@ class PdfToolsView(QWidget):
                 self,
                 title="参数未填完",
                 reason="合并至少需要 2 个 PDF",
-                hint="点「➕ 添加 PDF」选 2 个或更多文件。",
+                hint="点「添加 PDF」选 2 个或更多文件。",
             )
             return
         if self._merge_out_path is None:

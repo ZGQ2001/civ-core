@@ -20,6 +20,7 @@ def test_construct() -> None:
     b = BreadcrumbBar()
     assert b.height() == BAR_HEIGHT
     assert b.action_count() == 0
+    assert b.leading_count() == 0
 
 
 def test_breadcrumb_text() -> None:

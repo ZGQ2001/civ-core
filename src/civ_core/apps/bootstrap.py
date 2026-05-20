@@ -110,190 +110,348 @@ def create_app(argv: list[str] | None = None) -> tuple[QApplication, AppConfig]:
 # 文本色：
 #   主文字 #D9DEE5（浅灰）/ 次文字 #8B92A0（中灰）/ 占位 #5B6573（深灰）
 #
-# 选择器都加 objectName，避免误覆盖 qfluentwidgets 内部控件的样式。
+# Token 来源：VSCode Dark+ theme（github.com/microsoft/vscode）。
+# 层次：activityBar #181818（最深）→ sideBar/editor #1F1F1F → input #313131。
+# 选中蓝 #094771 / focus 边 #007FD4 / 文本 #CCCCCC / 次文本 #969696。
+# 字号：UI 13px（≈10pt @96dpi），紧凑无圆角，VSCode 视觉密度。
 _APP_QSS_DARK = """
-/* ──────────────────────────────────────────────────────────────
-   L0 根背景：窗口主体 / 各页根 widget
-   ────────────────────────────────────────────────────────────── */
+/* ============================================================
+   全局基底
+   ============================================================ */
+QWidget {
+    background-color: #1F1F1F;
+    color: #CCCCCC;
+}
+QMainWindow#shellWindow,
+QWidget#shellCentral {
+    background-color: #1F1F1F;
+}
+
+/* ============================================================
+   顶栏面包屑（VSCode 风极简）
+   ============================================================ */
+QFrame#breadcrumbBar {
+    background-color: #181818;
+    border-bottom: 1px solid #2B2B2B;
+}
+QLabel#breadcrumbText {
+    color: #969696;
+    font-size: 12px;
+    background: transparent;
+}
+
+/* ============================================================
+   Activity Bar 48px 最深色侧栏
+   ============================================================ */
+QFrame#activityBar {
+    background-color: #181818;
+    border-right: 1px solid #2B2B2B;
+}
+QFrame#activityBar QToolButton {
+    background-color: transparent;
+    color: #858585;
+    border: none;
+    border-left: 2px solid transparent;  /* 占位防选中态高度跳 */
+    margin: 0;
+    padding: 0;
+}
+QFrame#activityBar QToolButton:hover {
+    color: #FFFFFF;
+}
+QFrame#activityBar QToolButton:checked {
+    color: #FFFFFF;
+    border-left: 2px solid #007FD4;       /* VSCode 风激活指示条 */
+}
+
+/* ============================================================
+   Side Bar（资源管理器：header + 文件树）
+   ============================================================ */
+QFrame#projectTree {
+    background-color: #1F1F1F;
+    border-right: 1px solid #2B2B2B;
+}
+QWidget#sidebarHeader {
+    background-color: #1F1F1F;
+    border-bottom: 1px solid #2B2B2B;
+}
+QLabel#sidebarHeaderTitle {
+    color: #BBBBBB;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    background: transparent;
+}
+QToolButton#sidebarHeaderBtn {
+    background-color: transparent;
+    color: #858585;
+    border: none;
+    border-radius: 3px;
+}
+QToolButton#sidebarHeaderBtn:hover {
+    background-color: #2A2D2E;
+    color: #FFFFFF;
+}
+QToolButton#sidebarHeaderBtn:pressed {
+    background-color: #094771;
+}
+
+/* 文件树本体 */
+QTreeView#projectTreeView {
+    background-color: #1F1F1F;
+    color: #CCCCCC;
+    border: none;
+    outline: 0;
+    font-size: 13px;
+    show-decoration-selected: 1;
+}
+QTreeView#projectTreeView::item {
+    padding: 1px 0;
+    border: none;
+}
+QTreeView#projectTreeView::item:hover {
+    background-color: #2A2D2E;
+}
+QTreeView#projectTreeView::item:selected {
+    background-color: #094771;
+    color: #FFFFFF;
+}
+QTreeView#projectTreeView::item:selected:!active {
+    background-color: #37373D;
+}
+
+/* Empty state（VSCode 风欢迎页） */
+QWidget#projectTreeEmpty {
+    background-color: #1F1F1F;
+}
+QLabel#projectTreeEmptyHint {
+    color: #969696;
+    font-size: 12px;
+    background: transparent;
+}
+
+/* ============================================================
+   QPushButton 通用（VSCode 蓝色 primary + 次按钮）
+   ============================================================ */
+QPushButton {
+    background-color: #0E639C;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 2px;
+    padding: 4px 14px;
+    font-size: 12px;
+    min-height: 22px;
+}
+QPushButton:hover {
+    background-color: #1177BB;
+}
+QPushButton:pressed {
+    background-color: #0B5587;
+}
+QPushButton:disabled {
+    background-color: #3A3A3A;
+    color: #6E7681;
+}
+/* 次按钮（用 property=variant="secondary" 标记） */
+QPushButton[variant="secondary"] {
+    background-color: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #3C3C3C;
+}
+QPushButton[variant="secondary"]:hover {
+    background-color: #3A3A3A;
+}
+
+/* ============================================================
+   主 Splitter handle：极细 1px，hover 才显蓝
+   ============================================================ */
+QSplitter#shellMainSplitter::handle {
+    background-color: #2B2B2B;
+}
+QSplitter#shellMainSplitter::handle:hover {
+    background-color: #007FD4;
+}
+
+/* ============================================================
+   保留工具页内部既有 splitter 样式（不破坏 plot_curves 内部布局）
+   ============================================================ */
+QSplitter#plotCurvesSplitter::handle:horizontal,
+QSplitter#plotCurvesRightSplitter::handle:vertical {
+    background-color: #2B2B2B;
+}
+QSplitter#plotCurvesSplitter::handle:horizontal:hover,
+QSplitter#plotCurvesRightSplitter::handle:vertical:hover {
+    background-color: #007FD4;
+}
+
+/* ============================================================
+   工具页根 widget（plotCurvesPage / pdfToolsPage / 等）：与编辑器同色
+   ============================================================ */
 QWidget#plotCurvesPage,
 QWidget#pdfToolsPage,
 QWidget#word2pdfPage,
 QWidget#homePage,
-QWidget#settingsPage {
-    background-color: #161A1F;
+QWidget#settingsPage,
+QStackedWidget#toolContainer {
+    background-color: #1F1F1F;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   L1 面板层：参数面板内容区 / 右栏 / 底栏 / 预览容器
-   ────────────────────────────────────────────────────────────── */
+/* 工具页内部面板层 */
 QWidget#presetAccordionContent,
 QWidget#plotCurvesRightColumn,
 QWidget#bottomTabPanel,
 QWidget#livePreviewPane {
-    background-color: #1E232A;
+    background-color: #1F1F1F;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   分组卡片：L1 底上的卡片，比 L1 略深 (#1A1F26) 制造"凹陷"层级
-   圆角收小到 4px；分隔用细线 #2E343D，不再用左侧蓝色条占位
-   ────────────────────────────────────────────────────────────── */
+/* 折叠分组卡片 */
 QWidget[objectName^="collapsibleSection_"] {
-    background-color: #1A1F26;
-    border: 1px solid #2E343D;
-    border-radius: 4px;
-    margin: 3px 2px;
+    background-color: #252526;
+    border: 1px solid #2B2B2B;
+    border-radius: 3px;
+    margin: 2px 2px;
 }
-
-/* 分组标题栏：默认无蓝色，仅 hover/expand 态有微妙强调。
-   _SectionHeader（QWidget）+ 内含固定宽度箭头 QLabel + 弹性 title QLabel。 */
 QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader {
     background: transparent;
     border: none;
-    padding: 7px 10px;
-    border-bottom: 1px solid transparent;  /* 占位防 hover 时高度跳 */
+    padding: 5px 8px;
+    border-bottom: 1px solid transparent;
 }
 QWidget[objectName^="collapsibleSection_"] > QWidget#collapsibleHeader:hover {
-    background: #232932;          /* 比 L1 卡片略浅 */
-    border-bottom: 1px solid #2E343D;
+    background: #2A2D2E;
+    border-bottom: 1px solid #2B2B2B;
 }
-/* 标题文字：浅灰主色 + 微字间距 */
 QLabel#collapsibleTitle {
     font-weight: 600;
-    letter-spacing: 0.5px;
-    color: #D9DEE5;
+    letter-spacing: 0.3px;
+    color: #CCCCCC;
     background: transparent;
 }
-/* 箭头：默认灰，仅当鼠标 hover 在 header 上时变蓝（激活态） */
 QLabel#collapsibleArrow {
-    color: #6B7280;
+    color: #858585;
     font-weight: 700;
     background: transparent;
 }
 QWidget#collapsibleHeader:hover QLabel#collapsibleArrow {
-    color: #0078D4;
+    color: #007FD4;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   Splitter handle：默认与 L1 同色（看不出来），hover 才显出蓝色
-   ────────────────────────────────────────────────────────────── */
-QSplitter#plotCurvesSplitter::handle:horizontal,
-QSplitter#plotCurvesRightSplitter::handle:vertical {
-    background-color: #2E343D;
-}
-QSplitter#plotCurvesSplitter::handle:horizontal:hover,
-QSplitter#plotCurvesRightSplitter::handle:vertical:hover {
-    background-color: #0078D4;
-}
-
-/* ──────────────────────────────────────────────────────────────
-   实时预览图容器：深色"画框" —— L0 底色 + 细描边
-   ────────────────────────────────────────────────────────────── */
+/* 预览图容器 */
 QLabel#livePreviewImage {
-    background-color: #14181D;
-    border: 1px solid #2E343D;
-    border-radius: 4px;
+    background-color: #181818;
+    border: 1px solid #2B2B2B;
+    border-radius: 3px;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   通用文本：BodyLabel 默认色（次级文字）
-   ────────────────────────────────────────────────────────────── */
 QLabel {
-    color: #D9DEE5;
+    color: #CCCCCC;
     background: transparent;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   输入控件：L2 浅色底 / 圆角 4 / 细描边 / focus 才显蓝边
-   ────────────────────────────────────────────────────────────── */
+/* ============================================================
+   输入控件
+   ============================================================ */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-    background-color: #262C35;
-    color: #E1E5EA;
-    border: 1px solid #2E343D;
-    border-radius: 4px;
-    padding: 3px 6px;
-    selection-background-color: #0078D4;
+    background-color: #313131;
+    color: #CCCCCC;
+    border: 1px solid #3C3C3C;
+    border-radius: 2px;
+    padding: 2px 6px;
+    selection-background-color: #094771;
     selection-color: #FFFFFF;
+    min-height: 20px;
 }
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-    border: 1px solid #0078D4;   /* 激活态才变蓝 —— 关键约束 */
+    border: 1px solid #007FD4;
 }
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
-    color: #5B6573;
-    background-color: #1B2026;
-    border: 1px solid #262C35;
+    color: #6E7681;
+    background-color: #252526;
+    border: 1px solid #2B2B2B;
 }
-
-/* 数字字段统一等宽字体（工程感关键一笔） */
 QSpinBox, QDoubleSpinBox {
-    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    font-family: "Cascadia Mono", "Consolas", "JetBrains Mono", monospace;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   表格：L1 底 / 表头 L2 / 选中行用蓝（激活态）
-   ────────────────────────────────────────────────────────────── */
+/* ============================================================
+   表格
+   ============================================================ */
 QTableView {
-    background-color: #1A1F26;
-    alternate-background-color: #1E232A;
-    color: #D9DEE5;
-    gridline-color: #2E343D;
-    border: 1px solid #2E343D;
-    border-radius: 4px;
-    font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace;
-    selection-background-color: #0078D4;
+    background-color: #1F1F1F;
+    alternate-background-color: #252526;
+    color: #CCCCCC;
+    gridline-color: #2B2B2B;
+    border: 1px solid #2B2B2B;
+    border-radius: 2px;
+    font-family: "Cascadia Mono", "Consolas", "JetBrains Mono", monospace;
+    selection-background-color: #094771;
     selection-color: #FFFFFF;
 }
 QHeaderView::section {
-    background-color: #262C35;
-    color: #B8BFC9;
+    background-color: #252526;
+    color: #CCCCCC;
     border: none;
-    border-right: 1px solid #2E343D;
-    border-bottom: 1px solid #2E343D;
+    border-right: 1px solid #2B2B2B;
+    border-bottom: 1px solid #2B2B2B;
     padding: 4px 8px;
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 12px;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   滚动条：细窄设计 —— 因为 PresetAccordionPanel 启用了 always-on，
-   做得越细越不抢戏；hover 时才有蓝色提示
-   ────────────────────────────────────────────────────────────── */
+/* ============================================================
+   滚动条 - VSCode 极细透明
+   ============================================================ */
 QScrollBar:vertical {
-    background: #1E232A;
-    width: 8px;
+    background: transparent;
+    width: 10px;
     margin: 0;
     border: none;
 }
 QScrollBar::handle:vertical {
-    background: #2E343D;
-    border-radius: 3px;
+    background: #424242;
+    border-radius: 0;
     min-height: 24px;
 }
-QScrollBar::handle:vertical:hover {
-    background: #0078D4;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0;
-    background: transparent;
-}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-    background: transparent;
-}
+QScrollBar::handle:vertical:hover { background: #4F4F4F; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+
 QScrollBar:horizontal {
-    background: #1E232A;
-    height: 8px;
+    background: transparent;
+    height: 10px;
     margin: 0;
     border: none;
 }
 QScrollBar::handle:horizontal {
-    background: #2E343D;
-    border-radius: 3px;
+    background: #424242;
+    border-radius: 0;
     min-width: 24px;
 }
-QScrollBar::handle:horizontal:hover {
-    background: #0078D4;
+QScrollBar::handle:horizontal:hover { background: #4F4F4F; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+
+/* ============================================================
+   QTabWidget（B2 底部 Tab 会用到，先打底）
+   ============================================================ */
+QTabWidget::pane {
+    border-top: 1px solid #2B2B2B;
+    background: #1F1F1F;
+    top: -1px;
 }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-    width: 0;
-    background: transparent;
+QTabBar::tab {
+    background: #2D2D2D;
+    color: #969696;
+    padding: 4px 12px;
+    border: none;
+    margin: 0;
+    font-size: 12px;
+}
+QTabBar::tab:selected {
+    background: #1F1F1F;
+    color: #FFFFFF;
+    border-bottom: 1px solid #007FD4;
+}
+QTabBar::tab:hover:!selected {
+    color: #CCCCCC;
 }
 """
 

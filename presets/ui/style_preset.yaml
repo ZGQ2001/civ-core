@@ -7,17 +7,17 @@
 #   • 修改后需重启程序（或调 reload_style_preset() 清缓存）
 
 typography:
-  # 中文比例字体：用于名称、按钮、标题
-  font_family_ui: "'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif"
-  # 等宽字体：用于编号、金额、日期、进度这类对齐敏感的数据列
-  font_family_mono: "'JetBrains Mono', 'Consolas', monospace"
-  # 字号阶梯参考 Claude app：body=14（正文最舒服），title=22（页面级 H1），
-  # subtitle=16（区块级 H2），caption=13（次要标签），small=12（页脚 hint）
-  size_title: 22
-  size_subtitle: 16
-  size_body: 14
-  size_caption: 13
-  size_small: 12
+  # UI 字体优先 Segoe UI（Windows 系统默认 + VSCode 默认），中文回退 Microsoft YaHei UI
+  font_family_ui: "'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif"
+  # 等宽字体：VSCode 默认 Cascadia Mono，回退 JetBrains Mono / Consolas
+  font_family_mono: "'Cascadia Mono', 'JetBrains Mono', 'Consolas', monospace"
+  # 字号阶梯（VSCode 紧凑风）：body=10pt(≈13px) = VSCode 默认 UI 字号
+  # 之前 body=14 偏大，整体视觉过家家；改 10 + 紧凑 padding 让界面专业
+  size_title: 14
+  size_subtitle: 11
+  size_body: 10
+  size_caption: 9
+  size_small: 8
 
 colors:
   # 主色 / 强调

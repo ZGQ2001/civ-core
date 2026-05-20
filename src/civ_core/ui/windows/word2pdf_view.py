@@ -3,7 +3,7 @@
 布局：
   ┌─────────────────────────────────────────────────────────┐
   │ 标题 + 副标题                                              │
-  │ 待转 Word 文件列表 [➕ 添加 / × 删 / 清空]                    │
+  │ 待转 Word 文件列表 [添加 / 删除 / 清空]                       │
   │ 输出目录 [选择目录]                                         │
   │ [▶ 开始批量转换]                                            │
   ├─────────────────────────────────────────────────────────┤
@@ -98,10 +98,10 @@ class Word2PdfView(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
-        b_add = PushButton("➕ 添加 Word", self)
+        b_add = PushButton("添加 Word", self)
         b_add.clicked.connect(self._on_add)
         btn_row.addWidget(b_add)
-        b_del = PushButton("× 删除选中", self)
+        b_del = PushButton("删除选中", self)
         b_del.clicked.connect(self._on_remove)
         btn_row.addWidget(b_del)
         b_clear = PushButton("清空", self)
@@ -176,7 +176,7 @@ class Word2PdfView(QWidget):
                 self,
                 title="参数未填完",
                 reason="还没添加任何 Word 文件",
-                hint="点 [➕ 添加 Word] 挑选 .doc / .docx 文件。",
+                hint="点「添加 Word」挑选 .doc / .docx 文件。",
             )
             return
         if self._out_dir is None:

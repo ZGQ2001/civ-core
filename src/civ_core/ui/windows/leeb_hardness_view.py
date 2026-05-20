@@ -1,25 +1,25 @@
-"""里氏硬度（INSP-001）批级计算工具页。
+"""里氏硬度（INSP-001）批级计算工具页（2026-05-20 多批格式版）。
 
 工作流（钢结构厂房项目实战）：
-  1. [导入 Excel] 选「里氏硬度（钢柱/钢梁）」sheet → 解析为构件清单
-  2. 顶栏选全局测量角度（-90/-45/0/+45/+90）
-  3. [计算] → 调 calc_leeb_hardness_batch → 右栏显示结果
-  4. [导出 Excel] → 输出原始数据 + 计算结果两张 sheet 用于贴报告
+  1. [导入 Excel] 选符合规范的 xlsx（每 sheet=一检测批）→ 解析为 workbook
+  2. 顶栏选全局测量角度（-90/-45/0/+45/+90，默认 0° 水平）
+  3. 顶栏批选择器：切换查看不同检测批的构件清单 + 结果
+  4. [计算] → 一次性算所有批 → 显示当前批结果
+  5. [导出 Excel] → 写一个结果文件，每批 2 sheet（过程数据 + 报告插入表）
 
 布局：
-  ┌────────── 顶栏（导入 / 角度 / 计算 / 导出 / 清空） ──────────┐
+  ┌── 顶栏（导入 / 角度 / 批选 / 计算 / 导出 / 清空 / 模板下载）──┐
   ├──────────┬──────────────────────────────────────────────────┤
-  │ 构件清单  │ 批级 fb_char_avg（醒目大字号）                    │
+  │ 构件清单  │ 当前批批级 fb_char_avg（醒目大字号）              │
   │ Table    │ ────────────────────────────────                  │
-  │ (40%)    │ 详细结果 Table（每测区一行）                       │
-  │          │ (60%)                                            │
+  │ (当前批)  │ 当前批详细结果 Table（每测区一行）                 │
   └──────────┴──────────────────────────────────────────────────┘
 
 设计要点：
-  • 数据持有：self._components / self._batch_result，UI 模型从这两个状态读
-  • 不依赖 worker thread：批级计算 28 构件 × 3 测区 ≈ 60ms，主线程同步即可
-  • angle_degrees 是全局参数（钢结构常用 90°/向下垂直），UI 顶栏下拉一次性设
-  • db 由外部（MainWindow）注入，避免本视图自己 init standards.db
+  • angle_degrees 全局参数（默认 0° 水平；规范表 -90° = 向下垂直基线档）
+  • 数据持有：self._workbook + self._workbook_result + self._current_batch_idx
+  • 切换批不触发重算（结果已经按整 workbook 算好缓存）
+  • db 由 MainWindow 注入
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QSplitter,
     QTableView,
     QVBoxLayout,
@@ -47,14 +46,16 @@ from qfluentwidgets import (
     TitleLabel,
 )
 
-from civ_core.core.calc_functions import calc_leeb_hardness_batch
+from civ_core.core.calc_functions import calc_leeb_hardness_workbook
 from civ_core.domain.calc_schema import (
     LeebHardnessBatchResult,
     LeebHardnessComponentInput,
+    LeebHardnessWorkbook,
+    LeebHardnessWorkbookResult,
 )
 from civ_core.infra_io.leeb_excel import (
-    read_leeb_components,
-    write_leeb_results,
+    read_leeb_workbook,
+    write_leeb_results_workbook,
 )
 from civ_core.infra_io.standards_db import StandardsDB
 from civ_core.ui.components.error_infobar import (
@@ -132,10 +133,9 @@ class _ResultsTableModel(QAbstractTableModel):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        # 行：tuple (comp_seq | "", comp_name | "", zone_label, hl_m, hl_t, hl_a, hl_corr, fb_min, fb_max, comp_est | "")
         self._rows: list[tuple] = []
 
-    def set_batch(self, batch: LeebHardnessBatchResult | None) -> None:
+    def set_batch_result(self, batch: LeebHardnessBatchResult | None) -> None:
         self.beginResetModel()
         self._rows = []
         if batch is not None:
@@ -177,14 +177,17 @@ class _ResultsTableModel(QAbstractTableModel):
 
 
 # ── 主视图 ──────────────────────────────────────────────────────
-# 角度档：UI 用整数度数（与规范表 key1 一致）
+# 物理含义：-90° = 向下垂直（基线档，HL_a=0）；+90° = 向上垂直（最大修正）；0° = 水平（默认）
 _ANGLE_OPTIONS: tuple[tuple[str, float], ...] = (
-    ("-90° 向上垂直", -90.0),
-    ("-45° 向上 45°", -45.0),
-    ("0° 水平", 0.0),
-    ("+45° 向下 45°", 45.0),
-    ("+90° 向下垂直", 90.0),
+    ("-90° 向下垂直 ↓", -90.0),
+    ("-45° 向下 45°", -45.0),
+    ("0° 水平 →（默认）", 0.0),
+    ("+45° 向上 45°", 45.0),
+    ("+90° 向上垂直 ↑", 90.0),
 )
+_ANGLE_DEFAULT_INDEX = 2
+
+_TEMPLATE_PATH = Path("templates/leeb_hardness/原始数据模板.xlsx")
 
 
 class LeebHardnessView(QWidget):
@@ -194,9 +197,10 @@ class LeebHardnessView(QWidget):
         super().__init__(parent)
         self.setObjectName("leebHardnessPage")
         self._db = db
-        self._components: list[LeebHardnessComponentInput] = []
-        self._batch_result: LeebHardnessBatchResult | None = None
-        self._last_import_dir: Path | None = None
+        self._workbook: LeebHardnessWorkbook | None = None
+        self._workbook_result: LeebHardnessWorkbookResult | None = None
+        self._current_batch_idx: int = 0
+        self._last_dir: Path | None = None
 
         self._build_ui()
         self._refresh_buttons()
@@ -215,15 +219,27 @@ class LeebHardnessView(QWidget):
         self.btn_import.clicked.connect(self._on_import)
         toolbar.addWidget(self.btn_import)
 
+        self.btn_template = PushButton("下载模板")
+        self.btn_template.clicked.connect(self._on_download_template)
+        toolbar.addWidget(self.btn_template)
+
+        toolbar.addSpacing(12)
         toolbar.addWidget(BodyLabel("测量角度："))
         self.cmb_angle = ComboBox()
         for label, _ in _ANGLE_OPTIONS:
             self.cmb_angle.addItem(label)
-        # 钢结构常用 +90°（向下垂直）—— 找索引 4
-        self.cmb_angle.setCurrentIndex(4)
+        self.cmb_angle.setCurrentIndex(_ANGLE_DEFAULT_INDEX)
         self.cmb_angle.currentIndexChanged.connect(self._on_angle_changed)
         toolbar.addWidget(self.cmb_angle)
 
+        toolbar.addSpacing(12)
+        toolbar.addWidget(BodyLabel("检测批："))
+        self.cmb_batch = ComboBox()
+        self.cmb_batch.setMinimumWidth(160)
+        self.cmb_batch.currentIndexChanged.connect(self._on_batch_changed)
+        toolbar.addWidget(self.cmb_batch)
+
+        toolbar.addSpacing(12)
         self.btn_calc = PrimaryPushButton("▶ 计算")
         self.btn_calc.clicked.connect(self._on_calculate)
         toolbar.addWidget(self.btn_calc)
@@ -250,7 +266,7 @@ class LeebHardnessView(QWidget):
         left = QWidget()
         left_lo = QVBoxLayout(left)
         left_lo.setContentsMargins(0, 0, 0, 0)
-        left_lo.addWidget(StrongBodyLabel("构件清单"))
+        left_lo.addWidget(StrongBodyLabel("当前批构件清单"))
         self.tbl_components = QTableView()
         self._comp_model = _ComponentsTableModel(self)
         self.tbl_components.setModel(self._comp_model)
@@ -268,12 +284,11 @@ class LeebHardnessView(QWidget):
         right_lo = QVBoxLayout(right)
         right_lo.setContentsMargins(0, 0, 0, 0)
 
-        # 批级 fb_char_avg 醒目显示
         self.lbl_batch_summary = TitleLabel("批级抗拉强度特征值平均：—")
         self.lbl_batch_summary.setFont(self._make_summary_font())
         right_lo.addWidget(self.lbl_batch_summary)
 
-        right_lo.addWidget(StrongBodyLabel("详细结果（每测区一行）"))
+        right_lo.addWidget(StrongBodyLabel("当前批详细结果（每测区一行）"))
         self.tbl_results = QTableView()
         self._res_model = _ResultsTableModel(self)
         self.tbl_results.setModel(self._res_model)
@@ -298,100 +313,121 @@ class LeebHardnessView(QWidget):
 
     # ── 状态切换 ─────────────────────────────────────────────
     def _refresh_buttons(self) -> None:
-        has_data = bool(self._components)
-        has_result = self._batch_result is not None
+        has_data = self._workbook is not None
+        has_result = self._workbook_result is not None
         self.btn_calc.setEnabled(has_data)
         self.btn_export.setEnabled(has_result)
         self.btn_clear.setEnabled(has_data or has_result)
 
+    def _current_angle(self) -> float:
+        return _ANGLE_OPTIONS[self.cmb_angle.currentIndex()][1]
+
+    def _current_batch(self):
+        """当前选中的批（输入端）。"""
+        if self._workbook is None:
+            return None
+        return self._workbook.batches[self._current_batch_idx]
+
+    def _current_batch_result(self) -> LeebHardnessBatchResult | None:
+        if self._workbook_result is None:
+            return None
+        return self._workbook_result.batch_results[self._current_batch_idx]
+
     # ── 事件处理 ─────────────────────────────────────────────
+    def _on_download_template(self) -> None:
+        """让用户把内置模板另存到自选位置。"""
+        if not _TEMPLATE_PATH.exists():
+            show_warning_infobar(
+                self, "模板缺失",
+                f"未找到模板文件 {_TEMPLATE_PATH}",
+                hint="请联系开发者",
+            )
+            return
+        start_dir = str(self._last_dir) if self._last_dir else ""
+        out_str, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存模板副本",
+            f"{start_dir}/里氏硬度-原始数据.xlsx" if start_dir else "里氏硬度-原始数据.xlsx",
+            "Excel 文件 (*.xlsx)",
+        )
+        if not out_str:
+            return
+        import shutil
+
+        try:
+            shutil.copy2(_TEMPLATE_PATH, out_str)
+        except OSError as e:
+            show_error_infobar(
+                self,
+                CivCoreError(cause=f"复制模板失败：{e}", location="download_template"),
+            )
+            return
+        show_success_infobar(self, "模板已保存", Path(out_str).name)
+
     def _on_import(self) -> None:
-        """选择 Excel 文件 → 选 sheet → 解析为构件清单。"""
-        start_dir = str(self._last_import_dir) if self._last_import_dir else ""
+        """选 xlsx → 解析为 LeebHardnessWorkbook。"""
+        start_dir = str(self._last_dir) if self._last_dir else ""
         path_str, _ = QFileDialog.getOpenFileName(
             self,
-            "选择里氏硬度报检单",
+            "选择里氏硬度原始数据 Excel",
             start_dir,
             "Excel 文件 (*.xlsx *.xlsm);;所有文件 (*.*)",
         )
         if not path_str:
             return
         path = Path(path_str)
-        self._last_import_dir = path.parent
+        self._last_dir = path.parent
 
-        # 预读 sheet 列表让用户选
         try:
-            from openpyxl import load_workbook
-
-            wb = load_workbook(str(path), read_only=True)
-            sheet_names = list(wb.sheetnames)
-            wb.close()
-        except Exception as e:
-            show_error_infobar(
-                self,
-                CivCoreError(cause=f"读取 sheet 列表失败：{e}", location="import"),
-                where="导入",
-            )
-            return
-
-        if not sheet_names:
-            show_warning_infobar(self, "无工作表", "Excel 文件不含任何工作表")
-            return
-
-        # 优先列出含「里氏硬度」的 sheet
-        leeb_sheets = [s for s in sheet_names if "里氏" in s or "硬度" in s]
-        candidates = leeb_sheets + [s for s in sheet_names if s not in leeb_sheets]
-
-        sheet_name, ok = QInputDialog.getItem(
-            self,
-            "选择工作表",
-            f"共 {len(candidates)} 张工作表，请选择里氏硬度数据所在的表：",
-            candidates,
-            0,
-            False,
-        )
-        if not ok or not sheet_name:
-            return
-
-        # 解析
-        try:
-            angle = self._current_angle()
-            components = read_leeb_components(
-                path, sheet_name, default_angle_degrees=angle
-            )
+            wb = read_leeb_workbook(path, default_angle_degrees=self._current_angle())
         except CivCoreError as e:
             show_error_infobar(self, e, where="导入")
             return
         except Exception as e:
             show_error_infobar(
                 self,
-                CivCoreError(cause=f"解析失败：{e}", location="read_leeb_components"),
+                CivCoreError(cause=f"解析失败：{e}", location="read_leeb_workbook"),
                 where="导入",
             )
-            log.exception("导入 Excel 失败")
+            log.exception("导入失败")
             return
 
-        self._components = components
-        self._batch_result = None
-        self._comp_model.set_components(components)
-        self._res_model.set_batch(None)
-        self.lbl_batch_summary.setText("批级抗拉强度特征值平均：— （请点 ▶ 计算）")
-        self.lbl_status.setText(f"已导入 {len(components)} 个构件（{sheet_name}）")
+        self._workbook = wb
+        self._workbook_result = None
+        self._current_batch_idx = 0
+
+        # 填批选择器（先关信号避免触发 _on_batch_changed 时 workbook 还没装完）
+        self.cmb_batch.blockSignals(True)
+        self.cmb_batch.clear()
+        for batch in wb.batches:
+            self.cmb_batch.addItem(f"{batch.batch_name} ({len(batch.components)} 构件)")
+        self.cmb_batch.setCurrentIndex(0)
+        self.cmb_batch.blockSignals(False)
+
+        # 刷新当前批显示
+        self._refresh_current_batch_views()
+        self.lbl_status.setText(
+            f"已导入 {wb.file_label}.xlsx：{len(wb.batches)} 批 / "
+            f"共 {sum(len(b.components) for b in wb.batches)} 构件"
+        )
         self._refresh_buttons()
         show_success_infobar(
             self,
             "导入成功",
-            f"{path.name} / {sheet_name} → {len(components)} 个构件",
+            f"{path.name}：{len(wb.batches)} 个检测批",
         )
 
     def _on_angle_changed(self) -> None:
-        """角度切换 → 同步更新已导入构件的 angle_degrees。"""
-        if not self._components:
+        """角度切换 → 同步更新所有批的 angle_degrees，并作废已算结果。"""
+        if self._workbook is None:
             return
         angle = self._current_angle()
-        new_components: list[LeebHardnessComponentInput] = []
-        for c in self._components:
-            new_components.append(
+        # 重建 workbook 把新角度灌入每个构件
+        from civ_core.domain.calc_schema import LeebHardnessBatch
+
+        new_batches = []
+        for b in self._workbook.batches:
+            new_comps = tuple(
                 LeebHardnessComponentInput(
                     seq=c.seq,
                     name=c.name,
@@ -400,71 +436,108 @@ class LeebHardnessView(QWidget):
                     test_areas_raw=c.test_areas_raw,
                     batch_name=c.batch_name,
                 )
+                for c in b.components
             )
-        self._components = new_components
-        # 结果作废，需要重算
-        self._batch_result = None
-        self._res_model.set_batch(None)
-        self.lbl_batch_summary.setText("批级抗拉强度特征值平均：— （角度已变，请重新计算）")
+            new_batches.append(LeebHardnessBatch(batch_name=b.batch_name, components=new_comps))
+        self._workbook = LeebHardnessWorkbook(
+            batches=tuple(new_batches), file_label=self._workbook.file_label
+        )
+        self._workbook_result = None
+        self.lbl_batch_summary.setText(
+            "批级抗拉强度特征值平均：— （角度已变，请重新计算）"
+        )
+        self._refresh_current_batch_views()
         self._refresh_buttons()
 
-    def _current_angle(self) -> float:
-        return _ANGLE_OPTIONS[self.cmb_angle.currentIndex()][1]
+    def _on_batch_changed(self) -> None:
+        idx = self.cmb_batch.currentIndex()
+        if idx < 0 or self._workbook is None:
+            return
+        self._current_batch_idx = idx
+        self._refresh_current_batch_views()
+
+    def _refresh_current_batch_views(self) -> None:
+        """根据当前 _current_batch_idx 刷新左栏构件清单 + 右栏结果。"""
+        batch = self._current_batch()
+        if batch is None:
+            self._comp_model.set_components([])
+            self._res_model.set_batch_result(None)
+            self.lbl_batch_summary.setText("批级抗拉强度特征值平均：—")
+            return
+
+        self._comp_model.set_components(list(batch.components))
+        batch_result = self._current_batch_result()
+        self._res_model.set_batch_result(batch_result)
+        if batch_result is not None:
+            self.lbl_batch_summary.setText(
+                f"批级抗拉强度特征值平均：{batch_result.batch_fb_char_avg:.1f} MPa  "
+                f"（{batch.batch_name}，{batch_result.n_components} 个构件）"
+            )
+        else:
+            self.lbl_batch_summary.setText(
+                f"批级抗拉强度特征值平均：— （{batch.batch_name}，请点 ▶ 计算）"
+            )
 
     def _on_calculate(self) -> None:
-        if not self._components:
+        if self._workbook is None:
             return
         try:
-            batch = calc_leeb_hardness_batch(self._components, db=self._db)
+            result = calc_leeb_hardness_workbook(self._workbook, db=self._db)
         except CivCoreError as e:
             show_error_infobar(self, e, where="计算")
             return
         except Exception as e:
             show_error_infobar(
                 self,
-                CivCoreError(cause=f"计算失败：{e}", location="calc_leeb_hardness_batch"),
+                CivCoreError(cause=f"计算失败：{e}", location="calc_leeb_hardness_workbook"),
                 where="计算",
             )
             log.exception("批级计算失败")
             return
 
-        self._batch_result = batch
-        self._res_model.set_batch(batch)
-        self.lbl_batch_summary.setText(
-            f"批级抗拉强度特征值平均：{batch.batch_fb_char_avg:.1f} MPa  "
-            f"（共 {batch.n_components} 个构件）"
-        )
+        self._workbook_result = result
+        self._refresh_current_batch_views()
         self.lbl_status.setText(
-            f"已计算 {batch.n_components} 个构件 / {sum(len(c.test_areas_raw) for c in self._components)} 测区"
+            f"已计算 {result.n_batches} 批 / 共 {result.n_components_total} 构件"
         )
         self._refresh_buttons()
 
     def _on_export(self) -> None:
-        if self._batch_result is None:
+        if self._workbook_result is None:
             return
-        start_dir = str(self._last_import_dir) if self._last_import_dir else ""
+        start_dir = str(self._last_dir) if self._last_dir else ""
+        default_name = (
+            f"{self._workbook.file_label}-结果.xlsx"
+            if self._workbook else "里氏硬度-结果.xlsx"
+        )
         path_str, _ = QFileDialog.getSaveFileName(
             self,
             "导出里氏硬度计算结果",
-            start_dir + "/里氏硬度_计算结果.xlsx" if start_dir else "里氏硬度_计算结果.xlsx",
+            f"{start_dir}/{default_name}" if start_dir else default_name,
             "Excel 文件 (*.xlsx)",
         )
         if not path_str:
             return
         path = Path(path_str)
         try:
-            write_leeb_results(path, self._batch_result, angle_degrees=self._current_angle())
+            write_leeb_results_workbook(
+                path, self._workbook_result, angle_degrees=self._current_angle()
+            )
         except CivCoreError as e:
             show_error_infobar(self, e, where="导出")
             return
 
-        show_success_infobar(self, "导出成功", f"已写入 {path.name}")
+        show_success_infobar(
+            self, "导出成功", f"{path.name}：每批 2 sheet（过程数据 + 报告插入表）"
+        )
 
     def _on_clear(self) -> None:
-        self._components = []
-        self._batch_result = None
-        self._comp_model.set_components([])
-        self._res_model.set_batch(None)
-        self.lbl_batch_summary.setText("批级抗拉强度特征值平均：—")
+        self._workbook = None
+        self._workbook_result = None
+        self._current_batch_idx = 0
+        self.cmb_batch.blockSignals(True)
+        self.cmb_batch.clear()
+        self.cmb_batch.blockSignals(False)
+        self._refresh_current_batch_views()
         self.lbl_status.setText("尚未导入数据")
         self._refresh_buttons()

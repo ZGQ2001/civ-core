@@ -44,7 +44,7 @@ def db_seeded() -> StandardsDB:
         d.put_row(StandardsRow(table_name=TABLE_LEEB_THICKNESS, key1=thick, value1=hl_t))
 
     # 角度修正表（2D：度数 × HL_m → HL_a）
-    # 度数：-90 向上垂直 / -45 向上45° / 0 水平 / +45 向下45° / +90 向下垂直
+    # 度数：-90 向下垂直（基线）/ -45 向下45° / 0 水平 / +45 向上45° / +90 向上垂直
     # placeholder：0° 水平时修正 0；垂直与 45° 给小偏移
     for deg, base_offset in [(-90.0, -3.0), (-45.0, -2.0), (0.0, 0.0), (45.0, 2.0), (90.0, 3.0)]:
         for hl_m in [350.0, 400.0, 500.0]:
@@ -134,7 +134,7 @@ def test_multi_areas_aggregation(db_seeded: StandardsDB) -> None:
 
 # ── 角度档修正生效 ─────────────────────────────────────────────
 def test_angle_category_affects_correction(db_seeded: StandardsDB) -> None:
-    """档 1（向上垂直）HL_a=-3 vs 档 3（水平）HL_a=0。"""
+    """-90°（向下垂直，基线档）HL_a=-3 vs 0°（水平）HL_a=0。"""
     raw = [(400,) * 9]
     r1 = calc_leeb_hardness_steel(
         test_areas_raw=raw, thickness=25.0, angle_degrees=-90.0, db=db_seeded

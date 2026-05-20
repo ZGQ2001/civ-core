@@ -1,31 +1,33 @@
-"""里氏硬度报检单 Excel 导入 / 导出。
+"""里氏硬度原始数据 / 结果 Excel 导入导出（2026-05-20 固化新格式）。
 
-为什么独立成 leeb_excel.py 而不复用 excel_reader.py：
-  - excel_reader 是「绘曲线图」专用的通用 Excel 读取（按表头取列）
-  - 里氏硬度报检单是「每构件 3 行 9 列」的固定结构 + 首行带元信息（序号/构件名/厚度）
-    后两行只有 9 个 HL 测点，需要专门的"按构件分组读取"逻辑
-  - 与其在 excel_reader 加 if-else 分支，不如独立一个语义清晰的模块
+为什么独立成 leeb_excel.py：
+  里氏硬度的「每构件 3 行 9 列」固定结构与通用 excel_reader（按表头取列）差异大，
+  独立模块语义清晰。
 
-报检单 Excel 格式（参考 data/training_materials/防火厚度报检单(D号站房)新.xlsx
-                  「里氏硬度（钢柱）」sheet）：
+新格式约定（2026-05-20 锁定，详见 docs/civil_kb/formats/leeb_hardness_excel.md）：
+    一个 xlsx 文件 = 一个检测项目实例（如「里氏硬度-D号站房.xlsx」）
+    一个 sheet     = 一个检测批（sheet 名 = 批名，如「检测批1」）
+    sheet 内每构件 3 行：
+        | 序号 | 构件位置 | HL1..HL9 | 厚度 |
+        | 1  | 2×H钢柱  | 467..463 | 16   |
+        |    |          | 471..465 |      |
+        |    |          | 477..462 |      |
 
-    | 序号 | 构件位置 | HL1 | HL2 | ... | HL9 | 厚度 | 抗拉特征值 | 平均值 | ... | 检测批 |
-    |  1  | 2×H钢柱  | 467 | 465 | ... | 463 | 16   | (Excel公式) | ...   | ... | 检测批1 |
-    |     |          | 471 | 478 | ... | 465 |      |             |       |     |        |
-    |     |          | 477 | 481 | ... | 462 |      |             |       |     |        |
-    |  2  | 2×J钢柱  | ...                                                                |
+  • 第 1 行表头固定；数据从第 2 行起
+  • 序号 / 构件位置 / 厚度 仅在每构件首行
+  • HL 9 列每行都有值
+  • 不再有 mid-sheet 子表头（这是旧报检单格式遗留，现在每批独立 sheet）
 
-  • 序号 / 构件位置 / 厚度 / 检测批 仅在每构件第 1 行有值；后 2 行的对应单元格为 None
-  • HL 9 列每行都有值（即每测区 9 个测点单独一行）
+兼容旧格式：read_leeb_components 单 sheet API 保留 + 跳子表头逻辑保留，
+便于读 D 号站房旧报检单（一 sheet 多批）。
 
-测量角度（angle_degrees）报检单 Excel 中通常不显式列出（钢柱默认向下 90°）；
-由调用方（UI 层）作为全局参数传入，本模块不负责猜测。
+测量角度 (angle_degrees) 不在原始数据 Excel 中；由 UI 全局选择传入。
 
-写入：
-  output_workbook 写两张 sheet：
-    Sheet「原始数据」复制输入构件清单（按报检单格式）
-    Sheet「计算结果」每行一个测区，列：序号 / 构件 / 测区号 / HL_m / HL_t / HL_a / HL_corr / fb_min / fb_max
-    并在底部追加批级 fb_char_avg
+结果文件格式（write_leeb_results_workbook）：
+    一个 xlsx 文件 = 一份计算结果
+    每检测批生成 2 个 sheet：
+      「<批名>-过程数据」：每测区一行 HL_m/HL_t/HL_a/HL_corr/fb_min/fb_max 及构件聚合
+      「<批名>-报告插入表」：仿 D 号站房风格，每构件 3 行（带聚合首行），可直接拷贝粘报告
 """
 
 from __future__ import annotations
@@ -36,8 +38,11 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
 from civ_core.domain.calc_schema import (
+    LeebHardnessBatch,
     LeebHardnessBatchResult,
     LeebHardnessComponentInput,
+    LeebHardnessWorkbook,
+    LeebHardnessWorkbookResult,
 )
 from civ_core.utils.exceptions import InfraIOError, InputError
 from civ_core.utils.logger import get_logger
@@ -220,6 +225,95 @@ def read_leeb_components(
 
 
 # ════════════════════════════════════════════════════════════════
+# 新格式：read_leeb_workbook 一文件多批 sheet
+# ════════════════════════════════════════════════════════════════
+def read_leeb_workbook(
+    path: Path,
+    *,
+    default_angle_degrees: float = 0.0,
+    sheet_name_filter: str | None = None,
+) -> LeebHardnessWorkbook:
+    """读整个 xlsx → LeebHardnessWorkbook（每 sheet = 一个检测批）。
+
+    参数:
+        path: xlsx 文件路径
+        default_angle_degrees: 全部构件的默认测量角度（UI 后续可整体改）
+        sheet_name_filter: 若给则只读名字含该子串的 sheet（例如 "检测批" 跳过元信息 sheet）
+
+    返回:
+        LeebHardnessWorkbook：含 N 个 LeebHardnessBatch，按 sheet 顺序保持
+
+    异常:
+        InfraIOError —— 文件不存在 / 打不开
+        InputError   —— 文件不含任何可解析的 sheet
+    """
+    if not path.exists():
+        raise InfraIOError(
+            cause=f"文件不存在：{path}",
+            location="read_leeb_workbook",
+        )
+    try:
+        from openpyxl import load_workbook
+
+        wb = load_workbook(str(path), read_only=True, data_only=True)
+        sheet_names = list(wb.sheetnames)
+        wb.close()
+    except Exception as e:
+        raise InfraIOError(
+            cause=f"打开 Excel 文件失败：{e}",
+            location="read_leeb_workbook",
+        ) from e
+
+    target_sheets = [
+        s for s in sheet_names
+        if sheet_name_filter is None or sheet_name_filter in s
+    ]
+    if not target_sheets:
+        raise InputError(
+            cause=f"未找到可解析的 sheet（可选：{sheet_names}，过滤：{sheet_name_filter!r}）",
+            location="read_leeb_workbook",
+            hint="请确认 sheet 命名（如「检测批1」）",
+        )
+
+    batches: list[LeebHardnessBatch] = []
+    for sheet in target_sheets:
+        try:
+            components = read_leeb_components(
+                path, sheet, default_angle_degrees=default_angle_degrees
+            )
+        except InputError as e:
+            # sheet 完全没数据：跳过（可能是元信息 sheet 比如「委托信息」）
+            log.warning("跳过 sheet %r：%s", sheet, e)
+            continue
+        # 把 sheet 名作为批名注入每个构件（覆盖原 batch_name），便于追溯
+        components_with_batch = [
+            LeebHardnessComponentInput(
+                seq=c.seq,
+                name=c.name,
+                thickness=c.thickness,
+                angle_degrees=c.angle_degrees,
+                test_areas_raw=c.test_areas_raw,
+                batch_name=sheet,
+            )
+            for c in components
+        ]
+        batches.append(LeebHardnessBatch(batch_name=sheet, components=tuple(components_with_batch)))
+
+    if not batches:
+        raise InputError(
+            cause=f"{path.name} 中所有 sheet 都没有有效数据",
+            location="read_leeb_workbook",
+            hint="请按格式规范填写至少一个检测批 sheet",
+        )
+
+    log.info("读取里氏硬度 workbook 完成：%s → %d 个检测批", path.name, len(batches))
+    return LeebHardnessWorkbook(
+        batches=tuple(batches),
+        file_label=path.stem,
+    )
+
+
+# ════════════════════════════════════════════════════════════════
 # 导出：批级结果 → Excel 两张表
 # ════════════════════════════════════════════════════════════════
 def write_leeb_results(
@@ -331,3 +425,162 @@ def write_leeb_results(
         batch.n_components,
         batch.batch_fb_char_avg,
     )
+
+
+# ════════════════════════════════════════════════════════════════
+# 新格式：结果导出（每批 2 sheet：过程 + 报告插入表）
+# ════════════════════════════════════════════════════════════════
+# 报告插入表样式（仿计算表格.xlsx BH..BO 区域）：
+#   检测部位 | 测区 | 测区里氏硬度平均值HL | 修正后里氏硬度平均值HL |
+#   抗拉强度最小值fb,min | 抗拉强度特征值N/mm² | 抗拉强度特征值平均值N/mm²
+# 每构件 3 行（3 测区），首行带构件名 + 构件级聚合值
+_REPORT_HEADER = (
+    "检测部位",
+    "测区",
+    "测区里氏硬度平均值 (HL)",
+    "修正后里氏硬度平均值 (HL)",
+    "抗拉强度最小值 fb,min (N/mm²)",
+    "抗拉强度特征值 (N/mm²)",
+    "抗拉强度特征值平均值 (N/mm²)",
+)
+
+_PROCESS_HEADER = (
+    "序号",
+    "构件位置",
+    "测区",
+    "HL_m",
+    "HL_t (厚度修正)",
+    "HL_a (角度修正)",
+    "HL_corr",
+    "fb_min (MPa)",
+    "fb_max (MPa)",
+    "构件下限平均",
+    "构件上限平均",
+    "构件推定值",
+)
+
+
+def _bold_header(ws, row: int = 1) -> None:
+    """给指定行所有非空单元格加粗 + 浅灰底色 + 居中。"""
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    fill = PatternFill("solid", fgColor="E8EEF5")
+    align = Alignment(horizontal="center", vertical="center")
+    bold = Font(bold=True)
+    for cell in ws[row]:
+        if cell.value is not None:
+            cell.font = bold
+            cell.fill = fill
+            cell.alignment = align
+
+
+def _write_process_sheet(ws, batch_result: LeebHardnessBatchResult, angle_degrees: float) -> None:
+    """写「<批名>-过程数据」sheet：每测区一行，含全部中间量 + 构件聚合 + 底部批级。"""
+    ws.append(list(_PROCESS_HEADER))
+    for comp, result in batch_result.components_with_results:
+        for zone_idx, area in enumerate(result.test_areas):
+            ws.append(
+                [
+                    comp.seq if zone_idx == 0 else "",
+                    comp.name if zone_idx == 0 else "",
+                    f"测区{zone_idx + 1}",
+                    area.hl_m,
+                    round(area.hl_t, 2),
+                    round(area.hl_a, 2),
+                    round(area.hl_corrected, 2),
+                    round(area.fb_min, 1),
+                    round(area.fb_max, 1),
+                    round(result.comp_fb_min_avg, 1) if zone_idx == 0 else "",
+                    round(result.comp_fb_max_avg, 1) if zone_idx == 0 else "",
+                    round(result.comp_fb_est, 1) if zone_idx == 0 else "",
+                ]
+            )
+    # 底部批级汇总
+    ws.append([])
+    ws.append(
+        [
+            "—", f"批级汇总（{batch_result.n_components} 构件，角度 {angle_degrees}°）",
+            "—", "—", "—", "—", "—", "—", "—",
+            "批级特征值平均",
+            "—",
+            round(batch_result.batch_fb_char_avg, 1),
+        ]
+    )
+    _bold_header(ws)
+
+
+def _write_report_sheet(ws, batch_result: LeebHardnessBatchResult) -> None:
+    """写「<批名>-报告插入表」sheet：仿 D 号站房报告风格，可直接拷贝粘报告。"""
+    ws.append(list(_REPORT_HEADER))
+    for _comp, result in batch_result.components_with_results:
+        # 首行带构件名 + 构件级聚合
+        for zone_idx, area in enumerate(result.test_areas):
+            row = [
+                _comp.name if zone_idx == 0 else "",
+                f"测区{zone_idx + 1}",
+                area.hl_m,
+                round(area.hl_corrected, 1),
+                round(area.fb_min, 1),
+                round(result.comp_fb_min_avg, 1) if zone_idx == 0 else "",
+                # 抗拉强度特征值平均值：所有 fb_min 单值再做构件平均（同 comp_fb_min_avg）
+                round(result.comp_fb_min_avg, 1) if zone_idx == 0 else "",
+            ]
+            ws.append(row)
+    # 底部追加批级特征值平均行（合并第 7 列右侧显示）
+    ws.append([])
+    ws.append([
+        "批级特征值平均", "", "", "", "", "",
+        round(batch_result.batch_fb_char_avg, 1),
+    ])
+    _bold_header(ws)
+
+
+def write_leeb_results_workbook(
+    path: Path,
+    workbook_result: LeebHardnessWorkbookResult,
+    *,
+    angle_degrees: float,
+) -> None:
+    """把 workbook 结果导出为 xlsx：每批 2 sheet（过程 + 报告插入表）。
+
+    sheet 命名：「<批名>-过程数据」+「<批名>-报告插入表」
+    sheet 顺序：所有批的"过程"sheet 在前，所有"报告"sheet 在后？
+                还是按批分组（A 批过程、A 批报告、B 批过程、B 批报告）？
+    选后者：分组形式更便于按检测批切换查看
+    """
+    wb = Workbook()
+    # 删除默认空 sheet
+    default_sheet = wb.active
+    wb.remove(default_sheet)
+
+    for br in workbook_result.batch_results:
+        # sheet 名长度上限 31 字符（openpyxl/Excel 硬限）
+        proc_name = _safe_sheet_name(f"{br.batch_name}-过程数据")
+        rep_name = _safe_sheet_name(f"{br.batch_name}-报告插入表")
+        ws_proc = wb.create_sheet(proc_name)
+        ws_rep = wb.create_sheet(rep_name)
+        _write_process_sheet(ws_proc, br, angle_degrees)
+        _write_report_sheet(ws_rep, br)
+
+    try:
+        wb.save(str(path))
+    except Exception as e:
+        raise InfraIOError(
+            cause=f"写入 Excel 失败：{e}",
+            location="write_leeb_results_workbook",
+            hint="请确认目标目录可写且文件未被 Excel 打开",
+        ) from e
+
+    log.info(
+        "导出里氏硬度 workbook 结果：%s（%d 批，共 %d 构件）",
+        path,
+        workbook_result.n_batches,
+        workbook_result.n_components_total,
+    )
+
+
+def _safe_sheet_name(name: str) -> str:
+    """Excel sheet 名限制：≤31 字符，不能含 / \\ ? * [ ] :。"""
+    bad_chars = '/\\?*[]:'
+    cleaned = "".join("_" if c in bad_chars else c for c in name)
+    return cleaned[:31]

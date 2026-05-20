@@ -13,10 +13,15 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook, load_workbook
 
-from civ_core.core.calc_functions import calc_leeb_hardness_batch
+from civ_core.core.calc_functions import (
+    calc_leeb_hardness_batch,
+    calc_leeb_hardness_workbook,
+)
 from civ_core.infra_io.leeb_excel import (
     read_leeb_components,
+    read_leeb_workbook,
     write_leeb_results,
+    write_leeb_results_workbook,
 )
 from civ_core.infra_io.standards_db import StandardsDB, seed_all_leeb_tables
 from civ_core.utils.exceptions import InfraIOError, InputError
@@ -165,3 +170,99 @@ def test_missing_hl_value_raises(tmp_path: Path) -> None:
     wb.save(str(p))
     with pytest.raises(InputError, match="HL"):
         read_leeb_components(p, "里氏")
+
+
+# ════════════════════════════════════════════════════════════════
+# 新格式：read_leeb_workbook 多 sheet 模式
+# ════════════════════════════════════════════════════════════════
+def _write_new_format_workbook(path: Path) -> None:
+    """造一个新格式 xlsx：2 个检测批，每批 2 个构件。"""
+    wb = Workbook()
+    # 默认 sheet 改名
+    ws1 = wb.active
+    ws1.title = "检测批1"
+    ws1.append(
+        ["序号", "构件位置", "HL1", "HL2", "HL3", "HL4", "HL5", "HL6", "HL7", "HL8", "HL9", "厚度"]
+    )
+    ws1.append([1, "钢柱A-1", 467, 465, 471, 468, 467, 468, 473, 472, 463, 12])
+    ws1.append(["", "", 471, 478, 471, 470, 480, 477, 472, 475, 465, ""])
+    ws1.append(["", "", 477, 481, 468, 469, 478, 470, 469, 476, 462, ""])
+    ws1.append([2, "钢柱A-2", 470, 472, 471, 469, 473, 475, 470, 472, 471, 12])
+    ws1.append(["", "", 469, 470, 472, 473, 471, 470, 472, 471, 470, ""])
+    ws1.append(["", "", 471, 472, 470, 471, 470, 473, 469, 471, 472, ""])
+
+    ws2 = wb.create_sheet("检测批2")
+    ws2.append(
+        ["序号", "构件位置", "HL1", "HL2", "HL3", "HL4", "HL5", "HL6", "HL7", "HL8", "HL9", "厚度"]
+    )
+    ws2.append([1, "钢梁B-1", 460, 462, 461, 459, 463, 465, 460, 462, 461, 10])
+    ws2.append(["", "", 459, 460, 462, 463, 461, 460, 462, 461, 460, ""])
+    ws2.append(["", "", 461, 462, 460, 461, 460, 463, 459, 461, 462, ""])
+    wb.save(str(path))
+
+
+def test_read_workbook_two_batches(tmp_path: Path) -> None:
+    p = tmp_path / "new_format.xlsx"
+    _write_new_format_workbook(p)
+    wb_in = read_leeb_workbook(p, default_angle_degrees=0.0)
+    assert len(wb_in.batches) == 2
+    assert wb_in.batches[0].batch_name == "检测批1"
+    assert wb_in.batches[1].batch_name == "检测批2"
+    assert len(wb_in.batches[0].components) == 2  # 钢柱A-1, A-2
+    assert len(wb_in.batches[1].components) == 1  # 钢梁B-1
+    # 构件 batch_name 跟随 sheet 名
+    assert wb_in.batches[0].components[0].batch_name == "检测批1"
+
+
+def test_read_workbook_filter_by_sheet_name(tmp_path: Path) -> None:
+    """sheet_name_filter='检测批' 过滤掉无关 sheet（如「委托信息」）。"""
+    p = tmp_path / "with_meta.xlsx"
+    wb = Workbook()
+    wb.active.title = "委托信息"
+    wb.active.append(["工程名称", "示例项目"])
+
+    ws2 = wb.create_sheet("检测批1")
+    ws2.append(
+        ["序号", "构件位置", "HL1", "HL2", "HL3", "HL4", "HL5", "HL6", "HL7", "HL8", "HL9", "厚度"]
+    )
+    ws2.append([1, "C-1", 470, 472, 471, 469, 473, 475, 470, 472, 471, 12])
+    ws2.append(["", "", 469, 470, 472, 473, 471, 470, 472, 471, 470, ""])
+    ws2.append(["", "", 471, 472, 470, 471, 470, 473, 469, 471, 472, ""])
+    wb.save(str(p))
+
+    wb_in = read_leeb_workbook(p, sheet_name_filter="检测批")
+    assert len(wb_in.batches) == 1
+    assert wb_in.batches[0].batch_name == "检测批1"
+
+
+def test_full_new_format_pipeline(db: StandardsDB, tmp_path: Path) -> None:
+    """读 → 计算 → 导出结果文件，验证每批两 sheet 命名 + 内容。"""
+    src = tmp_path / "src.xlsx"
+    _write_new_format_workbook(src)
+    wb_in = read_leeb_workbook(src, default_angle_degrees=0.0)
+    result = calc_leeb_hardness_workbook(wb_in, db=db)
+
+    assert result.n_batches == 2
+    assert result.n_components_total == 3
+    # batch_name 应跟 sheet 名一致
+    assert result.batch_results[0].batch_name == "检测批1"
+    assert result.batch_results[1].batch_name == "检测批2"
+
+    # 导出结果文件
+    out = tmp_path / "result.xlsx"
+    write_leeb_results_workbook(out, result, angle_degrees=0.0)
+    wb_out = load_workbook(str(out))
+    # 每批 2 sheet → 共 4 sheet
+    assert "检测批1-过程数据" in wb_out.sheetnames
+    assert "检测批1-报告插入表" in wb_out.sheetnames
+    assert "检测批2-过程数据" in wb_out.sheetnames
+    assert "检测批2-报告插入表" in wb_out.sheetnames
+    assert len(wb_out.sheetnames) == 4
+
+    # 过程 sheet 表头校验
+    ws_proc = wb_out["检测批1-过程数据"]
+    assert ws_proc.cell(1, 1).value == "序号"
+    assert ws_proc.cell(1, 8).value == "fb_min (MPa)"
+    # 报告 sheet 表头
+    ws_rep = wb_out["检测批1-报告插入表"]
+    assert ws_rep.cell(1, 1).value == "检测部位"

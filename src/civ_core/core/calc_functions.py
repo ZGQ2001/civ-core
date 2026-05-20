@@ -30,6 +30,8 @@ from civ_core.domain.calc_schema import (
     LeebHardnessComponentInput,
     LeebHardnessResult,
     LeebHardnessTestArea,
+    LeebHardnessWorkbook,
+    LeebHardnessWorkbookResult,
     ReboundResult,
     ReboundTestArea,
 )
@@ -320,9 +322,9 @@ def calc_leeb_hardness_steel(
     参数:
         test_areas_raw: 多测区原始 HL 列表，每测区固定 9 个 int 测点。
         thickness: 构件厚度（mm），用于查厚度修正表 leeb_thickness_correction。
-        angle_degrees: 测量角度（必须是 -90 / -45 / 0 / +45 / +90 之一）。
-                       +90° = 竖直向上 ↑；+45° = 向上 45°；0° = 水平 →；
-                      -45° = 向下 45°；-90° = 竖直向下 ↓
+        angle_degrees: 测量角度（必须是 -90 / -45 / 0 / +45 / +90 之一，GB/T 17394 符号约定）。
+                       -90° = 竖直向下 ↓（基线档）；-45° = 向下 45°；0° = 水平 →（默认）；
+                       +45° = 向上 45°；+90° = 竖直向上 ↑（最大修正档）
         db: 已 seed 过 leeb_thickness / leeb_angle / leeb_strength 三表的 StandardsDB。
         design_fb_min: 设计抗拉强度下限（MPa）。当前版本暂不写回 result（结果 dataclass
                        未带 passed 字段，由调用方拿 comp_fb_est 自行判定）。
@@ -444,10 +446,43 @@ def calc_leeb_hardness_batch(
     # 批级 = 所有构件 comp_fb_min_avg 的平均（INSP-001 §3）
     batch_fb_char_avg = sum(r.comp_fb_min_avg for _, r in pairs) / len(pairs)
 
+    # 取第一个构件的 batch_name 作为批名（同一批的所有构件 batch_name 一致）
+    bn = components[0].batch_name if components else ""
+
     return LeebHardnessBatchResult(
         components_with_results=tuple(pairs),
         batch_fb_char_avg=batch_fb_char_avg,
         n_components=len(pairs),
+        batch_name=bn,
+    )
+
+
+def calc_leeb_hardness_workbook(
+    workbook: LeebHardnessWorkbook,
+    *,
+    db: StandardsDB,
+) -> LeebHardnessWorkbookResult:
+    """整文件多批级计算入口。
+
+    遍历 workbook.batches 的每个检测批，调 calc_leeb_hardness_batch；
+    保留 sheet（=批名）顺序；返回聚合 WorkbookResult。
+    """
+    batch_results: list[LeebHardnessBatchResult] = []
+    for batch in workbook.batches:
+        br = calc_leeb_hardness_batch(list(batch.components), db=db)
+        # 用 batch 的官方名字覆盖（确保与 sheet 名一致，不依赖构件 batch_name）
+        br_named = LeebHardnessBatchResult(
+            components_with_results=br.components_with_results,
+            batch_fb_char_avg=br.batch_fb_char_avg,
+            n_components=br.n_components,
+            batch_name=batch.batch_name,
+        )
+        batch_results.append(br_named)
+
+    return LeebHardnessWorkbookResult(
+        batch_results=tuple(batch_results),
+        n_batches=len(batch_results),
+        n_components_total=sum(r.n_components for r in batch_results),
     )
 
 

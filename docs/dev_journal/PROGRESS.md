@@ -6,7 +6,30 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** ① 画图、② 里氏硬度（INSP-001）批级 GUI 完整可用（钢结构厂房项目实战可用）、INSP-002 钻芯法可用、INSP-003 骨架（687 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+**当前状态：** ① 画图、② 里氏硬度（INSP-001）多批 GUI 完整可用（含原始数据模板 + 报告插入表 + 格式规范文档，钢结构厂房项目实战可用）、INSP-002 钻芯法可用、INSP-003 骨架（691 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+
+**2026-05-20 里氏硬度格式固化 + 多批支持：**
+- 修角度语义反掉的 bug：-90° = 向下垂直（基线档）、+90° = 向上垂直、0° = 水平（默认）
+- 新格式约定（详见 `docs/civil_kb/formats/leeb_hardness_excel.md`）：
+  - **一个 xlsx 文件 = 一个检测项目实例**（如「里氏硬度-D号站房.xlsx」）
+  - **一个 sheet = 一个检测批**（sheet 名 = 批名）
+  - 同一文件可混装钢柱+钢梁，按检测批区分
+- domain 加 `LeebHardnessBatch` / `LeebHardnessWorkbook` / `LeebHardnessWorkbookResult` 多批容器；
+  `LeebHardnessBatchResult` 加 `batch_name` 字段
+- core 加 `calc_leeb_hardness_workbook(workbook, db)` 一次性算所有批
+- infra_io.leeb_excel：
+  - 新增 `read_leeb_workbook(path, sheet_name_filter)` 多 sheet 读
+  - 新增 `write_leeb_results_workbook(path, result)` 写结果文件
+  - 每检测批生成 2 sheet：「<批名>-过程数据」+「<批名>-报告插入表」
+  - 旧 API `read_leeb_components` / `write_leeb_results` 保留兼容
+- 原始数据模板 `templates/leeb_hardness/原始数据模板.xlsx`：
+  - 表头加粗 + 浅蓝底 + 居中 + 边框，冻结首行
+  - 「检测批1」含 2 个示例构件 + 3 个空构件待填；「检测批2」全空示意可加批
+- UI 改造 LeebHardnessView：
+  - 顶栏加「下载模板」按钮 + 「检测批」选择器
+  - 默认角度从 +90° 改为 0° 水平
+  - 一次性算所有批，切批不重算（缓存在 WorkbookResult）
+  - 角度切换会作废结果但保留 workbook
 
 **2026-05-20 里氏硬度批级 GUI 交付：** 端到端打通"报检单 Excel → 计算 → 导出"流程。
 - `domain/calc_schema.py` 加 `LeebHardnessComponentInput` + `LeebHardnessBatchResult` 批级契约

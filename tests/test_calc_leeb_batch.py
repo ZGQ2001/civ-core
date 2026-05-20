@@ -34,7 +34,7 @@ def _comp(seq: int, name: str, zones: list[tuple[int, ...]]) -> LeebHardnessComp
         seq=seq,
         name=name,
         thickness=12.0,
-        angle_degrees=-90.0,  # 向上垂直，HL_a = 0（最简）
+        angle_degrees=-90.0,  # 向下垂直（基线档），HL_a = 0（最简）
         test_areas_raw=tuple(zones),
     )
 

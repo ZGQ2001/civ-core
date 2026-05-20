@@ -1,7 +1,7 @@
 """INSP-001 里氏硬度端到端集成测试（用真实规范表 + Excel 中的实测数据）。
 
 数据来源：docs/civil_kb/formulas/计算表格.xlsx → 钢材硬度 sheet 序号 1（地上一层 2×H 钢柱）
-  厚度 12mm，测量角度 +90°（向下垂直），3 个测区每区 9 个 HL 读数。
+  厚度 12mm，测量角度 +90°（向上垂直），3 个测区每区 9 个 HL 读数。
 
 测试目标：
   1. 三表（厚度/角度/强度）seed 后 calc_leeb_hardness_steel 跑通端到端
@@ -37,7 +37,7 @@ SEQ1_ZONE1 = (483, 481, 480, 481, 474, 479, 479, 483, 474)
 SEQ1_ZONE2 = (488, 479, 488, 479, 481, 486, 487, 485, 493)
 SEQ1_ZONE3 = (476, 489, 470, 481, 487, 476, 478, 486, 473)
 SEQ1_THICKNESS = 12.0
-SEQ1_ANGLE = 90.0  # 向下垂直
+SEQ1_ANGLE = 90.0  # 向上垂直（+90° 档）
 
 
 def test_seq1_hl_m_exact() -> None:
@@ -120,7 +120,7 @@ def test_thickness_gt_12_returns_zero_correction(db_real: StandardsDB) -> None:
 def test_thinner_plate_positive_correction(db_real: StandardsDB) -> None:
     """6mm 薄板 → HL_t = +30 表内精确匹配；但需保证 HL_corr 落在强度表范围内。
 
-    用 HL_m=400 + thickness=6 + angle=-90°（向上垂直，HL_a=0）→ HL_corr=430，
+    用 HL_m=400 + thickness=6 + angle=-90°（向下垂直，基线档 HL_a=0）→ HL_corr=430，
     在强度表 [255, 480] 内。
     """
     raw = (400,) * 9
@@ -135,9 +135,9 @@ def test_thinner_plate_positive_correction(db_real: StandardsDB) -> None:
 
 
 def test_upward_vertical_no_angle_correction(db_real: StandardsDB) -> None:
-    """-90°（向上垂直）→ HL_a = 0 对所有 HL_m（规范表 -90° 列全部为 0）。
+    """-90°（向下垂直，规范基线档）→ HL_a = 0 对所有 HL_m（规范表 -90° 列全部为 0）。
 
-    这是规范的物理基准：枪口朝上垂直冲击时，重力对冲击体作用方向相反，
+    这是规范的物理基准：枪口朝下垂直冲击时即为基线方向，
     实测里氏值无需修正。其它角度（如水平 0°）实际都是负值修正。
     """
     r = calc_leeb_hardness_steel(

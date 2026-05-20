@@ -128,8 +128,9 @@ class LeebHardnessComponentInput:
 
 @dataclass(slots=True, frozen=True)
 class LeebHardnessBatchResult:
-    """多构件批级计算结果。
+    """单个检测批级计算结果（对应 xlsx 中一个 sheet）。
 
+    batch_name: 检测批名（= 来源 sheet 名，便于 UI 切换 / 导出还原）
     components_with_results: (输入构件, 该构件的 LeebHardnessResult) 元组列表，
                              保持输入顺序，方便 UI 表格按序号渲染
     batch_fb_char_avg:       全部构件 comp_fb_min_avg 的平均（INSP-001 §3 批级特征值）
@@ -139,6 +140,7 @@ class LeebHardnessBatchResult:
     components_with_results: tuple[tuple[LeebHardnessComponentInput, LeebHardnessResult], ...]
     batch_fb_char_avg: float
     n_components: int
+    batch_name: str = ""
 
     def __post_init__(self) -> None:
         if self.n_components != len(self.components_with_results):
@@ -148,6 +150,73 @@ class LeebHardnessBatchResult:
             )
         if self.n_components < 1:
             raise ValueError("LeebHardnessBatchResult.n_components 必须 >= 1")
+
+
+@dataclass(slots=True, frozen=True)
+class LeebHardnessBatch:
+    """单个检测批输入（对应原始数据 xlsx 中一个 sheet）。
+
+    batch_name: 检测批名（= sheet 名）
+    components: 该批内的所有构件（≥1）
+    """
+
+    batch_name: str
+    components: tuple[LeebHardnessComponentInput, ...]
+
+    def __post_init__(self) -> None:
+        if not self.batch_name.strip():
+            raise ValueError("LeebHardnessBatch.batch_name 不可为空")
+        if not self.components:
+            raise ValueError("LeebHardnessBatch.components 至少需要 1 个构件")
+
+
+@dataclass(slots=True, frozen=True)
+class LeebHardnessWorkbook:
+    """一次检测项目实例的全部数据（对应一个 xlsx 文件）。
+
+    file_label: 项目实例标签（如「里氏硬度-D号站房」），可空
+    batches:    各检测批；按 sheet 顺序保持
+    """
+
+    batches: tuple[LeebHardnessBatch, ...]
+    file_label: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.batches:
+            raise ValueError("LeebHardnessWorkbook.batches 至少需要 1 个检测批")
+        # 检测批名应唯一（sheet 不允许重名）
+        names = [b.batch_name for b in self.batches]
+        if len(names) != len(set(names)):
+            raise ValueError(
+                f"LeebHardnessWorkbook.batches 检测批名重复：{names}"
+            )
+
+
+@dataclass(slots=True, frozen=True)
+class LeebHardnessWorkbookResult:
+    """整 workbook 的批级计算结果聚合。
+
+    batch_results: 每检测批的结果，按输入顺序
+    n_batches:     检测批数
+    n_components_total: 所有批的构件总数（便于 UI 状态行显示）
+    """
+
+    batch_results: tuple[LeebHardnessBatchResult, ...]
+    n_batches: int
+    n_components_total: int
+
+    def __post_init__(self) -> None:
+        if self.n_batches != len(self.batch_results):
+            raise ValueError(
+                f"LeebHardnessWorkbookResult.n_batches ({self.n_batches}) 与列表长度不一致 "
+                f"({len(self.batch_results)})"
+            )
+        expected = sum(r.n_components for r in self.batch_results)
+        if expected != self.n_components_total:
+            raise ValueError(
+                f"LeebHardnessWorkbookResult.n_components_total ({self.n_components_total}) "
+                f"与各批之和不一致 ({expected})"
+            )
 
 
 # ════════════════════════════════════════════════════════════════

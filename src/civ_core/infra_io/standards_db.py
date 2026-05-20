@@ -339,7 +339,12 @@ def seed_leeb_thickness_correction(db: StandardsDB) -> None:
 
 
 # 角度修正：(角度档 = float 度数, HL_m) → HL_a
-# 角度档：+90° = 竖直向上 / 0° = 水平 / -90° = 竖直向下（GB/T 17394 符号约定）
+# 角度档（GB/T 17394 符号约定 + 源 Excel 表头 -90°/-45°/0°/+45°/+90° 一一对应）：
+#   -90° = 竖直向下 ↓（枪口朝下，基线档，全档 HL_a = 0）
+#   -45° = 向下 45°
+#     0° = 水平（默认工作角度）
+#   +45° = 向上 45°
+#   +90° = 竖直向上 ↑（最大修正档，HL_a 最负值）
 # 注：源 Excel 文件中 (HL_m=650, +90°) 单元格为 18，按整列趋势（其他行均为 -33..-14 单调递增）
 #     该值显然漏掉负号，已手动修正为 -18。修订需要确认时直接改下方 _LEEB_ANGLE_RAW 中标注行。
 _LEEB_ANGLE_RAW: tuple[tuple[float, float, float, float, float, float], ...] = (

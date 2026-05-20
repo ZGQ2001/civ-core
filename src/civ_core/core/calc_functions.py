@@ -299,11 +299,14 @@ def calc_core_drilling_concrete(
 _LEEB_FB_RANGE = 150.0
 
 
+_LEEB_VALID_ANGLES = frozenset({-90.0, -45.0, 0.0, 45.0, 90.0})
+
+
 def calc_leeb_hardness_steel(
     *,
     test_areas_raw: Sequence[Sequence[int]],
     thickness: float,
-    angle_category: int,
+    angle_degrees: float,
     db: StandardsDB,
     design_fb_min: float | None = None,
 ) -> LeebHardnessResult:
@@ -315,8 +318,9 @@ def calc_leeb_hardness_steel(
     参数:
         test_areas_raw: 多测区原始 HL 列表，每测区固定 9 个 int 测点。
         thickness: 构件厚度（mm），用于查厚度修正表 leeb_thickness_correction。
-        angle_category: 角度档（1=向上垂直 / 2=向上45° / 3=水平 / 4=向下45° / 5=向下垂直），
-                        用于查角度修正表 leeb_angle_correction。
+        angle_degrees: 测量角度（必须是 -90 / -45 / 0 / +45 / +90 之一）。
+                       -90° = 向上垂直 ↑；-45° = 向上 45°；0° = 水平 →；
+                       +45° = 向下 45°；+90° = 向下垂直 ↓
         db: 已 seed 过 leeb_thickness / leeb_angle / leeb_strength 三表的 StandardsDB。
         design_fb_min: 设计抗拉强度下限（MPa）。当前版本暂不写回 result（结果 dataclass
                        未带 passed 字段，由调用方拿 comp_fb_est 自行判定）。
@@ -326,17 +330,18 @@ def calc_leeb_hardness_steel(
 
     异常:
         InputError —— 测区为空 / 角度档非法 / 厚度越表 / 强度查表越界。
-
-    注意:
-        本函数依赖 standards_db 中的 leeb_thickness_correction / leeb_angle_correction
-        / leeb_strength_conversion 三表，目前需要由用户从 GB/T 17394.4-2014 与
-        GB/T 50344-2019 附录 N 录入。骨架已就绪，加 seed_leeb_*_table 即可上线。
     """
     if not test_areas_raw:
         raise InputError(
             cause="至少需要 1 个测区",
             location="calc_leeb_hardness_steel",
             hint="GB/T 50344-2019 附录 N.2.2 要求每构件测区数量 >= 3",
+        )
+    if float(angle_degrees) not in _LEEB_VALID_ANGLES:
+        raise InputError(
+            cause=f"测量角度 {angle_degrees}° 不在规范允许档 {{-90, -45, 0, 45, 90}}",
+            location="calc_leeb_hardness_steel",
+            hint="规范只列出 5 个标准角度档；非标准角度需现场调整测量方向",
         )
 
     areas: list[LeebHardnessTestArea] = []
@@ -347,14 +352,14 @@ def calc_leeb_hardness_steel(
         hl_t = _lookup_with_interp(
             db, TABLE_LEEB_THICKNESS, thickness, value_idx="value1"
         )
-        # 角度修正（2D 查表：角度档精确 + HL_m 插值）
+        # 角度修正（2D 查表：角度度数精确 + HL_m 插值）
         hl_a = _lookup_2d_fixed_key1_interp_key2(
             db,
             TABLE_LEEB_ANGLE,
-            float(angle_category),
+            float(angle_degrees),
             float(hl_m),
             value_idx="value1",
-            key1_label="角度档",
+            key1_label="测量角度",
         )
         hl_corrected = float(hl_m) + hl_t + hl_a
         # 强度换算（1D 查表 HL_corr → fb_min）

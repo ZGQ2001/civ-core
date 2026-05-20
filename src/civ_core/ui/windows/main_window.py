@@ -24,6 +24,7 @@ from civ_core.apps.bootstrap import set_theme_runtime
 from civ_core.configs.loader import AppConfig
 from civ_core.core.project_service import ProjectService
 from civ_core.infra_io.project_db import ProjectDB
+from civ_core.infra_io.standards_db import init_standards_db
 from civ_core.ui.windows.pdf_tools_view import PdfToolsView
 from civ_core.ui.windows.plot_curves_view import PlotCurvesView
 from civ_core.ui.windows.project_board_view import ProjectBoardView
@@ -98,6 +99,12 @@ class MainWindow(FluentWindow):
         conn.row_factory = sqlite3.Row
         db = ProjectDB(conn)
         db.create_tables()
+
+        # 规范库 standards.db：建表 + seed 全部规范表（INSP-001/002）
+        # 持有 conn 让生命周期跟 MainWindow 一致，避免被 GC 关掉。
+        # 即使当前没有 UI 直接用它，未来 calc UI 上来就能直接调，不需要重 seed。
+        self._standards_db, self._standards_conn = init_standards_db()
+
         svc = ProjectService(db)
         self.home_page = ProjectBoardView(svc)
         self.home_page.setObjectName("homePage")

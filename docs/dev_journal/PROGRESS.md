@@ -6,33 +6,39 @@
 
 ## 📌 顶部摘要
 
-**当前状态：** ① 画图、② 计算函数底座已闭环（659 测试 / ruff 0 / healthcheck 9/9）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
+**当前状态：** ① 画图、② 计算函数 INSP-001/002 完整可用、INSP-003 骨架（670 测试 / ruff 0 / healthcheck 10/10）。深色主题、设置页、缩略图视窗、hover 数据浮动、左右切图、Ctrl+Z/Y 撤销、项目看板 4 档筛选 + style_preset.yaml 全交付。2026-05-14 起锁定「维护 + 新功能」模式。
 
-**2026-05-20 ② 计算函数底座交付：** 按 INSP-001/002/003 三份公式文档实现。
-- `infra_io/standards_db.py` SQLite 通用查表层（standards_tables + partial unique index 区分 1D/2D，ON CONFLICT REPLACE 上挂），已 seed INSP-002 钻芯法 k1/k2 系数表共 60 行（JGJ/T 384-2016 表 A.0.2）
-- `domain/calc_schema.py` 3 类 frozen 结果契约 + __post_init__ 强制规范不变量（9/16 点测区、n>=10、fb_max=fb_min+150、batch 模式要求 n>=10 等）
+**2026-05-20 ② 计算函数底座 + 里氏硬度完整可用：** 按 INSP-001/002/003 三份公式文档实现。
+- `infra_io/standards_db.py` SQLite 通用查表层（standards_tables + partial unique index 区分 1D/2D，ON CONFLICT REPLACE 上挂）。已 seed：
+  - INSP-002 钻芯法 k1/k2 系数表（60 行，JGJ/T 384-2016 表 A.0.2）
+  - INSP-001 里氏硬度三表（板厚 6 行含哨兵 + 角度 70 行 + 强度 100 行；源 Excel `(HL_m=650, +90°)=18` 漏负号已修正为 -18）
+  - 默认 DB 路径 `~/.civ-core/standards.db`，`init_standards_db()` 一键开+seed，幂等；MainWindow 启动时自动初始化
+- `domain/calc_schema.py` 3 类 frozen 结果契约 + __post_init__ 强制规范不变量
 - `core/calc_functions.py` 三函数：
-  - `calc_core_drilling_concrete`：**完整可用**（k1/k2 表已 seed，含线性插值 / take=upper/lower / 小直径芯样 / design_fcu 判定）
-  - `calc_leeb_hardness_steel`：**骨架就绪**（截尾平均 + 厚度/角度修正 + 强度查表 + 构件聚合），等用户录入 GB/T 17394.4-2014 与 GB/T 50344-2019 附录 N 的厚度/角度/强度三张表
-  - `calc_rebound_concrete`：**骨架就绪**（截尾平均 + 碳化归一化 + 二维测强曲线查表 + single/batch 双模式），等用户录入 JGJ/T 23-2011 附录 A 测强曲线表
+  - `calc_core_drilling_concrete`：**完整可用**（INSP-002 钻芯法，k1/k2 表已 seed）
+  - `calc_leeb_hardness_steel`：**完整可用**（INSP-001 里氏硬度，3 表已 seed；端到端测试对齐 Excel 钢材硬度 sheet 序号 1 真实数据）
+  - `calc_rebound_concrete`：**骨架就绪**（INSP-003 回弹法，等用户录入 JGJ/T 23-2011 附录 A 测强曲线表）
 - 通用工具 `_lookup_with_interp`（1D）+ `_lookup_2d_fixed_key1_interp_key2`（分类+插值）覆盖所有规范查表模式
+- API 决策：角度档用 `float 度数`（-90/-45/0/+45/+90），不用 1..5 整数编码
+- healthcheck 加 `_check_standards_db_calc_pipeline`：每次验收跑 INSP-001/002 端到端 round-trip
 
 **主管线（已更正依赖顺序）：**
 
 ```
 ① 画图 ✅  →  ② 计算函数 ⛹  →  ②.5 数据生成  →  ③ 规范评定  →  ④ 数据填充  →  ⑤ Word 报告
-  (已交付)    (底座+002可用)     (data_gen)       (calc UI)     (auto_filler)  (模板+输出)
+  (已交付)    (001/002 可用)     (data_gen)       (calc UI)     (auto_filler)  (模板+输出)
                   ↑
           data_gen 的前置依赖：
           生成数据需调用计算函数验证合规性；
           规范评定复用同一套函数评定真实数据
 ```
 
-**当前进度条：** `██████████░░░░░░░░░░` ① 完成，② 底座完成（INSP-002 全通；001/003 待表数据）
+**当前进度条：** `███████████░░░░░░░░░` ① 完成，② INSP-001/002 完整可用；INSP-003 待用户提供 JGJ/T 23-2011 附录 A 测强曲线表
 
 **下一步（择一）：**
-1. 用户提供 GB/T 17394.4-2014 表 + GB/T 50344-2019 附录 N + JGJ/T 23-2011 附录 A 数据 → 录入 standards_db 让 INSP-001/003 切到「完整可用」
-2. 直接进 `data_gen`（调用 INSP-002 验证生成的钻芯数据，等其他表就位再扩到 001/003）
+1. 用户提供 JGJ/T 23-2011 附录 A 测强曲线表数据（R_m × d_m 二维）→ 录入 standards_db 让 INSP-003 切到「完整可用」
+2. 直接进 `data_gen`（已有 INSP-001/002 可调用做生成数据的合规验证）
+3. 给 INSP-001/002 做计算 UI（项目「数据处理」阶段嵌入）
 
 主页项目看板 UI/UX 整改已闭环（2026-05-19），剩余可选优化（不阻塞 data_gen 启动）：
 - 编辑页表单的细粒度样式仍保留硬编码（drawer 第 380 行以下），未来如有视觉需求再统一抽取

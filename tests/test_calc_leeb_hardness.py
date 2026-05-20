@@ -43,15 +43,15 @@ def db_seeded() -> StandardsDB:
     for thick, hl_t in [(6.0, -5.0), (10.0, -2.0), (15.0, 0.0), (25.0, 1.0), (50.0, 2.0)]:
         d.put_row(StandardsRow(table_name=TABLE_LEEB_THICKNESS, key1=thick, value1=hl_t))
 
-    # 角度修正表（2D：角度档 1..5 × HL_m → HL_a）
-    # 角度档：1=向上垂直 2=向上45° 3=水平 4=向下45° 5=向下垂直
-    # placeholder：3=水平时修正 0；垂直与 45° 给小偏移
-    for category, base_offset in [(1, -3.0), (2, -2.0), (3, 0.0), (4, 2.0), (5, 3.0)]:
+    # 角度修正表（2D：度数 × HL_m → HL_a）
+    # 度数：-90 向上垂直 / -45 向上45° / 0 水平 / +45 向下45° / +90 向下垂直
+    # placeholder：0° 水平时修正 0；垂直与 45° 给小偏移
+    for deg, base_offset in [(-90.0, -3.0), (-45.0, -2.0), (0.0, 0.0), (45.0, 2.0), (90.0, 3.0)]:
         for hl_m in [350.0, 400.0, 500.0]:
             d.put_row(
                 StandardsRow(
                     table_name=TABLE_LEEB_ANGLE,
-                    key1=float(category),
+                    key1=deg,
                     key2=hl_m,
                     value1=base_offset,
                 )
@@ -99,7 +99,7 @@ def test_single_test_area_full_pipeline(db_seeded: StandardsDB) -> None:
     r = calc_leeb_hardness_steel(
         test_areas_raw=test_areas_raw,
         thickness=25.0,
-        angle_category=3,
+        angle_degrees=0.0,
         db=db_seeded,
     )
     area = r.test_areas[0]
@@ -119,7 +119,7 @@ def test_multi_areas_aggregation(db_seeded: StandardsDB) -> None:
     r = calc_leeb_hardness_steel(
         test_areas_raw=test_areas_raw,
         thickness=25.0,
-        angle_category=3,
+        angle_degrees=0.0,
         db=db_seeded,
     )
     assert len(r.test_areas) == 3
@@ -137,10 +137,10 @@ def test_angle_category_affects_correction(db_seeded: StandardsDB) -> None:
     """档 1（向上垂直）HL_a=-3 vs 档 3（水平）HL_a=0。"""
     raw = [(400,) * 9]
     r1 = calc_leeb_hardness_steel(
-        test_areas_raw=raw, thickness=25.0, angle_category=1, db=db_seeded
+        test_areas_raw=raw, thickness=25.0, angle_degrees=-90.0, db=db_seeded
     )
     r3 = calc_leeb_hardness_steel(
-        test_areas_raw=raw, thickness=25.0, angle_category=3, db=db_seeded
+        test_areas_raw=raw, thickness=25.0, angle_degrees=0.0, db=db_seeded
     )
     assert r1.test_areas[0].hl_a == -3.0
     assert r3.test_areas[0].hl_a == 0.0
@@ -152,10 +152,10 @@ def test_thickness_correction(db_seeded: StandardsDB) -> None:
     """6mm → HL_t=-5；50mm → HL_t=2。"""
     raw = [(400,) * 9]
     r6 = calc_leeb_hardness_steel(
-        test_areas_raw=raw, thickness=6.0, angle_category=3, db=db_seeded
+        test_areas_raw=raw, thickness=6.0, angle_degrees=0.0, db=db_seeded
     )
     r50 = calc_leeb_hardness_steel(
-        test_areas_raw=raw, thickness=50.0, angle_category=3, db=db_seeded
+        test_areas_raw=raw, thickness=50.0, angle_degrees=0.0, db=db_seeded
     )
     assert r6.test_areas[0].hl_t == -5.0
     assert r50.test_areas[0].hl_t == 2.0
@@ -167,17 +167,18 @@ def test_no_test_areas_raises(db_seeded: StandardsDB) -> None:
         calc_leeb_hardness_steel(
             test_areas_raw=[],
             thickness=25.0,
-            angle_category=3,
+            angle_degrees=0.0,
             db=db_seeded,
         )
 
 
-def test_invalid_angle_category_raises(db_seeded: StandardsDB) -> None:
-    with pytest.raises(InputError, match="角度档"):
+def test_invalid_angle_degrees_raises(db_seeded: StandardsDB) -> None:
+    """30° 不在规范 5 档内（-90/-45/0/+45/+90）。"""
+    with pytest.raises(InputError, match="角度"):
         calc_leeb_hardness_steel(
             test_areas_raw=[(400,) * 9],
             thickness=25.0,
-            angle_category=9,  # 表里只有 1..5
+            angle_degrees=30.0,
             db=db_seeded,
         )
 
@@ -188,6 +189,6 @@ def test_thickness_out_of_table_range_raises(db_seeded: StandardsDB) -> None:
         calc_leeb_hardness_steel(
             test_areas_raw=[(400,) * 9],
             thickness=100.0,
-            angle_category=3,
+            angle_degrees=0.0,
             db=db_seeded,
         )

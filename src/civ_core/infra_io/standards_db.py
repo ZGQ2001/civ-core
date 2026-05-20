@@ -309,3 +309,152 @@ def seed_core_drilling_k_table(db: StandardsDB) -> None:
     ]
     db.put_rows(rows)
     log.info("seed standards_tables.%s 完成，共 %d 行", TABLE_CORE_DRILLING_K, len(rows))
+
+
+# ════════════════════════════════════════════════════════════════
+# Seed：INSP-001 里氏硬度三表（GB/T 50344-2019 附录 N + GB/T 17394.4-2014）
+# 数据来源：docs/civil_kb/formulas/计算表格.xlsx → 钢材硬度 sheet
+# ════════════════════════════════════════════════════════════════
+
+# 板厚修正：板厚 mm → HL_t（薄板回弹偏低，HL 正向加值校正）
+# 表只覆盖 6~12mm；> 12mm 视作无需修正（用 999.0 哨兵行 + 0 让插值始终返回 0）
+_LEEB_THICKNESS_DATA: tuple[tuple[float, float], ...] = (
+    (6.0, 30.0),
+    (7.0, 22.0),
+    (8.0, 18.0),
+    (10.0, 10.0),
+    (12.0, 0.0),
+    (999.0, 0.0),  # 哨兵：> 12mm 任意厚度 → HL_t = 0
+)
+
+
+def seed_leeb_thickness_correction(db: StandardsDB) -> None:
+    """录入 INSP-001 板厚修正表（5 行真实数据 + 1 行 > 12mm 哨兵）。"""
+    rows = [
+        StandardsRow(table_name=TABLE_LEEB_THICKNESS, key1=t, value1=hl_t)
+        for (t, hl_t) in _LEEB_THICKNESS_DATA
+    ]
+    db.put_rows(rows)
+    log.info("seed standards_tables.%s 完成，共 %d 行", TABLE_LEEB_THICKNESS, len(rows))
+
+
+# 角度修正：(角度档 = float 度数, HL_m) → HL_a
+# 角度档：-90° = 向上垂直 / -45° = 向上 45° / 0° = 水平 / 45° = 向下 45° / 90° = 向下垂直
+# 注：源 Excel 文件中 (HL_m=650, +90°) 单元格为 18，按整列趋势（其他行均为 -33..-14 单调递增）
+#     该值显然漏掉负号，已手动修正为 -18。修订需要确认时直接改下方 _LEEB_ANGLE_RAW 中标注行。
+_LEEB_ANGLE_RAW: tuple[tuple[float, float, float, float, float, float], ...] = (
+    # HL_m,  -90°,  -45°,   0°,  +45°,  +90°
+    (200.0,   0.0,  -7.0, -14.0, -23.0, -33.0),
+    (250.0,   0.0,  -6.0, -13.0, -22.0, -31.0),
+    (300.0,   0.0,  -6.0, -12.0, -20.0, -29.0),
+    (350.0,   0.0,  -6.0, -12.0, -19.0, -27.0),
+    (400.0,   0.0,  -5.0, -11.0, -18.0, -25.0),
+    (450.0,   0.0,  -5.0, -10.0, -17.0, -24.0),
+    (500.0,   0.0,  -5.0, -10.0, -16.0, -22.0),
+    (550.0,   0.0,  -4.0,  -9.0, -15.0, -20.0),
+    (600.0,   0.0,  -4.0,  -8.0, -14.0, -19.0),
+    (650.0,   0.0,  -4.0,  -8.0, -13.0, -18.0),  # 源 Excel 此格为 18，趋势修正为 -18
+    (700.0,   0.0,  -3.0,  -7.0, -12.0, -17.0),
+    (750.0,   0.0,  -3.0,  -6.0, -11.0, -16.0),
+    (800.0,   0.0,  -3.0,  -6.0, -10.0, -15.0),
+    (850.0,   0.0,  -2.0,  -5.0,  -9.0, -14.0),
+)
+_LEEB_ANGLE_DEGREES: tuple[float, ...] = (-90.0, -45.0, 0.0, 45.0, 90.0)
+
+
+def seed_leeb_angle_correction(db: StandardsDB) -> None:
+    """录入 INSP-001 角度修正表（5 角度档 × 14 HL_m 行 = 70 行）。"""
+    rows: list[StandardsRow] = []
+    for row in _LEEB_ANGLE_RAW:
+        hl_m, *hl_a_values = row
+        for deg, hl_a in zip(_LEEB_ANGLE_DEGREES, hl_a_values, strict=True):
+            rows.append(
+                StandardsRow(
+                    table_name=TABLE_LEEB_ANGLE,
+                    key1=deg,
+                    key2=hl_m,
+                    value1=hl_a,
+                )
+            )
+    db.put_rows(rows)
+    log.info("seed standards_tables.%s 完成，共 %d 行", TABLE_LEEB_ANGLE, len(rows))
+
+
+# 强度换算：HL_corrected → fb_min（MPa）。fb_max = fb_min + 150 由 dataclass 校验
+# 数据范围 HL_dm 255..480（100 行；前段 5 步长，HL>=302 后 2 步长）
+_LEEB_STRENGTH_DATA: tuple[tuple[float, float], ...] = (
+    (255.0, 306.0), (260.0, 306.0), (265.0, 307.0), (270.0, 307.0), (275.0, 308.0),
+    (280.0, 309.0), (285.0, 310.0), (290.0, 311.0), (295.0, 313.0), (300.0, 315.0),
+    (302.0, 316.0), (304.0, 317.0), (306.0, 318.0), (308.0, 319.0), (310.0, 320.0),
+    (312.0, 321.0), (314.0, 322.0), (316.0, 323.0), (318.0, 324.0), (320.0, 326.0),
+    (322.0, 327.0), (324.0, 328.0), (326.0, 329.0), (328.0, 331.0), (330.0, 332.0),
+    (332.0, 334.0), (334.0, 335.0), (336.0, 337.0), (338.0, 338.0), (340.0, 340.0),
+    (342.0, 342.0), (344.0, 343.0), (346.0, 345.0), (348.0, 347.0), (350.0, 349.0),
+    (352.0, 350.0), (354.0, 352.0), (356.0, 354.0), (358.0, 356.0), (360.0, 358.0),
+    (362.0, 360.0), (364.0, 362.0), (366.0, 365.0), (368.0, 367.0), (370.0, 369.0),
+    (372.0, 371.0), (374.0, 374.0), (376.0, 376.0), (378.0, 378.0), (380.0, 381.0),
+    (382.0, 383.0), (384.0, 386.0), (386.0, 388.0), (388.0, 391.0), (390.0, 393.0),
+    (392.0, 396.0), (394.0, 399.0), (396.0, 401.0), (398.0, 404.0), (400.0, 407.0),
+    (402.0, 410.0), (404.0, 413.0), (406.0, 416.0), (408.0, 419.0), (410.0, 422.0),
+    (412.0, 425.0), (414.0, 428.0), (416.0, 431.0), (418.0, 434.0), (420.0, 437.0),
+    (422.0, 441.0), (424.0, 444.0), (426.0, 447.0), (428.0, 451.0), (430.0, 454.0),
+    (432.0, 458.0), (434.0, 461.0), (436.0, 465.0), (438.0, 468.0), (440.0, 472.0),
+    (442.0, 475.0), (444.0, 479.0), (446.0, 483.0), (448.0, 487.0), (450.0, 491.0),
+    (452.0, 494.0), (454.0, 498.0), (456.0, 502.0), (458.0, 506.0), (460.0, 510.0),
+    (462.0, 514.0), (464.0, 518.0), (466.0, 523.0), (468.0, 527.0), (470.0, 531.0),
+    (472.0, 535.0), (474.0, 539.0), (476.0, 544.0), (478.0, 548.0), (480.0, 553.0),
+)
+
+
+def seed_leeb_strength_conversion(db: StandardsDB) -> None:
+    """录入 INSP-001 强度换算表（共 100 行 HL_dm 255~480 → fb_min MPa）。"""
+    rows = [
+        StandardsRow(table_name=TABLE_LEEB_STRENGTH, key1=hl, value1=fb_min)
+        for (hl, fb_min) in _LEEB_STRENGTH_DATA
+    ]
+    db.put_rows(rows)
+    log.info("seed standards_tables.%s 完成，共 %d 行", TABLE_LEEB_STRENGTH, len(rows))
+
+
+def seed_all_leeb_tables(db: StandardsDB) -> None:
+    """一次性 seed INSP-001 三张表（厚度 + 角度 + 强度）。"""
+    seed_leeb_thickness_correction(db)
+    seed_leeb_angle_correction(db)
+    seed_leeb_strength_conversion(db)
+
+
+# ════════════════════════════════════════════════════════════════
+# 默认 DB 文件 + 一键初始化（供 bootstrap / healthcheck 调用）
+# ════════════════════════════════════════════════════════════════
+import sqlite3 as _sqlite3
+from pathlib import Path as _Path
+
+
+def get_default_db_path() -> _Path:
+    """规范库默认存放位置：~/.civ-core/standards.db。"""
+    return _Path("~/.civ-core/standards.db").expanduser()
+
+
+def init_standards_db(
+    path: _Path | None = None,
+) -> tuple[StandardsDB, _sqlite3.Connection]:
+    """打开规范库 DB，建表，幂等 seed 全部规范表。
+
+    返回 (db, conn)：调用方负责持有 conn 直到不再用（关闭见 conn.close()）。
+    若 path 为空，落 ~/.civ-core/standards.db（自动 mkdir 父目录）。
+
+    当前 seed 的表：
+      - INSP-002 钻芯法 k1/k2 系数表（60 行）
+      - INSP-001 里氏硬度三表：厚度修正（6 行含哨兵）/ 角度修正（70 行）/
+        强度换算（100 行）
+    """
+    db_path = path or get_default_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = _sqlite3.connect(str(db_path))
+    conn.row_factory = _sqlite3.Row
+    db = StandardsDB(conn)
+    db.create_tables()
+    seed_core_drilling_k_table(db)
+    seed_all_leeb_tables(db)
+    log.info("standards_db 初始化完成：%s", db_path)
+    return db, conn

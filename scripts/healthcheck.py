@@ -164,6 +164,80 @@ def _check_cli_list_presets() -> str:
         return _fail("CLI 出图模块异常", f"原因：{e}")
 
 
+def _check_standards_db_calc_pipeline() -> str:
+    """规范库（standards.db）+ INSP-001/002 计算函数端到端 round-trip。
+
+    在临时 DB 上 seed 全部规范表，跑一遍钻芯法 + 里氏硬度计算，验证：
+      - SQLite 通用查表层（partial unique index / UPSERT）正常
+      - INSP-002 钻芯法 60 行 k 系数表完整
+      - INSP-001 里氏硬度 3 表（厚度/角度/强度）完整
+      - calc_functions 能正确联动查表 + 插值算出推定值
+    """
+    try:
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+
+        from civ_core.core.calc_functions import (
+            calc_core_drilling_concrete,
+            calc_leeb_hardness_steel,
+        )
+        from civ_core.infra_io.standards_db import (
+            StandardsDB,
+            seed_all_leeb_tables,
+            seed_core_drilling_k_table,
+        )
+
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "standards.db"
+            conn = sqlite3.connect(str(p))
+            conn.row_factory = sqlite3.Row
+            try:
+                db = StandardsDB(conn)
+                db.create_tables()
+                seed_core_drilling_k_table(db)
+                seed_all_leeb_tables(db)
+
+                # INSP-002 钻芯法 round-trip
+                r_core = calc_core_drilling_concrete(
+                    tuple(30.0 + i * 0.1 for i in range(10)),
+                    db=db,
+                    take="lower",
+                )
+                if not (0 < r_core.f_cu_est < 50):
+                    return _fail(
+                        "钻芯法推定值异常",
+                        f"f_cu_est={r_core.f_cu_est} 超出合理范围 (0, 50)",
+                    )
+
+                # INSP-001 里氏硬度 round-trip（Excel 序号 1 测区 1 真实数据）
+                raw = (483, 481, 480, 481, 474, 479, 479, 483, 474)
+                r_leeb = calc_leeb_hardness_steel(
+                    test_areas_raw=[raw],
+                    thickness=12.0,
+                    angle_degrees=90.0,
+                    db=db,
+                )
+                if r_leeb.test_areas[0].hl_m != 480:
+                    return _fail(
+                        "里氏硬度截尾平均异常",
+                        f"HL_m={r_leeb.test_areas[0].hl_m} 应为 480",
+                    )
+                if not (400 < r_leeb.comp_fb_est < 700):
+                    return _fail(
+                        "里氏硬度推定值异常",
+                        f"fb_est={r_leeb.comp_fb_est} 超出合理范围 (400, 700)",
+                    )
+            finally:
+                conn.close()
+
+        return _ok(
+            "规范库 + 计算函数正常（钻芯法 INSP-002 + 里氏硬度 INSP-001 端到端）"
+        )
+    except Exception as e:
+        return _fail("规范库计算管线异常", f"原因：{e}")
+
+
 def _check_log_panel() -> str:
     """日志面板能否构造、QtLogBridge round-trip 是否完整。"""
     import os
@@ -409,6 +483,7 @@ CHECKS: list[Callable[[], str]] = [
     _check_system_presets_readable,
     _check_user_preset_writable,
     _check_cli_list_presets,
+    _check_standards_db_calc_pipeline,
     _check_gui_constructible,
     _check_splitter_persistence,
     _check_preview_pane,

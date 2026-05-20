@@ -22,9 +22,16 @@ import pytest
 
 from civ_core.infra_io.standards_db import (
     TABLE_CORE_DRILLING_K,
+    TABLE_LEEB_ANGLE,
+    TABLE_LEEB_STRENGTH,
+    TABLE_LEEB_THICKNESS,
     StandardsDB,
     StandardsRow,
+    seed_all_leeb_tables,
     seed_core_drilling_k_table,
+    seed_leeb_angle_correction,
+    seed_leeb_strength_conversion,
+    seed_leeb_thickness_correction,
 )
 
 
@@ -153,3 +160,56 @@ def test_seed_idempotent(db: StandardsDB) -> None:
     seed_core_drilling_k_table(db)
     rows = db.list_rows(TABLE_CORE_DRILLING_K)
     assert len(rows) == 60
+
+
+# ── INSP-001 三表 seed ──────────────────────────────────────────
+def test_seed_leeb_thickness(db: StandardsDB) -> None:
+    """5 行真实数据 + 1 行 > 12mm 哨兵 = 6 行。"""
+    seed_leeb_thickness_correction(db)
+    rows = db.list_rows(TABLE_LEEB_THICKNESS)
+    assert len(rows) == 6
+    # 抽检
+    r6 = db.get_row(TABLE_LEEB_THICKNESS, key1=6.0)
+    assert r6 is not None and r6.value1 == 30.0
+    r12 = db.get_row(TABLE_LEEB_THICKNESS, key1=12.0)
+    assert r12 is not None and r12.value1 == 0.0
+    # 哨兵
+    r999 = db.get_row(TABLE_LEEB_THICKNESS, key1=999.0)
+    assert r999 is not None and r999.value1 == 0.0
+
+
+def test_seed_leeb_angle(db: StandardsDB) -> None:
+    """5 角度档 × 14 HL_m 行 = 70 行。"""
+    seed_leeb_angle_correction(db)
+    rows = db.list_rows(TABLE_LEEB_ANGLE)
+    assert len(rows) == 70
+    # 抽检 (-45°, HL_m=400) = -5
+    r = db.get_row(TABLE_LEEB_ANGLE, key1=-45.0, key2=400.0)
+    assert r is not None and r.value1 == -5.0
+    # 抽检关键修正：(+90°, HL_m=650) = -18（源 Excel 漏负号，已修正）
+    r_typo = db.get_row(TABLE_LEEB_ANGLE, key1=90.0, key2=650.0)
+    assert r_typo is not None
+    assert r_typo.value1 == -18.0, "650/+90° 应为 -18（源 Excel 漏负号）"
+
+
+def test_seed_leeb_strength(db: StandardsDB) -> None:
+    """100 行 HL_dm 255..480。"""
+    seed_leeb_strength_conversion(db)
+    rows = db.list_rows(TABLE_LEEB_STRENGTH)
+    assert len(rows) == 100
+    # 边界 + 中段抽检
+    r255 = db.get_row(TABLE_LEEB_STRENGTH, key1=255.0)
+    assert r255 is not None and r255.value1 == 306.0
+    r480 = db.get_row(TABLE_LEEB_STRENGTH, key1=480.0)
+    assert r480 is not None and r480.value1 == 553.0
+    r400 = db.get_row(TABLE_LEEB_STRENGTH, key1=400.0)
+    assert r400 is not None and r400.value1 == 407.0
+
+
+def test_seed_all_leeb_tables(db: StandardsDB) -> None:
+    """一键 seed 三表，幂等。"""
+    seed_all_leeb_tables(db)
+    seed_all_leeb_tables(db)  # 再来一次
+    assert len(db.list_rows(TABLE_LEEB_THICKNESS)) == 6
+    assert len(db.list_rows(TABLE_LEEB_ANGLE)) == 70
+    assert len(db.list_rows(TABLE_LEEB_STRENGTH)) == 100

@@ -74,3 +74,33 @@ class TestBoardViewConstruct:
     def test_btn_new_exists(self, qapp: QApplication, svc: ProjectService) -> None:
         view = ProjectBoardView(svc)
         assert view._btn_new is not None
+
+
+class TestDrawerClose:
+    """drawer 关闭路径：open → close 必须把 splitter 第二格收到 0。
+
+    历史 bug：setChildrenCollapsible(False) 阻止程序化塌缩，drawer 关不掉。
+    """
+
+    def test_close_collapses_drawer_to_zero(
+        self, qapp: QApplication, svc: ProjectService
+    ) -> None:
+        # 构造项目 + view，并把窗口给一个合理尺寸（保证 splitter 有非零总宽）
+        proj = svc.create_project(_project(project_number="P001"), create_folder=False)
+        view = ProjectBoardView(svc)
+        view.resize(1200, 700)
+        view.show()
+        qapp.processEvents()
+
+        # 打开 drawer
+        view._open_drawer_for(proj)
+        qapp.processEvents()
+        assert view._body_splitter.sizes()[1] > 0, "drawer 打开后应有正宽度"
+
+        # 关闭 drawer → 第二格必须为 0
+        view._drawer.close()
+        qapp.processEvents()
+        assert view._body_splitter.sizes()[1] == 0, (
+            f"drawer 关闭后宽度应为 0，实际 {view._body_splitter.sizes()}"
+        )
+        view.close()

@@ -292,6 +292,8 @@ class ProjectBoardView(QWidget):
         # ── 主体：QSplitter（左视图 / 右抽屉），用户可拖动手柄调整抽屉宽度 ────
         self._body_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._body_splitter.setHandleWidth(4)
+        # 主视图不可塌缩（防止误拖丢失表格），但 drawer（索引 1）必须允许程序化收到 0，
+        # 否则 setChildrenCollapsible(False) 会让 setSizes([X, 0]) 被 minimumSizeHint clamp，drawer 关不掉。
         self._body_splitter.setChildrenCollapsible(False)
 
         # 主视图栈
@@ -374,6 +376,8 @@ class ProjectBoardView(QWidget):
         self._drawer.closed = self._on_drawer_closed
         self._drawer.project_deleted = self._on_project_deleted
         self._body_splitter.addWidget(self._drawer)
+        # 仅允许 drawer（索引 1）程序化塌缩到 0，主视图（索引 0）保持不可塌缩
+        self._body_splitter.setCollapsible(1, True)
         # 关闭态：splitter sizes = [view, 0]；打开态：[view, saved_drawer_w or 400]
         self._body_splitter.setSizes([1, 0])
         self._body_splitter.setStretchFactor(0, 1)

@@ -6,12 +6,13 @@
 
 ## 🎯 当前焦点（2026-05-21）
 
-**T5 收尾 + UI 抛光。** T5.1-5.4 四个工具页（plot_curves / leeb / pdf / word2pdf）端到端已通；当前在修 UI 妥协项 + plot_curves 做实时预览 + form 调参。
+**T5 全员闭环 + plot_curves 调参完整改造完成。** 上半部分实时预览图，下半部分 form 调参（无 JSON）；改任何字段 300ms debounce 自动重渲染预览。其他工具页（leeb/pdf/word2pdf）端到端已通。
 
-**下一步具体动作**：
-1. 后端加 `plot_curves.render_preview(preset_dict, excel_path, sheet, header_row) -> {png_base64}`，复用 `chart_writer.render_plot_to_bytes`
-2. 前端 plot_curves 工具页改造为「上预览 + 下 form 调参」（底部 Panel 接管参数面板）
-3. form 字段：title_template、x/y axis label+range、curves[0] color/linewidth/markersize/marker；不暴露 points（嵌套数组，留高级用户编辑 JSON）
+**下一步候选**（按价值排）：
+1. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包
+2. **leeb/pdf/word2pdf 也用 Context lift state**：参数页可以放底部 Panel（统一交互范式），但代价是 4×重构
+3. **plot_curves 多曲线 form**：当前只暴露第 1 条曲线样式；多曲线需 tabs 或 accordion
+4. **流式进度**：plot_curves 跑大批量时无反馈（协议升级方案见妥协项）
 
 ---
 
@@ -29,12 +30,15 @@
 
 ## 🧩 已知 UX 待补 / 妥协项（小条目，按优先级）
 
-- ~~底部 Panel 关闭后无 toggle 入口~~ → batch 1 修
-- ~~plot_curves 调曲线只能编辑 JSON~~ → batch 3 改 form + 实时预览
+- ~~底部 Panel 关闭后无 toggle 入口~~ → 已修：StatusBar「面板」按钮 + Ctrl+J
+- ~~plot_curves 调曲线只能编辑 JSON~~ → 已改：底部 Panel form 表单 + 实时预览
+- ~~BottomPanel「工具设置」Tab 当前是空提示~~ → 已接：plot_curves 时显示 SettingsForm
+- plot_curves form 只暴露**第 1 条曲线**样式；多曲线预设要改其他曲线得后续做 tabs/accordion
+- plot_curves form **不暴露 `points`**（嵌套数组，复杂；高级用户直接编辑 JSON 预设文件）
+- leeb / pdf / word2pdf 工具页**没有用 Context lift state**，参数在工具页内（不在底部 Panel）—— 如果用户要求统一交互范式，每个工具都要做 Context 改造
 - 「刷新」「全部折叠」共用 refreshKey 整树重挂，丢失 expanded 状态（VSCode refresh 应保留）
 - 「新建标准结构」用 `window.prompt` 输项目名（样式不可控）；后续换自定义 modal
 - 流式进度未做（plot_curves 跑大批量时无 N/M 反馈）—— 协议升级方案：sidecar stdout 写 JSON-RPC notification，Rust 转发 Tauri event，前端 listen
-- BottomPanel「工具设置」Tab 当前是空提示；plot_curves 调参（batch 3）会接管这个 Tab，让其他工具也能用同样位置放参数
 
 ---
 
@@ -45,7 +49,7 @@
 | `ping` / `version` | 桥联自测 |
 | `workspace.{last,set,clear,create_standard}` | 工作区记忆 + 新建标准骨架 |
 | `files.{list_dir,exists}` | Explorer 文件树 |
-| `plot_curves.{list_presets,run,preflight}` | 绘曲线图（list_presets 含 details 字段） |
+| `plot_curves.{list_presets,run,preflight,render_preview}` | 绘曲线图；render_preview 给前端实时预览（PNG base64） |
 | `leeb.run` | 里氏硬度 INSP-001 |
 | `pdf_tools.{merge,split_per_page,split_by_ranges}` | PDF 合并/拆分 |
 | `word2pdf.convert` | Word→PDF 批量（COM） |

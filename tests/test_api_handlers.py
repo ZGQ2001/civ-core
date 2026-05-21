@@ -241,6 +241,53 @@ def test_plot_curves_render_preview_missing_excel(tmp_path) -> None:
         plot_handler.render_preview(bad_preset, str(tmp_path / "nope.xlsx"))
 
 
+def test_plot_curves_render_preview_returns_row_data(tmp_path) -> None:
+    """render_preview 必须返回当前 row 的所有列值（之前用 stem 反查 id 永远空）。"""
+    from openpyxl import Workbook
+
+    xlsx = tmp_path / "data.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        ws = wb.create_sheet()
+    ws.append(["编号", "X值", "Y值", "备注"])
+    ws.append(["A1", 1.0, 10.0, "first"])
+    ws.append(["A2", 2.0, 20.0, "second"])
+    wb.save(str(xlsx))
+
+    # filename_template 含中文后缀 —— stem 不等于 id，原 bug 就是这里失配
+    preset = {
+        "id_column": "编号",
+        "filename_template": "{id}_曲线.png",
+        "title_template": "{id} 预览",
+        "x_axis": {"label": "X", "range": None},
+        "y_axis": {"label": "Y", "range": None},
+        "curves": [
+            {
+                "name": "曲线",
+                "color": "#1F4FE0",
+                "marker": "o",
+                "linewidth": 2.0,
+                "markersize": 6,
+                "points": [
+                    {"fixed_axis": "x", "fixed_value": 1.0, "var_column": "Y值"},
+                ],
+            }
+        ],
+    }
+    # 第 0 张（A1）的 row_data 应该非空且含原始列
+    res0 = plot_handler.render_preview(preset, str(xlsx), row_index=0)
+    assert res0["row_data"], "row_data 不能为空 dict"
+    assert res0["row_data"]["编号"] == "A1"
+    assert res0["row_data"]["X值"] == 1.0
+    assert res0["row_data"]["备注"] == "first"
+
+    # 第 1 张（A2）应该是另一行
+    res1 = plot_handler.render_preview(preset, str(xlsx), row_index=1)
+    assert res1["row_data"]["编号"] == "A2"
+    assert res1["row_data"]["备注"] == "second"
+
+
 def test_plot_curves_render_preview_returns_base64_png(tmp_path) -> None:
     """端到端：写一个最小 xlsx + 最小预设 → 拿到非空 base64 PNG。"""
     import base64

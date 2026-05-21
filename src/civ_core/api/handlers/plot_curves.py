@@ -216,31 +216,25 @@ def render_preview(
     idx = min(max(0, row_index), len(jobs) - 1)
     job = jobs[idx]
     png_bytes = render_plot_to_bytes(job)
+
     # row_data：当前预览图对应的 Excel 行所有列值（让前端展示数据对照）
-    # 注意 jobs 已过滤了空 ID / 缺数据行，所以 idx 不能直接索引 rows；
-    # 通过 job.output_path.stem（=id 字符串）反查匹配的 row
-    row_id_str = job.output_path.stem
-    matched_row = _find_row_by_id(rows, preset_dict.get("id_column", ""), row_id_str)
+    # 反推保留的行 —— build_jobs 已过滤空 ID / 缺数据行，但行号信息
+    # 都在 summary 里；按"未被跳过"的顺序索引到第 idx 个，即与 jobs[idx] 对应
+    skipped_set: set[int] = set(summary.skipped_empty_id) | {
+        pair[0] for pair in summary.skipped_bad_data
+    }
+    # rows 是 0-based list，summary 的行号是 1-based；统一减 1
+    used_rows = [r for i, r in enumerate(rows) if (i + 1) not in skipped_set]
+    matched_row: dict | None = used_rows[idx] if idx < len(used_rows) else None
+
     return {
         "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         "mime": "image/png",
-        "row_id": row_id_str,
+        "row_id": job.output_path.stem,
         "title": job.title,
         "total_rows": len(jobs),
         "row_data": _jsonify_row(matched_row) if matched_row else {},
     }
-
-
-def _find_row_by_id(rows: list[dict], id_column: str, target_id: str) -> dict | None:
-    """按 build_jobs 里的 id 字符串规则反查 row（None/NaN 跳过；int float 去 .0）。"""
-    for row in rows:
-        raw = row.get(id_column)
-        if raw is None or (isinstance(raw, float) and raw != raw):
-            continue
-        s = str(int(raw)) if isinstance(raw, float) and raw.is_integer() else str(raw).strip()
-        if s == target_id:
-            return row
-    return None
 
 
 def _jsonify_row(row: dict) -> dict:

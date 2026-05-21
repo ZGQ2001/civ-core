@@ -48,7 +48,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
       {/* 顶部：计算类型 + 选 Excel + Sheet + 表头行 + 跑 */}
       <div className="px-6 pt-4 pb-3 border-b border-vscode-border space-y-2">
         <h1 className="text-base font-medium text-vscode-text flex items-center gap-2">
-          <i className="codicon codicon-calculator !text-[16px]" />
+          <i className="codicon codicon-symbol-method !text-[16px]" />
           数据处理
         </h1>
         <div className="flex items-center gap-2 flex-wrap">

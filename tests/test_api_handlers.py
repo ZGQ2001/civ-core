@@ -10,6 +10,7 @@ import pytest
 from civ_core.api import handlers
 from civ_core.api.handlers import files as files_handler
 from civ_core.api.handlers import leeb as leeb_handler
+from civ_core.api.handlers import pdf_tools as pdf_handler
 from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import workspace as ws_handler
 
@@ -406,3 +407,44 @@ def test_leeb_preview_excel_caps_max_rows(tmp_path) -> None:
 def test_leeb_preview_excel_exposes_in_all() -> None:
     """preview_excel 必须在 __all__ 里，否则 register_module 不会暴露成 RPC。"""
     assert "preview_excel" in leeb_handler.__all__
+
+
+# ── pdf_tools handler ─────────────────────────────────────
+def _make_blank_pdf(out_path: Path, n_pages: int) -> Path:
+    """造一个 n 页空白 PDF 供测试用。"""
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(n_pages):
+        writer.add_blank_page(width=595, height=842)
+    with out_path.open("wb") as fh:
+        writer.write(fh)
+    writer.close()
+    return out_path
+
+
+def test_pdf_inspect_basic(tmp_path) -> None:
+    """inspect 返每个 PDF 的页数 + 大小 + 合计 total_pages。"""
+    a = _make_blank_pdf(tmp_path / "a.pdf", n_pages=3)
+    b = _make_blank_pdf(tmp_path / "b.pdf", n_pages=7)
+    res = pdf_handler.inspect([str(a), str(b)])
+    assert res["total_pages"] == 10
+    assert len(res["files"]) == 2
+    assert res["files"][0]["pages"] == 3
+    assert res["files"][1]["pages"] == 7
+    assert res["files"][0]["size_kb"] > 0
+    assert "error" not in res["files"][0]
+
+
+def test_pdf_inspect_missing_file(tmp_path) -> None:
+    """单个文件不存在 → 带 error 字段返回，不影响其他文件统计。"""
+    a = _make_blank_pdf(tmp_path / "a.pdf", n_pages=2)
+    res = pdf_handler.inspect([str(a), str(tmp_path / "ghost.pdf")])
+    assert res["total_pages"] == 2  # 只算成功的
+    assert "error" in res["files"][1]
+    assert "不存在" in res["files"][1]["error"]
+    assert "pages" not in res["files"][1]
+
+
+def test_pdf_inspect_exposes_in_all() -> None:
+    assert "inspect" in pdf_handler.__all__

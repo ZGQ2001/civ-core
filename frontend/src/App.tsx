@@ -31,11 +31,12 @@ import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
 import { DataProcessingProvider, DataProcessingSettingsForm } from "./tools/data_processing";
+import { PdfToolsProvider, PdfToolsSettingsForm } from "./tools/pdf_tools";
 import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
-  { id: "data_processing", icon: "calculator", tooltip: "数据处理" },
+  { id: "data_processing", icon: "symbol-method", tooltip: "数据处理" },
   { id: "pdf_tools", icon: "file-pdf", tooltip: "PDF 工具" },
   { id: "word2pdf", icon: "file-binary", tooltip: "Word → PDF" },
 ];
@@ -206,6 +207,16 @@ export default function App() {
           },
         ]
       : []),
+    ...(activeToolId === "pdf_tools"
+      ? [
+          {
+            id: "settings",
+            label: "调参",
+            icon: "settings-gear",
+            node: <PdfToolsSettingsForm />,
+          },
+        ]
+      : []),
     { id: "agent", label: "AI 助手", icon: "hubot", node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
@@ -213,6 +224,7 @@ export default function App() {
   return (
     <PlotCurvesProvider>
       <DataProcessingProvider>
+      <PdfToolsProvider>
       <div className="flex h-screen w-screen flex-col">
         <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
@@ -308,6 +320,7 @@ export default function App() {
           rightPanelAvailable={rightAvailable}
         />
       </div>
+      </PdfToolsProvider>
       </DataProcessingProvider>
     </PlotCurvesProvider>
   );

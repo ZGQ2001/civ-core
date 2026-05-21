@@ -3,7 +3,7 @@
  * appendOutput 透传给工具页，工具页跑完往底部 Panel 输出 Tab 写日志摘要。
  */
 import { DataProcessingPage } from "../tools/data_processing";
-import { PdfToolsTool } from "../tools/PdfToolsTool";
+import { PdfToolsPage } from "../tools/pdf_tools";
 import { Placeholder } from "../tools/Placeholder";
 import { PlotCurvesPage } from "../tools/plot_curves";
 import { Word2PdfTool } from "../tools/Word2PdfTool";
@@ -33,7 +33,7 @@ function renderTool(
     case "data_processing":
       return <DataProcessingPage appendOutput={appendOutput} />;
     case "pdf_tools":
-      return <PdfToolsTool appendOutput={appendOutput} />;
+      return <PdfToolsPage appendOutput={appendOutput} />;
     case "word2pdf":
       return <Word2PdfTool appendOutput={appendOutput} />;
     case "settings":

@@ -5,8 +5,9 @@
  * T2 阶段：纯前端骨架，无 Tauri/Python 接入；工作区路径暂时 null。
  * T3 阶段：接 Tauri rpc_call 调 Python sidecar，文件树/工作区都打通。
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
 import { EditorArea } from "./components/EditorArea";
@@ -31,6 +32,8 @@ export default function App() {
   const [activeToolId, setActiveToolId] = useState<string>("plot_curves");
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [sidecarStatus, setSidecarStatus] = useState<string>("连接中…");
+  // 递增即触发 FileTree 整树重挂（刷新 / 全部折叠共用这一把锤子）
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const toolLabel =
     ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
@@ -48,6 +51,53 @@ export default function App() {
       }
     })();
   }, []);
+
+  // 打开文件夹：dialog 选目录 → workspace.set 持久化 → 更新 state
+  const handleOpenFolder = useCallback(async () => {
+    try {
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: "选择工作区文件夹",
+      });
+      if (typeof selected !== "string") return; // 用户取消
+      await rpc("workspace.set", { path: selected });
+      setWorkspacePath(selected);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      console.error("打开文件夹失败:", e);
+      alert(`打开文件夹失败：${String(e)}`);
+    }
+  }, []);
+
+  // 新建标准结构：dialog 选父目录 → prompt 输入项目名 → workspace.create_standard
+  // 注意：window.prompt 在 Tauri webview 里能用但样式不可控；T5+ 可换自定义 modal
+  const handleNewWorkspace = useCallback(async () => {
+    try {
+      const parent = await openDialog({
+        directory: true,
+        multiple: false,
+        title: "选择父目录（在其下创建标准项目结构）",
+      });
+      if (typeof parent !== "string") return;
+      const name = window.prompt("输入项目名（将在父目录下创建同名子文件夹 + 标准骨架）：");
+      if (!name || !name.trim()) return;
+      const res = await rpc<{ ok: boolean; path: string }>(
+        "workspace.create_standard",
+        { parent_dir: parent, name: name.trim() },
+      );
+      await rpc("workspace.set", { path: res.path });
+      setWorkspacePath(res.path);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      console.error("新建工作区失败:", e);
+      alert(`新建工作区失败：${String(e)}`);
+    }
+  }, []);
+
+  const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  // 折叠所有：第一版用整树重挂复用 refresh 路径；后续要保留 expanded 再细化
+  const handleCollapseAll = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   const workspaceName = workspacePath
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
@@ -76,10 +126,11 @@ export default function App() {
           >
             <SideBar
               workspacePath={workspacePath}
-              onOpenFolder={() => console.log("TODO: open folder")}
-              onNewWorkspace={() => console.log("TODO: new workspace")}
-              onRefresh={() => console.log("TODO: refresh")}
-              onCollapseAll={() => console.log("TODO: collapse all")}
+              refreshKey={refreshKey}
+              onOpenFolder={handleOpenFolder}
+              onNewWorkspace={handleNewWorkspace}
+              onRefresh={handleRefresh}
+              onCollapseAll={handleCollapseAll}
             />
           </Panel>
           <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />

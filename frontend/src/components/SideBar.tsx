@@ -4,9 +4,12 @@
  * 内容区：文件树 / empty state（B1 阶段是 placeholder，T4 接 Python 文件树）
  */
 import { cn } from "../lib/cn";
+import { FileTree } from "./FileTree";
 
 interface Props {
   workspacePath: string | null;
+  /** 由父组件递增；变化时 FileTree 整树重挂（实现刷新/全部折叠） */
+  refreshKey: number;
   onOpenFolder: () => void;
   onNewWorkspace: () => void;
   onRefresh: () => void;
@@ -15,6 +18,7 @@ interface Props {
 
 export function SideBar({
   workspacePath,
+  refreshKey,
   onOpenFolder,
   onNewWorkspace,
   onRefresh,
@@ -38,7 +42,8 @@ export function SideBar({
       {/* 内容 */}
       <div className="flex-1 overflow-auto">
         {workspacePath ? (
-          <FileTreePlaceholder workspacePath={workspacePath} />
+          // key 让 refreshKey/路径变化时整棵树重挂
+          <FileTree key={`${workspacePath}::${refreshKey}`} rootPath={workspacePath} />
         ) : (
           <EmptyState onOpenFolder={onOpenFolder} onNewWorkspace={onNewWorkspace} />
         )}
@@ -106,14 +111,3 @@ function EmptyState({
   );
 }
 
-// T4 阶段会替换为真实 QFileSystemModel 等价物（调 files.list_dir）
-function FileTreePlaceholder({ workspacePath }: { workspacePath: string }) {
-  return (
-    <div className="p-2 text-xs text-vscode-text-dim">
-      <div className="mb-1 font-semibold uppercase text-vscode-text">
-        {workspacePath.split(/[\\/]/).pop() || workspacePath}
-      </div>
-      <div className="text-vscode-text-faint">（文件树接 Python 后端中…）</div>
-    </div>
-  );
-}

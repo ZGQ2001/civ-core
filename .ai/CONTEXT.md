@@ -6,9 +6,18 @@
 
 ## 当前焦点（2026-05-21）
 
-**plot_curves 体验完整闭环：一预设一曲线 + 上下对照 + 数据点 form + 行号跳转。** 用户反馈一轮密集修复后，UI 已可用。
+**T5 工具页统一交互范式（中间预览 + 右侧参数）— 1/3 已完成（leeb）**。pdf_tools / word2pdf 待迁。
 
 布局：`ActivityBar | SideBar(全高) | (Editor + 底部输出 Panel) | RightPanel(全高，tab 化)`。
+
+leeb_hardness 工具页（已对齐 plot_curves 范式）：
+- 三件套：`controller.tsx`（Provider + useLeeb hook）/ `Page.tsx`（顶部条 + 中间表格预览 + 底部结果）/ `SettingsForm.tsx`（右侧调参：输出路径 + 默认角度）
+- 顶部条：选 Excel / Sheet 下拉（preview_excel 一并返）/ 表头行 / 开始计算按钮
+- 中间预览：前 50 行表格（深色斑马纹、表头 sticky、`previewShownRows / previewTotalRows` 提示）
+- 后端新加 `leeb.preview_excel(path, sheet, header_row, max_rows)` —— sheets + headers + rows + total_rows，4 个 pytest 覆盖
+- 公共组件抽：`tools/_shared/forms.tsx`（Field / Picker / ResetBtn / RunBtn）—— 之前耦合在 LeebHardnessTool.tsx 末尾被 pdf/word2pdf 跨文件 import
+
+plot_curves 工具页（中间预览 + 右侧参数 范式）：
 
 plot_curves 工具页（中间预览 + 右侧参数 范式）：
 - 顶部操作行：Excel / Sheet 下拉（自动拉 list_sheets）/ 表头行 / 曲线 dropdown（业务 UI 命名"曲线"，code 还叫 preset）/ 曲线按钮组（新建 / 复制 / 重命名 / 删除 / 保存或另存为）/ 跑
@@ -36,7 +45,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ## 下一步候选（按价值排）
 
 1. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包
-2. **leeb/pdf/word2pdf 加输入预览 + 参数挪 RightPanel**：统一交互范式（中间预览 + 右侧参数）；3 个工具的预览分别是「读到的前 N 行表格」「已选 PDF 列表 + 页数」「已选 Word 列表 + 页数估算」
+2. **pdf/word2pdf 加输入预览 + 参数挪 RightPanel**（leeb 已完成）：剩 2 个工具的预览分别是「已选 PDF 列表 + 页数」「已选 Word 列表 + 页数估算」；后端各加 `pdf_tools.inspect` / `word2pdf.inspect` RPC
 3. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
 4. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
 5. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
@@ -70,7 +79,8 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 - ~~没有数据点增删 form~~ → CurvesTab 全量 accordion + PointsEditor 完成
 - ~~RightPanel 没 tab，没法预留 agent~~ → 已 tab 化，agent 占位 tab 已加
 - ~~UI 散布 emoji~~ → 前端 UI 已清；Python CLI / log / 注释里按"不动旧代码"暂留
-- `leeb/pdf/word2pdf` 工具页**还没用 RightPanel + 中间预览范式**，参数和操作都堆在 EditorArea 主区 — 候选 #2
+- ~~`leeb` 工具页没用 RightPanel + 中间预览范式~~ → 已迁
+- `pdf/word2pdf` 工具页**还没用 RightPanel + 中间预览范式**，参数和操作都堆在 EditorArea 主区 — 候选 #2
 - `points` 字段编辑要求用户懂 fixed_axis 概念（X 固定 vs Y 固定），不懂的人可能困惑 — 未来可加示意图或更友好的"按位置选点"
 - 「刷新」「全部折叠」共用 refreshKey 整树重挂，丢失 expanded 状态（VSCode refresh 应保留）
 - 「新建标准结构」/ 预设 CRUD 用 `window.prompt` / `confirm`（样式不可控）— 后续换自定义 modal + toast
@@ -94,6 +104,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 | `plot_curves.preflight` | 跑前预检列名匹配 |
 | `plot_curves.save_preset` / `delete_preset` / `rename_preset` / `copy_preset` | 用户预设 CRUD |
 | `leeb.run` | 里氏硬度 INSP-001 |
+| `leeb.preview_excel` | leeb 工具页前 N 行表格预览（含 sheets + headers + rows + total_rows） |
 | `pdf_tools.{merge,split_per_page,split_by_ranges}` | PDF 合并/拆分 |
 | `word2pdf.convert` | Word→PDF 批量（COM） |
 
@@ -106,7 +117,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ```bash
 cd frontend && npx tsc -b --noEmit        # TS 类型
 uv run --frozen ruff check .              # Python lint
-uv run --frozen pytest -q                 # 测试（当前 311 passed）
+uv run --frozen pytest -q                 # 测试（当前 315 passed）
 uv run --frozen python scripts/healthcheck.py  # 6 项冒烟
 ```
 

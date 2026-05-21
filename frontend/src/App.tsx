@@ -30,6 +30,7 @@ import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
+import { LeebHardnessProvider, LeebHardnessSettingsForm } from "./tools/leeb_hardness";
 import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
 
 const TOP_TOOLS: ActivityItem[] = [
@@ -195,12 +196,23 @@ export default function App() {
           },
         ]
       : []),
+    ...(activeToolId === "leeb_hardness"
+      ? [
+          {
+            id: "settings",
+            label: "调参",
+            icon: "settings-gear",
+            node: <LeebHardnessSettingsForm />,
+          },
+        ]
+      : []),
     { id: "agent", label: "AI 助手", icon: "hubot", node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
 
   return (
     <PlotCurvesProvider>
+      <LeebHardnessProvider>
       <div className="flex h-screen w-screen flex-col">
         <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
@@ -296,6 +308,7 @@ export default function App() {
           rightPanelAvailable={rightAvailable}
         />
       </div>
+      </LeebHardnessProvider>
     </PlotCurvesProvider>
   );
 }

@@ -8,7 +8,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 
 import { cn } from "../lib/cn";
 import { rpc } from "../lib/rpc";
-import { Field, Picker, RunBtn } from "./LeebHardnessTool";
+import { Field, Picker, RunBtn } from "./_shared/forms";
 
 type Mode = "merge" | "split_per_page" | "split_by_ranges";
 

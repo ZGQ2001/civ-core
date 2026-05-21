@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 
 import { rpc } from "../lib/rpc";
-import { Field, Picker, RunBtn } from "./LeebHardnessTool";
+import { Field, Picker, RunBtn } from "./_shared/forms";
 
 interface ConvertRes {
   written: string[];

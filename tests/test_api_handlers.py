@@ -9,6 +9,7 @@ import pytest
 
 from civ_core.api import handlers
 from civ_core.api.handlers import files as files_handler
+from civ_core.api.handlers import leeb as leeb_handler
 from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import workspace as ws_handler
 
@@ -354,3 +355,54 @@ def test_plot_curves_run_default_output_dir(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(ph, "run_plot_curves", fake_run)
     ph.run(excel_path=str(excel), preset="x")  # output_dir 省略
     assert captured["output_dir"] == excel.parent / "曲线图"
+
+
+# ── leeb handler ──────────────────────────────────────────
+def _make_leeb_preview_xlsx(path: Path, n_rows: int = 5) -> None:
+    """造一个最小可读 xlsx：1 行表头 + n 行数据。"""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.append(["构件编号", "测点1", "测点2", "备注"])
+    for i in range(n_rows):
+        ws.append([f"G{i + 1}", 720.0 + i, 715.0 + i, ""])
+    wb.save(str(path))
+
+
+def test_leeb_preview_excel_basic(tmp_path) -> None:
+    """preview_excel 返 sheets + 实际 sheet 名 + headers + 截断 rows + 总行数。"""
+    xlsx = tmp_path / "data.xlsx"
+    _make_leeb_preview_xlsx(xlsx, n_rows=3)
+    res = leeb_handler.preview_excel(str(xlsx))
+    assert isinstance(res["sheets"], list)
+    assert res["sheet"] == res["sheets"][0]
+    assert res["headers"] == ["构件编号", "测点1", "测点2", "备注"]
+    assert res["total_rows"] == 3
+    assert res["shown_rows"] == 3
+    assert res["rows"][0]["构件编号"] == "G1"
+    assert res["rows"][0]["测点1"] == 720.0
+
+
+def test_leeb_preview_excel_sheet_fallback(tmp_path) -> None:
+    """传不存在的 sheet → 回退到第一个，不抛错。"""
+    xlsx = tmp_path / "data.xlsx"
+    _make_leeb_preview_xlsx(xlsx, n_rows=1)
+    res = leeb_handler.preview_excel(str(xlsx), sheet="不存在的sheet")
+    assert res["sheet"] == res["sheets"][0]
+
+
+def test_leeb_preview_excel_caps_max_rows(tmp_path) -> None:
+    """max_rows 截断生效，total_rows 仍为真实总数。"""
+    xlsx = tmp_path / "data.xlsx"
+    _make_leeb_preview_xlsx(xlsx, n_rows=50)
+    res = leeb_handler.preview_excel(str(xlsx), max_rows=10)
+    assert res["total_rows"] == 50
+    assert res["shown_rows"] == 10
+    assert len(res["rows"]) == 10
+
+
+def test_leeb_preview_excel_exposes_in_all() -> None:
+    """preview_excel 必须在 __all__ 里，否则 register_module 不会暴露成 RPC。"""
+    assert "preview_excel" in leeb_handler.__all__

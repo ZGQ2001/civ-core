@@ -8,13 +8,20 @@ export interface AxisSpec {
   log?: boolean;
 }
 
+export interface PointDef {
+  /** 固定轴：'x' 表示该点横坐标固定（fixed_value），纵坐标从 var_column 列读 */
+  fixed_axis: "x" | "y";
+  fixed_value: number;
+  var_column: string;
+}
+
 export interface CurveDef {
   name: string;
   color: string;
   marker?: string;
   linewidth?: number;
   markersize?: number;
-  points: unknown[];
+  points: PointDef[];
 }
 
 export interface PlotPreset {

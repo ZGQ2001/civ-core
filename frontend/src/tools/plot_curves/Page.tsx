@@ -129,16 +129,16 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             onChange={(e) => c.setPreset(e.target.value)}
             disabled={c.presets.length === 0}
             title={
-            c.currentSource === "system"
-              ? '🔒 系统预设（只读，可"另存为"再改）'
-              : "✏️ 用户预设（可改可删）"
-          }
+              c.currentSource === "system"
+                ? '系统预设（只读，可"另存为"再改）'
+                : "用户预设（可改可删）"
+            }
             className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
           >
             {c.presets.length === 0 && <option value="">（无可用）</option>}
             {c.presets.map((p) => (
               <option key={p} value={p}>
-                {c.presetSources[p] === "system" ? "🔒 " : "✏️ "}
+                {c.presetSources[p] === "system" ? "[系统] " : "[我的] "}
                 {p}
               </option>
             ))}
@@ -387,6 +387,25 @@ function PresetCrudButtons() {
   const c = usePlotCurves();
   const isUser = c.currentSource === "user";
 
+  const handleNewBlank = async () => {
+    const name = window.prompt("新建空预设；输入名字：", "新预设");
+    if (!name?.trim()) return;
+    // 一个最小可用的空模板：所有必填字段就位，curves 留空让用户在 form 里加
+    const blank = {
+      id_column: "",
+      filename_template: "{id}.png",
+      title_template: "{id}",
+      x_axis: { label: "X", range: null },
+      y_axis: { label: "Y", range: null },
+      curves: [],
+    };
+    try {
+      await c.savePreset(name.trim(), blank as never);
+    } catch (e) {
+      alert(`新建失败：${String(e)}`);
+    }
+  };
+
   const handleSave = async () => {
     if (!c.effectivePreset || !c.preset) return;
     // system 预设 + 已编辑 → 提示"另存为"；其他情况直接覆盖到用户预设
@@ -461,9 +480,10 @@ function PresetCrudButtons() {
           {c.currentSource === "system" ? "另存为…" : "保存"}
         </button>
       )}
-      <IconBtn icon="copy" title="复制为新预设" onClick={handleCopy} />
-      <IconBtn icon="edit" title={isUser ? "重命名" : "🔒 系统预设不可改名"} onClick={handleRename} disabled={!isUser} />
-      <IconBtn icon="trash" title={isUser ? "删除" : "🔒 系统预设不可删"} onClick={handleDelete} disabled={!isUser} danger />
+      <IconBtn icon="new-file" title="新建空预设（从零开始）" onClick={handleNewBlank} />
+      <IconBtn icon="copy" title="复制当前为新预设（保留所有字段）" onClick={handleCopy} />
+      <IconBtn icon="edit" title={isUser ? "重命名" : "系统预设不可改名"} onClick={handleRename} disabled={!isUser} />
+      <IconBtn icon="trash" title={isUser ? "删除" : "系统预设不可删"} onClick={handleDelete} disabled={!isUser} danger />
     </div>
   );
 }

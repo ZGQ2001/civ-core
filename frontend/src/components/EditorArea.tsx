@@ -2,8 +2,11 @@
  * EditorArea：按 activeToolId 路由到各工具页。
  * appendOutput 透传给工具页，工具页跑完往底部 Panel 输出 Tab 写日志摘要。
  */
+import { LeebHardnessTool } from "../tools/LeebHardnessTool";
+import { PdfToolsTool } from "../tools/PdfToolsTool";
 import { Placeholder } from "../tools/Placeholder";
 import { PlotCurvesTool } from "../tools/PlotCurvesTool";
+import { Word2PdfTool } from "../tools/Word2PdfTool";
 
 interface Props {
   activeToolId: string | null;
@@ -28,11 +31,11 @@ function renderTool(
     case "plot_curves":
       return <PlotCurvesTool appendOutput={appendOutput} />;
     case "leeb_hardness":
-      return <Placeholder icon="symbol-numeric" label={label ?? "里氏硬度"} detail="T5.2 接入" />;
+      return <LeebHardnessTool appendOutput={appendOutput} />;
     case "pdf_tools":
-      return <Placeholder icon="file-pdf" label={label ?? "PDF 工具"} detail="T5.3 接入" />;
+      return <PdfToolsTool appendOutput={appendOutput} />;
     case "word2pdf":
-      return <Placeholder icon="file-binary" label={label ?? "Word → PDF"} detail="T5.4 接入" />;
+      return <Word2PdfTool appendOutput={appendOutput} />;
     case "settings":
       return <Placeholder icon="settings-gear" label={label ?? "设置"} detail="后续接入" />;
     default:

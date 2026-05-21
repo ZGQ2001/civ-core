@@ -422,6 +422,7 @@ def run_plot_curves(
     presets_path: Path | str | None = None,
     header_row: int = 1,
     progress_cb: Callable[[int, int], None] | None = None,
+    preset_override: dict[str, Any] | None = None,
 ) -> RunResult:
     """工具入口：读 Excel → 套预设 → 批量出 PNG。
 
@@ -439,6 +440,9 @@ def run_plot_curves(
       progress_cb    可选回调 (done, total)，每张图渲染后调一次。
                      UI 用它把进度信号发回主线程；CLI/脚本可不传，默认 no-op。
                      回调内任何异常都会被吞，不打断批量。
+      preset_override 完整覆盖选中的预设字典（UI"工具设置"Tab 编辑后传进来）。
+                     None=用预设库里的原始预设；给值=完全替换，不做 merge
+                     （UI 拿的是完整预设 JSON，编辑回传也是完整 JSON，无歧义）。
     """
     excel = Path(excel_path)
     out_dir = Path(output_dir)
@@ -467,8 +471,11 @@ def run_plot_curves(
                 f"预设 {preset_name!r} 不存在",
                 hint=f"可用预设：{get_preset_names(presets)}",
             )
-        preset = presets[preset_name]
-        log.info("   ↳ 选用预设: %s", preset_name)
+        preset = preset_override if preset_override is not None else presets[preset_name]
+        if preset_override is not None:
+            log.info("   ↳ 选用预设: %s（UI 编辑覆盖）", preset_name)
+        else:
+            log.info("   ↳ 选用预设: %s", preset_name)
 
         log.info("📊 读取 Excel: %s  Sheet: %s", excel, sheet_name or "<默认第一个>")
         rows = read_rows(excel, sheet_name, header_row=header_row)

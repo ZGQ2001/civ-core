@@ -15,6 +15,7 @@ import { rpc } from "../lib/rpc";
 interface PresetsRes {
   presets: string[];
   default: string | null;
+  details: Record<string, unknown>;
 }
 
 interface FailedItem {
@@ -42,6 +43,7 @@ interface Props {
 
 export function PlotCurvesTool({ appendOutput }: Props = {}) {
   const [presets, setPresets] = useState<string[]>([]);
+  const [presetDetails, setPresetDetails] = useState<Record<string, unknown>>({});
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const [preset, setPreset] = useState<string>("");
   const [excelPath, setExcelPath] = useState<string>("");
@@ -51,19 +53,36 @@ export function PlotCurvesTool({ appendOutput }: Props = {}) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunRes | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  // 预设 JSON 编辑：null=用原始预设；string=用户编辑后的 JSON 文本（跑时 parse）
+  const [presetJsonEdit, setPresetJsonEdit] = useState<string | null>(null);
+  const [jsonParseError, setJsonParseError] = useState<string | null>(null);
 
-  // 启动时拉一次预设列表
+  // 启动时拉一次预设列表（含完整详情）
   useEffect(() => {
     (async () => {
       try {
         const r = await rpc<PresetsRes>("plot_curves.list_presets");
         setPresets(r.presets);
+        setPresetDetails(r.details);
         if (r.default) setPreset(r.default);
       } catch (e) {
         setPresetLoadError(String(e));
       }
     })();
   }, []);
+
+  // 切换预设时丢弃之前的编辑（避免 A 预设的编辑跑到 B 预设上）
+  useEffect(() => {
+    setPresetJsonEdit(null);
+    setJsonParseError(null);
+  }, [preset]);
+
+  const currentPresetJson = useMemo(
+    () => (preset && presetDetails[preset] ? JSON.stringify(presetDetails[preset], null, 2) : ""),
+    [preset, presetDetails],
+  );
+  const edited = presetJsonEdit !== null;
+  const editorValue = presetJsonEdit ?? currentPresetJson;
 
   const excelDir = useMemo(() => {
     if (!excelPath) return "";
@@ -107,6 +126,18 @@ export function PlotCurvesTool({ appendOutput }: Props = {}) {
     setRunning(true);
     setRunError(null);
     setResult(null);
+    // 若用户编辑过预设 JSON，先 parse；失败拦掉别白跑
+    let override: unknown = undefined;
+    if (presetJsonEdit !== null) {
+      try {
+        override = JSON.parse(presetJsonEdit);
+        setJsonParseError(null);
+      } catch (e) {
+        setJsonParseError(String(e));
+        setRunning(false);
+        return;
+      }
+    }
     try {
       const params: Record<string, unknown> = {
         excel_path: excelPath,
@@ -115,6 +146,7 @@ export function PlotCurvesTool({ appendOutput }: Props = {}) {
       };
       if (sheet.trim()) params.sheet = sheet.trim();
       if (outputDir.trim()) params.output_dir = outputDir.trim();
+      if (override !== undefined) params.preset_override = override;
       const res = await rpc<RunRes>("plot_curves.run", params);
       setResult(res);
       // 把摘要写到底部 Panel 输出 Tab
@@ -139,7 +171,7 @@ export function PlotCurvesTool({ appendOutput }: Props = {}) {
     } finally {
       setRunning(false);
     }
-  }, [canRun, excelPath, preset, sheet, headerRow, outputDir, appendOutput]);
+  }, [canRun, excelPath, preset, sheet, headerRow, outputDir, presetJsonEdit, appendOutput]);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -237,7 +269,55 @@ export function PlotCurvesTool({ appendOutput }: Props = {}) {
             {running ? "正在批量出图…" : "开始批量出图"}
           </button>
           {!excelPath && <span className="text-xs text-vscode-text-dim">请先选 Excel</span>}
+          {edited && (
+            <span className="text-xs text-yellow-400 flex items-center gap-1">
+              <i className="codicon codicon-edit !text-[12px]" />
+              已编辑预设（跑时用编辑后版本）
+            </span>
+          )}
         </div>
+
+        {/* 调参：直接编辑当前预设的 JSON。要 form 的话以后再封 */}
+        {preset && (
+          <details className="border border-vscode-border rounded-[2px]">
+            <summary className="cursor-pointer px-3 py-2 text-xs text-vscode-text-dim hover:text-white flex items-center gap-2">
+              <i className="codicon codicon-settings !text-[14px]" />
+              调曲线参数（编辑当前预设的 JSON）
+              {edited && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPresetJsonEdit(null);
+                    setJsonParseError(null);
+                  }}
+                  className="ml-auto text-vscode-focus hover:underline"
+                >
+                  恢复默认
+                </button>
+              )}
+            </summary>
+            <div className="border-t border-vscode-border p-3 space-y-2">
+              <div className="text-[11px] text-vscode-text-faint">
+                可改字段：title_template / x_axis / y_axis / curves[].color/linewidth/markersize 等。
+                编辑只在本次运行生效，不会写回预设库。
+              </div>
+              <textarea
+                value={editorValue}
+                onChange={(e) => setPresetJsonEdit(e.target.value)}
+                spellCheck={false}
+                rows={16}
+                className="w-full font-mono text-[12px] bg-vscode-input border border-vscode-border px-2 py-1 text-vscode-text rounded-[2px] resize-y"
+              />
+              {jsonParseError && (
+                <div className="text-xs text-red-400">
+                  <i className="codicon codicon-error !text-[12px] mr-1" />
+                  JSON 解析失败：{jsonParseError}
+                </div>
+              )}
+            </div>
+          </details>
+        )}
       </div>
 
       {/* 结果区 */}

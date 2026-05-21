@@ -23,21 +23,40 @@ from civ_core.core.plot_curves import (
     run_plot_curves,
 )
 
-__all__ = ["list_presets", "list_sheets", "run", "preflight", "render_preview"]
+__all__ = [
+    "list_presets",
+    "list_sheets",
+    "run",
+    "preflight",
+    "render_preview",
+    "save_preset",
+    "delete_preset",
+    "rename_preset",
+    "copy_preset",
+]
 
 
 def list_presets() -> dict:
-    """列出可用预设 + 每个预设的完整 JSON 详情。
+    """列出可用预设 + 详情 + 来源（system / user）。
 
-    details 字段让 UI"工具设置"Tab 不必再二次 RPC 拿详情；缺点是返回体大，
-    但预设库本身就几个 KB，可接受。
+    sources 字段让前端判断按钮可点性：
+      - system 预设：只能"复制"，不能改名/删
+      - user 预设：可改名/删，可"另存为"
     """
-    presets = load_presets()
-    names = get_preset_names(presets)
+    from civ_core.infra_io.preset_manager import (
+        PresetSource,
+        load_merged_presets,
+    )
+
+    entries = load_merged_presets("plot_curves")
+    presets = {e.name: e.data for e in entries}
+    names = [e.name for e in entries]
+    sources = {e.name: ("user" if e.source == PresetSource.USER else "system") for e in entries}
     return {
         "presets": names,
         "default": names[0] if names else None,
-        "details": {name: presets[name] for name in names},
+        "details": presets,
+        "sources": sources,
     }
 
 
@@ -81,6 +100,38 @@ def run(
         },
         "output_dir": str(out_dir),
     }
+
+
+def save_preset(name: str, data: dict[str, Any]) -> dict:
+    """保存（新增或覆盖）一条用户预设。系统预设同名时该用户预设会在合并时覆盖之。"""
+    from civ_core.infra_io.preset_manager import save_user_preset
+
+    save_user_preset(name, data, tool="plot_curves")
+    return {"ok": True, "name": name}
+
+
+def delete_preset(name: str) -> dict:
+    """删除一条**用户**预设。系统预设无法删（preset_manager 会抛 PresetError）。"""
+    from civ_core.infra_io.preset_manager import delete_user_preset
+
+    delete_user_preset(name, tool="plot_curves")
+    return {"ok": True, "name": name}
+
+
+def rename_preset(old_name: str, new_name: str) -> dict:
+    """重命名一条**用户**预设（系统预设需先复制再删除）。"""
+    from civ_core.infra_io.preset_manager import rename_user_preset
+
+    rename_user_preset(old_name, new_name, tool="plot_curves")
+    return {"ok": True, "old_name": old_name, "new_name": new_name}
+
+
+def copy_preset(source_name: str, new_name: str) -> dict:
+    """把任一预设（系统或用户）复制为用户预设的新条目。"""
+    from civ_core.infra_io.preset_manager import copy_system_to_user
+
+    copy_system_to_user(source_name, new_name, tool="plot_curves")
+    return {"ok": True, "source": source_name, "new_name": new_name}
 
 
 def list_sheets(excel_path: str) -> dict:

@@ -126,13 +126,22 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             value={c.preset}
             onChange={(e) => c.setPreset(e.target.value)}
             disabled={c.presets.length === 0}
+            title={
+            c.currentSource === "system"
+              ? '🔒 系统预设（只读，可"另存为"再改）'
+              : "✏️ 用户预设（可改可删）"
+          }
             className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
           >
             {c.presets.length === 0 && <option value="">（无可用）</option>}
             {c.presets.map((p) => (
-              <option key={p} value={p}>{p}</option>
+              <option key={p} value={p}>
+                {c.presetSources[p] === "system" ? "🔒 " : "✏️ "}
+                {p}
+              </option>
             ))}
           </select>
+          <PresetCrudButtons />
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -327,6 +336,125 @@ function PreviewPane() {
         提示：在「底部 Panel · 工具设置」里调参，会实时反映到这张预览。
       </div>
     </div>
+  );
+}
+
+/** 预设增删改按钮组（在顶部预设 dropdown 旁边）。 */
+function PresetCrudButtons() {
+  const c = usePlotCurves();
+  const isUser = c.currentSource === "user";
+
+  const handleSave = async () => {
+    if (!c.effectivePreset || !c.preset) return;
+    // system 预设 + 已编辑 → 提示"另存为"；其他情况直接覆盖到用户预设
+    if (c.currentSource === "system") {
+      const name = window.prompt(
+        `当前预设「${c.preset}」是系统预设（只读）。\n输入新名字另存为用户预设：`,
+        `${c.preset}（我的）`,
+      );
+      if (!name?.trim()) return;
+      try {
+        await c.savePreset(name.trim(), c.effectivePreset);
+        alert(`已保存为用户预设：${name.trim()}`);
+      } catch (e) {
+        alert(`保存失败：${String(e)}`);
+      }
+    } else {
+      try {
+        await c.savePreset(c.preset, c.effectivePreset);
+        alert(`已保存到用户预设：${c.preset}`);
+      } catch (e) {
+        alert(`保存失败：${String(e)}`);
+      }
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!c.preset) return;
+    const name = window.prompt("复制为新预设；输入新名字：", `${c.preset}（副本）`);
+    if (!name?.trim()) return;
+    try {
+      await c.copyPreset(c.preset, name.trim());
+    } catch (e) {
+      alert(`复制失败：${String(e)}`);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!c.preset || !isUser) return;
+    const name = window.prompt(`重命名「${c.preset}」为：`, c.preset);
+    if (!name?.trim() || name.trim() === c.preset) return;
+    try {
+      await c.renamePreset(c.preset, name.trim());
+    } catch (e) {
+      alert(`重命名失败：${String(e)}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!c.preset || !isUser) return;
+    if (!window.confirm(`确定删除用户预设「${c.preset}」？此操作不可撤销。`)) return;
+    try {
+      await c.deletePreset(c.preset);
+    } catch (e) {
+      alert(`删除失败：${String(e)}`);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      {c.edited && (
+        <button
+          type="button"
+          onClick={handleSave}
+          title={
+            c.currentSource === "system"
+              ? '系统预设只读 — 将弹出"另存为"'
+              : "保存修改到用户预设"
+          }
+          className="px-2 py-1 text-xs bg-vscode-button hover:bg-vscode-button-hover text-white rounded-[2px] flex items-center gap-1"
+        >
+          <i className="codicon codicon-save !text-[12px]" />
+          {c.currentSource === "system" ? "另存为…" : "保存"}
+        </button>
+      )}
+      <IconBtn icon="copy" title="复制为新预设" onClick={handleCopy} />
+      <IconBtn icon="edit" title={isUser ? "重命名" : "🔒 系统预设不可改名"} onClick={handleRename} disabled={!isUser} />
+      <IconBtn icon="trash" title={isUser ? "删除" : "🔒 系统预设不可删"} onClick={handleDelete} disabled={!isUser} danger />
+    </div>
+  );
+}
+
+function IconBtn({
+  icon,
+  title,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: string;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "h-7 w-7 flex items-center justify-center rounded-[2px] border border-vscode-border transition-colors",
+        disabled
+          ? "text-vscode-text-faint cursor-not-allowed opacity-50"
+          : danger
+            ? "text-vscode-text-dim hover:text-red-400 hover:bg-vscode-hover"
+            : "text-vscode-text-dim hover:text-white hover:bg-vscode-hover",
+      )}
+    >
+      <i className={`codicon codicon-${icon} !text-[14px]`} />
+    </button>
   );
 }
 

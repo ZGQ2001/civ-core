@@ -17,10 +17,13 @@ import type { PlotPreset, PreviewRes, RunRes } from "./types";
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
+type PresetSource = "system" | "user";
+
 interface State {
   // 静态预设库
   presets: string[];
   presetDetails: Record<string, PlotPreset>;
+  presetSources: Record<string, PresetSource>;
   presetLoadError: string | null;
 
   // 当前 Excel 的 sheet 列表（选 Excel 后自动拉）
@@ -65,9 +68,20 @@ interface Actions {
   patchPreset: (updater: (p: PlotPreset) => PlotPreset) => void;
   resetPreset: () => void;
   run: () => Promise<void>;
+  // CRUD（操作完会自动 refresh 预设列表）
+  savePreset: (name: string, data: PlotPreset) => Promise<void>;
+  deletePreset: (name: string) => Promise<void>;
+  renamePreset: (oldName: string, newName: string) => Promise<void>;
+  copyPreset: (sourceName: string, newName: string) => Promise<void>;
+  reloadPresets: () => Promise<void>;
 }
 
-type Ctx = State & Actions & { edited: boolean; effectivePreset: PlotPreset | null };
+type Ctx = State &
+  Actions & {
+    edited: boolean;
+    effectivePreset: PlotPreset | null;
+    currentSource: PresetSource | null;
+  };
 
 const PlotCurvesContext = createContext<Ctx | null>(null);
 
@@ -80,6 +94,7 @@ export function usePlotCurves(): Ctx {
 export function PlotCurvesProvider({ children }: { children: React.ReactNode }) {
   const [presets, setPresets] = useState<string[]>([]);
   const [presetDetails, setPresetDetails] = useState<Record<string, PlotPreset>>({});
+  const [presetSources, setPresetSources] = useState<Record<string, PresetSource>>({});
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
 
   const [sheets, setSheets] = useState<string[]>([]);
@@ -109,23 +124,29 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   const [result, setResult] = useState<RunRes | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
-  // 启动拉预设
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await rpc<{
-          presets: string[];
-          default: string | null;
-          details: Record<string, PlotPreset>;
-        }>("plot_curves.list_presets");
-        setPresets(r.presets);
-        setPresetDetails(r.details);
-        if (r.default) setPreset(r.default);
-      } catch (e) {
-        setPresetLoadError(String(e));
-      }
-    })();
+  // 拉预设（启动 + CRUD 操作后调用）
+  const reloadPresets = useCallback(async () => {
+    try {
+      const r = await rpc<{
+        presets: string[];
+        default: string | null;
+        details: Record<string, PlotPreset>;
+        sources: Record<string, PresetSource>;
+      }>("plot_curves.list_presets");
+      setPresets(r.presets);
+      setPresetDetails(r.details);
+      setPresetSources(r.sources);
+      setPresetLoadError(null);
+      // 当前选中的预设如果没了 → 退回 default
+      setPreset((cur) => (cur && r.presets.includes(cur) ? cur : r.default ?? ""));
+    } catch (e) {
+      setPresetLoadError(String(e));
+    }
   }, []);
+
+  useEffect(() => {
+    void reloadPresets();
+  }, [reloadPresets]);
 
   // 切换预设 → 丢编辑、重置行号
   useEffect(() => {
@@ -168,6 +189,46 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
 
   const effectivePreset: PlotPreset | null = workingPreset ?? presetDetails[preset] ?? null;
   const edited = workingPreset !== null;
+  const currentSource: PresetSource | null = preset ? presetSources[preset] ?? null : null;
+
+  // CRUD —— 调完后 reload 确保前端拿到最新预设列表 + sources
+  const savePreset = useCallback(
+    async (name: string, data: PlotPreset) => {
+      await rpc("plot_curves.save_preset", { name, data });
+      await reloadPresets();
+      // 切到刚保存的，清掉 working override
+      setPreset(name);
+      setWorkingPreset(null);
+    },
+    [reloadPresets],
+  );
+
+  const deletePreset = useCallback(
+    async (name: string) => {
+      await rpc("plot_curves.delete_preset", { name });
+      await reloadPresets();
+    },
+    [reloadPresets],
+  );
+
+  const renamePreset = useCallback(
+    async (oldName: string, newName: string) => {
+      await rpc("plot_curves.rename_preset", { old_name: oldName, new_name: newName });
+      await reloadPresets();
+      // 切到新名
+      setPreset(newName);
+    },
+    [reloadPresets],
+  );
+
+  const copyPreset = useCallback(
+    async (sourceName: string, newName: string) => {
+      await rpc("plot_curves.copy_preset", { source_name: sourceName, new_name: newName });
+      await reloadPresets();
+      setPreset(newName);
+    },
+    [reloadPresets],
+  );
 
   const patchPreset: Actions["patchPreset"] = useCallback(
     (updater) => {
@@ -261,6 +322,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     () => ({
       presets,
       presetDetails,
+      presetSources,
       presetLoadError,
       sheets,
       sheetsLoading,
@@ -284,6 +346,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       runError,
       edited,
       effectivePreset,
+      currentSource,
       setPreset,
       setExcelPath,
       setSheet,
@@ -293,15 +356,21 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       patchPreset,
       resetPreset,
       run,
+      savePreset,
+      deletePreset,
+      renamePreset,
+      copyPreset,
+      reloadPresets,
     }),
     [
-      presets, presetDetails, presetLoadError,
+      presets, presetDetails, presetSources, presetLoadError,
       sheets, sheetsLoading, sheetsError,
       preset, excelPath, sheet, headerRow, outputDir, rowIndex,
       workingPreset, previewPng, previewError, previewLoading,
       previewTotal, previewTitle, previewRowId, previewRowData,
-      running, result, runError, edited, effectivePreset,
+      running, result, runError, edited, effectivePreset, currentSource,
       patchPreset, resetPreset, run,
+      savePreset, deletePreset, renamePreset, copyPreset, reloadPresets,
     ],
   );
 

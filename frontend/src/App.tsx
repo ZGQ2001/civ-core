@@ -30,12 +30,12 @@ import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
-import { LeebHardnessProvider, LeebHardnessSettingsForm } from "./tools/leeb_hardness";
+import { DataProcessingProvider, DataProcessingSettingsForm } from "./tools/data_processing";
 import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
-  { id: "leeb_hardness", icon: "symbol-numeric", tooltip: "里氏硬度" },
+  { id: "data_processing", icon: "calculator", tooltip: "数据处理" },
   { id: "pdf_tools", icon: "file-pdf", tooltip: "PDF 工具" },
   { id: "word2pdf", icon: "file-binary", tooltip: "Word → PDF" },
 ];
@@ -196,13 +196,13 @@ export default function App() {
           },
         ]
       : []),
-    ...(activeToolId === "leeb_hardness"
+    ...(activeToolId === "data_processing"
       ? [
           {
             id: "settings",
             label: "调参",
             icon: "settings-gear",
-            node: <LeebHardnessSettingsForm />,
+            node: <DataProcessingSettingsForm />,
           },
         ]
       : []),
@@ -212,7 +212,7 @@ export default function App() {
 
   return (
     <PlotCurvesProvider>
-      <LeebHardnessProvider>
+      <DataProcessingProvider>
       <div className="flex h-screen w-screen flex-col">
         <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
@@ -308,7 +308,7 @@ export default function App() {
           rightPanelAvailable={rightAvailable}
         />
       </div>
-      </LeebHardnessProvider>
+      </DataProcessingProvider>
     </PlotCurvesProvider>
   );
 }

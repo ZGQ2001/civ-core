@@ -2,7 +2,7 @@
  * EditorArea：按 activeToolId 路由到各工具页。
  * appendOutput 透传给工具页，工具页跑完往底部 Panel 输出 Tab 写日志摘要。
  */
-import { LeebHardnessPage } from "../tools/leeb_hardness";
+import { DataProcessingPage } from "../tools/data_processing";
 import { PdfToolsTool } from "../tools/PdfToolsTool";
 import { Placeholder } from "../tools/Placeholder";
 import { PlotCurvesPage } from "../tools/plot_curves";
@@ -30,8 +30,8 @@ function renderTool(
   switch (id) {
     case "plot_curves":
       return <PlotCurvesPage appendOutput={appendOutput} />;
-    case "leeb_hardness":
-      return <LeebHardnessPage appendOutput={appendOutput} />;
+    case "data_processing":
+      return <DataProcessingPage appendOutput={appendOutput} />;
     case "pdf_tools":
       return <PdfToolsTool appendOutput={appendOutput} />;
     case "word2pdf":

@@ -1,25 +1,25 @@
 /**
- * leeb_hardness 工具页主区：顶部操作行 + 中间「Excel 前 N 行表格预览」+ 底部结果区。
- * 所有状态通过 useLeeb context 拿；右侧参数（输出路径 / 默认角度）在 SettingsForm。
+ * data_processing 工具页主区：顶部操作行（含「计算类型」下拉）+ 中间 Excel 前 N 行预览 + 底部结果。
+ * 所有状态走 useDataProcessing；右侧参数（输出路径 / 默认角度 / 其他算法特定参数）在 SettingsForm。
  */
 import { useCallback } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 
 import { cn } from "../../lib/cn";
-import { useLeeb } from "./controller";
-import type { CellValue } from "./types";
+import { useDataProcessing } from "./controller";
+import { CALC_TYPE_LABELS, type CalcType, type CellValue } from "./types";
 
 interface Props {
   appendOutput?: (text: string) => void;
 }
 
-export function LeebHardnessPage({ appendOutput }: Props = {}) {
-  const c = useLeeb();
+export function DataProcessingPage({ appendOutput }: Props = {}) {
+  const c = useDataProcessing();
 
   const pickExcel = useCallback(async () => {
     const sel = await openDialog({
-      title: "选择里氏硬度 Excel",
+      title: "选择检测数据 Excel",
       multiple: false,
       filters: [{ name: "Excel", extensions: ["xlsx", "xls"] }],
     });
@@ -28,26 +28,42 @@ export function LeebHardnessPage({ appendOutput }: Props = {}) {
 
   const handleRun = useCallback(async () => {
     const res = await c.run();
+    const calcLabel = CALC_TYPE_LABELS[c.calcType];
     if (res) {
       appendOutput?.(
-        `[${new Date().toLocaleTimeString()}] leeb: ${res.batches} 批 / ${res.components} 构件 → ${res.output}`,
+        `[${new Date().toLocaleTimeString()}] ${calcLabel}: ${res.batches} 批 / ${res.components} 构件 → ${res.output}`,
       );
     } else if (c.runError) {
-      appendOutput?.(`[${new Date().toLocaleTimeString()}] leeb 失败: ${c.runError}`);
+      appendOutput?.(
+        `[${new Date().toLocaleTimeString()}] ${calcLabel} 失败: ${c.runError}`,
+      );
     }
   }, [c, appendOutput]);
 
   const canRun = !!c.excelPath && !c.running;
+  const calcOptions = Object.entries(CALC_TYPE_LABELS) as Array<[CalcType, string]>;
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶部：选 Excel + Sheet + 表头行 + 跑 */}
+      {/* 顶部：计算类型 + 选 Excel + Sheet + 表头行 + 跑 */}
       <div className="px-6 pt-4 pb-3 border-b border-vscode-border space-y-2">
         <h1 className="text-base font-medium text-vscode-text flex items-center gap-2">
-          <i className="codicon codicon-symbol-numeric !text-[16px]" />
-          里氏硬度 INSP-001
+          <i className="codicon codicon-calculator !text-[16px]" />
+          数据处理
         </h1>
         <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-xs text-vscode-text-dim">计算:</label>
+          <select
+            value={c.calcType}
+            onChange={(e) => c.setCalcType(e.target.value as CalcType)}
+            title="未来会有更多计算类型（钻芯法 / 回弹法 等）"
+            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
+          >
+            {calcOptions.map(([id, label]) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+          <span className="text-vscode-text-faint">·</span>
           <button
             type="button"
             onClick={pickExcel}
@@ -146,7 +162,7 @@ export function LeebHardnessPage({ appendOutput }: Props = {}) {
 }
 
 function PreviewPane() {
-  const c = useLeeb();
+  const c = useDataProcessing();
 
   if (!c.excelPath) {
     return (

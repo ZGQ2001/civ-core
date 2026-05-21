@@ -1,11 +1,18 @@
 /**
- * leeb_hardness 状态控制中心。和 plot_curves controller 同构：
- *   - 全状态 lift 到 Provider（Page 在主区 / SettingsForm 在右侧 RightPanel 共用同一份）
- *   - excelPath/sheet/headerRow 任一改 → 300ms debounce 调 leeb.preview_excel 拉前 N 行表格
- *   - run() 同步阻塞，结果存 result/runError；Page 顶部按钮触发
+ * data_processing 状态控制中心。整合"读 Excel → 走某种检测算法 → 写结果 Excel"流程。
+ *
+ * calcType: 计算类型 dropdown 切换；当前只有 "leeb"（里氏硬度），未来加钻芯/回弹等。
+ *   - 每种 calcType 的 RPC 方法和参数集不一样，但「读 Excel + 预览 + 跑」这套
+ *     状态是通用的；run() 内按 calcType 分支调对应 RPC。
+ *
+ * preview 走 leeb.preview_excel 通用读 Excel 前 N 行（headers/rows/total/sheets）；
+ * 这个方法和 calcType 无关，未来可改成 io.preview_xlsx 之类的中性命名，暂沿用。
  *
  * 设计选择：sheet 列表也走 preview_excel 一并返（省一次 RPC）；用户改 sheet 时再次调
  * preview_excel 用新 sheet 重读 rows —— sheets 字段每次返一样的全列表，幂等。
+ *
+ * 未来 T5.5 后 leeb 的 Excel 读取切 C# OpenXML（合并单元格解析更靠谱），
+ * preview_excel + leeb.run 都会迁过去，前端结构不需要改动 —— Provider 这层不感知。
  */
 import {
   createContext,
@@ -18,12 +25,14 @@ import {
 } from "react";
 
 import { rpc } from "../../lib/rpc";
-import type { CellValue, PreviewRes, RunRes } from "./types";
+import type { CalcType, CellValue, PreviewRes, RunRes } from "./types";
 
 const PREVIEW_DEBOUNCE_MS = 300;
 const PREVIEW_MAX_ROWS = 50;
 
 interface State {
+  calcType: CalcType;
+
   // 用户参数
   excelPath: string;
   sheet: string;
@@ -47,6 +56,7 @@ interface State {
 }
 
 interface Actions {
+  setCalcType: (t: CalcType) => void;
   setExcelPath: (p: string) => void;
   setSheet: (s: string) => void;
   setHeaderRow: (n: number) => void;
@@ -57,15 +67,17 @@ interface Actions {
 
 type Ctx = State & Actions & { defaultOutput: string };
 
-const LeebContext = createContext<Ctx | null>(null);
+const DataProcessingContext = createContext<Ctx | null>(null);
 
-export function useLeeb(): Ctx {
-  const v = useContext(LeebContext);
-  if (!v) throw new Error("useLeeb must be used within <LeebHardnessProvider>");
+export function useDataProcessing(): Ctx {
+  const v = useContext(DataProcessingContext);
+  if (!v) throw new Error("useDataProcessing must be used within <DataProcessingProvider>");
   return v;
 }
 
-export function LeebHardnessProvider({ children }: { children: React.ReactNode }) {
+export function DataProcessingProvider({ children }: { children: React.ReactNode }) {
+  const [calcType, setCalcType] = useState<CalcType>("leeb");
+
   const [excelPath, setExcelPathRaw] = useState("");
   const [sheet, setSheet] = useState("");
   const [headerRow, setHeaderRow] = useState(1);
@@ -164,6 +176,7 @@ export function LeebHardnessProvider({ children }: { children: React.ReactNode }
     setRunError(null);
     setResult(null);
     try {
+      // 当前 calcType 只支持 leeb；未来在这里加 switch 分支
       const params: Record<string, unknown> = {
         input_xlsx: excelPath,
         angle_degrees: angle,
@@ -182,6 +195,7 @@ export function LeebHardnessProvider({ children }: { children: React.ReactNode }
 
   const ctx: Ctx = useMemo(
     () => ({
+      calcType,
       excelPath,
       sheet,
       headerRow,
@@ -198,6 +212,7 @@ export function LeebHardnessProvider({ children }: { children: React.ReactNode }
       result,
       runError,
       defaultOutput,
+      setCalcType,
       setExcelPath,
       setSheet,
       setHeaderRow,
@@ -206,6 +221,7 @@ export function LeebHardnessProvider({ children }: { children: React.ReactNode }
       run,
     }),
     [
+      calcType,
       excelPath, sheet, headerRow, angle, outputPath,
       sheets, previewHeaders, previewRows, previewTotalRows, previewShownRows,
       previewLoading, previewError,
@@ -214,5 +230,5 @@ export function LeebHardnessProvider({ children }: { children: React.ReactNode }
     ],
   );
 
-  return <LeebContext.Provider value={ctx}>{children}</LeebContext.Provider>;
+  return <DataProcessingContext.Provider value={ctx}>{children}</DataProcessingContext.Provider>;
 }

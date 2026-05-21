@@ -1,15 +1,28 @@
 /**
- * civ-core shell：VSCode 风三段式布局。
- * 顶层：[Activity Bar | (Side Bar | Editor) Resizable] + 底部 Status Bar
+ * civ-core shell：VSCode 风布局。
  *
- * T2 阶段：纯前端骨架，无 Tauri/Python 接入；工作区路径暂时 null。
- * T3 阶段：接 Tauri rpc_call 调 Python sidecar，文件树/工作区都打通。
+ * 整体（自上而下）：
+ *   TitleBar (30px)
+ *   Main：ActivityBar (48px) + vertical Group {
+ *     上：horizontal Group { SideBar | EditorArea }
+ *     下：BottomPanel（可折叠 / 可拖）
+ *   }
+ *   StatusBar (22px)
+ *
+ * Activity Bar 顶部的 Explorer 图标 toggle SideBar 显隐（VSCode 原生）。
+ * 底部 Panel 默认折叠；BottomPanel 内部"关闭"按钮 collapse 自身；后续会从工具页主动 expand。
  */
-import { useCallback, useEffect, useState } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Group,
+  Panel,
+  Separator,
+  type PanelImperativeHandle,
+} from "react-resizable-panels";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
+import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
@@ -32,13 +45,17 @@ export default function App() {
   const [activeToolId, setActiveToolId] = useState<string>("plot_curves");
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [sidecarStatus, setSidecarStatus] = useState<string>("连接中…");
-  // 递增即触发 FileTree 整树重挂（刷新 / 全部折叠共用这一把锤子）
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [outputLog, setOutputLog] = useState("");
 
-  const toolLabel =
-    ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
+  // Panel refs：用于命令式 collapse/expand
+  const sidebarRef = useRef<PanelImperativeHandle>(null);
+  const bottomRef = useRef<PanelImperativeHandle>(null);
 
-  // 启动时：ping 确认 sidecar 通了，再读 last_workspace 自动加载
+  const toolLabel = ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
+
+  // 启动：ping + 拉上次工作区
   useEffect(() => {
     (async () => {
       try {
@@ -52,7 +69,28 @@ export default function App() {
     })();
   }, []);
 
-  // 打开文件夹：dialog 选目录 → workspace.set 持久化 → 更新 state
+  // SideBar 显隐：通过 Panel imperative handle
+  const handleExplorerToggle = useCallback(() => {
+    const p = sidebarRef.current;
+    if (!p) return;
+    if (p.isCollapsed()) {
+      p.expand();
+      setSidebarVisible(true);
+    } else {
+      p.collapse();
+      setSidebarVisible(false);
+    }
+  }, []);
+
+  // 工具向"输出"Tab 写日志的入口（也会自动展开底部 Panel）
+  const appendOutput = useCallback((text: string) => {
+    setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
+    bottomRef.current?.expand();
+  }, []);
+
+  const closeBottom = useCallback(() => bottomRef.current?.collapse(), []);
+
+  // SideBar 4 个按钮
   const handleOpenFolder = useCallback(async () => {
     try {
       const selected = await openDialog({
@@ -60,7 +98,7 @@ export default function App() {
         multiple: false,
         title: "选择工作区文件夹",
       });
-      if (typeof selected !== "string") return; // 用户取消
+      if (typeof selected !== "string") return;
       await rpc("workspace.set", { path: selected });
       setWorkspacePath(selected);
       setRefreshKey((k) => k + 1);
@@ -70,8 +108,6 @@ export default function App() {
     }
   }, []);
 
-  // 新建标准结构：dialog 选父目录 → prompt 输入项目名 → workspace.create_standard
-  // 注意：window.prompt 在 Tauri webview 里能用但样式不可控；T5+ 可换自定义 modal
   const handleNewWorkspace = useCallback(async () => {
     try {
       const parent = await openDialog({
@@ -96,7 +132,6 @@ export default function App() {
   }, []);
 
   const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
-  // 折叠所有：第一版用整树重挂复用 refresh 路径；后续要保留 expanded 再细化
   const handleCollapseAll = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   const workspaceName = workspacePath
@@ -107,40 +142,78 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col">
       <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
-      {/* 主区：Activity Bar + 可拖动两栏 */}
       <div className="flex flex-1 min-h-0">
         <ActivityBar
           topItems={TOP_TOOLS}
           bottomItems={BOTTOM_TOOLS}
           activeId={activeToolId}
           onChange={setActiveToolId}
+          explorerActive={sidebarVisible}
+          onExplorerToggle={handleExplorerToggle}
         />
 
-        <Group orientation="horizontal" id="civ-core-shell" className="flex flex-1 min-w-0">
+        {/* 上下分栏：上=SideBar|Editor，下=底部 Panel */}
+        <Group orientation="vertical" id="civ-core-vsplit" className="flex flex-1 min-w-0 flex-col">
+          <Panel defaultSize={75} minSize={20} id="vsplit-top">
+            <Group
+              orientation="horizontal"
+              id="civ-core-hsplit"
+              className="flex h-full min-h-0"
+            >
+              <Panel
+                panelRef={sidebarRef}
+                defaultSize={18}
+                minSize={8}
+                collapsible
+                collapsedSize={0}
+                id="sidebar"
+                onResize={(s) => {
+                  // 同步 explorerActive 高亮：用户拖到极小也算折叠
+                  setSidebarVisible(s.asPercentage > 0.5);
+                }}
+              >
+                <SideBar
+                  workspacePath={workspacePath}
+                  refreshKey={refreshKey}
+                  onOpenFolder={handleOpenFolder}
+                  onNewWorkspace={handleNewWorkspace}
+                  onRefresh={handleRefresh}
+                  onCollapseAll={handleCollapseAll}
+                />
+              </Panel>
+              <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
+              <Panel defaultSize={82} minSize={30} id="editor">
+                <EditorArea
+                  activeToolId={activeToolId}
+                  toolLabel={toolLabel}
+                  appendOutput={appendOutput}
+                />
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="h-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
           <Panel
-            defaultSize={18}
-            minSize={6}
+            panelRef={bottomRef}
+            defaultSize={25}
+            minSize={10}
             collapsible
             collapsedSize={0}
-            id="sidebar"
+            id="bottom-panel"
           >
-            <SideBar
-              workspacePath={workspacePath}
-              refreshKey={refreshKey}
-              onOpenFolder={handleOpenFolder}
-              onNewWorkspace={handleNewWorkspace}
-              onRefresh={handleRefresh}
-              onCollapseAll={handleCollapseAll}
+            <BottomPanel
+              output={outputLog}
+              settingsSlot={undefined /* 第二刀填 plot_curves 设置 */}
+              onClose={closeBottom}
             />
-          </Panel>
-          <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
-          <Panel defaultSize={82} minSize={30} id="editor">
-            <EditorArea activeToolId={activeToolId} toolLabel={toolLabel} />
           </Panel>
         </Group>
       </div>
 
-      <StatusBar workspacePath={workspacePath} toolLabel={toolLabel} sidecarStatus={sidecarStatus} />
+      <StatusBar
+        workspacePath={workspacePath}
+        toolLabel={toolLabel}
+        sidecarStatus={sidecarStatus}
+      />
     </div>
   );
 }

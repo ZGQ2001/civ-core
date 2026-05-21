@@ -1,6 +1,6 @@
 /**
  * EditorArea：按 activeToolId 路由到各工具页。
- * T5：plot_curves 已端到端；其他工具页用 Placeholder 占位，等后续轮次接入。
+ * appendOutput 透传给工具页，工具页跑完往底部 Panel 输出 Tab 写日志摘要。
  */
 import { Placeholder } from "../tools/Placeholder";
 import { PlotCurvesTool } from "../tools/PlotCurvesTool";
@@ -8,20 +8,25 @@ import { PlotCurvesTool } from "../tools/PlotCurvesTool";
 interface Props {
   activeToolId: string | null;
   toolLabel: string | null;
+  appendOutput: (text: string) => void;
 }
 
-export function EditorArea({ activeToolId, toolLabel }: Props) {
+export function EditorArea({ activeToolId, toolLabel, appendOutput }: Props) {
   return (
     <div className="flex h-full flex-col bg-vscode-bg min-w-0">
-      {renderTool(activeToolId, toolLabel)}
+      {renderTool(activeToolId, toolLabel, appendOutput)}
     </div>
   );
 }
 
-function renderTool(id: string | null, label: string | null) {
+function renderTool(
+  id: string | null,
+  label: string | null,
+  appendOutput: (text: string) => void,
+) {
   switch (id) {
     case "plot_curves":
-      return <PlotCurvesTool />;
+      return <PlotCurvesTool appendOutput={appendOutput} />;
     case "leeb_hardness":
       return <Placeholder icon="symbol-numeric" label={label ?? "里氏硬度"} detail="T5.2 接入" />;
     case "pdf_tools":
@@ -31,6 +36,8 @@ function renderTool(id: string | null, label: string | null) {
     case "settings":
       return <Placeholder icon="settings-gear" label={label ?? "设置"} detail="后续接入" />;
     default:
-      return <Placeholder icon="tools" label={label ?? "请选择工具"} detail="从左侧 Activity Bar 选一个工具" />;
+      return (
+        <Placeholder icon="tools" label={label ?? "请选择工具"} detail="从左侧 Activity Bar 选一个工具" />
+      );
   }
 }

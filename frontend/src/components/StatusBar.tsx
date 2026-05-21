@@ -1,6 +1,10 @@
 /**
- * StatusBar：VSCode 底部 22px #007acc 蓝条。
- * 左：工作区路径 | 右：当前工具
+ * StatusBar：VSCode 底部 22px 状态栏。
+ *
+ * 招牌双色：
+ *   无工作区 → 紫色 #68217a（"危险/未就绪"提示）
+ *   有工作区 → 蓝色 #007acc（常态）
+ * 用 inline style 兜底，避免 Tailwind v4 utility 万一未生成。
  */
 interface Props {
   workspacePath: string | null;
@@ -9,9 +13,20 @@ interface Props {
 }
 
 export function StatusBar({ workspacePath, toolLabel, sidecarStatus }: Props) {
+  const bg = workspacePath ? "#007acc" : "#68217a";
   return (
-    <div className="flex h-[22px] items-center bg-vscode-status text-white text-[11px] px-3 shrink-0">
-      <span className="truncate">{workspacePath ?? "无工作区"}</span>
+    <div
+      style={{ backgroundColor: bg }}
+      className="flex h-[22px] items-center text-white text-[11px] px-3 shrink-0 select-none"
+    >
+      <span className="truncate flex items-center gap-1">
+        <i
+          className={`codicon !text-[12px] ${
+            workspacePath ? "codicon-folder-active" : "codicon-warning"
+          }`}
+        />
+        {workspacePath ?? "尚未打开工作区"}
+      </span>
       <div className="ml-auto flex items-center gap-3">
         {sidecarStatus && <span className="opacity-80">{sidecarStatus}</span>}
         {toolLabel && <span>{toolLabel}</span>}

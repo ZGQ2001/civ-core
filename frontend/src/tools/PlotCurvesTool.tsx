@@ -35,7 +35,12 @@ interface RunRes {
   output_dir: string;
 }
 
-export function PlotCurvesTool() {
+interface Props {
+  /** 跑完后把摘要写到底部 Panel 的输出 Tab（顺带展开 Panel） */
+  appendOutput?: (text: string) => void;
+}
+
+export function PlotCurvesTool({ appendOutput }: Props = {}) {
   const [presets, setPresets] = useState<string[]>([]);
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const [preset, setPreset] = useState<string>("");
@@ -112,12 +117,29 @@ export function PlotCurvesTool() {
       if (outputDir.trim()) params.output_dir = outputDir.trim();
       const res = await rpc<RunRes>("plot_curves.run", params);
       setResult(res);
+      // 把摘要写到底部 Panel 输出 Tab
+      if (appendOutput) {
+        const ts = new Date().toLocaleTimeString();
+        const lines = [
+          `[${ts}] plot_curves: 预设=${preset}  输入=${excelPath}`,
+          `  → 已写 ${res.summary.written_count} / 失败 ${res.summary.failed_count} / 跳过空ID ${res.summary.skipped_empty_id} / 跳过缺数据 ${res.summary.skipped_bad_data}`,
+          `  → 输出目录: ${res.output_dir}`,
+        ];
+        if (res.failed.length > 0) {
+          lines.push("  失败明细:");
+          res.failed.forEach((f) => lines.push(`    ${f.path}: ${f.error}`));
+        }
+        appendOutput(lines.join("\n"));
+      }
     } catch (e) {
       setRunError(String(e));
+      if (appendOutput) {
+        appendOutput(`[${new Date().toLocaleTimeString()}] plot_curves 失败: ${String(e)}`);
+      }
     } finally {
       setRunning(false);
     }
-  }, [canRun, excelPath, preset, sheet, headerRow, outputDir]);
+  }, [canRun, excelPath, preset, sheet, headerRow, outputDir, appendOutput]);
 
   return (
     <div className="flex h-full flex-col overflow-auto">

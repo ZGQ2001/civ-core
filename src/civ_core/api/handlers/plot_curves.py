@@ -23,7 +23,7 @@ from civ_core.core.plot_curves import (
     run_plot_curves,
 )
 
-__all__ = ["list_presets", "run", "preflight"]
+__all__ = ["list_presets", "run", "preflight", "render_preview"]
 
 
 def list_presets() -> dict:
@@ -104,3 +104,60 @@ def preflight(
     cols = get_column_headers(excel, sheet, header_row=header_row)
     ok, message = preflight_check(presets[preset], cols)
     return {"ok": ok, "message": message}
+
+
+def render_preview(
+    preset_dict: dict[str, Any],
+    excel_path: str,
+    sheet: str | None = None,
+    header_row: int = 1,
+    row_index: int = 0,
+) -> dict:
+    """实时预览：用 preset_dict + Excel 第 row_index 行数据渲染单张 PNG。
+
+    返回：
+      {png_base64: str, mime: "image/png", row_id: str, title: str, total_rows: int}
+
+    前端用 `<img src="data:image/png;base64,${png_base64}">` 直接显示。
+    设计选择：base64 比 binary 大 33%，但 JSON-RPC 协议传字节流要走 hex/array
+    更费劲；几十 KB 的 PNG 走 base64 完全可接受。
+
+    没有可绘行（全空 / 全跳过）时抛 PlotCurvesError，前端展示 message。
+    """
+    import base64
+    import tempfile
+
+    from civ_core.core.plot_curves import build_jobs
+    from civ_core.infra_io.chart_writer import render_plot_to_bytes
+    from civ_core.infra_io.excel_reader import read_rows
+
+    excel = Path(excel_path)
+    rows = read_rows(excel, sheet, header_row=header_row)
+    if not rows:
+        raise PlotCurvesError(
+            "Excel 没有可读取的数据行",
+            hint="请检查 sheet 名 / 表头位置 / 数据是否填写。",
+        )
+
+    # build_jobs 需要 output_dir 拼路径（实际不写）；用临时目录占位即可
+    with tempfile.TemporaryDirectory() as td:
+        jobs, summary = build_jobs(preset_dict, rows, td)
+
+    if not jobs:
+        skipped = len(summary.skipped_empty_id) + len(summary.skipped_bad_data)
+        raise PlotCurvesError(
+            f"没有可绘的行（共 {len(rows)} 行，全部被跳过 / 缺数据；skipped={skipped}）",
+            hint="请检查标识列（id_column）是否有值，以及预设要求的列是否都有数据。",
+        )
+
+    # 选 row_index，越界时回退到末尾（前端切换 row 时容错）
+    idx = min(max(0, row_index), len(jobs) - 1)
+    job = jobs[idx]
+    png_bytes = render_plot_to_bytes(job)
+    return {
+        "png_base64": base64.b64encode(png_bytes).decode("ascii"),
+        "mime": "image/png",
+        "row_id": job.output_path.stem,
+        "title": job.title,
+        "total_rows": len(jobs),
+    }

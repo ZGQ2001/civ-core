@@ -227,6 +227,63 @@ def test_plot_curves_run_rejects_missing_preset(tmp_path) -> None:
         )
 
 
+def test_plot_curves_render_preview_missing_excel(tmp_path) -> None:
+    """render_preview 缺 excel → 抛错（不静默返回空字节）。"""
+    bad_preset = {
+        "id_column": "X",
+        "filename_template": "{id}.png",
+        "title_template": "{id}",
+        "x_axis": {"label": "x", "range": None},
+        "y_axis": {"label": "y", "range": None},
+        "curves": [],
+    }
+    with pytest.raises(Exception):
+        plot_handler.render_preview(bad_preset, str(tmp_path / "nope.xlsx"))
+
+
+def test_plot_curves_render_preview_returns_base64_png(tmp_path) -> None:
+    """端到端：写一个最小 xlsx + 最小预设 → 拿到非空 base64 PNG。"""
+    import base64
+
+    from openpyxl import Workbook
+
+    xlsx = tmp_path / "data.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        ws = wb.create_sheet()
+    ws.append(["编号", "X值", "Y值"])
+    ws.append(["A1", 1.0, 10.0])
+    ws.append(["A2", 2.0, 20.0])
+    wb.save(str(xlsx))
+
+    preset = {
+        "id_column": "编号",
+        "filename_template": "{id}.png",
+        "title_template": "{id} 预览",
+        "x_axis": {"label": "X", "range": None},
+        "y_axis": {"label": "Y", "range": None},
+        "curves": [
+            {
+                "name": "曲线",
+                "color": "#1F4FE0",
+                "marker": "o",
+                "linewidth": 2.0,
+                "markersize": 6,
+                "points": [
+                    {"fixed_axis": "x", "fixed_value": 1.0, "var_column": "Y值"},
+                ],
+            }
+        ],
+    }
+    res = plot_handler.render_preview(preset, str(xlsx))
+    assert res["mime"] == "image/png"
+    assert res["total_rows"] == 2
+    # base64 解出来必须是有效 PNG（前 8 字节为 PNG 魔数）
+    raw = base64.b64decode(res["png_base64"])
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_plot_curves_run_default_output_dir(tmp_path, monkeypatch) -> None:
     """output_dir=None 时默认 <excel 同级>/曲线图/。通过 mock run_plot_curves 验路径计算。"""
     from civ_core.api.handlers import plot_curves as ph

@@ -6,13 +6,15 @@
 
 ## 🎯 当前焦点（2026-05-21）
 
-**T5 全员闭环 + plot_curves 体验抛光完成。** 工具页主区：sheet / 表头行 / 预设 / 实时预览图 / 多行翻页 / 「查看本行原始数据」折叠表（高亮预设引用的列）；底部 Panel 「工具设置」拆 4 tab（基础 / X 轴 / Y 轴 / 曲线样式），全部 form 无 JSON。其他工具页（leeb/pdf/word2pdf）已端到端通。
+**plot_curves 体验闭环 + 复刻 VSCode 真实布局。** 布局：ActivityBar | SideBar（全高）| (Editor + 底部输出 Panel) | RightPanel（全高，装调参）。plot_curves 工具页：顶部操作行（Excel 选择 + sheet 下拉 + 表头行 + 预设 dropdown + 预设 CRUD 按钮组）/ 预览图（可切对照视图）/ 数据对照表（高亮预设引用列）；右侧 RightPanel 4 tab 调参 form（基础 / X 轴 / Y 轴 / 曲线样式）。
+
+**预设管理**：list_presets 返回 sources 字段；前端按 system 🔒 / user ✏️ 区分；CRUD 全套（保存 / 复制 / 重命名 / 删除），系统预设的"保存"自动弹"另存为"。
 
 **屎山清理**：scripts/_*.py 7 个一次性脚本已删（commit 5d6ce79）。其他没积压。
 
 **下一步候选**（按价值排）：
 1. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包
-2. **leeb/pdf/word2pdf 也用 Context lift state**：参数页可以放底部 Panel（统一交互范式），但代价是 4× 重构
+2. **leeb/pdf/word2pdf 也用 Context lift state**：参数也可放右侧 RightPanel（统一交互范式），但代价是 3× 重构
 3. **plot_curves 多曲线 form**：当前只暴露第 1 条曲线样式；多曲线需 tabs 或 accordion
 4. **流式进度**：plot_curves 跑大批量时无反馈（协议升级方案见妥协项）
 5. **数据对照交互升级**：点 cell 高亮曲线上对应点（hit-test，chart_writer 里 render_plot_with_hittest 已有）

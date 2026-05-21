@@ -43,7 +43,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
       const r = c.result;
       appendOutput?.(
         [
-          `[${ts}] plot_curves: 预设=${c.preset}  输入=${c.excelPath}`,
+          `[${ts}] plot_curves: 曲线=${c.preset}  输入=${c.excelPath}`,
           `  → 已写 ${r.summary.written_count} / 失败 ${r.summary.failed_count} / 跳过空ID ${r.summary.skipped_empty_id} / 跳过缺数据 ${r.summary.skipped_bad_data}`,
           `  → 输出目录: ${r.output_dir}`,
         ].join("\n"),
@@ -63,7 +63,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
           {c.edited && (
             <span className="text-xs text-yellow-400 flex items-center gap-1 ml-2">
               <i className="codicon codicon-edit !text-[12px]" />
-              预设已被调参（运行 / 预览均用编辑版）
+              曲线已被调参（运行 / 预览均用编辑版）
               <button
                 type="button"
                 onClick={c.resetPreset}
@@ -123,22 +123,22 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-14"
           />
           <span className="text-vscode-text-faint">·</span>
-          <label className="text-xs text-vscode-text-dim">预设:</label>
+          <label className="text-xs text-vscode-text-dim">曲线:</label>
           <select
             value={c.preset}
             onChange={(e) => c.setPreset(e.target.value)}
             disabled={c.presets.length === 0}
             title={
               c.currentSource === "system"
-                ? '系统预设（只读，可"另存为"再改）'
-                : "用户预设（可改可删）"
+                ? '内置曲线（只读，可"另存为"再改）'
+                : "我的曲线（可改可删）"
             }
             className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
           >
             {c.presets.length === 0 && <option value="">（无可用）</option>}
             {c.presets.map((p) => (
               <option key={p} value={p}>
-                {c.presetSources[p] === "system" ? "[系统] " : "[我的] "}
+                {c.presetSources[p] === "system" ? "[内置] " : "[我的] "}
                 {p}
               </option>
             ))}
@@ -173,7 +173,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
           </div>
         </div>
         {c.presetLoadError && (
-          <div className="text-xs text-red-400">预设加载失败：{c.presetLoadError}</div>
+          <div className="text-xs text-red-400">曲线加载失败：{c.presetLoadError}</div>
         )}
       </div>
 
@@ -382,22 +382,31 @@ function PreviewImage() {
   );
 }
 
-/** 预设增删改按钮组（在顶部预设 dropdown 旁边）。 */
+/** 曲线（预设）增删改按钮组。一预设 = 一曲线，所有 UI 文案统一叫"曲线"。 */
 function PresetCrudButtons() {
   const c = usePlotCurves();
   const isUser = c.currentSource === "user";
 
   const handleNewBlank = async () => {
-    const name = window.prompt("新建空预设；输入名字：", "新预设");
+    const name = window.prompt("新建曲线；输入名字：", "新曲线");
     if (!name?.trim()) return;
-    // 一个最小可用的空模板：所有必填字段就位，curves 留空让用户在 form 里加
+    // 默认模板：必填字段 + 一条默认曲线（避免用户进 form 看到"还没定义曲线"困惑）
     const blank = {
       id_column: "",
       filename_template: "{id}.png",
       title_template: "{id}",
       x_axis: { label: "X", range: null },
       y_axis: { label: "Y", range: null },
-      curves: [],
+      curves: [
+        {
+          name: "曲线",
+          color: "#1F4FE0",
+          marker: "o",
+          linewidth: 2,
+          markersize: 6,
+          points: [],
+        },
+      ],
     };
     try {
       await c.savePreset(name.trim(), blank as never);
@@ -408,23 +417,23 @@ function PresetCrudButtons() {
 
   const handleSave = async () => {
     if (!c.effectivePreset || !c.preset) return;
-    // system 预设 + 已编辑 → 提示"另存为"；其他情况直接覆盖到用户预设
+    // 内置曲线 + 已编辑 → 强制弹"另存为"；自己的曲线直接覆盖
     if (c.currentSource === "system") {
       const name = window.prompt(
-        `当前预设「${c.preset}」是系统预设（只读）。\n输入新名字另存为用户预设：`,
+        `当前曲线「${c.preset}」是内置曲线（只读）。\n输入新名字另存为我的曲线：`,
         `${c.preset}（我的）`,
       );
       if (!name?.trim()) return;
       try {
         await c.savePreset(name.trim(), c.effectivePreset);
-        alert(`已保存为用户预设：${name.trim()}`);
+        alert(`已另存为：${name.trim()}`);
       } catch (e) {
         alert(`保存失败：${String(e)}`);
       }
     } else {
       try {
         await c.savePreset(c.preset, c.effectivePreset);
-        alert(`已保存到用户预设：${c.preset}`);
+        alert(`已保存：${c.preset}`);
       } catch (e) {
         alert(`保存失败：${String(e)}`);
       }
@@ -433,7 +442,7 @@ function PresetCrudButtons() {
 
   const handleCopy = async () => {
     if (!c.preset) return;
-    const name = window.prompt("复制为新预设；输入新名字：", `${c.preset}（副本）`);
+    const name = window.prompt("复制为新曲线；输入新名字：", `${c.preset}（副本）`);
     if (!name?.trim()) return;
     try {
       await c.copyPreset(c.preset, name.trim());
@@ -455,7 +464,7 @@ function PresetCrudButtons() {
 
   const handleDelete = async () => {
     if (!c.preset || !isUser) return;
-    if (!window.confirm(`确定删除用户预设「${c.preset}」？此操作不可撤销。`)) return;
+    if (!window.confirm(`确定删除曲线「${c.preset}」？此操作不可撤销。`)) return;
     try {
       await c.deletePreset(c.preset);
     } catch (e) {
@@ -471,8 +480,8 @@ function PresetCrudButtons() {
           onClick={handleSave}
           title={
             c.currentSource === "system"
-              ? '系统预设只读 — 将弹出"另存为"'
-              : "保存修改到用户预设"
+              ? '内置曲线只读 — 将弹出"另存为"'
+              : "保存修改到这条曲线"
           }
           className="px-2 py-1 text-xs bg-vscode-button hover:bg-vscode-button-hover text-white rounded-[2px] flex items-center gap-1"
         >
@@ -480,10 +489,10 @@ function PresetCrudButtons() {
           {c.currentSource === "system" ? "另存为…" : "保存"}
         </button>
       )}
-      <IconBtn icon="new-file" title="新建空预设（从零开始）" onClick={handleNewBlank} />
-      <IconBtn icon="copy" title="复制当前为新预设（保留所有字段）" onClick={handleCopy} />
-      <IconBtn icon="edit" title={isUser ? "重命名" : "系统预设不可改名"} onClick={handleRename} disabled={!isUser} />
-      <IconBtn icon="trash" title={isUser ? "删除" : "系统预设不可删"} onClick={handleDelete} disabled={!isUser} danger />
+      <IconBtn icon="new-file" title="新建曲线（从零开始）" onClick={handleNewBlank} />
+      <IconBtn icon="copy" title="复制当前曲线为新曲线" onClick={handleCopy} />
+      <IconBtn icon="edit" title={isUser ? "重命名" : "内置曲线不可改名"} onClick={handleRename} disabled={!isUser} />
+      <IconBtn icon="trash" title={isUser ? "删除" : "内置曲线不可删"} onClick={handleDelete} disabled={!isUser} danger />
     </div>
   );
 }
@@ -531,7 +540,7 @@ function RowDataDetails() {
       <summary className="cursor-pointer text-xs text-vscode-text-dim hover:text-white py-2 flex items-center gap-2">
         <i className="codicon codicon-table !text-[12px]" />
         <span>查看本行原始数据（{keys.length} 列）</span>
-        <span className="text-[10px] text-vscode-text-faint">— 高亮列被预设引用</span>
+        <span className="text-[10px] text-vscode-text-faint">— 高亮列被当前曲线引用</span>
       </summary>
       <div className="mt-2">
         <RowDataTable />

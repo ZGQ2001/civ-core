@@ -24,7 +24,7 @@ export function PlotCurvesSettingsForm() {
   if (!preset) {
     return (
       <div className="p-6 text-xs text-vscode-text-faint italic">
-        （未加载预设；请确认后端预设库可用。）
+        （未加载曲线；请确认后端预设库可用。）
       </div>
     );
   }
@@ -40,7 +40,7 @@ export function PlotCurvesSettingsForm() {
           <button
             type="button"
             onClick={c.resetPreset}
-            title="撤销所有改动，回到预设原版"
+            title="撤销所有改动，回到曲线原版"
             className="ml-auto px-2 h-7 text-xs text-vscode-focus hover:underline flex items-center gap-1"
           >
             <i className="codicon codicon-discard !text-[12px]" />

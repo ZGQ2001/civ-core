@@ -6,18 +6,30 @@
 
 ## 当前焦点（2026-05-21）
 
-**T5 工具页统一交互范式（中间预览 + 右侧参数）— 1/3 已完成（leeb）**。pdf_tools / word2pdf 待迁。
+**T5 完结：4 个工具页全部对齐范式（中间预览 + 右侧参数）**。下一步看用户选 T5.5（C# sidecar）还是 T6（打包）。
 
 布局：`ActivityBar | SideBar(全高) | (Editor + 底部输出 Panel) | RightPanel(全高，tab 化)`。
 
-leeb_hardness 工具页（已对齐 plot_curves 范式）：
-- 三件套：`controller.tsx`（Provider + useLeeb hook）/ `Page.tsx`（顶部条 + 中间表格预览 + 底部结果）/ `SettingsForm.tsx`（右侧调参：输出路径 + 默认角度）
-- 顶部条：选 Excel / Sheet 下拉（preview_excel 一并返）/ 表头行 / 开始计算按钮
-- 中间预览：前 50 行表格（深色斑马纹、表头 sticky、`previewShownRows / previewTotalRows` 提示）
-- 后端新加 `leeb.preview_excel(path, sheet, header_row, max_rows)` —— sheets + headers + rows + total_rows，4 个 pytest 覆盖
-- 公共组件抽：`tools/_shared/forms.tsx`（Field / Picker / ResetBtn / RunBtn）—— 之前耦合在 LeebHardnessTool.tsx 末尾被 pdf/word2pdf 跨文件 import
+ActivityBar 4 个工具：
+- `plot_curves` (graph-line) — 绘曲线图
+- `data_processing` (symbol-method) — 数据处理；用 calcType 下拉选计算类型，目前只「里氏硬度」一项，未来加钻芯/回弹
+- `pdf_tools` (file-pdf) — PDF 合并/按页拆/按范围拆
+- `word2pdf` (file-binary) — Word 批量转 PDF
 
-plot_curves 工具页（中间预览 + 右侧参数 范式）：
+工具页统一范式（每个工具一份 controller/Page/SettingsForm/index）：
+
+| 工具 | 中间预览 | 右侧参数 | 后端预览 RPC |
+|---|---|---|---|
+| plot_curves | 实时 PNG（render_preview） | 4 sub-tab（基础/X 轴/Y 轴/曲线） | `plot_curves.render_preview` |
+| data_processing | Excel 前 50 行表格（深色斑马纹、sticky 表头） | 输出路径 + 角度（按 calcType 切） | `leeb.preview_excel` |
+| pdf_tools | PDF 列表（页数 + KB），合并模式带上下移除 | 按 mode 切：输出路径 / 输出目录+模板+表达式 | `pdf_tools.inspect` |
+| word2pdf | docx 列表（段落数 + 页数 + KB） | 仅输出目录 | `word2pdf.inspect` |
+
+公共组件：`tools/_shared/forms.tsx`（Field / Picker / ResetBtn / RunBtn）跨 4 个工具用。
+
+**遗留**：data_processing 当前底层走 openpyxl（Python），合并单元格解析弱；用户明确未来 T5.5 后 leeb Excel 读取（含 preview_excel + leeb.run + leeb_excel）切 C# OpenXML SDK。前端 controller 不感知，按 RPC 前缀路由自动走 C# sidecar。
+
+**图标坑**：codicon 找不到的 glyph 会渲染透明 —— `calculator` 不存在，用 `symbol-method`。其他确认存在的列表见 CLAUDE.md「前端布局规范」。
 
 plot_curves 工具页（中间预览 + 右侧参数 范式）：
 - 顶部操作行：Excel / Sheet 下拉（自动拉 list_sheets）/ 表头行 / 曲线 dropdown（业务 UI 命名"曲线"，code 还叫 preset）/ 曲线按钮组（新建 / 复制 / 重命名 / 删除 / 保存或另存为）/ 跑
@@ -44,13 +56,13 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 
 ## 下一步候选（按价值排）
 
-1. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包
-2. **pdf/word2pdf 加输入预览 + 参数挪 RightPanel**（leeb 已完成）：剩 2 个工具的预览分别是「已选 PDF 列表 + 页数」「已选 Word 列表 + 页数估算」；后端各加 `pdf_tools.inspect` / `word2pdf.inspect` RPC
+1. **T5.5 起手 C# sidecar**：建 `dotnet/civ-doc/`（.NET 9 + OpenXML SDK）+ JSON-RPC over stdin/stdout；第一个方法 `doc.fill_template`（Word 模板填充）；之后 `xlsx.read_leeb_workbook` 切 C# 解决合并单元格问题
+2. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包（如果 T5.5 在后做，T6 先打 Python 版本）
 3. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
-4. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
-5. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
-6. **流式进度**：plot_curves 跑大批量时无 N/M 反馈（协议升级方案见妥协项）
-7. **数据对照交互升级**：点 cell 高亮曲线上对应点（hit-test，`chart_writer.render_plot_with_hittest` 已有底座）
+4. **报告填充工具**：新建 ActivityBar 项（报告处理类别？），Word 模板 + 数据 → 自动填表；走 T5.5 的 doc.fill_template
+5. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
+6. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
+7. **流式进度**：plot_curves / word2pdf 跑大批量时无 N/M 反馈（协议升级方案见妥协项）
 8. **Toast 通知**：把现在的 alert() 换成右下角 toast
 
 ---
@@ -80,13 +92,16 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 - ~~RightPanel 没 tab，没法预留 agent~~ → 已 tab 化，agent 占位 tab 已加
 - ~~UI 散布 emoji~~ → 前端 UI 已清；Python CLI / log / 注释里按"不动旧代码"暂留
 - ~~`leeb` 工具页没用 RightPanel + 中间预览范式~~ → 已迁
-- `pdf/word2pdf` 工具页**还没用 RightPanel + 中间预览范式**，参数和操作都堆在 EditorArea 主区 — 候选 #2
+- ~~`pdf/word2pdf` 工具页没用 RightPanel + 中间预览范式~~ → 已迁
+- **`data_processing` Excel 读取走 openpyxl，合并单元格解析弱** —— 用户明确未来 T5.5 后切 C# OpenXML SDK；前端不需改动（按 RPC 前缀路由）
+- `data_processing` calcType 下拉当前只 1 项（里氏硬度），下拉看起来有点空 —— 等加第二种计算（钻芯/回弹）就自然了，YAGNI
+- word2pdf `pages` 字段只在 Word 真打开保存过的 docx 有（docProps/app.xml Pages 缓存）；纯 python-docx / docxtpl 生成的没有 —— 显示「N 段」即可，不强求页数
 - `points` 字段编辑要求用户懂 fixed_axis 概念（X 固定 vs Y 固定），不懂的人可能困惑 — 未来可加示意图或更友好的"按位置选点"
 - 「刷新」「全部折叠」共用 refreshKey 整树重挂，丢失 expanded 状态（VSCode refresh 应保留）
 - 「新建标准结构」/ 预设 CRUD 用 `window.prompt` / `confirm`（样式不可控）— 后续换自定义 modal + toast
 - 流式进度未做 — 协议升级方案：sidecar stdout 写 JSON-RPC notification，Rust 转发 Tauri event，前端 listen
 - 数据对照表格点 cell 暂不能跳到曲线上对应点（已有 hit-test 底座 `render_plot_with_hittest`，留候选 #7）
-- `App.tsx` 比较胖（200+ 行）；如果再加面板或 agent 状态可考虑拆个 `useShellState` hook
+- `App.tsx` 比较胖（200+ 行）+ 嵌套 4 个 Provider —— 如果再加面板或 agent 状态可考虑拆个 `useShellState` hook + 抽个 `<AppProviders>` 包装
 
 ---
 
@@ -103,10 +118,12 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 | `plot_curves.run` | 批量出图；preset_override 覆盖预设跑 |
 | `plot_curves.preflight` | 跑前预检列名匹配 |
 | `plot_curves.save_preset` / `delete_preset` / `rename_preset` / `copy_preset` | 用户预设 CRUD |
-| `leeb.run` | 里氏硬度 INSP-001 |
-| `leeb.preview_excel` | leeb 工具页前 N 行表格预览（含 sheets + headers + rows + total_rows） |
+| `leeb.run` | 里氏硬度（data_processing 工具页跑） |
+| `leeb.preview_excel` | data_processing 中间表格预览（含 sheets + headers + rows + total_rows） |
 | `pdf_tools.{merge,split_per_page,split_by_ranges}` | PDF 合并/拆分 |
+| `pdf_tools.inspect` | pdf_tools 中间预览：每个 PDF 的 pages + size_kb，单个失败带 error |
 | `word2pdf.convert` | Word→PDF 批量（COM） |
+| `word2pdf.inspect` | word2pdf 中间预览：每个 docx 的 size_kb + paragraphs + (pages 可选) |
 
 **新加 RPC 必须在 handler 模块加 `__all__` 白名单** — 否则顶部 import 的 Path/dataclass 会被 `register_module` 误暴露成 RPC 方法（已在 server.py 修过这个 bug，但行为依赖 `__all__`）。
 
@@ -117,7 +134,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ```bash
 cd frontend && npx tsc -b --noEmit        # TS 类型
 uv run --frozen ruff check .              # Python lint
-uv run --frozen pytest -q                 # 测试（当前 315 passed）
+uv run --frozen pytest -q                 # 测试（当前 322 passed）
 uv run --frozen python scripts/healthcheck.py  # 6 项冒烟
 ```
 

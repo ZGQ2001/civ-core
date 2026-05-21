@@ -6,19 +6,21 @@
 
 ## 📌 顶部摘要
 
-**当前状态（2026-05-20）：** 🚧 **UI 技术栈转型进行中（Tauri + React + Python sidecar）**
+**当前状态（2026-05-21）：** 🚧 **UI 技术栈转型进行中（Tauri + React + Python sidecar）**
 
-旧 Qt UI 因视觉天花板过不去被彻底清理。当前进度 **3/7**，下面四步待做：
+旧 Qt UI 因视觉天花板过不去被彻底清理。当前进度 **4.5/7**：
 
 ```
 T1 ✅ Python JSON-RPC server (stdin/stdout)
 T2 ✅ 前端骨架 (Vite + React + TS + Tailwind v4 + codicons)
 T3 ✅ Tauri 主进程 + Python sidecar 桥 + 自画 VSCode 风顶栏
+T4 ✅ 工作区 + 文件树端到端（SideBar 真实 FileTree + workspace 持久化）
+T5 ✅ 工具页迁移 — 4 个工具全部 controller/Page/SettingsForm 范式 + 中间预览 + 右侧参数
+     plot_curves（实时 PNG）/ data_processing（Excel 表格）/ pdf_tools（PDF 列表）/
+     word2pdf（docx 列表）。data_processing 用 calcType 下拉留接口（未来加钻芯/回弹）
 ─────────────────── 当前在这里 ───────────────────
-T4 ⏳ 工作区 + 文件树端到端（前端 Explorer 调 files.list_dir 渲染真实树；
-                            "打开文件夹"调 Tauri dialog plugin；workspace 持久化）
-T5 ⏳ 工具页迁移（plot_curves / leeb_hardness / pdf_tools 三个走 Python）
-T5.5 ⏳ 加 C# sidecar：Word 报告填充（doc.fill_template）—— 见下方"混合架构"
+T5.5 ⏳ 加 C# sidecar：Word 报告填充（doc.fill_template）+ 后期把 leeb Excel 读取也切过去
+        （合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生强）
 T6 ⏳ 打包（PyInstaller 把 Python sidecar 打成 exe；dotnet publish 把 C# 打成 exe
         → Tauri externalBin 同时引两个）
 T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
@@ -36,20 +38,19 @@ T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
 **渐进策略**：一次只迁一个方法。第一次 Word 报告功能时直接 C# 写，老 Python
 方法不动。可以永远停在某个 Python/C# 比例，不强求全切。
 
-**业务底座状态：** ① 画图、② INSP-001 里氏硬度 / INSP-002 钻芯法、③ PDF 工具、④ Word→PDF 计算与 IO 层完整可用（**305 pytest / ruff 0 / healthcheck 6/6** 全过）。前端没接前都只能 CLI 跑。
+**业务底座状态：** ① 画图、② INSP-001 里氏硬度 / INSP-002 钻芯法、③ PDF 工具、④ Word→PDF 计算与 IO 层完整可用（**322 pytest / ruff 0 / healthcheck 6/6** 全过）。前端 UI 全 4 个工具页可用。
 
-**下一步具体动作（T4，纯前端）：**
-1. 前端：删 `SideBar.tsx` 里的 `FileTreePlaceholder`，写真实 `<FileTree>` 组件（递归渲染 `files.list_dir` 返回的 entries，点击目录展开/收起，双击文件调 `opener.openPath`）
-2. 前端：`SideBar` header「打开文件夹」按钮调 Tauri dialog plugin 的 `open({ directory: true })`，返回路径后 `rpc("workspace.set", { path })`，刷新树
-3. 前端：「新建标准结构」 → 同样 dialog 选父目录 + 输项目名 → `rpc("workspace.create_standard", ...)`
-4. 后端：现有 `workspace.{last,set,create_standard}` + `files.list_dir` 都已 ready，T4 主要是前端工作
+**下一步具体动作（T5.5 / T6 二选一）：**
+- T5.5 路径：开始 C# sidecar 建项目（见下方起手清单），第一个目标 `doc.fill_template`；之后第二步把 leeb 的 Excel 读取（preview_excel / leeb.run / leeb_excel.read_leeb_workbook）也切 OpenXML SDK
+- T6 路径：先打包当前 4 工具版本出个能装的安装包（PyInstaller + tauri:build），用户先实际用着；T5.5 之后再加 C# sidecar，外壳已经 ready
 
-**T5.5 起手清单（等 T4-T5 部分工具页就绪后做）：**
+**T5.5 起手清单（任何时候启动）：**
 1. 新建 `dotnet/civ-doc/` 子项目（.NET 9 + OpenXML SDK）
 2. 同样的 JSON-RPC over stdin/stdout 协议（参考 `src/civ_core/api/server.py`）
 3. 第一个方法：`doc.fill_template(template_path, context)` 走 docxtpl 类似的变量填充，但用 OpenXML 实现
-4. Tauri `src-tauri/src/lib.rs` 加第二个 sidecar 管理（按 method 前缀路由）
-5. PyInstaller + dotnet publish 都放进 `tauri.conf.json` 的 externalBin
+4. 后续 `xlsx.read_leeb_workbook` 系列方法切 C#（合并单元格 / 复杂格式靠它）；前端 `data_processing` controller 不需改，按 method 前缀路由会自动走 C# sidecar
+5. Tauri `src-tauri/src/lib.rs` 加第二个 sidecar 管理（按 method 前缀路由）
+6. PyInstaller + dotnet publish 都放进 `tauri.conf.json` 的 externalBin
 
 ---
 
@@ -82,6 +83,15 @@ T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
 
 | commit | 内容 |
 |---|---|
+| `1ae71f1` 2026-05-21 | T5 完结：word2pdf 工具页对齐范式 + word2pdf.inspect RPC（读 docx 段落数 + size + Word 缓存 Pages）+ 3 个 pytest |
+| `7175729` 2026-05-21 | pdf_tools 工具页对齐范式（3 个 mode 共享 state） + pdf_tools.inspect RPC（PDF 页数 + size） + fix 数据处理图标 codicon-calculator 不存在→透明 改 symbol-method |
+| `94751e0` 2026-05-21 | leeb_hardness → data_processing 模块改名 + Page 顶部加「计算类型」下拉（留接口给未来钻芯/回弹）+ 去 INSP 字眼 + ActivityBar 改名「数据处理」 |
+| `c77d156` 2026-05-21 | leeb 工具页对齐 plot_curves 范式（中间表格预览 + 右侧参数）+ 后端 leeb.preview_excel RPC + 抽公共 _shared/forms.tsx |
+| `dbb7921` 2026-05-21 | plot_curves 数据对照条只显示图引用的列 + CONTEXT 同步 |
+| `bca7883` 2026-05-21 | fix plot_curves 数据对照条永远空（stem 反查 id 失配，改按 BuildSummary 跳过行号反推） |
+| `36641b7` 2026-05-21 | fix plot_curves 对照视图改上下 + 跳转行号 + 深色 spinbox |
+| `92057c4` 2026-05-21 | refactor plot_curves 一预设一曲线 + UI 改名 预设→曲线 |
+| `ca9accf` 2026-05-21 | 移 AI 文档到 .ai/ + 更新 CLAUDE.md 同步新架构 |
 | `[本次]` 2026-05-20 | 大清理：删旧 Qt UI（30+ 文件）+ 重写 logger.py 去 QtLogBridge + 重写 main.py 去 GUI 分支 + healthcheck 改 6 项 + pyproject 去 pyside6/qfluentwidgets/pytest-qt + 重写 CLAUDE.md/PROGRESS.md 到 200 行内 |
 | `921e9bb` 2026-05-20 | 自画 VSCode 风 TitleBar（decorations=false + 30px 顶栏 + chrome-* 按钮 + 拖动区）+ `run.sh` 一键启动 + CLAUDE.md 加中国镜像表 |
 | `dc1f53a` 2026-05-20 | T3 Tauri 主进程 + sidecar.rs（PythonSidecar Mutex 串行 RPC）+ `frontend/src-tauri/.cargo/config.toml` 字节镜像 |

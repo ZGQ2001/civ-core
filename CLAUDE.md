@@ -43,7 +43,8 @@
 | `src/civ_core/utils/` | 日志 / 异常 / COM 入口 | 无业务逻辑 |
 | `src/civ_core/main.py` | CLI 入口 | GUI 分支已弃；no-args 输出迁移提示 |
 | `frontend/src/components/` | 公共布局组件 | TitleBar / ActivityBar / SideBar / EditorArea / BottomPanel / RightPanel / StatusBar / AgentPanel |
-| `frontend/src/tools/<tool>/` | 单工具子目录 | plot_curves 已用 controller/Page/SettingsForm/tabs 解耦范式 |
+| `frontend/src/tools/_shared/` | 跨工具共用 form 控件 | `forms.tsx` Field / Picker / ResetBtn / RunBtn |
+| `frontend/src/tools/<tool>/` | 单工具子目录 | 全部 4 个工具（plot_curves / data_processing / pdf_tools / word2pdf）统一用 controller/Page/SettingsForm/index 范式 |
 | `frontend/src-tauri/` | Tauri 2 主进程（Rust） | spawn Python/C# sidecar，`rpc_call` 按前缀转发 |
 | `dotnet/civ-doc/` *(T5.5 新建)* | .NET 9 + OpenXML SDK | C# sidecar：`doc.*` / `xlsx_complex.*` 方法 |
 | `presets/` | 系统预设（只读） | 程序运行时禁写 |
@@ -60,7 +61,7 @@
 | `workspace.*` / `files.*` | Python | `workspace.last`、`files.list_dir` |
 | `plot_curves.*` / `leeb.*` / `pdf_tools.*` / `word2pdf.*` | Python | 业务计算与出图 |
 | `doc.*` *(T5.5)* | C# | `doc.fill_template`（Word 模板填充走 OpenXML，不靠 COM） |
-| `xlsx_complex.*` *(未来)* | C# | 透视表 / 条件格式 / 公式重算等复杂 Excel |
+| `xlsx_complex.*` *(T5.5 后期)* | C# | **leeb 等 Excel 读取也会迁此**：合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生 |
 
 **handler 强约束**：每个 `api/handlers/*.py` 必须在文件顶部写 `__all__` 显式列出要暴露的 RPC 方法。`register_module` 优先读 `__all__`；不写会把顶部 `import Path` 等工具类误暴露成 RPC 方法（API 边界泄漏）。
 
@@ -77,7 +78,12 @@ StatusBar (22px)
 - **SideBar 全高**：资源管理器；不被底部 Panel 截断
 - **底部 Panel**：专用「输出/日志」Tab；Ctrl+J / StatusBar「面板」按钮 toggle
 - **RightPanel 全高**：tab 化 —— `当前工具调参 + AI 助手（占位）`；Ctrl+Alt+B / StatusBar「调参」按钮 toggle
-- **工具页交互范式**：中间上部预览区 + 右侧参数区（RightPanel）。plot_curves 已实现；leeb / pdf / word2pdf 后续按需对齐
+- **工具页交互范式**：中间上部预览区 + 右侧参数区（RightPanel）。4 个工具页全部对齐：
+  - `plot_curves`：实时 PNG 预览（render_preview）
+  - `data_processing`：Excel 前 50 行表格预览（leeb.preview_excel）
+  - `pdf_tools`：每个 PDF 的页数 + 大小列表（pdf_tools.inspect）
+  - `word2pdf`：每个 docx 的段落数 + 大小列表（word2pdf.inspect）
+- **图标必须用 @vscode/codicons 真实存在的名字**：找不到的会渲染透明。常用确认存在的：`symbol-method`、`symbol-numeric`、`graph-line`、`file-pdf`、`file-binary`、`table`、`folder-opened`、`add`、`close`、`pass`、`error`、`warning`、`loading`、`chevron-up/down`、`hubot`、`settings-gear`、`discard`、`edit`、`new-file`、`copy`、`trash`、`eye`、`eye-closed`、`clear-all`。**不存在**：`calculator`（用 `symbol-method` 代替）
 
 ---
 
@@ -90,11 +96,17 @@ StatusBar (22px)
 | `api/handlers/workspace.py` | `workspace.{last,set,clear,create_standard}` |
 | `api/handlers/files.py` | `files.{list_dir,exists}`；默认隐藏 `.civ-core` 和点开头 |
 | `api/handlers/plot_curves.py` | `plot_curves.{list_presets,list_sheets,run,preflight,render_preview,save_preset,delete_preset,rename_preset,copy_preset}` |
-| `api/handlers/leeb.py` / `pdf_tools.py` / `word2pdf.py` | 对应工具的 RPC |
+| `api/handlers/leeb.py` | `leeb.{run,preview_excel}` —— preview_excel 给 data_processing 中间预览用 |
+| `api/handlers/pdf_tools.py` | `pdf_tools.{merge,split_per_page,split_by_ranges,inspect}` —— inspect 给中间预览拉每个 PDF 页数 |
+| `api/handlers/word2pdf.py` | `word2pdf.{convert,inspect}` —— inspect 读 docx 段落数 + size + Word 缓存 Pages |
 | `frontend/src-tauri/src/lib.rs` / `sidecar.rs` | Tauri 启动 + Python sidecar Mutex 串行 RPC |
-| `frontend/src/App.tsx` | 顶层 layout + 快捷键（Ctrl+B / Ctrl+J / Ctrl+Alt+B） |
+| `frontend/src/App.tsx` | 顶层 layout + 快捷键（Ctrl+B / Ctrl+J / Ctrl+Alt+B）+ 嵌套 Providers（plot_curves / data_processing / pdf_tools / word2pdf）|
 | `frontend/src/lib/rpc.ts` | `invoke('rpc_call', ...)` 包装 |
-| `frontend/src/tools/plot_curves/` | controller/Page/SettingsForm + tabs/ 子目录范式 |
+| `frontend/src/tools/plot_curves/` | controller/Page/SettingsForm + tabs/ 子目录范式（form 复杂 tabs 拆） |
+| `frontend/src/tools/data_processing/` | calcType 下拉切计算类型（当前只 leeb，留接口）+ controller/Page/SettingsForm |
+| `frontend/src/tools/pdf_tools/` | mode 切换（merge / split_per_page / split_by_ranges）共享 state |
+| `frontend/src/tools/word2pdf/` | 简版三件套（最少参数：仅输出目录）|
+| `frontend/src/tools/_shared/forms.tsx` | Field / Picker / ResetBtn / RunBtn 跨工具共用 |
 | `core/plot_curves.py` | Excel → PlotJob → 批量出 PNG（`render_plot_to_bytes` 内存版供预览） |
 | `core/calc_functions.py` | INSP-001/002/003 计算（里氏 / 钻芯 / 回弹） |
 | `infra_io/standards_db.py` | SQLite 通用查表层 |

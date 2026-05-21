@@ -232,19 +232,6 @@ function CurveTab() {
           该预设有 {preset.curves.length} 条曲线，此处只调整第 1 条样式。其他曲线沿用预设原版。
         </div>
       )}
-      <Row label="曲线名称" hint="图例文字">
-        <input
-          type="text"
-          value={curve.name}
-          onChange={(e) =>
-            c.patchPreset((p) => {
-              p.curves[0] = { ...p.curves[0], name: e.target.value };
-              return p;
-            })
-          }
-          className={inputClass}
-        />
-      </Row>
       <Row label="颜色">
         <div className="flex items-center gap-2">
           <input

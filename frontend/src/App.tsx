@@ -1,16 +1,16 @@
 /**
- * civ-core shell：VSCode 风布局。
+ * civ-core shell：VSCode 真实布局。
  *
- * 整体（自上而下）：
  *   TitleBar (30px)
- *   Main：ActivityBar (48px) + vertical Group {
- *     上：horizontal Group { SideBar | EditorArea }
- *     下：BottomPanel（可折叠 / 可拖）
- *   }
+ *   Main：[ActivityBar | SideBar(全高) | (Editor+BottomPanel 竖向) | RightPanel(全高)]
  *   StatusBar (22px)
  *
- * Activity Bar 顶部的 Explorer 图标 toggle SideBar 显隐（VSCode 原生）。
- * 底部 Panel 默认折叠；BottomPanel 内部"关闭"按钮 collapse 自身；后续会从工具页主动 expand。
+ * 关键：SideBar 和 RightPanel 都是全高（与 VSCode 一致），底部 Panel 只覆盖
+ * Editor 区域，不挤占 SideBar 和 RightPanel。
+ *
+ * SideBar 显隐：Activity Bar 顶部 Explorer 图标 toggle / Ctrl+B
+ * BottomPanel 显隐：StatusBar「面板」按钮 / Ctrl+J
+ * RightPanel 显隐：当前工具有 settings 时展开；右上角 chevron-right 收起
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -24,6 +24,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
+import { RightPanel } from "./components/RightPanel";
 import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
@@ -49,15 +50,15 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [bottomVisible, setBottomVisible] = useState(true);
+  const [rightVisible, setRightVisible] = useState(true);
   const [outputLog, setOutputLog] = useState("");
 
-  // Panel refs：用于命令式 collapse/expand
   const sidebarRef = useRef<PanelImperativeHandle>(null);
   const bottomRef = useRef<PanelImperativeHandle>(null);
+  const rightRef = useRef<PanelImperativeHandle>(null);
 
   const toolLabel = ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
 
-  // 启动：ping + 拉上次工作区
   useEffect(() => {
     (async () => {
       try {
@@ -71,7 +72,6 @@ export default function App() {
     })();
   }, []);
 
-  // SideBar 显隐：通过 Panel imperative handle
   const handleExplorerToggle = useCallback(() => {
     const p = sidebarRef.current;
     if (!p) return;
@@ -84,7 +84,6 @@ export default function App() {
     }
   }, []);
 
-  // 工具向"输出"Tab 写日志的入口（也会自动展开底部 Panel）
   const appendOutput = useCallback((text: string) => {
     setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
     bottomRef.current?.expand();
@@ -103,20 +102,36 @@ export default function App() {
     }
   }, []);
 
-  // Ctrl+J 全局快捷键（与 VSCode 一致）
+  const toggleRight = useCallback(() => {
+    const p = rightRef.current;
+    if (!p) return;
+    if (p.isCollapsed()) {
+      p.expand();
+      setRightVisible(true);
+    } else {
+      p.collapse();
+      setRightVisible(false);
+    }
+  }, []);
+
+  // 快捷键：Ctrl+J（底部 Panel）/ Ctrl+B（SideBar）/ Ctrl+Alt+B（右侧 Panel）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "j") {
+      const k = e.key.toLowerCase();
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && k === "j") {
         e.preventDefault();
         toggleBottom();
-      } else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+      } else if (e.ctrlKey && !e.shiftKey && !e.altKey && k === "b") {
         e.preventDefault();
         handleExplorerToggle();
+      } else if (e.ctrlKey && e.altKey && !e.shiftKey && k === "b") {
+        e.preventDefault();
+        toggleRight();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleBottom, handleExplorerToggle]);
+  }, [toggleBottom, handleExplorerToggle, toggleRight]);
 
   // SideBar 4 个按钮
   const handleOpenFolder = useCallback(async () => {
@@ -166,90 +181,111 @@ export default function App() {
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
     : null;
 
-  // 底部 Panel "工具设置" Tab 内容 —— 根据当前工具切换
-  const settingsSlot = activeToolId === "plot_curves" ? <PlotCurvesSettingsForm /> : undefined;
+  // 右侧 Panel 内容：当前工具的参数面板（暂时只 plot_curves 有）
+  const rightContent: { title: string; node: React.ReactNode } | null =
+    activeToolId === "plot_curves"
+      ? { title: "工具设置 — 绘曲线图", node: <PlotCurvesSettingsForm /> }
+      : null;
 
   return (
     <PlotCurvesProvider>
-    <div className="flex h-screen w-screen flex-col">
-      <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
+      <div className="flex h-screen w-screen flex-col">
+        <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
-      <div className="flex flex-1 min-h-0">
-        <ActivityBar
-          topItems={TOP_TOOLS}
-          bottomItems={BOTTOM_TOOLS}
-          activeId={activeToolId}
-          onChange={setActiveToolId}
-          explorerActive={sidebarVisible}
-          onExplorerToggle={handleExplorerToggle}
-        />
+        <div className="flex flex-1 min-h-0">
+          <ActivityBar
+            topItems={TOP_TOOLS}
+            bottomItems={BOTTOM_TOOLS}
+            activeId={activeToolId}
+            onChange={setActiveToolId}
+            explorerActive={sidebarVisible}
+            onExplorerToggle={handleExplorerToggle}
+          />
 
-        {/* 上下分栏：上=SideBar|Editor，下=底部 Panel */}
-        <Group orientation="vertical" id="civ-core-vsplit" className="flex flex-1 min-w-0 flex-col">
-          <Panel defaultSize={75} minSize={20} id="vsplit-top">
-            <Group
-              orientation="horizontal"
-              id="civ-core-hsplit"
-              className="flex h-full min-h-0"
+          {/* 主 horizontal group：SideBar(全高) | 中间(Editor+底部 Panel 竖向) | RightPanel(全高) */}
+          <Group orientation="horizontal" id="civ-core-main" className="flex flex-1 min-w-0">
+            <Panel
+              panelRef={sidebarRef}
+              defaultSize={16}
+              minSize={8}
+              collapsible
+              collapsedSize={0}
+              id="sidebar"
+              onResize={(s) => setSidebarVisible(s.asPercentage > 0.5)}
             >
-              <Panel
-                panelRef={sidebarRef}
-                defaultSize={18}
-                minSize={8}
-                collapsible
-                collapsedSize={0}
-                id="sidebar"
-                onResize={(s) => {
-                  // 同步 explorerActive 高亮：用户拖到极小也算折叠
-                  setSidebarVisible(s.asPercentage > 0.5);
-                }}
-              >
-                <SideBar
-                  workspacePath={workspacePath}
-                  refreshKey={refreshKey}
-                  onOpenFolder={handleOpenFolder}
-                  onNewWorkspace={handleNewWorkspace}
-                  onRefresh={handleRefresh}
-                  onCollapseAll={handleCollapseAll}
-                />
-              </Panel>
-              <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
-              <Panel defaultSize={82} minSize={30} id="editor">
-                <EditorArea
-                  activeToolId={activeToolId}
-                  toolLabel={toolLabel}
-                  appendOutput={appendOutput}
-                />
-              </Panel>
-            </Group>
-          </Panel>
-          <Separator className="h-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
-          <Panel
-            panelRef={bottomRef}
-            defaultSize={25}
-            minSize={10}
-            collapsible
-            collapsedSize={0}
-            id="bottom-panel"
-            onResize={(s) => setBottomVisible(s.asPercentage > 0.5)}
-          >
-            <BottomPanel
-              output={outputLog}
-              settingsSlot={settingsSlot}
-              onClose={toggleBottom}
-            />
-          </Panel>
-        </Group>
-      </div>
+              <SideBar
+                workspacePath={workspacePath}
+                refreshKey={refreshKey}
+                onOpenFolder={handleOpenFolder}
+                onNewWorkspace={handleNewWorkspace}
+                onRefresh={handleRefresh}
+                onCollapseAll={handleCollapseAll}
+              />
+            </Panel>
+            <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
 
-      <StatusBar
-        workspacePath={workspacePath}
-        toolLabel={toolLabel}
-        sidecarStatus={sidecarStatus}
-        bottomPanelOpen={bottomVisible}
-        onToggleBottomPanel={toggleBottom}
-      />
-    </div>
+            {/* 中间：Editor + 底部 Panel 竖向分栏 */}
+            <Panel defaultSize={rightContent ? 58 : 84} minSize={30} id="middle">
+              <Group
+                orientation="vertical"
+                id="civ-core-vsplit"
+                className="flex h-full min-h-0 flex-col"
+              >
+                <Panel defaultSize={75} minSize={20} id="editor">
+                  <EditorArea
+                    activeToolId={activeToolId}
+                    toolLabel={toolLabel}
+                    appendOutput={appendOutput}
+                  />
+                </Panel>
+                <Separator className="h-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
+                <Panel
+                  panelRef={bottomRef}
+                  defaultSize={25}
+                  minSize={10}
+                  collapsible
+                  collapsedSize={0}
+                  id="bottom-panel"
+                  onResize={(s) => setBottomVisible(s.asPercentage > 0.5)}
+                >
+                  <BottomPanel output={outputLog} onClose={toggleBottom} />
+                </Panel>
+              </Group>
+            </Panel>
+
+            {/* 右侧 Panel：当前工具的参数面板（只在有 rightContent 时占面积） */}
+            {rightContent && (
+              <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
+            )}
+            <Panel
+              panelRef={rightRef}
+              defaultSize={rightContent ? 26 : 0}
+              minSize={rightContent ? 14 : 0}
+              collapsible
+              collapsedSize={0}
+              id="right-panel"
+              onResize={(s) => setRightVisible(s.asPercentage > 0.5)}
+            >
+              {rightContent && (
+                <RightPanel title={rightContent.title} onClose={toggleRight}>
+                  {rightContent.node}
+                </RightPanel>
+              )}
+            </Panel>
+          </Group>
+        </div>
+
+        <StatusBar
+          workspacePath={workspacePath}
+          toolLabel={toolLabel}
+          sidecarStatus={sidecarStatus}
+          bottomPanelOpen={bottomVisible}
+          onToggleBottomPanel={toggleBottom}
+          rightPanelOpen={rightVisible}
+          onToggleRightPanel={toggleRight}
+          rightPanelAvailable={!!rightContent}
+        />
+      </div>
     </PlotCurvesProvider>
   );
 }

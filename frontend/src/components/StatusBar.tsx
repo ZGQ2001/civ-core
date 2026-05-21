@@ -13,6 +13,10 @@ interface Props {
   /** 底部 Panel 当前是否展开（决定按钮高亮 + 图标方向） */
   bottomPanelOpen: boolean;
   onToggleBottomPanel: () => void;
+  rightPanelOpen: boolean;
+  onToggleRightPanel: () => void;
+  /** 当前工具有没有右侧调参面板（无的话隐藏按钮，避免误导） */
+  rightPanelAvailable: boolean;
 }
 
 export function StatusBar({
@@ -21,6 +25,9 @@ export function StatusBar({
   sidecarStatus,
   bottomPanelOpen,
   onToggleBottomPanel,
+  rightPanelOpen,
+  onToggleRightPanel,
+  rightPanelAvailable,
 }: Props) {
   const bg = workspacePath ? "#007acc" : "#68217a";
   return (
@@ -42,7 +49,7 @@ export function StatusBar({
         <button
           type="button"
           onClick={onToggleBottomPanel}
-          title={`${bottomPanelOpen ? "隐藏" : "显示"}面板 (Ctrl+J)`}
+          title={`${bottomPanelOpen ? "隐藏" : "显示"}底部面板 (Ctrl+J)`}
           className="flex items-center gap-1 px-1.5 h-[18px] rounded hover:bg-white/15 transition-colors"
         >
           <i
@@ -52,6 +59,21 @@ export function StatusBar({
           />
           <span>面板</span>
         </button>
+        {rightPanelAvailable && (
+          <button
+            type="button"
+            onClick={onToggleRightPanel}
+            title={`${rightPanelOpen ? "隐藏" : "显示"}右侧调参 (Ctrl+Alt+B)`}
+            className="flex items-center gap-1 px-1.5 h-[18px] rounded hover:bg-white/15 transition-colors"
+          >
+            <i
+              className={`codicon !text-[12px] ${
+                rightPanelOpen ? "codicon-layout-sidebar-right" : "codicon-layout-sidebar-right-off"
+              }`}
+            />
+            <span>调参</span>
+          </button>
+        )}
       </div>
     </div>
   );

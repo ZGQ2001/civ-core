@@ -41,6 +41,7 @@ interface State {
   previewTotal: number;
   previewTitle: string;
   previewRowId: string;
+  previewRowData: Record<string, string | number | boolean | null>;
 
   // 运行
   running: boolean;
@@ -91,6 +92,9 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   const [previewTotal, setPreviewTotal] = useState(0);
   const [previewTitle, setPreviewTitle] = useState("");
   const [previewRowId, setPreviewRowId] = useState("");
+  const [previewRowData, setPreviewRowData] = useState<
+    Record<string, string | number | boolean | null>
+  >({});
 
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunRes | null>(null);
@@ -170,6 +174,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
           setPreviewTotal(r.total_rows);
           setPreviewTitle(r.title);
           setPreviewRowId(r.row_id);
+          setPreviewRowData(r.row_data ?? {});
         })
         .catch((e) => {
           if (myId !== reqIdRef.current) return;
@@ -228,6 +233,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       previewTotal,
       previewTitle,
       previewRowId,
+      previewRowData,
       running,
       result,
       runError,
@@ -247,7 +253,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       presets, presetDetails, presetLoadError,
       preset, excelPath, sheet, headerRow, outputDir, rowIndex,
       workingPreset, previewPng, previewError, previewLoading,
-      previewTotal, previewTitle, previewRowId,
+      previewTotal, previewTitle, previewRowId, previewRowData,
       running, result, runError, edited, effectivePreset,
       patchPreset, resetPreset, run,
     ],

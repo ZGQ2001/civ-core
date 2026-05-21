@@ -87,6 +87,26 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             </span>
           )}
           <span className="text-vscode-text-faint">·</span>
+          <label className="text-xs text-vscode-text-dim">Sheet:</label>
+          <input
+            type="text"
+            value={c.sheet}
+            onChange={(e) => c.setSheet(e.target.value)}
+            placeholder="（默认第一个）"
+            title="留空 = 用 Excel 的第一个 sheet"
+            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-32"
+          />
+          <span className="text-vscode-text-faint">·</span>
+          <label className="text-xs text-vscode-text-dim">表头行:</label>
+          <input
+            type="number"
+            min={1}
+            value={c.headerRow}
+            onChange={(e) => c.setHeaderRow(Math.max(1, parseInt(e.target.value || "1", 10)))}
+            title="表头所在的 1-based 行号；数据从下一行开始读"
+            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-14"
+          />
+          <span className="text-vscode-text-faint">·</span>
           <label className="text-xs text-vscode-text-dim">预设:</label>
           <select
             value={c.preset}
@@ -286,9 +306,77 @@ function PreviewPane() {
         )}
       </div>
 
+      {/* 数据对照：当前 row 的所有列值，预设用到的列高亮 */}
+      <RowDataDetails />
+
       <div className="text-xs text-vscode-text-faint">
         提示：在「底部 Panel · 工具设置」里调参，会实时反映到这张预览。
       </div>
     </div>
+  );
+}
+
+function RowDataDetails() {
+  const c = usePlotCurves();
+  const rowData = c.previewRowData;
+  const keys = Object.keys(rowData);
+  if (keys.length === 0) return null;
+
+  // 算预设引用的列名集合（id_column + curves[].points[].var_column）
+  const referenced = new Set<string>();
+  if (c.effectivePreset) {
+    if (c.effectivePreset.id_column) referenced.add(c.effectivePreset.id_column);
+    for (const curve of c.effectivePreset.curves) {
+      for (const pt of curve.points as Array<{ var_column?: string }>) {
+        if (pt?.var_column) referenced.add(pt.var_column);
+      }
+    }
+  }
+
+  return (
+    <details className="w-full max-w-4xl mx-auto px-4">
+      <summary className="cursor-pointer text-xs text-vscode-text-dim hover:text-white py-2 flex items-center gap-2">
+        <i className="codicon codicon-table !text-[12px]" />
+        <span>查看本行原始数据（{keys.length} 列）</span>
+        <span className="text-[10px] text-vscode-text-faint">— 高亮列被预设引用</span>
+      </summary>
+      <div className="mt-2 border border-vscode-border rounded-[2px] overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-[#252525] text-vscode-text-dim">
+            <tr>
+              <th className="text-left px-3 py-1.5 w-2/5 font-normal">列名</th>
+              <th className="text-left px-3 py-1.5 font-normal">值</th>
+            </tr>
+          </thead>
+          <tbody>
+            {keys.map((k, i) => {
+              const v = rowData[k];
+              const used = referenced.has(k);
+              return (
+                <tr
+                  key={k}
+                  className={cn(
+                    i % 2 === 0 ? "bg-vscode-bg" : "bg-[#222]",
+                    used && "bg-vscode-selected/30",
+                  )}
+                >
+                  <td className={cn("px-3 py-1 align-top", used ? "text-white font-medium" : "text-vscode-text-dim")}>
+                    {used && <i className="codicon codicon-link !text-[10px] mr-1 text-vscode-focus" />}
+                    {k}
+                  </td>
+                  <td className="px-3 py-1 text-vscode-text font-mono align-top break-all">
+                    {v === null || v === undefined ? (
+                      <span className="text-vscode-text-faint italic">（空）</span>
+                    ) : (
+                      String(v)
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }

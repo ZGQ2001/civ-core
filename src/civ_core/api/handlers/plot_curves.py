@@ -154,10 +154,45 @@ def render_preview(
     idx = min(max(0, row_index), len(jobs) - 1)
     job = jobs[idx]
     png_bytes = render_plot_to_bytes(job)
+    # row_data：当前预览图对应的 Excel 行所有列值（让前端展示数据对照）
+    # 注意 jobs 已过滤了空 ID / 缺数据行，所以 idx 不能直接索引 rows；
+    # 通过 job.output_path.stem（=id 字符串）反查匹配的 row
+    row_id_str = job.output_path.stem
+    matched_row = _find_row_by_id(rows, preset_dict.get("id_column", ""), row_id_str)
     return {
         "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         "mime": "image/png",
-        "row_id": job.output_path.stem,
+        "row_id": row_id_str,
         "title": job.title,
         "total_rows": len(jobs),
+        "row_data": _jsonify_row(matched_row) if matched_row else {},
     }
+
+
+def _find_row_by_id(rows: list[dict], id_column: str, target_id: str) -> dict | None:
+    """按 build_jobs 里的 id 字符串规则反查 row（None/NaN 跳过；int float 去 .0）。"""
+    for row in rows:
+        raw = row.get(id_column)
+        if raw is None or (isinstance(raw, float) and raw != raw):
+            continue
+        s = str(int(raw)) if isinstance(raw, float) and raw.is_integer() else str(raw).strip()
+        if s == target_id:
+            return row
+    return None
+
+
+def _jsonify_row(row: dict) -> dict:
+    """把 row 的所有值转 JSON-safe（datetime / NaN / bytes 等）。前端只用于显示。"""
+    out: dict = {}
+    for k, v in row.items():
+        if v is None:
+            out[k] = None
+        elif isinstance(v, (int, str, bool)):
+            out[k] = v
+        elif isinstance(v, float):
+            # NaN / inf 在 JSON 里非法；当成 None 处理（前端显示"—"）
+            out[k] = v if v == v and v not in (float("inf"), float("-inf")) else None
+        else:
+            # datetime / Decimal / 其他：toString 兜底
+            out[k] = str(v)
+    return out

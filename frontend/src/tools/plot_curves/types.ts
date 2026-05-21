@@ -34,6 +34,8 @@ export interface PreviewRes {
   row_id: string;
   title: string;
   total_rows: number;
+  /** 当前行的所有列值 — 给前端"数据对照"折叠区显示 */
+  row_data: Record<string, string | number | boolean | null>;
 }
 
 export interface FailedItem {

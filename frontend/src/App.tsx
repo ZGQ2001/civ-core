@@ -28,6 +28,7 @@ import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
+import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
@@ -165,7 +166,11 @@ export default function App() {
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
     : null;
 
+  // 底部 Panel "工具设置" Tab 内容 —— 根据当前工具切换
+  const settingsSlot = activeToolId === "plot_curves" ? <PlotCurvesSettingsForm /> : undefined;
+
   return (
+    <PlotCurvesProvider>
     <div className="flex h-screen w-screen flex-col">
       <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
@@ -230,7 +235,7 @@ export default function App() {
           >
             <BottomPanel
               output={outputLog}
-              settingsSlot={undefined /* batch 3 填 plot_curves form */}
+              settingsSlot={settingsSlot}
               onClose={toggleBottom}
             />
           </Panel>
@@ -245,5 +250,6 @@ export default function App() {
         onToggleBottomPanel={toggleBottom}
       />
     </div>
+    </PlotCurvesProvider>
   );
 }

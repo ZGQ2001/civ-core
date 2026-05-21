@@ -5,7 +5,7 @@
 import { LeebHardnessTool } from "../tools/LeebHardnessTool";
 import { PdfToolsTool } from "../tools/PdfToolsTool";
 import { Placeholder } from "../tools/Placeholder";
-import { PlotCurvesTool } from "../tools/PlotCurvesTool";
+import { PlotCurvesPage } from "../tools/plot_curves";
 import { Word2PdfTool } from "../tools/Word2PdfTool";
 
 interface Props {
@@ -29,7 +29,7 @@ function renderTool(
 ) {
   switch (id) {
     case "plot_curves":
-      return <PlotCurvesTool appendOutput={appendOutput} />;
+      return <PlotCurvesPage appendOutput={appendOutput} />;
     case "leeb_hardness":
       return <LeebHardnessTool appendOutput={appendOutput} />;
     case "pdf_tools":

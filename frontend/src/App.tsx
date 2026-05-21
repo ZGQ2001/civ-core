@@ -22,9 +22,10 @@ import {
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
+import { AgentPanel } from "./components/AgentPanel";
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
-import { RightPanel } from "./components/RightPanel";
+import { RightPanel, type RightTab } from "./components/RightPanel";
 import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
@@ -181,11 +182,22 @@ export default function App() {
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
     : null;
 
-  // 右侧 Panel 内容：当前工具的参数面板（暂时只 plot_curves 有）
-  const rightContent: { title: string; node: React.ReactNode } | null =
-    activeToolId === "plot_curves"
-      ? { title: "工具设置 — 绘曲线图", node: <PlotCurvesSettingsForm /> }
-      : null;
+  // 右侧 Panel 多 tab：当前工具调参 + 常驻 AI 助手（占位）。
+  // 调参 tab 只在该工具确实有 settings 时出现，AI 助手始终在。
+  const rightTabs: RightTab[] = [
+    ...(activeToolId === "plot_curves"
+      ? [
+          {
+            id: "settings",
+            label: "调参",
+            icon: "settings-gear",
+            node: <PlotCurvesSettingsForm />,
+          },
+        ]
+      : []),
+    { id: "agent", label: "AI 助手", icon: "hubot", node: <AgentPanel /> },
+  ];
+  const rightAvailable = rightTabs.length > 0;
 
   return (
     <PlotCurvesProvider>
@@ -225,7 +237,7 @@ export default function App() {
             <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
 
             {/* 中间：Editor + 底部 Panel 竖向分栏 */}
-            <Panel defaultSize={rightContent ? 58 : 84} minSize={30} id="middle">
+            <Panel defaultSize={rightAvailable ? 58 : 84} minSize={30} id="middle">
               <Group
                 orientation="vertical"
                 id="civ-core-vsplit"
@@ -253,23 +265,21 @@ export default function App() {
               </Group>
             </Panel>
 
-            {/* 右侧 Panel：当前工具的参数面板（只在有 rightContent 时占面积） */}
-            {rightContent && (
+            {/* 右侧 Panel：tab 化（调参 + AI 助手） */}
+            {rightAvailable && (
               <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
             )}
             <Panel
               panelRef={rightRef}
-              defaultSize={rightContent ? 26 : 0}
-              minSize={rightContent ? 14 : 0}
+              defaultSize={rightAvailable ? 26 : 0}
+              minSize={rightAvailable ? 14 : 0}
               collapsible
               collapsedSize={0}
               id="right-panel"
               onResize={(s) => setRightVisible(s.asPercentage > 0.5)}
             >
-              {rightContent && (
-                <RightPanel title={rightContent.title} onClose={toggleRight}>
-                  {rightContent.node}
-                </RightPanel>
+              {rightAvailable && (
+                <RightPanel tabs={rightTabs} defaultActiveId="settings" onClose={toggleRight} />
               )}
             </Panel>
           </Group>
@@ -283,7 +293,7 @@ export default function App() {
           onToggleBottomPanel={toggleBottom}
           rightPanelOpen={rightVisible}
           onToggleRightPanel={toggleRight}
-          rightPanelAvailable={!!rightContent}
+          rightPanelAvailable={rightAvailable}
         />
       </div>
     </PlotCurvesProvider>

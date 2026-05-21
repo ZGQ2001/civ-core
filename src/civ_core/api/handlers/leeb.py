@@ -3,8 +3,9 @@
 RPC 方法（注册时前缀 "leeb."）：
   leeb.run(input_xlsx, output_xlsx=None, angle_degrees=0.0)
     -> {batches, components, output, report_table_data}
-       output xlsx 仅写「过程数据」sheet（精致版「报告插入表」交给 C# sidecar）。
-       report_table_data 给前端串行调 xlsx.write_leeb_report_table 用。
+       Python 端只算数据返 report_table_data；不写任何 xlsx 文件 —— 输出文件
+       由前端串行调 xlsx.write_leeb_report_table（C# sidecar / ClosedXML）创建，
+       每批 1 个「报告插入表」sheet。
   leeb.preview_excel(path, sheet=None, header_row=1, max_rows=50)
     -> {sheets, sheet, headers, rows, total_rows, shown_rows}
        前端「中间预览」用：用户改 sheet/header_row 时实时拉前 N 行表格。
@@ -18,10 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from civ_core.core.calc_functions import calc_leeb_hardness_workbook
-from civ_core.infra_io.leeb_excel import read_leeb_workbook, write_leeb_results_workbook
+from civ_core.infra_io.leeb_excel import read_leeb_workbook
 from civ_core.infra_io.standards_db import init_standards_db
 
 __all__ = ["run", "preview_excel"]
+
+
+_CALC_TYPE_SUFFIX = "里氏"  # 输出文件名里检测类型段；未来加钻芯/回弹时用 calcType 入参推断
 
 
 def run(
@@ -29,13 +33,16 @@ def run(
     output_xlsx: str | None = None,
     angle_degrees: float = 0.0,
 ) -> dict:
-    """读 Excel → 套规范 → 算硬度 → 写「过程数据」sheet。
+    """读 Excel → 套规范 → 算硬度 → 返回结构化报告数据（不写文件）。
 
-    output_xlsx=None 时默认 <input 同级>/<stem>_结果.xlsx。
+    output_xlsx=None 时默认 `<input 同级>/<stem>_里氏_结果.xlsx`（带检测类型段防覆盖：
+    未来跑钻芯用同一份原始数据时输出文件名不冲突）。
     angle_degrees：全部构件的默认测量角度，沿用 read_leeb_workbook 语义。
 
-    返回里加 report_table_data：前端拿到后串行调 xlsx.write_leeb_report_table（C# sidecar），
-    用 ClosedXML 把「报告插入表」sheet 追加到同一文件（合并单元格 / 字体 / 边框等精致格式）。
+    Python 端只算数据；输出 xlsx 完全交给 C# sidecar 的 xlsx.write_leeb_report_table
+    创建（用 ClosedXML 写精致格式：合并单元格 / 字体 / 边框）。前端串行调用：
+      1. leeb.run → 拿到 report_table_data + 承诺的 output 路径
+      2. xlsx.write_leeb_report_table(output_path, report_table_data) → C# 写文件
     """
     from civ_core.infra_io.leeb_excel import _safe_sheet_name
 
@@ -43,23 +50,17 @@ def run(
     if output_xlsx:
         out = Path(output_xlsx)
     else:
-        out = src.parent / f"{src.stem}_结果.xlsx"
+        out = src.parent / f"{src.stem}_{_CALC_TYPE_SUFFIX}_结果.xlsx"
 
-    # 读 workbook → 规范库 → 计算 → 写出（不写报告插入表，交给 C#）
+    # 读 workbook → 规范库 → 计算（不写任何 xlsx）
     workbook = read_leeb_workbook(src, default_angle_degrees=angle_degrees)
     db, conn = init_standards_db()
     try:
         result = calc_leeb_hardness_workbook(workbook, db=db)
     finally:
         conn.close()
-    write_leeb_results_workbook(
-        out,
-        result,
-        angle_degrees=angle_degrees,
-        include_report_sheet=False,
-    )
 
-    # 组装报告表格数据，前端转交 C# sidecar 写精致版「报告插入表」
+    # 组装报告表格数据，前端转交 C# 写精致 xlsx
     report_table_data = []
     for br in result.batch_results:
         components = []
@@ -70,8 +71,9 @@ def run(
                 "test_areas_raw": [list(area) for area in comp_input.test_areas_raw],
                 "comp_fb_min_avg": comp_result.comp_fb_min_avg,
             })
+        # sheet 名直接 = 批名（没「过程数据」sheet 对照后，"-报告插入表" 后缀失去意义）
         report_table_data.append({
-            "sheet_name": _safe_sheet_name(f"{br.batch_name}-报告插入表"),
+            "sheet_name": _safe_sheet_name(br.batch_name),
             "components": components,
             "batch_fb_char_avg": br.batch_fb_char_avg,
         })

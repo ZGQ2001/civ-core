@@ -413,9 +413,9 @@ def test_leeb_preview_excel_exposes_in_all() -> None:
 def test_leeb_run_returns_report_table_data(tmp_path: Path) -> None:
     """leeb.run 必须返回 report_table_data，前端串行调 xlsx.write_leeb_report_table 需要。
 
-    同时验证 output xlsx 只含「过程数据」sheet，不含「报告插入表」（交给 C# 写）。
+    Python 端不再创建任何 xlsx —— 输出文件完全由 C# sidecar 写。
     """
-    from openpyxl import Workbook, load_workbook
+    from openpyxl import Workbook
 
     src = tmp_path / "input.xlsx"
     out = tmp_path / "result.xlsx"
@@ -440,7 +440,8 @@ def test_leeb_run_returns_report_table_data(tmp_path: Path) -> None:
     assert isinstance(res["report_table_data"], list)
     assert len(res["report_table_data"]) == 1
     batch = res["report_table_data"][0]
-    assert batch["sheet_name"].endswith("-报告插入表")
+    # sheet 名 = 批名（无后缀，直接对应原始数据 sheet 名风格）
+    assert batch["sheet_name"] == "检测批1"
     assert "batch_fb_char_avg" in batch
     assert isinstance(batch["components"], list)
     assert len(batch["components"]) == 1
@@ -453,12 +454,29 @@ def test_leeb_run_returns_report_table_data(tmp_path: Path) -> None:
     assert comp["test_areas_raw"][0][0] == 467
     assert "comp_fb_min_avg" in comp
 
-    # 输出 xlsx 应只含「过程数据」sheet（报告插入表 sheet 由 C# 后续追加）
-    wb_out = load_workbook(str(out))
-    assert any(name.endswith("-过程数据") for name in wb_out.sheetnames)
-    assert not any(name.endswith("-报告插入表") for name in wb_out.sheetnames), (
-        "leeb.run 不应再写「报告插入表」sheet —— 交给 C# xlsx.write_leeb_report_table"
+    # Python 端不写任何 xlsx；输出文件应该不存在（C# sidecar 后续创建）
+    assert not out.exists(), "leeb.run 不应创建 xlsx 文件 —— C# 端负责写"
+
+
+def test_leeb_run_default_output_path_carries_calc_type(tmp_path: Path) -> None:
+    """默认 output 路径必须带检测类型段，防止跑钻芯/回弹用同输入时覆盖里氏结果。"""
+    from openpyxl import Workbook
+
+    src = tmp_path / "01检测批一【】.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "检测批1"
+    ws.append(
+        ["序号", "构件位置", "HL1", "HL2", "HL3", "HL4", "HL5", "HL6", "HL7", "HL8", "HL9", "厚度"]
     )
+    ws.append([1, "钢柱A", 467, 465, 471, 468, 467, 468, 473, 472, 463, 12])
+    ws.append(["", "", 471, 478, 471, 470, 480, 477, 472, 475, 465, ""])
+    ws.append(["", "", 477, 481, 468, 469, 478, 470, 469, 476, 462, ""])
+    wb.save(str(src))
+
+    res = leeb_handler.run(str(src), output_xlsx=None, angle_degrees=0)
+    assert res["output"].endswith("01检测批一【】_里氏_结果.xlsx")
 
 
 # ── pdf_tools handler ─────────────────────────────────────

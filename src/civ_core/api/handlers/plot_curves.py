@@ -23,7 +23,7 @@ from civ_core.core.plot_curves import (
     run_plot_curves,
 )
 
-__all__ = ["list_presets", "run", "preflight", "render_preview"]
+__all__ = ["list_presets", "list_sheets", "run", "preflight", "render_preview"]
 
 
 def list_presets() -> dict:
@@ -81,6 +81,17 @@ def run(
         },
         "output_dir": str(out_dir),
     }
+
+
+def list_sheets(excel_path: str) -> dict:
+    """列举 Excel 的所有 sheet 名，给前端 dropdown 用。
+
+    返回 {sheets: [str]}；文件不存在/打不开抛 ExcelReadError，由 dispatcher
+    包成 RPC error 返前端。
+    """
+    from civ_core.infra_io.excel_reader import read_sheet_names
+
+    return {"sheets": read_sheet_names(Path(excel_path))}
 
 
 def preflight(

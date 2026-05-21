@@ -88,14 +88,28 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
           )}
           <span className="text-vscode-text-faint">·</span>
           <label className="text-xs text-vscode-text-dim">Sheet:</label>
-          <input
-            type="text"
+          <select
             value={c.sheet}
             onChange={(e) => c.setSheet(e.target.value)}
-            placeholder="（默认第一个）"
-            title="留空 = 用 Excel 的第一个 sheet"
-            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-32"
-          />
+            disabled={!c.excelPath || c.sheetsLoading || c.sheets.length === 0}
+            title={
+              c.sheetsError
+                ? `读 sheet 失败: ${c.sheetsError}`
+                : c.sheetsLoading
+                  ? "正在读 sheet 列表…"
+                  : "下拉选择要绘图的 sheet"
+            }
+            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] min-w-[8rem] max-w-[16rem]"
+          >
+            {!c.excelPath && <option value="">（先选 Excel）</option>}
+            {c.excelPath && c.sheetsLoading && <option value="">（加载中…）</option>}
+            {c.excelPath && !c.sheetsLoading && c.sheets.length === 0 && (
+              <option value="">{c.sheetsError ? "（读取失败）" : "（无 sheet）"}</option>
+            )}
+            {c.sheets.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
           <span className="text-vscode-text-faint">·</span>
           <label className="text-xs text-vscode-text-dim">表头行:</label>
           <input

@@ -23,6 +23,11 @@ interface State {
   presetDetails: Record<string, PlotPreset>;
   presetLoadError: string | null;
 
+  // 当前 Excel 的 sheet 列表（选 Excel 后自动拉）
+  sheets: string[];
+  sheetsLoading: boolean;
+  sheetsError: string | null;
+
   // 用户选择
   preset: string;
   excelPath: string;
@@ -77,6 +82,10 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   const [presetDetails, setPresetDetails] = useState<Record<string, PlotPreset>>({});
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
 
+  const [sheets, setSheets] = useState<string[]>([]);
+  const [sheetsLoading, setSheetsLoading] = useState(false);
+  const [sheetsError, setSheetsError] = useState<string | null>(null);
+
   const [preset, setPreset] = useState<string>("");
   const [excelPath, setExcelPath] = useState<string>("");
   const [sheet, setSheet] = useState<string>("");
@@ -123,6 +132,39 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     setWorkingPreset(null);
     setRowIndex(0);
   }, [preset]);
+
+  // 切换 Excel → 拉 sheets 列表；自动选第一个；重置 row index
+  useEffect(() => {
+    if (!excelPath) {
+      setSheets([]);
+      setSheetsError(null);
+      setSheet("");
+      return;
+    }
+    let cancelled = false;
+    setSheetsLoading(true);
+    setSheetsError(null);
+    rpc<{ sheets: string[] }>("plot_curves.list_sheets", { excel_path: excelPath })
+      .then((r) => {
+        if (cancelled) return;
+        setSheets(r.sheets);
+        // 当前选中 sheet 不在新文件里 → 退回第一个；空文件 → 清空
+        setSheet((cur) => (r.sheets.includes(cur) ? cur : r.sheets[0] ?? ""));
+        setRowIndex(0);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setSheetsError(String(e));
+        setSheets([]);
+        setSheet("");
+      })
+      .finally(() => {
+        if (!cancelled) setSheetsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [excelPath]);
 
   const effectivePreset: PlotPreset | null = workingPreset ?? presetDetails[preset] ?? null;
   const edited = workingPreset !== null;
@@ -220,6 +262,9 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       presets,
       presetDetails,
       presetLoadError,
+      sheets,
+      sheetsLoading,
+      sheetsError,
       preset,
       excelPath,
       sheet,
@@ -251,6 +296,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     }),
     [
       presets, presetDetails, presetLoadError,
+      sheets, sheetsLoading, sheetsError,
       preset, excelPath, sheet, headerRow, outputDir, rowIndex,
       workingPreset, previewPng, previewError, previewLoading,
       previewTotal, previewTitle, previewRowId, previewRowData,

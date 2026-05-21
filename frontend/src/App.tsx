@@ -33,6 +33,7 @@ import { rpc, type WorkspaceLast } from "./lib/rpc";
 import { DataProcessingProvider, DataProcessingSettingsForm } from "./tools/data_processing";
 import { PdfToolsProvider, PdfToolsSettingsForm } from "./tools/pdf_tools";
 import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
+import { Word2PdfProvider, Word2PdfSettingsForm } from "./tools/word2pdf";
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
@@ -217,6 +218,16 @@ export default function App() {
           },
         ]
       : []),
+    ...(activeToolId === "word2pdf"
+      ? [
+          {
+            id: "settings",
+            label: "调参",
+            icon: "settings-gear",
+            node: <Word2PdfSettingsForm />,
+          },
+        ]
+      : []),
     { id: "agent", label: "AI 助手", icon: "hubot", node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
@@ -225,6 +236,7 @@ export default function App() {
     <PlotCurvesProvider>
       <DataProcessingProvider>
       <PdfToolsProvider>
+      <Word2PdfProvider>
       <div className="flex h-screen w-screen flex-col">
         <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
 
@@ -320,6 +332,7 @@ export default function App() {
           rightPanelAvailable={rightAvailable}
         />
       </div>
+      </Word2PdfProvider>
       </PdfToolsProvider>
       </DataProcessingProvider>
     </PlotCurvesProvider>

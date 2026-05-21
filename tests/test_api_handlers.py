@@ -12,6 +12,7 @@ from civ_core.api.handlers import files as files_handler
 from civ_core.api.handlers import leeb as leeb_handler
 from civ_core.api.handlers import pdf_tools as pdf_handler
 from civ_core.api.handlers import plot_curves as plot_handler
+from civ_core.api.handlers import word2pdf as word2pdf_handler
 from civ_core.api.handlers import workspace as ws_handler
 
 
@@ -448,3 +449,40 @@ def test_pdf_inspect_missing_file(tmp_path) -> None:
 
 def test_pdf_inspect_exposes_in_all() -> None:
     assert "inspect" in pdf_handler.__all__
+
+
+# ── word2pdf handler ──────────────────────────────────────
+def _make_simple_docx(out_path: Path, n_paragraphs: int) -> Path:
+    """造一个有 n 段的简单 docx 供测试。python-docx 生成的不含 Pages 缓存。"""
+    from docx import Document
+
+    doc = Document()
+    for i in range(n_paragraphs):
+        doc.add_paragraph(f"段落 {i + 1}")
+    doc.save(str(out_path))
+    return out_path
+
+
+def test_word2pdf_inspect_basic(tmp_path) -> None:
+    """inspect 返每个 docx 的 size_kb + paragraphs；纯 python-docx 生成不含 pages。"""
+    a = _make_simple_docx(tmp_path / "a.docx", n_paragraphs=5)
+    b = _make_simple_docx(tmp_path / "b.docx", n_paragraphs=12)
+    res = word2pdf_handler.inspect([str(a), str(b)])
+    assert len(res["files"]) == 2
+    assert res["files"][0]["paragraphs"] == 5
+    assert res["files"][1]["paragraphs"] == 12
+    assert res["files"][0]["size_kb"] > 0
+    assert "error" not in res["files"][0]
+
+
+def test_word2pdf_inspect_missing_file(tmp_path) -> None:
+    """单文件不存在 → 带 error 字段，不影响其他统计。"""
+    a = _make_simple_docx(tmp_path / "a.docx", n_paragraphs=3)
+    res = word2pdf_handler.inspect([str(a), str(tmp_path / "ghost.docx")])
+    assert res["files"][0]["paragraphs"] == 3
+    assert "error" in res["files"][1]
+    assert "不存在" in res["files"][1]["error"]
+
+
+def test_word2pdf_inspect_exposes_in_all() -> None:
+    assert "inspect" in word2pdf_handler.__all__

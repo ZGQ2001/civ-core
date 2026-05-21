@@ -6,7 +6,7 @@ import { DataProcessingPage } from "../tools/data_processing";
 import { PdfToolsPage } from "../tools/pdf_tools";
 import { Placeholder } from "../tools/Placeholder";
 import { PlotCurvesPage } from "../tools/plot_curves";
-import { Word2PdfTool } from "../tools/Word2PdfTool";
+import { Word2PdfPage } from "../tools/word2pdf";
 
 interface Props {
   activeToolId: string | null;
@@ -35,7 +35,7 @@ function renderTool(
     case "pdf_tools":
       return <PdfToolsPage appendOutput={appendOutput} />;
     case "word2pdf":
-      return <Word2PdfTool appendOutput={appendOutput} />;
+      return <Word2PdfPage appendOutput={appendOutput} />;
     case "settings":
       return <Placeholder icon="settings-gear" label={label ?? "设置"} detail="后续接入" />;
     default:

@@ -2,7 +2,7 @@
  * plot_curves 工具页主区：顶部操作行 + 实时预览图 + 行号切换 + 结果区。
  * 所有 state 走 usePlotCurves Context；调参表单在底部 Panel（SettingsForm.tsx）。
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 
@@ -15,6 +15,8 @@ interface Props {
 
 export function PlotCurvesPage({ appendOutput }: Props = {}) {
   const c = usePlotCurves();
+  // 对照视图：true=图+表左右并排，false=图全宽 + 数据表折叠在下方
+  const [compareView, setCompareView] = useState(false);
 
   const pickExcel = useCallback(async () => {
     const sel = await openDialog({
@@ -175,9 +177,9 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
         )}
       </div>
 
-      {/* 中间：预览图 */}
-      <div className="flex-1 min-h-0 overflow-auto bg-[#252525] flex flex-col items-center">
-        <PreviewPane />
+      {/* 中间：预览图（可切换对照视图） */}
+      <div className="flex-1 min-h-0 overflow-hidden bg-[#252525]">
+        <PreviewPane compareView={compareView} onToggleCompareView={() => setCompareView(v => !v)} />
       </div>
 
       {/* 结果区（跑完才显示） */}
@@ -237,17 +239,21 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
   );
 }
 
-function PreviewPane() {
+function PreviewPane({
+  compareView,
+  onToggleCompareView,
+}: {
+  compareView: boolean;
+  onToggleCompareView: () => void;
+}) {
   const c = usePlotCurves();
 
   if (!c.excelPath) {
     return (
-      <div className="flex flex-1 items-center justify-center text-center px-8">
+      <div className="flex h-full items-center justify-center text-center px-8">
         <div>
           <i className="codicon codicon-graph !text-[48px] text-vscode-text-faint" />
-          <div className="mt-3 text-sm text-vscode-text-dim">
-            请先选 Excel 数据文件
-          </div>
+          <div className="mt-3 text-sm text-vscode-text-dim">请先选 Excel 数据文件</div>
           <div className="mt-1 text-xs text-vscode-text-faint">
             选好后会实时预览第 1 行数据的图
           </div>
@@ -258,7 +264,7 @@ function PreviewPane() {
 
   if (c.previewError) {
     return (
-      <div className="flex flex-1 items-center justify-center text-center px-8">
+      <div className="flex h-full items-center justify-center text-center px-8">
         <div className="max-w-2xl text-xs text-red-400 whitespace-pre-wrap">
           <i className="codicon codicon-error !text-[20px] block mb-2" />
           预览失败：{c.previewError}
@@ -268,73 +274,110 @@ function PreviewPane() {
   }
 
   return (
-    <div className="flex flex-col items-center w-full py-4 gap-3">
-      {/* 行号切换条 */}
-      {c.previewTotal > 1 && (
-        <div className="flex items-center gap-2 text-xs text-vscode-text">
-          <button
-            type="button"
-            disabled={c.rowIndex === 0}
-            onClick={() => c.setRowIndex(c.rowIndex - 1)}
-            className="px-2 h-6 bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            <i className="codicon codicon-chevron-left !text-[12px]" />
-            上一张
-          </button>
-          <span className="text-vscode-text-dim">
-            第 {c.rowIndex + 1} / {c.previewTotal} 张
-            {c.previewRowId && <span className="ml-2 text-vscode-text">（{c.previewRowId}）</span>}
-          </span>
-          <button
-            type="button"
-            disabled={c.rowIndex >= c.previewTotal - 1}
-            onClick={() => c.setRowIndex(c.rowIndex + 1)}
-            className="px-2 h-6 bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            下一张
-            <i className="codicon codicon-chevron-right !text-[12px]" />
-          </button>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* 工具条：行翻页 + 对照视图切换 */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-vscode-border text-xs shrink-0">
+        {c.previewTotal > 1 && (
+          <>
+            <button
+              type="button"
+              disabled={c.rowIndex === 0}
+              onClick={() => c.setRowIndex(c.rowIndex - 1)}
+              className="px-2 h-6 bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <i className="codicon codicon-chevron-left !text-[12px]" />
+              上一张
+            </button>
+            <span className="text-vscode-text-dim">
+              第 {c.rowIndex + 1} / {c.previewTotal} 张
+              {c.previewRowId && <span className="ml-2 text-vscode-text">（{c.previewRowId}）</span>}
+            </span>
+            <button
+              type="button"
+              disabled={c.rowIndex >= c.previewTotal - 1}
+              onClick={() => c.setRowIndex(c.rowIndex + 1)}
+              className="px-2 h-6 bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              下一张
+              <i className="codicon codicon-chevron-right !text-[12px]" />
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onToggleCompareView}
+          title="把数据表和曲线图并排显示（再点回到图全宽）"
+          className={cn(
+            "ml-auto px-2 h-6 border border-vscode-border rounded-[2px] flex items-center gap-1",
+            compareView
+              ? "bg-vscode-selected text-white border-vscode-focus"
+              : "bg-[#2d2d2d] hover:bg-[#3a3a3a] text-vscode-text-dim hover:text-white",
+          )}
+        >
+          <i
+            className={`codicon !text-[12px] ${
+              compareView ? "codicon-split-horizontal" : "codicon-table"
+            }`}
+          />
+          {compareView ? "退出对照" : "对照视图"}
+        </button>
+      </div>
+
+      {/* 主区：根据 compareView 切换布局 */}
+      {compareView ? (
+        <div className="flex-1 grid grid-cols-2 gap-2 p-3 min-h-0 overflow-hidden">
+          <div className="flex items-center justify-center overflow-auto">
+            <PreviewImage />
+          </div>
+          <div className="overflow-auto border border-vscode-border rounded-[2px] bg-vscode-bg">
+            <RowDataTable />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center overflow-auto py-4 gap-3">
+          <PreviewImage />
+          <RowDataDetails />
+          <div className="text-xs text-vscode-text-faint">
+            提示：右上「对照视图」可让数据表和曲线图左右并排；右侧调参面板改参数实时反映到预览。
+          </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* 图片本体（loading 时半透明） */}
-      <div className="relative">
-        {c.previewPng ? (
-          <img
-            src={`data:image/png;base64,${c.previewPng}`}
-            alt={c.previewTitle}
-            className={cn(
-              "max-w-full bg-white rounded-[2px] shadow-lg transition-opacity",
-              c.previewLoading ? "opacity-50" : "opacity-100",
-            )}
-            style={{ maxHeight: "70vh" }}
-          />
-        ) : (
-          <div className="flex h-[300px] w-[500px] items-center justify-center text-vscode-text-dim">
-            {c.previewLoading ? (
-              <span className="flex items-center gap-2">
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[16px]" />
-                正在渲染预览…
-              </span>
-            ) : (
-              "等待预览"
-            )}
-          </div>
-        )}
-        {c.previewLoading && c.previewPng && (
-          <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 text-white text-xs rounded">
-            <i className="codicon codicon-loading codicon-modifier-spin !text-[10px] mr-1" />
-            更新中…
-          </div>
-        )}
-      </div>
-
-      {/* 数据对照：当前 row 的所有列值，预设用到的列高亮 */}
-      <RowDataDetails />
-
-      <div className="text-xs text-vscode-text-faint">
-        提示：在「底部 Panel · 工具设置」里调参，会实时反映到这张预览。
-      </div>
+function PreviewImage() {
+  const c = usePlotCurves();
+  return (
+    <div className="relative">
+      {c.previewPng ? (
+        <img
+          src={`data:image/png;base64,${c.previewPng}`}
+          alt={c.previewTitle}
+          className={cn(
+            "max-w-full bg-white rounded-[2px] shadow-lg transition-opacity",
+            c.previewLoading ? "opacity-50" : "opacity-100",
+          )}
+          style={{ maxHeight: "75vh" }}
+        />
+      ) : (
+        <div className="flex h-[300px] w-[500px] items-center justify-center text-vscode-text-dim">
+          {c.previewLoading ? (
+            <span className="flex items-center gap-2">
+              <i className="codicon codicon-loading codicon-modifier-spin !text-[16px]" />
+              正在渲染预览…
+            </span>
+          ) : (
+            "等待预览"
+          )}
+        </div>
+      )}
+      {c.previewLoading && c.previewPng && (
+        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 text-white text-xs rounded">
+          <i className="codicon codicon-loading codicon-modifier-spin !text-[10px] mr-1" />
+          更新中…
+        </div>
+      )}
     </div>
   );
 }
@@ -458,13 +501,32 @@ function IconBtn({
   );
 }
 
+/** 折叠版（默认模式下方） */
 function RowDataDetails() {
+  const c = usePlotCurves();
+  const keys = Object.keys(c.previewRowData);
+  if (keys.length === 0) return null;
+  return (
+    <details className="w-full max-w-4xl mx-auto px-4">
+      <summary className="cursor-pointer text-xs text-vscode-text-dim hover:text-white py-2 flex items-center gap-2">
+        <i className="codicon codicon-table !text-[12px]" />
+        <span>查看本行原始数据（{keys.length} 列）</span>
+        <span className="text-[10px] text-vscode-text-faint">— 高亮列被预设引用</span>
+      </summary>
+      <div className="mt-2">
+        <RowDataTable />
+      </div>
+    </details>
+  );
+}
+
+/** 表格本体（对照视图模式 + 折叠版 共用） */
+function RowDataTable() {
   const c = usePlotCurves();
   const rowData = c.previewRowData;
   const keys = Object.keys(rowData);
-  if (keys.length === 0) return null;
 
-  // 算预设引用的列名集合（id_column + curves[].points[].var_column）
+  // 预设引用的列名集合（id_column + curves[].points[].var_column）
   const referenced = new Set<string>();
   if (c.effectivePreset) {
     if (c.effectivePreset.id_column) referenced.add(c.effectivePreset.id_column);
@@ -475,50 +537,54 @@ function RowDataDetails() {
     }
   }
 
-  return (
-    <details className="w-full max-w-4xl mx-auto px-4">
-      <summary className="cursor-pointer text-xs text-vscode-text-dim hover:text-white py-2 flex items-center gap-2">
-        <i className="codicon codicon-table !text-[12px]" />
-        <span>查看本行原始数据（{keys.length} 列）</span>
-        <span className="text-[10px] text-vscode-text-faint">— 高亮列被预设引用</span>
-      </summary>
-      <div className="mt-2 border border-vscode-border rounded-[2px] overflow-hidden">
-        <table className="w-full text-xs">
-          <thead className="bg-[#252525] text-vscode-text-dim">
-            <tr>
-              <th className="text-left px-3 py-1.5 w-2/5 font-normal">列名</th>
-              <th className="text-left px-3 py-1.5 font-normal">值</th>
-            </tr>
-          </thead>
-          <tbody>
-            {keys.map((k, i) => {
-              const v = rowData[k];
-              const used = referenced.has(k);
-              return (
-                <tr
-                  key={k}
-                  className={cn(
-                    i % 2 === 0 ? "bg-vscode-bg" : "bg-[#222]",
-                    used && "bg-vscode-selected/30",
-                  )}
-                >
-                  <td className={cn("px-3 py-1 align-top", used ? "text-white font-medium" : "text-vscode-text-dim")}>
-                    {used && <i className="codicon codicon-link !text-[10px] mr-1 text-vscode-focus" />}
-                    {k}
-                  </td>
-                  <td className="px-3 py-1 text-vscode-text font-mono align-top break-all">
-                    {v === null || v === undefined ? (
-                      <span className="text-vscode-text-faint italic">（空）</span>
-                    ) : (
-                      String(v)
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+  if (keys.length === 0) {
+    return (
+      <div className="p-4 text-xs text-vscode-text-faint italic">
+        （暂无数据 — 等预览渲染好后会自动显示当前行）
       </div>
-    </details>
+    );
+  }
+
+  return (
+    <table className="w-full text-xs">
+      <thead className="bg-[#252525] text-vscode-text-dim sticky top-0">
+        <tr>
+          <th className="text-left px-3 py-1.5 w-2/5 font-normal">列名</th>
+          <th className="text-left px-3 py-1.5 font-normal">值</th>
+        </tr>
+      </thead>
+      <tbody>
+        {keys.map((k, i) => {
+          const v = rowData[k];
+          const used = referenced.has(k);
+          return (
+            <tr
+              key={k}
+              className={cn(
+                i % 2 === 0 ? "bg-vscode-bg" : "bg-[#222]",
+                used && "bg-vscode-selected/30",
+              )}
+            >
+              <td
+                className={cn(
+                  "px-3 py-1 align-top",
+                  used ? "text-white font-medium" : "text-vscode-text-dim",
+                )}
+              >
+                {used && <i className="codicon codicon-link !text-[10px] mr-1 text-vscode-focus" />}
+                {k}
+              </td>
+              <td className="px-3 py-1 text-vscode-text font-mono align-top break-all">
+                {v === null || v === undefined ? (
+                  <span className="text-vscode-text-faint italic">（空）</span>
+                ) : (
+                  String(v)
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

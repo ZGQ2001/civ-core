@@ -377,13 +377,12 @@ function RowNavBar({
   );
 }
 
-/** 当前行所有列值的紧凑条带：pill 风、横向滚动、引用列高亮。只占一行高。 */
+/** 当前行被图引用的列：pill 风条带、横向滚动、只占一行高。
+ *  引用列 = id_column + curves[].points[].var_column；其他列不显示（噪音）。 */
 function RowDataStrip() {
   const c = usePlotCurves();
   const rowData = c.previewRowData;
-  const keys = Object.keys(rowData);
 
-  // 引用列集合：id_column + curves[].points[].var_column
   const referenced = new Set<string>();
   if (c.effectivePreset) {
     if (c.effectivePreset.id_column) referenced.add(c.effectivePreset.id_column);
@@ -394,31 +393,29 @@ function RowDataStrip() {
     }
   }
 
+  const visibleKeys = Object.keys(rowData).filter((k) => referenced.has(k));
+
   return (
     <div className="shrink-0 border-t border-vscode-border bg-[#1a1a1a]">
       <div className="px-3 py-2 overflow-x-auto whitespace-nowrap text-[11px]">
-        {keys.length === 0 ? (
+        {Object.keys(rowData).length === 0 ? (
           <span className="text-vscode-text-faint italic">
-            （预览渲染好后这里显示当前行的所有列值；引用列会高亮）
+            （预览渲染好后这里显示图里用到的列）
+          </span>
+        ) : visibleKeys.length === 0 ? (
+          <span className="text-vscode-text-faint italic">
+            （这条曲线还没引用任何列；去右侧「曲线」tab 添加数据点）
           </span>
         ) : (
-          keys.map((k) => {
+          visibleKeys.map((k) => {
             const v = rowData[k];
-            const used = referenced.has(k);
             return (
               <span
                 key={k}
                 title={`${k}: ${v ?? "(空)"}`}
-                className={cn(
-                  "inline-flex items-baseline mr-2 px-2 py-0.5 rounded border align-middle",
-                  used
-                    ? "bg-vscode-selected/40 border-vscode-focus"
-                    : "bg-[#252525] border-vscode-border",
-                )}
+                className="inline-flex items-baseline mr-2 px-2 py-0.5 rounded border bg-vscode-selected/40 border-vscode-focus align-middle"
               >
-                <span className={cn("mr-1.5", used ? "text-white" : "text-vscode-text-dim")}>
-                  {k}
-                </span>
+                <span className="mr-1.5 text-white">{k}</span>
                 <span className="text-vscode-text font-mono">
                   {v === null || v === undefined ? (
                     <span className="text-vscode-text-faint italic">—</span>

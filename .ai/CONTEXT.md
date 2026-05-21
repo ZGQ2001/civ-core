@@ -6,23 +6,30 @@
 
 ## 当前焦点（2026-05-21）
 
-**plot_curves 体验完整闭环 + 复刻 VSCode 真实布局 + 预设/曲线/数据点全面可编辑。**
+**plot_curves 体验完整闭环：一预设一曲线 + 上下对照 + 数据点 form + 行号跳转。** 用户反馈一轮密集修复后，UI 已可用。
 
 布局：`ActivityBar | SideBar(全高) | (Editor + 底部输出 Panel) | RightPanel(全高，tab 化)`。
 
-plot_curves 工具页：
-- 顶部操作行：Excel 选择 / Sheet 下拉（自动拉 list_sheets）/ 表头行 / 预设 dropdown / 预设按钮组（新建空预设 / 复制 / 重命名 / 删除 / 保存或另存为）/ 跑
-- 预览图：实时（300ms debounce）；多行 Excel 上下张翻；右上角「对照视图」toggle 切换"图占满 + 折叠数据表" / "左图右表并排"
-- 右侧 RightPanel tab 化：「调参」（4 sub-tab：基础 / X 轴 / Y 轴 / 曲线）+「AI 助手」（占位，未来挂常驻 agent）
-- 曲线 form：accordion 多曲线，每条卡内含色块 + 线宽/点大小/点样式 slider + 数据点子表（增删 fixed_axis/fixed_value/var_column，var_column 用 datalist 给 Excel 表头建议）
+plot_curves 工具页（中间预览 + 右侧参数 范式）：
+- 顶部操作行：Excel / Sheet 下拉（自动拉 list_sheets）/ 表头行 / 曲线 dropdown（业务 UI 命名"曲线"，code 还叫 preset）/ 曲线按钮组（新建 / 复制 / 重命名 / 删除 / 保存或另存为）/ 跑
+- 行号工具条：上一行 / 下一行 / 跳转到第 N 行（number input，blur/Enter 提交）/ 「数据对照」开关
+- 预览图：实时（300ms debounce）；图上方工具条；下方按需弹出"数据对照"条带
+- 数据对照条带：**只显示图引用的列**（id_column + curves[].points[].var_column），pill 风、横向滚动、一行高
+- 右侧 RightPanel tab 化：「调参」（4 sub-tab：基础 / X 轴 / Y 轴 / 曲线，单曲线 form + 数据点子表）+「AI 助手」（占位）
 
-预设管理：
-- list_presets 多返 sources（system/user）字段；前端按 `[系统]` / `[我的]` 标签区分
-- CRUD 全套：save_preset / delete_preset / rename_preset / copy_preset；系统预设保存时强制弹"另存为"提示
+曲线管理（一预设 = 一曲线）：
+- list_presets 多返 sources（system/user）；前端按 `[内置]` / `[我的]` 标签区分
+- CRUD：save / delete / rename / copy；内置曲线保存时强制弹"另存为"
+- 新建曲线时默认模板已带 curves[0]，进 form 无空状态困惑
+- form 中删了「曲线名称」字段 + 删了「新增曲线」/「删除曲线」按钮（一预设一曲线原则）
+
+修过的关键 bug：
+- 数据对照永远空：原用 `job.output_path.stem` 反查 row 的 id，但 stem 是 `filename_template` 格式化后的全文件名，永远配不上裸 id。改用 BuildSummary 的"跳过行号"集合反推保留行，按 row_index 直接索引。
+- 原生控件白底：index.css 加 `html { color-scheme: dark }`，让 number 微调箭头 / color picker / range 槽位都按深色渲染
 
 **屎山清理**：scripts/_*.py 7 个一次性脚本已删（commit 5d6ce79）。其他没积压。
 
-**文档结构**：AI 维护的 PROGRESS.md / CONTEXT.md 已移到 `.ai/`（隐藏目录，约定同 `.github/.cursor/.vscode/`）。CLAUDE.md 已同步新文档位置 + RightPanel 布局 + emoji 禁令。
+**文档结构**：AI 维护的 PROGRESS.md / CONTEXT.md 已在 `.ai/`（隐藏目录，约定同 `.github/.cursor/.vscode/`）。CLAUDE.md 已同步新文档位置 + RightPanel 布局 + emoji 禁令 + handler `__all__` 强约束。
 
 ---
 

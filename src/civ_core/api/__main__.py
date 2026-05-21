@@ -58,6 +58,7 @@ def build_dispatcher() -> Dispatcher:
     d = Dispatcher()
     d.register_module("workspace", handlers.workspace)
     d.register_module("files", handlers.files)
+    d.register_module("plot_curves", handlers.plot_curves)
     # ping/version 用于桥联测试
     d.register("ping", lambda: "pong")
     d.register("version", lambda: {"app": "civ-core", "api": 1})

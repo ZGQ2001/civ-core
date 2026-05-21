@@ -1,7 +1,10 @@
 /**
- * EditorArea：中间工具区占位。
- * B2 阶段会做成 Tab 编辑器（多文件 / 多工具 Tab）；T1 阶段先放占位欢迎页。
+ * EditorArea：按 activeToolId 路由到各工具页。
+ * T5：plot_curves 已端到端；其他工具页用 Placeholder 占位，等后续轮次接入。
  */
+import { Placeholder } from "../tools/Placeholder";
+import { PlotCurvesTool } from "../tools/PlotCurvesTool";
+
 interface Props {
   activeToolId: string | null;
   toolLabel: string | null;
@@ -9,21 +12,25 @@ interface Props {
 
 export function EditorArea({ activeToolId, toolLabel }: Props) {
   return (
-    <div className="flex h-full flex-col bg-vscode-bg">
-      <div className="flex flex-1 items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-light text-vscode-text-dim">
-            {toolLabel ?? "请选择工具"}
-          </div>
-          {activeToolId && (
-            <div className="mt-2 text-xs text-vscode-text-faint">
-              工具 ID：<code>{activeToolId}</code>
-              <br />
-              （T5 阶段会接入实际工具页面）
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="flex h-full flex-col bg-vscode-bg min-w-0">
+      {renderTool(activeToolId, toolLabel)}
     </div>
   );
+}
+
+function renderTool(id: string | null, label: string | null) {
+  switch (id) {
+    case "plot_curves":
+      return <PlotCurvesTool />;
+    case "leeb_hardness":
+      return <Placeholder icon="symbol-numeric" label={label ?? "里氏硬度"} detail="T5.2 接入" />;
+    case "pdf_tools":
+      return <Placeholder icon="file-pdf" label={label ?? "PDF 工具"} detail="T5.3 接入" />;
+    case "word2pdf":
+      return <Placeholder icon="file-binary" label={label ?? "Word → PDF"} detail="T5.4 接入" />;
+    case "settings":
+      return <Placeholder icon="settings-gear" label={label ?? "设置"} detail="后续接入" />;
+    default:
+      return <Placeholder icon="tools" label={label ?? "请选择工具"} detail="从左侧 Activity Bar 选一个工具" />;
+  }
 }

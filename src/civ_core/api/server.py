@@ -50,16 +50,21 @@ class Dispatcher:
         self._handlers[method] = handler
 
     def register_module(self, prefix: str, module: Any) -> None:
-        """便捷：把 module 里所有不以 _ 开头的可调用对象按 `prefix.name` 注册。
+        """便捷：把 module 里的业务函数按 `prefix.name` 注册。
+
+        优先读 module.__all__：只注册显式导出的名字（避免把顶部 import 的
+        Path/dataclass/工具类误注册成 RPC 方法 —— 那是 API 边界泄漏）。
+        没有 __all__ 时回退到旧行为（全量 dir 扫，仍跳过 _ 开头）。
 
         例：register_module("workspace", workspace_module) →
             workspace_module.last() 注册成 "workspace.last"
         """
-        for name in dir(module):
-            if name.startswith("_"):
-                continue
-            obj = getattr(module, name)
-            if callable(obj):
+        names = getattr(module, "__all__", None)
+        if names is None:
+            names = [n for n in dir(module) if not n.startswith("_")]
+        for name in names:
+            obj = getattr(module, name, None)
+            if obj is not None and callable(obj):
                 self.register(f"{prefix}.{name}", obj)
 
     def handle_raw(self, raw: str) -> str:

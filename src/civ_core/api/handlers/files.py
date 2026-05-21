@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# RPC 暴露白名单（防 Path 被 register_module 误注册）
+__all__ = ["list_dir", "exists"]
+
 # 总是隐藏的应用专属目录（用户 show_hidden=True 也不显示，避免污染业务视图）
 _ALWAYS_HIDDEN = {".civ-core"}
 

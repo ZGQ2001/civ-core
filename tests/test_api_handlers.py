@@ -9,6 +9,7 @@ import pytest
 
 from civ_core.api import handlers
 from civ_core.api.handlers import files as files_handler
+from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import workspace as ws_handler
 
 
@@ -127,14 +128,44 @@ def test_exists(tmp_path) -> None:
 
 # ── 端到端 dispatch + handler 注册 ───────────────────────
 def test_full_dispatcher_methods(isolated_ws_store) -> None:
-    """build_dispatcher 注册了 workspace/files 全部方法 + ping/version。"""
+    """build_dispatcher 注册了 workspace/files/plot_curves 全部方法 + ping/version。"""
     from civ_core.api.__main__ import build_dispatcher
 
     d = build_dispatcher()
     methods = d.methods()
     # 关键方法都在
-    for m in ("ping", "version", "workspace.last", "workspace.set", "files.list_dir"):
+    for m in (
+        "ping",
+        "version",
+        "workspace.last",
+        "workspace.set",
+        "files.list_dir",
+        "plot_curves.list_presets",
+        "plot_curves.run",
+    ):
         assert m in methods
+
+
+def test_dispatcher_only_exposes_whitelisted_methods() -> None:
+    """register_module 必须只暴露 __all__ 里的方法 —— 避免顶部 import 的
+    工具类（Path / dataclass / 业务函数）被误注册成 RPC 方法，造成边界泄漏。"""
+    from civ_core.api.__main__ import build_dispatcher
+
+    d = build_dispatcher()
+    methods = set(d.methods())
+    # 这些是模块顶部 import 进来的，绝不能被注册成 RPC
+    forbidden = {
+        "workspace.Path",
+        "workspace.create_standard_structure",
+        "files.Path",
+        "plot_curves.Path",
+        "plot_curves.PlotCurvesError",
+        "plot_curves.get_preset_names",
+        "plot_curves.load_presets",
+        "plot_curves.run_plot_curves",
+    }
+    leaked = forbidden & methods
+    assert not leaked, f"非业务方法被泄漏为 RPC: {leaked}"
 
 
 def test_ping_roundtrip_via_dispatcher() -> None:
@@ -168,3 +199,54 @@ def test_workspace_set_via_dispatcher(isolated_ws_store, tmp_path) -> None:
 def test_handlers_module_exposes_submodules() -> None:
     assert hasattr(handlers, "workspace")
     assert hasattr(handlers, "files")
+    assert hasattr(handlers, "plot_curves")
+
+
+# ── plot_curves handler ───────────────────────────────────
+def test_plot_curves_list_presets_shape() -> None:
+    """list_presets 返回 {presets:[str], default:str|None}；预设库应不为空（系统预设至少 1 条）。"""
+    res = plot_handler.list_presets()
+    assert isinstance(res["presets"], list)
+    assert all(isinstance(n, str) for n in res["presets"])
+    # 系统至少有一条预设（healthcheck 验过）
+    assert len(res["presets"]) >= 1
+    assert res["default"] == res["presets"][0]
+
+
+def test_plot_curves_run_rejects_missing_preset(tmp_path) -> None:
+    """跑不存在的预设 → PlotCurvesError（dispatcher 会包成 -32603）。"""
+    from civ_core.core.plot_curves import PlotCurvesError
+
+    fake_xlsx = tmp_path / "x.xlsx"
+    fake_xlsx.write_bytes(b"not a real xlsx")  # 不会真的去读到这一步
+    with pytest.raises(PlotCurvesError):
+        plot_handler.run(
+            excel_path=str(fake_xlsx),
+            preset="不存在的预设名",
+            output_dir=str(tmp_path / "out"),
+        )
+
+
+def test_plot_curves_run_default_output_dir(tmp_path, monkeypatch) -> None:
+    """output_dir=None 时默认 <excel 同级>/曲线图/。通过 mock run_plot_curves 验路径计算。"""
+    from civ_core.api.handlers import plot_curves as ph
+    from civ_core.core.plot_curves import RunResult
+
+    excel = tmp_path / "data.xlsx"
+    excel.write_bytes(b"")
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        # 返回空结果即可
+        from civ_core.core.plot_curves import BuildSummary
+
+        return RunResult(
+            written=[],
+            failed=[],
+            summary=BuildSummary(total_rows=0, skipped_empty_id=[], skipped_bad_data=[]),
+        )
+
+    monkeypatch.setattr(ph, "run_plot_curves", fake_run)
+    ph.run(excel_path=str(excel), preset="x")  # output_dir 省略
+    assert captured["output_dir"] == excel.parent / "曲线图"

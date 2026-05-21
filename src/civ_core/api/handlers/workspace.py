@@ -18,6 +18,10 @@ from pathlib import Path
 
 from civ_core.infra_io.workspace_scaffold import create_standard_structure
 
+# RPC 暴露的方法白名单：避免把顶部 import 的工具类（Path / create_standard_structure）
+# 被 register_module 误注册成 RPC 方法
+__all__ = ["last", "set", "clear", "create_standard"]
+
 _STORE = Path("~/.civ-core/workspace.json").expanduser()
 
 

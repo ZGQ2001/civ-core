@@ -540,13 +540,17 @@ def write_leeb_results_workbook(
     workbook_result: LeebHardnessWorkbookResult,
     *,
     angle_degrees: float,
+    include_report_sheet: bool = True,
 ) -> None:
-    """把 workbook 结果导出为 xlsx：每批 2 sheet（过程 + 报告插入表）。
+    """把 workbook 结果导出为 xlsx：每批 1 或 2 sheet。
 
-    sheet 命名：「<批名>-过程数据」+「<批名>-报告插入表」
-    sheet 顺序：所有批的"过程"sheet 在前，所有"报告"sheet 在后？
-                还是按批分组（A 批过程、A 批报告、B 批过程、B 批报告）？
-    选后者：分组形式更便于按检测批切换查看
+    include_report_sheet=True（默认，CLI / 旧调用兼容）：每批 2 sheet（过程 + 报告插入表）
+    include_report_sheet=False（RPC handler 用）：每批只写「过程数据」sheet；
+      「报告插入表」交给 C# sidecar (xlsx.write_leeb_report_table) 用 ClosedXML 生成
+      精致格式（合并单元格 / 字体 / 边框 / 列宽）追加到同文件。
+
+    sheet 命名：「<批名>-过程数据」+ 可选「<批名>-报告插入表」
+    sheet 顺序：按批分组（A 批过程、A 批报告、B 批过程、B 批报告）
     """
     wb = Workbook()
     # 删除默认空 sheet
@@ -556,11 +560,12 @@ def write_leeb_results_workbook(
     for br in workbook_result.batch_results:
         # sheet 名长度上限 31 字符（openpyxl/Excel 硬限）
         proc_name = _safe_sheet_name(f"{br.batch_name}-过程数据")
-        rep_name = _safe_sheet_name(f"{br.batch_name}-报告插入表")
         ws_proc = wb.create_sheet(proc_name)
-        ws_rep = wb.create_sheet(rep_name)
         _write_process_sheet(ws_proc, br, angle_degrees)
-        _write_report_sheet(ws_rep, br)
+        if include_report_sheet:
+            rep_name = _safe_sheet_name(f"{br.batch_name}-报告插入表")
+            ws_rep = wb.create_sheet(rep_name)
+            _write_report_sheet(ws_rep, br)
 
     try:
         wb.save(str(path))

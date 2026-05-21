@@ -410,6 +410,57 @@ def test_leeb_preview_excel_exposes_in_all() -> None:
     assert "preview_excel" in leeb_handler.__all__
 
 
+def test_leeb_run_returns_report_table_data(tmp_path: Path) -> None:
+    """leeb.run 必须返回 report_table_data，前端串行调 xlsx.write_leeb_report_table 需要。
+
+    同时验证 output xlsx 只含「过程数据」sheet，不含「报告插入表」（交给 C# 写）。
+    """
+    from openpyxl import Workbook, load_workbook
+
+    src = tmp_path / "input.xlsx"
+    out = tmp_path / "result.xlsx"
+
+    # 造一个合规的 leeb 新格式输入：1 批 1 构件 3 测区 9 HL 值
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "检测批1"
+    ws.append(
+        ["序号", "构件位置", "HL1", "HL2", "HL3", "HL4", "HL5", "HL6", "HL7", "HL8", "HL9", "厚度"]
+    )
+    ws.append([1, "钢柱A", 467, 465, 471, 468, 467, 468, 473, 472, 463, 12])
+    ws.append(["", "", 471, 478, 471, 470, 480, 477, 472, 475, 465, ""])
+    ws.append(["", "", 477, 481, 468, 469, 478, 470, 469, 476, 462, ""])
+    wb.save(str(src))
+
+    res = leeb_handler.run(str(src), str(out), angle_degrees=0)
+
+    # 返回结构必含 report_table_data，前端不拿到这个就调不了 C# RPC
+    assert "report_table_data" in res
+    assert isinstance(res["report_table_data"], list)
+    assert len(res["report_table_data"]) == 1
+    batch = res["report_table_data"][0]
+    assert batch["sheet_name"].endswith("-报告插入表")
+    assert "batch_fb_char_avg" in batch
+    assert isinstance(batch["components"], list)
+    assert len(batch["components"]) == 1
+
+    comp = batch["components"][0]
+    assert comp["name"] == "钢柱A"
+    assert comp["thickness_mm"] == 12.0
+    assert len(comp["test_areas_raw"]) == 3
+    assert all(len(area) == 9 for area in comp["test_areas_raw"])
+    assert comp["test_areas_raw"][0][0] == 467
+    assert "comp_fb_min_avg" in comp
+
+    # 输出 xlsx 应只含「过程数据」sheet（报告插入表 sheet 由 C# 后续追加）
+    wb_out = load_workbook(str(out))
+    assert any(name.endswith("-过程数据") for name in wb_out.sheetnames)
+    assert not any(name.endswith("-报告插入表") for name in wb_out.sheetnames), (
+        "leeb.run 不应再写「报告插入表」sheet —— 交给 C# xlsx.write_leeb_report_table"
+    )
+
+
 # ── pdf_tools handler ─────────────────────────────────────
 def _make_blank_pdf(out_path: Path, n_pages: int) -> Path:
     """造一个 n 页空白 PDF 供测试用。"""

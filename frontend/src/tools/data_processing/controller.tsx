@@ -182,9 +182,38 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
         angle_degrees: angle,
       };
       if (outputPath.trim()) params.output_xlsx = outputPath.trim();
-      const res = await rpc<RunRes>("leeb.run", params);
-      setResult(res);
-      return res;
+
+      // ── 第 1 步：Python leeb.run 算 + 写「过程数据」sheet ──
+      // 后端把「报告插入表」交给 C# 写，所以这里也返回 report_table_data
+      const res = await rpc<RunRes & {
+        report_table_data: Array<{
+          sheet_name: string;
+          components: Array<{
+            name: string;
+            thickness_mm: number;
+            test_areas_raw: number[][];
+            comp_fb_min_avg: number;
+          }>;
+          batch_fb_char_avg: number;
+        }>;
+      }>("leeb.run", params);
+
+      // ── 第 2 步：C# sidecar 写精致「报告插入表」sheet（合并/字体/边框/列宽）──
+      if (res.report_table_data && res.report_table_data.length > 0) {
+        await rpc("xlsx.write_leeb_report_table", {
+          output_path: res.output,
+          batches: res.report_table_data,
+        });
+      }
+
+      // UI 只关心 batches/components/output，不展示 report_table_data
+      const display: RunRes = {
+        batches: res.batches,
+        components: res.components,
+        output: res.output,
+      };
+      setResult(display);
+      return display;
     } catch (e) {
       setRunError(String(e));
       return null;

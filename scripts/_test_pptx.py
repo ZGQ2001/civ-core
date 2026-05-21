@@ -1,2 +1,0 @@
-
-print("pptx module available")

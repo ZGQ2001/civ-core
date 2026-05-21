@@ -4,9 +4,21 @@
 
 ---
 
-## 当前焦点（2026-05-21）
+## 当前焦点（2026-05-22）
 
-**T5.5 Step 2 完成：C# 端写精致「报告插入表」xlsx + Python leeb.run 串行链路**。用户工作流 ①数据处理 → ②曲线图 → ③报告生成 → ④Word→PDF；当前完成 ①升级（leeb 输出从粗糙 7 列改为对齐报告格式的 14 列 + 合并 + 字体 + 边框）。
+**T5.5 Step 4 完成：leeb 整套迁 C#**。Python 端 leeb 业务全部清理（handler / leeb_excel / calc_leeb_* + 4 个测试文件删除）。SidecarRouter 改默认 C# 白名单 Python。用户方向「以后代码都用 C#」已落地。
+
+leeb 全套 C# 实现（dotnet/civ-doc/）：
+- Calc/Leeb/LeebDomain.cs — 数据契约 records
+- Calc/Leeb/LeebMath.cs — 查表 / 插值 / 截尾平均（跟 Python 完全等价）
+- Calc/Leeb/LeebExcelReader.cs — ClosedXML 读 leeb 输入（合并单元格 + 每构件 3 行）
+- Calc/Leeb/LeebCalculator.cs — INSP-001 钢材里氏计算
+- Handlers/LeebHandlers.cs — leeb.run / leeb.preview_excel RPC
+- StandardsDb/StandardsDb.cs — 只读规范库（Python sidecar 启动时 seed）
+
+测试覆盖 41 个 xUnit（40 通过 + 1 Skip 真实数据集成）：
+- Python 端跑黄金值 → C# 端跑同输入 → 完全一致（hl_m=468/473/472, fb_min=506/516/514, comp_fb_min_avg=512）
+- 真实 D 号站房 01检测批一【】.xlsx 跑通：钢梁 50 构件、钢柱 8 构件、含合并单元格
 
 T5.5 方向调整记录（重要）：
 - 原计划 Step 2 做 `doc.fill_template`（Word 模板填充 + 209 循环）—— **不做了**
@@ -74,9 +86,9 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 
 ## 下一步候选（按价值排）
 
-1. **用户实测 T5.5 Step 2**：`bash run.sh` → data_processing 工具页选真实 leeb Excel 跑 → 打开输出对照精致格式（合并 / 字体 / 边框 / 列宽）是否满足；列宽偏差或字体可微调
+1. **用户实测 T5.5 Step 4**：`bash run.sh` → data_processing 工具页跑你的 60 构件真实 leeb 数据 → 对比 Python 时代 2 分钟，C# 应该 1-3 秒
 2. **T5.5 Step 3: 报告生成工具页 + doc.compose_report**：新 ActivityBar 项「报告生成」；C# 端实现轻量 Word 变量替换 + xlsx sheet 嵌入 Word + 图片嵌入；模板 docx 公司信息写死（用户只一份），项目元信息（委托方/编号/日期/工程概况）从前端 form 拿
-3. **T5.5 Step 4: leeb Excel 读取切 C#**：解决「计算速度慢」痛点 + 合并单元格 openpyxl 解析弱；要先 profile 确认瓶颈在读 Excel 而不是算法
+3. **加钻芯/回弹 calcType 也迁 C#**：用户方向「以后代码都用 C#」；data_processing 工具页 calcType 下拉加新项；C# 端 Calc/CoreDrilling/ + Calc/Rebound/ 复制 Leeb/ 范式
 4. **T6 打包**：PyInstaller Python sidecar + dotnet publish C# + Tauri externalBin 同时引两个
 5. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
 6. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
@@ -137,16 +149,13 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 | `plot_curves.run` | 批量出图；preset_override 覆盖预设跑 |
 | `plot_curves.preflight` | 跑前预检列名匹配 |
 | `plot_curves.save_preset` / `delete_preset` / `rename_preset` / `copy_preset` | 用户预设 CRUD |
-| `leeb.run` | 里氏硬度（data_processing 工具页跑） |
-| `leeb.preview_excel` | data_processing 中间表格预览（含 sheets + headers + rows + total_rows） |
-| `pdf_tools.{merge,split_per_page,split_by_ranges}` | PDF 合并/拆分 |
-| `pdf_tools.inspect` | pdf_tools 中间预览：每个 PDF 的 pages + size_kb，单个失败带 error |
-| `word2pdf.convert` | Word→PDF 批量（COM） |
-| `word2pdf.inspect` | word2pdf 中间预览：每个 docx 的 size_kb + paragraphs + (pages 可选) |
-| `doc.ping` / `doc.version` | C# sidecar 链路验证；前端 App.tsx 启动时并行 ping 两边 |
-| `xlsx.write_leeb_report_table` | **T5.5 Step 2 已交付**：ClosedXML 写精致「报告插入表」sheet 追加到 leeb 输出 xlsx |
+| `leeb.run` | **走 C# sidecar**（T5.5 Step 4 已迁）；读 Excel + 算 + 返 report_table_data |
+| `leeb.preview_excel` | **走 C#**：data_processing 中间表格预览 |
+| `pdf_tools.{merge,split_per_page,split_by_ranges,inspect}` | Python 端 PDF 合并/拆分/预览 |
+| `word2pdf.{convert,inspect}` | Python 端 Word→PDF 批量（COM）+ 预览 |
+| `doc.ping` / `doc.version` | C# sidecar 链路验证 |
+| `xlsx.write_leeb_report_table` | C# ClosedXML 写精致「报告插入表」 |
 | `doc.compose_report` *(T5.5 Step 3 未做)* | 报告生成：模板 docx + 变量替换 + xlsx sheet 嵌入 + 图片嵌入 |
-| `xlsx.read_leeb_workbook` *(T5.5 Step 4 未做)* | leeb Excel 读取迁 C#：合并单元格 / 加速 |
 
 **新加 RPC 必须在 handler 模块加 `__all__` 白名单** — 否则顶部 import 的 Path/dataclass 会被 `register_module` 误暴露成 RPC 方法（已在 server.py 修过这个 bug，但行为依赖 `__all__`）。
 
@@ -157,7 +166,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ```bash
 cd frontend && npx tsc -b --noEmit              # TS 类型
 uv run --frozen ruff check .                    # Python lint
-uv run --frozen pytest -q                       # Python 测试（当前 323 passed）
+uv run --frozen pytest -q                       # Python 测试（当前 283 passed，删 leeb 测试后）
 uv run --frozen python scripts/healthcheck.py   # 6 项冒烟
 cd frontend/src-tauri && cargo check            # Rust 编译（改了 sidecar.rs / lib.rs 时跑）
 cd frontend/src-tauri && cargo test --lib       # Rust 单测（sidecar routing 等）

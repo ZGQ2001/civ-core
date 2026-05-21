@@ -1,22 +1,15 @@
-"""检测计算函数集合（INSP-001/002/003）。
+"""检测计算函数集合（Python 端：INSP-002 钻芯法 + INSP-003 回弹法）。
 
-为什么单文件而不是按规范拆 3 个：
-  - 3 个公式都是"统计 + 规范表查找"模式，共用 _trim_mean / _lookup_interp 等工具
-  - 后续可能再加 INSP-004/005，到 ~10 个函数时再按域拆模块也来得及
+INSP-001 钢材里氏硬度已迁 C# sidecar (civ-doc)；本模块只剩 Python 端继续承担的：
+  - INSP-002 钻芯法 calc_core_drilling_concrete
+  - INSP-003 回弹法 calc_rebound_concrete
+共享 _stdev_sample / _lookup_with_interp / _lookup_2d_fixed_key1_interp_key2 等工具。
 
 设计要点：
   - 纯 Python（不引 numpy/scipy）：用 statistics + 手写线性插值
   - StandardsDB 由外部传入（沿用 chart_writer 等的模式）
   - 出参全部走 domain/calc_schema 的 frozen dataclass
   - 异常用 utils/exceptions 的 InputError（用户输入不合规）
-  - 数据精度严格按公式文档要求做 round（避免下游再 round 一遍）
-
-模块结构：
-  ── 工具函数 ──
-    _trim_mean / _round_half_up / _lookup_with_interp / _stdev_sample
-  ── INSP-002 钻芯法 ──
-    calc_core_drilling_concrete
-  ── INSP-001 / INSP-003 骨架 ──（占位；查表数据待用户提供后实现）
 """
 
 from __future__ import annotations
@@ -26,20 +19,11 @@ from typing import Literal, Sequence
 
 from civ_core.domain.calc_schema import (
     CoreDrillingResult,
-    LeebHardnessBatchResult,
-    LeebHardnessComponentInput,
-    LeebHardnessResult,
-    LeebHardnessTestArea,
-    LeebHardnessWorkbook,
-    LeebHardnessWorkbookResult,
     ReboundResult,
     ReboundTestArea,
 )
 from civ_core.infra_io.standards_db import (
     TABLE_CORE_DRILLING_K,
-    TABLE_LEEB_ANGLE,
-    TABLE_LEEB_STRENGTH,
-    TABLE_LEEB_THICKNESS,
     TABLE_REBOUND_STRENGTH,
     StandardsDB,
 )
@@ -191,23 +175,6 @@ def _lookup_2d_fixed_key1_interp_key2(
     )
 
 
-def _trim_mean_leeb(values: Sequence[int]) -> int:
-    """INSP-001 §1.1 截尾平均：9 个里氏值剔除 2 高 2 低，对剩 5 个取均值并四舍五入取整。
-
-    对应 Excel `ROUND(TRIMMEAN(..., 4/9), 0)`。
-    """
-    if len(values) != 9:
-        raise InputError(
-            cause=f"里氏硬度截尾平均需 9 个测点，得到 {len(values)}",
-            location="_trim_mean_leeb",
-            hint="GB/T 50344-2019 附录 N 规定每测区 9 测点",
-        )
-    sorted_vals = sorted(values)
-    middle_five = sorted_vals[2:7]  # 剔除前 2 + 后 2，剩 5 个
-    mean = sum(middle_five) / 5.0
-    # Python round 半数向偶，与规范"四舍五入"不完全一致；用 +0.5 后向下取整确保 .5 向上
-    return int(mean + 0.5) if mean >= 0 else -int(-mean + 0.5)
-
 
 # ════════════════════════════════════════════════════════════════
 # INSP-002 钻芯法
@@ -293,196 +260,6 @@ def calc_core_drilling_concrete(
         f_cu_est=f_cu_est,
         take=take,
         passed=passed,
-    )
-
-
-# ════════════════════════════════════════════════════════════════
-# INSP-001 钢材里氏硬度
-# ════════════════════════════════════════════════════════════════
-# INSP-001 §1.4：fb_max = fb_min + 150（GB/T 17394.4-2014）
-_LEEB_FB_RANGE = 150.0
-
-
-_LEEB_VALID_ANGLES = frozenset({-90.0, -45.0, 0.0, 45.0, 90.0})
-
-
-def calc_leeb_hardness_steel(
-    *,
-    test_areas_raw: Sequence[Sequence[int]],
-    thickness: float,
-    angle_degrees: float,
-    db: StandardsDB,
-    design_fb_min: float | None = None,
-) -> LeebHardnessResult:
-    """钢材里氏硬度推算抗拉强度（INSP-001 / GB/T 50344-2019 附录 N）。
-
-    单构件（多测区）算一遍：每个测区独立做截尾平均 + 厚度/角度修正 + 强度查表，
-    最后按 INSP-001 §2 聚合得构件下/上限与推定值。
-
-    参数:
-        test_areas_raw: 多测区原始 HL 列表，每测区固定 9 个 int 测点。
-        thickness: 构件厚度（mm），用于查厚度修正表 leeb_thickness_correction。
-        angle_degrees: 测量角度（必须是 -90 / -45 / 0 / +45 / +90 之一，GB/T 17394 符号约定）。
-                       -90° = 竖直向下 ↓（基线档）；-45° = 向下 45°；0° = 水平 →（默认）；
-                       +45° = 向上 45°；+90° = 竖直向上 ↑（最大修正档）
-        db: 已 seed 过 leeb_thickness / leeb_angle / leeb_strength 三表的 StandardsDB。
-        design_fb_min: 设计抗拉强度下限（MPa）。当前版本暂不写回 result（结果 dataclass
-                       未带 passed 字段，由调用方拿 comp_fb_est 自行判定）。
-
-    返回:
-        LeebHardnessResult：含每测区详情 + 构件下/上限平均 + 推定值 + 批级特征值平均。
-
-    异常:
-        InputError —— 测区为空 / 角度档非法 / 厚度越表 / 强度查表越界。
-    """
-    if not test_areas_raw:
-        raise InputError(
-            cause="至少需要 1 个测区",
-            location="calc_leeb_hardness_steel",
-            hint="GB/T 50344-2019 附录 N.2.2 要求每构件测区数量 >= 3",
-        )
-    if float(angle_degrees) not in _LEEB_VALID_ANGLES:
-        raise InputError(
-            cause=f"测量角度 {angle_degrees}° 不在规范允许档 {{-90, -45, 0, 45, 90}}",
-            location="calc_leeb_hardness_steel",
-            hint="规范只列出 5 个标准角度档；非标准角度需现场调整测量方向",
-        )
-
-    areas: list[LeebHardnessTestArea] = []
-    for raw in test_areas_raw:
-        # 截尾平均
-        hl_m = _trim_mean_leeb(raw)
-        # 厚度修正（1D 查表 + 线性插值）
-        hl_t = _lookup_with_interp(
-            db, TABLE_LEEB_THICKNESS, thickness, value_idx="value1"
-        )
-        # 角度修正（2D 查表：角度度数精确 + HL_m 插值）
-        hl_a = _lookup_2d_fixed_key1_interp_key2(
-            db,
-            TABLE_LEEB_ANGLE,
-            float(angle_degrees),
-            float(hl_m),
-            value_idx="value1",
-            key1_label="测量角度",
-        )
-        hl_corrected = float(hl_m) + hl_t + hl_a
-        # 强度换算（1D 查表 HL_corr → fb_min）
-        fb_min = _lookup_with_interp(
-            db, TABLE_LEEB_STRENGTH, hl_corrected, value_idx="value1"
-        )
-        fb_max = fb_min + _LEEB_FB_RANGE
-
-        areas.append(
-            LeebHardnessTestArea(
-                raw_hl_values=tuple(raw),
-                hl_m=hl_m,
-                hl_t=hl_t,
-                hl_a=hl_a,
-                hl_corrected=hl_corrected,
-                fb_min=fb_min,
-                fb_max=fb_max,
-            )
-        )
-
-    # 构件级聚合（INSP-001 §2）
-    fb_min_list = [a.fb_min for a in areas]
-    fb_max_list = [a.fb_max for a in areas]
-    comp_fb_min_avg = sum(fb_min_list) / len(fb_min_list)
-    comp_fb_max_avg = sum(fb_max_list) / len(fb_max_list)
-    # §2.2：推定值 = AVERAGE(下限集合 ∪ 上限集合) = (下限均值 + 上限均值) / 2
-    comp_fb_est = (comp_fb_min_avg + comp_fb_max_avg) / 2.0
-    # §3：批级特征值平均；单构件场景 = comp_fb_min_avg
-    batch_fb_char_avg = comp_fb_min_avg
-
-    # design_fb_min 当前版本暂存（结果 dataclass 无 passed 字段；由调用方判定）
-    _ = design_fb_min
-
-    return LeebHardnessResult(
-        test_areas=tuple(areas),
-        comp_fb_min_avg=comp_fb_min_avg,
-        comp_fb_max_avg=comp_fb_max_avg,
-        comp_fb_est=comp_fb_est,
-        batch_fb_char_avg=batch_fb_char_avg,
-    )
-
-
-def calc_leeb_hardness_batch(
-    components: Sequence[LeebHardnessComponentInput],
-    *,
-    db: StandardsDB,
-) -> LeebHardnessBatchResult:
-    """多构件批级计算（INSP-001 §3 检验批/全局计算）。
-
-    遍历每个构件调 calc_leeb_hardness_steel，把构件级结果按输入顺序收集，
-    再用所有构件的 comp_fb_min_avg 取平均得批级特征值平均（batch_fb_char_avg）。
-
-    参数:
-        components: 构件输入列表（≥1 个）；每个构件含自己的 厚度/角度/N 测区
-        db: 已 seed 三表的 StandardsDB
-
-    返回:
-        LeebHardnessBatchResult；输入顺序在 components_with_results 里保持
-
-    异常:
-        InputError —— components 为空 / 任意构件计算失败（直接向上抛）
-    """
-    if not components:
-        raise InputError(
-            cause="批级计算至少需要 1 个构件",
-            location="calc_leeb_hardness_batch",
-            hint="GB/T 50621-2010 §3.4.4 钢结构抽样要求按总数 10% 且不少于 3 个构件",
-        )
-
-    pairs: list[tuple[LeebHardnessComponentInput, LeebHardnessResult]] = []
-    for comp in components:
-        r = calc_leeb_hardness_steel(
-            test_areas_raw=list(comp.test_areas_raw),
-            thickness=comp.thickness,
-            angle_degrees=comp.angle_degrees,
-            db=db,
-        )
-        pairs.append((comp, r))
-
-    # 批级 = 所有构件 comp_fb_min_avg 的平均（INSP-001 §3）
-    batch_fb_char_avg = sum(r.comp_fb_min_avg for _, r in pairs) / len(pairs)
-
-    # 取第一个构件的 batch_name 作为批名（同一批的所有构件 batch_name 一致）
-    bn = components[0].batch_name if components else ""
-
-    return LeebHardnessBatchResult(
-        components_with_results=tuple(pairs),
-        batch_fb_char_avg=batch_fb_char_avg,
-        n_components=len(pairs),
-        batch_name=bn,
-    )
-
-
-def calc_leeb_hardness_workbook(
-    workbook: LeebHardnessWorkbook,
-    *,
-    db: StandardsDB,
-) -> LeebHardnessWorkbookResult:
-    """整文件多批级计算入口。
-
-    遍历 workbook.batches 的每个检测批，调 calc_leeb_hardness_batch；
-    保留 sheet（=批名）顺序；返回聚合 WorkbookResult。
-    """
-    batch_results: list[LeebHardnessBatchResult] = []
-    for batch in workbook.batches:
-        br = calc_leeb_hardness_batch(list(batch.components), db=db)
-        # 用 batch 的官方名字覆盖（确保与 sheet 名一致，不依赖构件 batch_name）
-        br_named = LeebHardnessBatchResult(
-            components_with_results=br.components_with_results,
-            batch_fb_char_avg=br.batch_fb_char_avg,
-            n_components=br.n_components,
-            batch_name=batch.batch_name,
-        )
-        batch_results.append(br_named)
-
-    return LeebHardnessWorkbookResult(
-        batch_results=tuple(batch_results),
-        n_batches=len(batch_results),
-        n_components_total=sum(r.n_components for r in batch_results),
     )
 
 

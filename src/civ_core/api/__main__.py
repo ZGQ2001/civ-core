@@ -54,12 +54,15 @@ def _setup_api_logger() -> None:
 
 
 def build_dispatcher() -> Dispatcher:
-    """注册所有内置 handler 模块；新增工具时在这里加一行 register_module。"""
+    """注册所有内置 handler 模块；新增工具时在这里加一行 register_module。
+
+    注：leeb.* 已迁 C# sidecar（civ-doc），Python 端不再注册。Tauri SidecarRouter
+    按方法名「默认 C#，白名单 Python」路由（详见 frontend/src-tauri/src/sidecar.rs）。
+    """
     d = Dispatcher()
     d.register_module("workspace", handlers.workspace)
     d.register_module("files", handlers.files)
     d.register_module("plot_curves", handlers.plot_curves)
-    d.register_module("leeb", handlers.leeb)
     d.register_module("pdf_tools", handlers.pdf_tools)
     d.register_module("word2pdf", handlers.word2pdf)
     # ping/version 用于桥联测试
@@ -68,10 +71,25 @@ def build_dispatcher() -> Dispatcher:
     return d
 
 
+def _ensure_standards_db_seeded() -> None:
+    """启动时确保 ~/.civ-core/standards.db 已 seed —— C# sidecar (civ-doc) 读它做
+    leeb 计算（C# 端只读不 seed）。Python 端继续承担规范库写入责任。"""
+    from civ_core.infra_io.standards_db import init_standards_db
+
+    log = logging.getLogger(__name__)
+    try:
+        _db, conn = init_standards_db()
+        conn.close()
+        log.info("规范库 standards.db 已就绪（供 C# sidecar 读）")
+    except Exception as e:
+        log.warning("规范库初始化失败：%s（C# leeb.* 调用可能挂）", e)
+
+
 def main() -> int:
     _setup_api_logger()
     log = logging.getLogger(__name__)
     log.info("civ-core api server 启动")
+    _ensure_standards_db_seeded()
     dispatcher = build_dispatcher()
     log.info("已注册方法：%s", dispatcher.methods())
     return serve(dispatcher)

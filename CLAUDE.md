@@ -38,7 +38,7 @@
 | `src/civ_core/domain/` | 数据契约（dataclass） | 纯 Python，零外部依赖 |
 | `src/civ_core/core/` | 业务逻辑 | 禁直接 IO；入参出参全 dataclass |
 | `src/civ_core/infra_io/` | 文件读写 / COM / 预设 / SQLite | 唯一 IO 边界 |
-| `src/civ_core/api/` | JSON-RPC server（stdin/stdout，Tauri sidecar） | `server.py` + `handlers/{workspace,files,plot_curves,leeb,pdf_tools,word2pdf}.py` |
+| `src/civ_core/api/` | JSON-RPC server（stdin/stdout，Tauri sidecar） | `server.py` + `handlers/{workspace,files,plot_curves,pdf_tools,word2pdf}.py`；leeb 已迁 C# |
 | `src/civ_core/configs/` | 配置加载 | `loader.py` `lru_cache` 单例 |
 | `src/civ_core/utils/` | 日志 / 异常 / COM 入口 | 无业务逻辑 |
 | `src/civ_core/main.py` | CLI 入口 | GUI 分支已弃；no-args 输出迁移提示 |
@@ -56,12 +56,17 @@
 
 **RPC 方法前缀路由**（Tauri 端按前缀选 sidecar）：
 
-| 前缀 | sidecar | 例子 |
+**策略：默认 C#，白名单 Python**（用户「以后代码都用 C#」方向）。未来新加 calc 类型不用动 Rust 路由代码。
+
+| 类别 | sidecar | 例子 |
 |---|---|---|
-| `workspace.*` / `files.*` | Python | `workspace.last`、`files.list_dir` |
-| `plot_curves.*` / `leeb.*` / `pdf_tools.*` / `word2pdf.*` | Python | 业务计算与出图 |
-| `doc.*` | C# | `doc.ping` / `doc.version` 已通；`doc.compose_report` 下一步加（轻量 Word 变量替换 + xlsx sheet 嵌入 + 图片嵌入） |
-| `xlsx.*` | C# | `xlsx.write_leeb_report_table` 已通（ClosedXML 写精致 sheet）；`xlsx.read_leeb_workbook` 后期加（合并单元格 + 加速） |
+| 顶层 `ping` / `version` | Python | 桥联探活 |
+| `workspace.*` / `files.*` | Python | 工作区记忆 + 文件树 |
+| `plot_curves.*` / `pdf_tools.*` / `word2pdf.*` | Python | 已交付的 Python 工具（matplotlib / pypdf / docx COM）|
+| `leeb.*` | **C#** | T5.5 Step 4 整套迁 C#：读 Excel（OpenXML 合并单元格强）+ 计算 + 报告数据 |
+| `doc.*` | C# | `doc.ping` / `doc.version` 已通；`doc.compose_report` 下一步（轻量 Word 变量替换 + xlsx 嵌入 + 图片嵌入）|
+| `xlsx.*` | C# | `xlsx.write_leeb_report_table` 已通（ClosedXML 精致 sheet）|
+| **其他**（新 calc 类型 / AI / 报告等）| **默认 C#** | 钻芯/回弹未来迁 → `calc.core_drilling.*` 等 |
 
 **handler 强约束**：每个 `api/handlers/*.py` 必须在文件顶部写 `__all__` 显式列出要暴露的 RPC 方法。`register_module` 优先读 `__all__`；不写会把顶部 `import Path` 等工具类误暴露成 RPC 方法（API 边界泄漏）。
 
@@ -96,14 +101,19 @@ StatusBar (22px)
 | `api/handlers/workspace.py` | `workspace.{last,set,clear,create_standard}` |
 | `api/handlers/files.py` | `files.{list_dir,exists}`；默认隐藏 `.civ-core` 和点开头 |
 | `api/handlers/plot_curves.py` | `plot_curves.{list_presets,list_sheets,run,preflight,render_preview,save_preset,delete_preset,rename_preset,copy_preset}` |
-| `api/handlers/leeb.py` | `leeb.{run,preview_excel}` —— preview_excel 给 data_processing 中间预览用 |
 | `api/handlers/pdf_tools.py` | `pdf_tools.{merge,split_per_page,split_by_ranges,inspect}` —— inspect 给中间预览拉每个 PDF 页数 |
 | `api/handlers/word2pdf.py` | `word2pdf.{convert,inspect}` —— inspect 读 docx 段落数 + size + Word 缓存 Pages |
 | `dotnet/civ-doc/Program.cs` | C# sidecar 入口；强制 UTF-8 stdin/stdout 防中文乱码 |
 | `dotnet/civ-doc/Server/JsonRpcServer.cs` | C# 端 Dispatcher + 行循环；和 Python 端 server.py 同协议同错误码 |
-| `dotnet/civ-doc/Handlers/DocHandlers.cs` | `doc.{ping,version}`；handler 类型 `Func<JsonElement?, object?>` |
+| `dotnet/civ-doc/Handlers/DocHandlers.cs` | `doc.{ping,version}` |
 | `dotnet/civ-doc/Handlers/XlsxHandlers.cs` | `xlsx.write_leeb_report_table` —— 用 ClosedXML 把精致「报告插入表」sheet 追加到 leeb 输出 xlsx |
-| `dotnet/civ-doc/ReportTables/LeebReportTable.cs` | 里氏硬度报告插入表的列定义 / 合并规则 / 字体 / 列宽 / 边框（用 ClosedXML API） |
+| `dotnet/civ-doc/Handlers/LeebHandlers.cs` | `leeb.{run,preview_excel}` —— leeb 整套迁 C#（输入读取 + 计算 + 报告数据） |
+| `dotnet/civ-doc/Calc/Leeb/LeebDomain.cs` | 里氏硬度数据契约（record，对应 Python 旧 LeebHardness* dataclass） |
+| `dotnet/civ-doc/Calc/Leeb/LeebMath.cs` | 查表 / 插值 / 截尾平均（与 Python 完全等价；41 个 xUnit 测试覆盖）|
+| `dotnet/civ-doc/Calc/Leeb/LeebExcelReader.cs` | ClosedXML 读 leeb 输入（合并单元格 / 每构件 3 行格式）|
+| `dotnet/civ-doc/Calc/Leeb/LeebCalculator.cs` | INSP-001 钢材里氏硬度算法（hl_m / hl_t / hl_a → fb_min/max → 聚合）|
+| `dotnet/civ-doc/StandardsDb/StandardsDb.cs` | 只读规范库 SQLite（Microsoft.Data.Sqlite）；Python sidecar 启动时 seed |
+| `dotnet/civ-doc/ReportTables/LeebReportTable.cs` | 里氏报告插入表列定义 / 合并 / 字体 / 列宽（ClosedXML）|
 | `frontend/src-tauri/src/lib.rs` / `sidecar.rs` | Tauri 启动 + 双 sidecar (Python + C#) Mutex 串行 RPC；`SidecarRouter` 按 method 前缀路由 |
 | `frontend/src/App.tsx` | 顶层 layout + 快捷键（Ctrl+B / Ctrl+J / Ctrl+Alt+B）+ 嵌套 Providers（plot_curves / data_processing / pdf_tools / word2pdf）|
 | `frontend/src/lib/rpc.ts` | `invoke('rpc_call', ...)` 包装 |

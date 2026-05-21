@@ -149,14 +149,15 @@ def _check_cli_list_presets() -> str:
 
 
 def _check_standards_db_calc_pipeline() -> str:
-    """规范库（standards.db）+ INSP-001/002 计算函数端到端 round-trip。"""
+    """规范库（standards.db）+ Python 端计算函数端到端 round-trip。
+
+    INSP-001 里氏硬度已迁 C# sidecar（civ-doc），由 dotnet test 验证；本检查只测
+    Python 端保留的 INSP-002 钻芯法 + Python seed 写入规范库正确。
+    """
     try:
         import sqlite3
 
-        from civ_core.core.calc_functions import (
-            calc_core_drilling_concrete,
-            calc_leeb_hardness_steel,
-        )
+        from civ_core.core.calc_functions import calc_core_drilling_concrete
         from civ_core.infra_io.standards_db import (
             StandardsDB,
             seed_all_leeb_tables,
@@ -171,8 +172,9 @@ def _check_standards_db_calc_pipeline() -> str:
                 db = StandardsDB(conn)
                 db.create_tables()
                 seed_core_drilling_k_table(db)
-                seed_all_leeb_tables(db)
+                seed_all_leeb_tables(db)  # 仍 seed —— C# sidecar 读这份数据
 
+                # 钻芯法（Python 端业务，未迁 C#）端到端
                 r_core = calc_core_drilling_concrete(
                     tuple(30.0 + i * 0.1 for i in range(10)),
                     db=db,
@@ -184,28 +186,18 @@ def _check_standards_db_calc_pipeline() -> str:
                         f"f_cu_est={r_core.f_cu_est} 超出合理范围 (0, 50)",
                     )
 
-                raw = (483, 481, 480, 481, 474, 479, 479, 483, 474)
-                r_leeb = calc_leeb_hardness_steel(
-                    test_areas_raw=[raw],
-                    thickness=12.0,
-                    angle_degrees=90.0,
-                    db=db,
-                )
-                if r_leeb.test_areas[0].hl_m != 480:
+                # 里氏硬度三表行数（C# 端会读这些；保证 seed 写入正确）
+                leeb_rows = db.list_rows("leeb_thickness_correction")
+                if len(leeb_rows) != 6:
                     return _fail(
-                        "里氏硬度截尾平均异常",
-                        f"HL_m={r_leeb.test_areas[0].hl_m} 应为 480",
-                    )
-                if not (400 < r_leeb.comp_fb_est < 700):
-                    return _fail(
-                        "里氏硬度推定值异常",
-                        f"fb_est={r_leeb.comp_fb_est} 超出合理范围 (400, 700)",
+                        "里氏硬度厚度修正表行数异常",
+                        f"应 6 行，实际 {len(leeb_rows)}（C# sidecar 会读这份）",
                     )
             finally:
                 conn.close()
 
         return _ok(
-            "规范库 + 计算函数正常（钻芯法 INSP-002 + 里氏硬度 INSP-001 端到端）"
+            "规范库 + 钻芯法计算正常；里氏硬度三表已 seed (C# sidecar 读)"
         )
     except Exception as e:
         return _fail("规范库计算管线异常", f"原因：{e}")

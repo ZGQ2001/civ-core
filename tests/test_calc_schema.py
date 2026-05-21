@@ -1,7 +1,6 @@
 """calc_schema 数据契约测试。
 
-3 类结果 dataclass 对应 3 份公式文档：
-  LeebHardnessResult    ← INSP-001 钢材里氏硬度推算抗拉强度
+剩 2 类 dataclass（INSP-001 里氏硬度已迁 C# sidecar）：
   CoreDrillingResult    ← INSP-002 钻芯法混凝土抗压强度推定
   ReboundResult         ← INSP-003 回弹法混凝土抗压强度推定
 
@@ -15,80 +14,9 @@ import pytest
 
 from civ_core.domain.calc_schema import (
     CoreDrillingResult,
-    LeebHardnessResult,
-    LeebHardnessTestArea,
     ReboundResult,
     ReboundTestArea,
 )
-
-
-# ── LeebHardnessTestArea (测区级) ────────────────────────────────
-def test_leeb_test_area_basic() -> None:
-    area = LeebHardnessTestArea(
-        raw_hl_values=(401, 412, 395, 408, 402, 411, 399, 415, 405),
-        hl_m=406,
-        hl_t=2.0,
-        hl_a=-3.0,
-        hl_corrected=405.0,
-        fb_min=400.0,
-        fb_max=550.0,
-    )
-    assert area.hl_m == 406
-    assert area.fb_max == area.fb_min + 150  # INSP-001 §1.4 规则
-
-
-def test_leeb_test_area_requires_9_raw_values() -> None:
-    """规范固定每测区 9 个测点，少一个就该报错。"""
-    with pytest.raises(ValueError, match="9 个"):
-        LeebHardnessTestArea(
-            raw_hl_values=(400, 410, 420, 430, 440, 450, 460, 470),  # 只 8 个
-            hl_m=440,
-            hl_t=0.0,
-            hl_a=0.0,
-            hl_corrected=440.0,
-            fb_min=500.0,
-            fb_max=650.0,
-        )
-
-
-def test_leeb_test_area_fb_max_must_exceed_fb_min() -> None:
-    with pytest.raises(ValueError, match="fb_max"):
-        LeebHardnessTestArea(
-            raw_hl_values=tuple([400] * 9),
-            hl_m=400,
-            hl_t=0.0,
-            hl_a=0.0,
-            hl_corrected=400.0,
-            fb_min=500.0,
-            fb_max=400.0,
-        )
-
-
-# ── LeebHardnessResult (构件 + 批级) ─────────────────────────────
-def test_leeb_result_aggregation() -> None:
-    a1 = _mock_area(fb_min=400, fb_max=550)
-    a2 = _mock_area(fb_min=420, fb_max=570)
-    a3 = _mock_area(fb_min=410, fb_max=560)
-    result = LeebHardnessResult(
-        test_areas=(a1, a2, a3),
-        comp_fb_min_avg=410.0,
-        comp_fb_max_avg=560.0,
-        comp_fb_est=485.0,
-        batch_fb_char_avg=410.0,
-    )
-    assert len(result.test_areas) == 3
-    assert result.comp_fb_est == pytest.approx((410 + 560) / 2)
-
-
-def test_leeb_result_requires_at_least_one_area() -> None:
-    with pytest.raises(ValueError, match="不少于"):
-        LeebHardnessResult(
-            test_areas=(),
-            comp_fb_min_avg=0.0,
-            comp_fb_max_avg=0.0,
-            comp_fb_est=0.0,
-            batch_fb_char_avg=0.0,
-        )
 
 
 # ── CoreDrillingResult ───────────────────────────────────────────
@@ -231,18 +159,6 @@ def test_rebound_mode_validates() -> None:
 
 
 # ── helpers ──────────────────────────────────────────────────────
-def _mock_area(*, fb_min: float, fb_max: float) -> LeebHardnessTestArea:
-    return LeebHardnessTestArea(
-        raw_hl_values=tuple([400] * 9),
-        hl_m=400,
-        hl_t=0.0,
-        hl_a=0.0,
-        hl_corrected=400.0,
-        fb_min=fb_min,
-        fb_max=fb_max,
-    )
-
-
 def _mock_rebound_area(*, f_cu_i: float = 30.0) -> ReboundTestArea:
     return ReboundTestArea(
         raw_rebound_values=tuple(range(30, 46)),

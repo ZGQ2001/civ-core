@@ -19,17 +19,20 @@ T5 ✅ 工具页迁移 — 4 个工具全部 controller/Page/SettingsForm 范式
      plot_curves（实时 PNG）/ data_processing（Excel 表格）/ pdf_tools（PDF 列表）/
      word2pdf（docx 列表）。data_processing 用 calcType 下拉留接口（未来加钻芯/回弹）
 ─────────────────── 当前在这里 ───────────────────
-T5.5 🚧 加 C# sidecar（方向调整：先做 Excel 精致输出，Word 模板填充延后）
+T5.5 🚧 加 C# sidecar（用户方向：以后所有新代码用 C#，Python 已交付的渐进迁移）
      ✅ Step 1: 建 dotnet/civ-doc/（.NET 9 + JSON-RPC server + doc.ping/version + NuGet 华为云镜像）
-                + Tauri 双 sidecar (Python + C#) + SidecarRouter 按 method 前缀路由
+                + Tauri 双 sidecar (Python + C#) + SidecarRouter 路由
                 + 前端 App.tsx 并行 ping 两边
      ✅ Step 2: xlsx.write_leeb_report_table —— C# ClosedXML 写精致「报告插入表」
                 14 列 / 每构件 3 行 / 4 处合并 / 仿宋表头 / Times New Roman 数据 / 宋体 N 列
-                Python leeb.run 改成只写「过程数据」sheet + 返回 report_table_data；
-                前端 controller 串行调两个 RPC（Tauri 主进程按前缀路由分发）
+     ✅ Step 4: leeb 整套迁 C#（拆 5 个 Phase，跟用户「不要黑盒」约定逐步推进）
+                Phase 1 SQLite 规范库读取 + 数据契约
+                Phase 2 核心算法（查表/插值/截尾平均，41 个 xUnit 测试对照 Python）
+                Phase 3 ClosedXML 读 leeb 输入（合并单元格 / 每构件 3 行 / 真实数据 D 号站房验过）
+                Phase 4 leeb.run + leeb.preview_excel RPC + SidecarRouter 路由改默认 C#
+                Phase 5 删 Python leeb 模块（handler / leeb_excel / calc_leeb_*）
      ⏳ Step 3: 报告生成工具页（doc.compose_report）—— 委托方 / 编号 / 日期变量替换
                 + Excel sheet 嵌入 + 图片嵌入（按用户工作流：①数据处理 → ②曲线图 → ③报告生成）
-     ⏳ Step 4: 把 leeb.run 的 Excel 读取也切 C# OpenXML（解决合并单元格 + 加速）
 T6 ⏳ 打包（PyInstaller 把 Python sidecar 打成 exe；dotnet publish 把 C# 打成 exe
         → Tauri externalBin 同时引两个）
 T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
@@ -96,6 +99,13 @@ T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
 
 | commit | 内容 |
 |---|---|
+| `[本次]` 2026-05-22 | T5.5 Step 4 Phase 5：删 Python leeb（handler/leeb_excel/calc_leeb_* + 4 个测试文件）+ 文档维护 |
+| `fb05230` 2026-05-22 | T5.5 Step 4 Phase 4：C# leeb.run / leeb.preview_excel RPC + SidecarRouter 改默认 C# 白名单 Python |
+| `a6c8cc0` 2026-05-22 | T5.5 Step 4 Phase 3：C# ClosedXML 读 leeb 输入（合并单元格 + 每构件 3 行 + 真实数据 D 号站房验证）|
+| `fa11a07` 2026-05-22 | T5.5 Step 4 Phase 2：C# 核心算法（查表/插值/截尾平均，15 个 xUnit 对照 Python）|
+| `8b8119d` 2026-05-22 | T5.5 Step 4 Phase 1：C# SQLite 规范库读取 + 里氏数据契约 records |
+| `6e43586` 2026-05-21 | leeb 输出文件名带检测类型 + 去过程数据 sheet + sheet 名简化 |
+| `885124a` 2026-05-21 | docs T5.5 Step 2 三文档同步 |
 | `a6676c1` 2026-05-21 | T5.5 Step 2：C# ClosedXML 写精致里氏报告插入表 + leeb.run 串行链路（Python 算 + C# 写） |
 | `47de0e8` 2026-05-21 | T5.5 Step 1：C# sidecar 链路通了（dotnet/civ-doc/ + Tauri 双 sidecar + 前端并行 ping） |
 | `1ae71f1` 2026-05-21 | T5 完结：word2pdf 工具页对齐范式 + word2pdf.inspect RPC（读 docx 段落数 + size + Word 缓存 Pages）+ 3 个 pytest |

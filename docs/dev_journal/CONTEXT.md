@@ -6,13 +6,16 @@
 
 ## 🎯 当前焦点（2026-05-21）
 
-**T5 全员闭环 + plot_curves 调参完整改造完成。** 上半部分实时预览图，下半部分 form 调参（无 JSON）；改任何字段 300ms debounce 自动重渲染预览。其他工具页（leeb/pdf/word2pdf）端到端已通。
+**T5 全员闭环 + plot_curves 体验抛光完成。** 工具页主区：sheet / 表头行 / 预设 / 实时预览图 / 多行翻页 / 「查看本行原始数据」折叠表（高亮预设引用的列）；底部 Panel 「工具设置」拆 4 tab（基础 / X 轴 / Y 轴 / 曲线样式），全部 form 无 JSON。其他工具页（leeb/pdf/word2pdf）已端到端通。
+
+**屎山清理**：scripts/_*.py 7 个一次性脚本已删（commit 5d6ce79）。其他没积压。
 
 **下一步候选**（按价值排）：
 1. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包
-2. **leeb/pdf/word2pdf 也用 Context lift state**：参数页可以放底部 Panel（统一交互范式），但代价是 4×重构
+2. **leeb/pdf/word2pdf 也用 Context lift state**：参数页可以放底部 Panel（统一交互范式），但代价是 4× 重构
 3. **plot_curves 多曲线 form**：当前只暴露第 1 条曲线样式；多曲线需 tabs 或 accordion
 4. **流式进度**：plot_curves 跑大批量时无反馈（协议升级方案见妥协项）
+5. **数据对照交互升级**：点 cell 高亮曲线上对应点（hit-test，chart_writer 里 render_plot_with_hittest 已有）
 
 ---
 
@@ -33,8 +36,9 @@
 - ~~底部 Panel 关闭后无 toggle 入口~~ → 已修：StatusBar「面板」按钮 + Ctrl+J
 - ~~plot_curves 调曲线只能编辑 JSON~~ → 已改：底部 Panel form 表单 + 实时预览
 - ~~BottomPanel「工具设置」Tab 当前是空提示~~ → 已接：plot_curves 时显示 SettingsForm
-- plot_curves form 只暴露**第 1 条曲线**样式；多曲线预设要改其他曲线得后续做 tabs/accordion
+- plot_curves form 只暴露**第 1 条曲线**样式；多曲线预设要改其他曲线得后续做 tabs/accordion（form 已拆 4 tab：基础/X 轴/Y 轴/曲线样式）
 - plot_curves form **不暴露 `points`**（嵌套数组，复杂；高级用户直接编辑 JSON 预设文件）
+- 数据对照表格在预览图下方折叠区，高亮预设引用的列；点 cell 暂不能跳到曲线上对应点
 - leeb / pdf / word2pdf 工具页**没有用 Context lift state**，参数在工具页内（不在底部 Panel）—— 如果用户要求统一交互范式，每个工具都要做 Context 改造
 - 「刷新」「全部折叠」共用 refreshKey 整树重挂，丢失 expanded 状态（VSCode refresh 应保留）
 - 「新建标准结构」用 `window.prompt` 输项目名（样式不可控）；后续换自定义 modal

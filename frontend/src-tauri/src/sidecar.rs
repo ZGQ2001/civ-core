@@ -128,9 +128,12 @@ pub async fn spawn_csharp_dev(repo_root: &std::path::Path) -> Result<JsonRpcSide
     JsonRpcSidecar::spawn("csharp", cmd).await
 }
 
-/// 按 method 前缀路由到对应 sidecar。
+/// 按 method 路由到对应 sidecar。
 ///
-/// `doc.*` / `xlsx.*` → C#（OpenXML SDK 强）；其余 → Python（业务底座）。
+/// **策略：默认 C#，白名单 Python**（按用户「以后代码都用 C#」方向）。
+/// Python 白名单：工作区/文件系统 + 已交付的 Python 工具（plot_curves / pdf_tools / word2pdf）+ 顶层探活方法。
+/// 其他全 → C#（新加 calcType 不用改这里）。
+///
 /// 两个 sidecar 各自一个 Arc 持有，互不阻塞（Mutex 在各自 struct 里）。
 pub struct SidecarRouter {
     python: Arc<JsonRpcSidecar>,
@@ -143,15 +146,23 @@ impl SidecarRouter {
     }
 
     pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
-        if Self::is_csharp_method(method) {
-            self.csharp.call(method, params).await
-        } else {
+        if Self::is_python_method(method) {
             self.python.call(method, params).await
+        } else {
+            self.csharp.call(method, params).await
         }
     }
 
-    fn is_csharp_method(method: &str) -> bool {
-        method.starts_with("doc.") || method.starts_with("xlsx.")
+    /// Python 白名单：仅这些前缀走 Python，其他全 C#。
+    /// 顶层 `ping` / `version` 算 Python 探活方法（C# 端也有 doc.ping 单独探活）。
+    fn is_python_method(method: &str) -> bool {
+        method == "ping"
+            || method == "version"
+            || method.starts_with("workspace.")
+            || method.starts_with("files.")
+            || method.starts_with("plot_curves.")
+            || method.starts_with("pdf_tools.")
+            || method.starts_with("word2pdf.")
     }
 }
 
@@ -160,17 +171,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn routes_doc_to_csharp() {
-        assert!(SidecarRouter::is_csharp_method("doc.ping"));
-        assert!(SidecarRouter::is_csharp_method("doc.fill_template"));
-        assert!(SidecarRouter::is_csharp_method("xlsx.read_workbook"));
+    fn python_whitelist_routes_to_python() {
+        // 工作区 / 文件系统 + 顶层探活
+        assert!(SidecarRouter::is_python_method("ping"));
+        assert!(SidecarRouter::is_python_method("version"));
+        assert!(SidecarRouter::is_python_method("workspace.last"));
+        assert!(SidecarRouter::is_python_method("files.list_dir"));
+        // 已交付 Python 工具
+        assert!(SidecarRouter::is_python_method("plot_curves.run"));
+        assert!(SidecarRouter::is_python_method("pdf_tools.merge"));
+        assert!(SidecarRouter::is_python_method("word2pdf.convert"));
     }
 
     #[test]
-    fn routes_python_methods_elsewhere() {
-        assert!(!SidecarRouter::is_csharp_method("plot_curves.run"));
-        assert!(!SidecarRouter::is_csharp_method("leeb.preview_excel"));
-        assert!(!SidecarRouter::is_csharp_method("workspace.last"));
-        assert!(!SidecarRouter::is_csharp_method("ping"));
+    fn default_csharp_for_everything_else() {
+        // 已切 C#
+        assert!(!SidecarRouter::is_python_method("doc.ping"));
+        assert!(!SidecarRouter::is_python_method("xlsx.write_leeb_report_table"));
+        // 本轮切 C#（Step 4）
+        assert!(!SidecarRouter::is_python_method("leeb.run"));
+        assert!(!SidecarRouter::is_python_method("leeb.preview_excel"));
+        // 未来加的（不用改路由）
+        assert!(!SidecarRouter::is_python_method("calc.core_drilling.run"));
+        assert!(!SidecarRouter::is_python_method("rebound.run"));
     }
 }

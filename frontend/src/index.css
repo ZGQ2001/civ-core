@@ -27,6 +27,12 @@
   box-sizing: border-box;
 }
 
+/* 让浏览器原生 UI（input[type=number] 微调箭头、color picker、range 槽位等）
+   按深色主题渲染。否则 spinbox / 滑块在深色背景上显眼地白色突兀。 */
+html {
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {

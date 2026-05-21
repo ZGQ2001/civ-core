@@ -52,3 +52,10 @@ frontend/src-tauri/target/
 build/
 dist/
 *.spec
+
+# ==========================================
+# 6. C# sidecar（dotnet/civ-doc/，T5.5 之后）
+# ==========================================
+dotnet/**/bin/
+dotnet/**/obj/
+*.user

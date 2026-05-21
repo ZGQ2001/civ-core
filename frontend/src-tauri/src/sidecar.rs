@@ -1,12 +1,22 @@
-//! Python sidecar 子进程管理。
+//! JSON-RPC sidecar 子进程管理（Python + C# 通用）。
 //!
-//! 启动 `uv run python -m civ_core.api`，stdin/stdout 行协议 JSON-RPC 通信。
-//! 单 Mutex 串行调用就够：内业小工具 RPC 并发量低，避免做复杂 id 匹配。
+//! 一行协议：stdin 一行 JSON-RPC 请求 → stdout 一行 JSON-RPC 响应。
+//! 单 Mutex 串行调用：内业小工具 RPC 并发量低，避免做复杂 id 匹配。
 //!
-//! 开发时 cwd 是仓库根（src-tauri 的祖父目录 -> ../../..）；生产打包后
-//! sidecar 是嵌入的 PyInstaller 单文件 exe（T6 阶段配 Tauri externalBin）。
+//! 两个 sidecar：
+//!   - PythonSidecar：`uv run python -m civ_core.api` — 业务计算/IO 主力
+//!   - CSharpSidecar：`dotnet exec dotnet/civ-doc/bin/Debug/net9.0/civ-doc.dll` —
+//!     Word/Excel 重资产场景（doc.* / xlsx.* 方法走 OpenXML SDK 原生）
+//!
+//! C# 端**假设已经 dotnet build 过**（run.sh 启动前会先 build），sidecar 直接 `dotnet exec` dll
+//! 跑 —— 避免 `dotnet run` 的 build 信息混进 stdout 污染协议流。
+//! 生产打包 T6 阶段切到 PyInstaller exe + dotnet publish 出来的 self-contained exe，
+//! Tauri externalBin 同时引两个。
+//!
+//! SidecarRouter 按 method 前缀路由：`doc.*` / `xlsx.*` → C#，其余 → Python。
 
 use std::process::Stdio;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, anyhow};
@@ -15,31 +25,30 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
-pub struct PythonSidecar {
+/// 通用 JSON-RPC sidecar。Python / C# 共用同一份调用逻辑。
+pub struct JsonRpcSidecar {
+    name: &'static str,
     stdin: Mutex<ChildStdin>,
     stdout: Mutex<BufReader<ChildStdout>>,
     next_id: AtomicU64,
     _child: Child, // 持有避免 drop 杀进程
 }
 
-impl PythonSidecar {
-    /// 开发模式：在仓库根目录跑 `uv run python -m civ_core.api`。
-    /// 生产模式：调 `sidecar_civ_core_api`（PyInstaller exe，T6 阶段接）。
-    pub async fn spawn_dev(repo_root: &std::path::Path) -> Result<Self> {
-        let mut cmd = Command::new("uv");
-        cmd.args(["run", "python", "-m", "civ_core.api"])
-            .current_dir(repo_root)
-            .stdin(Stdio::piped())
+impl JsonRpcSidecar {
+    /// 从已配置好的 Command spawn。调用方负责设置 cwd / args / pipe / kill_on_drop。
+    pub async fn spawn(name: &'static str, mut cmd: Command) -> Result<Self> {
+        cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let mut child = cmd
             .spawn()
-            .with_context(|| format!("启动 Python sidecar 失败 (cwd={})", repo_root.display()))?;
-        let stdin = child.stdin.take().ok_or_else(|| anyhow!("拿不到 sidecar stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow!("拿不到 sidecar stdout"))?;
-        log::info!("Python sidecar 启动 (pid={:?})", child.id());
+            .with_context(|| format!("启动 sidecar 失败: {name}"))?;
+        let stdin = child.stdin.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdin"))?;
+        let stdout = child.stdout.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdout"))?;
+        log::info!("{name} sidecar 启动 (pid={:?})", child.id());
         Ok(Self {
+            name,
             stdin: Mutex::new(stdin),
             stdout: Mutex::new(BufReader::new(stdout)),
             next_id: AtomicU64::new(1),
@@ -63,28 +72,105 @@ impl PythonSidecar {
         stdin
             .write_all(req_line.as_bytes())
             .await
-            .context("写 sidecar stdin 失败")?;
-        stdin.flush().await.context("flush sidecar stdin 失败")?;
+            .with_context(|| format!("{}: 写 stdin 失败", self.name))?;
+        stdin.flush().await.with_context(|| format!("{}: flush stdin 失败", self.name))?;
         drop(stdin); // 早释放 stdin，让 sidecar 处理时其他 caller 可以排队
 
         let mut stdout = self.stdout.lock().await;
         let mut line = String::new();
-        let n = stdout.read_line(&mut line).await.context("读 sidecar stdout 失败")?;
+        let n = stdout.read_line(&mut line).await
+            .with_context(|| format!("{}: 读 stdout 失败", self.name))?;
         if n == 0 {
-            return Err(anyhow!("sidecar 关闭了 stdout (进程崩溃?)"));
+            return Err(anyhow!("{}: stdout 关闭（进程崩溃?）", self.name));
         }
 
         let resp: Value = serde_json::from_str(line.trim())
-            .with_context(|| format!("解析 sidecar 响应失败: {}", line.trim()))?;
+            .with_context(|| format!("{}: 解析响应失败: {}", self.name, line.trim()))?;
 
         if let Some(err) = resp.get("error") {
             let msg = err
                 .get("message")
                 .and_then(|m| m.as_str())
                 .unwrap_or("未知错误");
-            return Err(anyhow!("RPC error: {}", msg));
+            return Err(anyhow!("{} RPC error: {}", self.name, msg));
         }
 
         Ok(resp.get("result").cloned().unwrap_or(Value::Null))
+    }
+}
+
+/// 开发模式：仓库根目录跑 `uv run python -m civ_core.api`。
+pub async fn spawn_python_dev(repo_root: &std::path::Path) -> Result<JsonRpcSidecar> {
+    let mut cmd = Command::new("uv");
+    cmd.args(["run", "python", "-m", "civ_core.api"]).current_dir(repo_root);
+    JsonRpcSidecar::spawn("python", cmd).await
+}
+
+/// 开发模式：跑 `dotnet exec dotnet/civ-doc/bin/Debug/net9.0/civ-doc.dll`。
+/// 假设已 `dotnet build`（run.sh 启动前会预 build）；用 `dotnet exec` 而不是 `dotnet run`
+/// 是为了避免 build 信息（"已成功生成"等）走 stdout 污染协议流。
+pub async fn spawn_csharp_dev(repo_root: &std::path::Path) -> Result<JsonRpcSidecar> {
+    let dll = repo_root
+        .join("dotnet")
+        .join("civ-doc")
+        .join("bin")
+        .join("Debug")
+        .join("net9.0")
+        .join("civ-doc.dll");
+    if !dll.is_file() {
+        return Err(anyhow!(
+            "civ-doc.dll 不存在（{}）；请先 `cd dotnet/civ-doc && dotnet build`",
+            dll.display()
+        ));
+    }
+    let mut cmd = Command::new("dotnet");
+    cmd.arg("exec").arg(&dll).current_dir(repo_root);
+    JsonRpcSidecar::spawn("csharp", cmd).await
+}
+
+/// 按 method 前缀路由到对应 sidecar。
+///
+/// `doc.*` / `xlsx.*` → C#（OpenXML SDK 强）；其余 → Python（业务底座）。
+/// 两个 sidecar 各自一个 Arc 持有，互不阻塞（Mutex 在各自 struct 里）。
+pub struct SidecarRouter {
+    python: Arc<JsonRpcSidecar>,
+    csharp: Arc<JsonRpcSidecar>,
+}
+
+impl SidecarRouter {
+    pub fn new(python: Arc<JsonRpcSidecar>, csharp: Arc<JsonRpcSidecar>) -> Self {
+        Self { python, csharp }
+    }
+
+    pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
+        if Self::is_csharp_method(method) {
+            self.csharp.call(method, params).await
+        } else {
+            self.python.call(method, params).await
+        }
+    }
+
+    fn is_csharp_method(method: &str) -> bool {
+        method.starts_with("doc.") || method.starts_with("xlsx.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn routes_doc_to_csharp() {
+        assert!(SidecarRouter::is_csharp_method("doc.ping"));
+        assert!(SidecarRouter::is_csharp_method("doc.fill_template"));
+        assert!(SidecarRouter::is_csharp_method("xlsx.read_workbook"));
+    }
+
+    #[test]
+    fn routes_python_methods_elsewhere() {
+        assert!(!SidecarRouter::is_csharp_method("plot_curves.run"));
+        assert!(!SidecarRouter::is_csharp_method("leeb.preview_excel"));
+        assert!(!SidecarRouter::is_csharp_method("workspace.last"));
+        assert!(!SidecarRouter::is_csharp_method("ping"));
     }
 }

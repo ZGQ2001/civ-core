@@ -19,8 +19,12 @@ T5 ✅ 工具页迁移 — 4 个工具全部 controller/Page/SettingsForm 范式
      plot_curves（实时 PNG）/ data_processing（Excel 表格）/ pdf_tools（PDF 列表）/
      word2pdf（docx 列表）。data_processing 用 calcType 下拉留接口（未来加钻芯/回弹）
 ─────────────────── 当前在这里 ───────────────────
-T5.5 ⏳ 加 C# sidecar：Word 报告填充（doc.fill_template）+ 后期把 leeb Excel 读取也切过去
-        （合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生强）
+T5.5 🚧 加 C# sidecar
+     ✅ Step 1: 建 dotnet/civ-doc/（.NET 9 + JSON-RPC server + doc.ping/version + NuGet 华为云镜像）
+                + Tauri 双 sidecar (Python + C#) + SidecarRouter 按 method 前缀路由
+                + 前端 App.tsx 并行 ping 两边
+     ⏳ Step 2: 第一个业务方法 doc.fill_template（Word 模板填充，OpenXML SDK + 模板引擎选型）
+     ⏳ Step 3: leeb 的 Excel 读取迁 xlsx.* 系列方法（合并单元格 OpenXML 原生）
 T6 ⏳ 打包（PyInstaller 把 Python sidecar 打成 exe；dotnet publish 把 C# 打成 exe
         → Tauri externalBin 同时引两个）
 T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
@@ -38,19 +42,23 @@ T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
 **渐进策略**：一次只迁一个方法。第一次 Word 报告功能时直接 C# 写，老 Python
 方法不动。可以永远停在某个 Python/C# 比例，不强求全切。
 
-**业务底座状态：** ① 画图、② INSP-001 里氏硬度 / INSP-002 钻芯法、③ PDF 工具、④ Word→PDF 计算与 IO 层完整可用（**322 pytest / ruff 0 / healthcheck 6/6** 全过）。前端 UI 全 4 个工具页可用。
+**业务底座状态：** ① 画图、② INSP-001 里氏硬度 / INSP-002 钻芯法、③ PDF 工具、④ Word→PDF 计算与 IO 层完整可用（**322 pytest / ruff 0 / healthcheck 6/6** 全过）。前端 UI 全 4 个工具页可用。C# sidecar 链路 `doc.ping/version` 已通。
 
-**下一步具体动作（T5.5 / T6 二选一）：**
-- T5.5 路径：开始 C# sidecar 建项目（见下方起手清单），第一个目标 `doc.fill_template`；之后第二步把 leeb 的 Excel 读取（preview_excel / leeb.run / leeb_excel.read_leeb_workbook）也切 OpenXML SDK
-- T6 路径：先打包当前 4 工具版本出个能装的安装包（PyInstaller + tauri:build），用户先实际用着；T5.5 之后再加 C# sidecar，外壳已经 ready
+**下一步具体动作（T5.5 Step 2）：**
+- 选业务用例：Word 模板填充 `doc.fill_template(template_path, context)` —— 对齐 docxtpl 行为（`{{var}}` 变量、`{%for%}` 循环、`{%if%}` 条件）
+- 模板引擎选型决策：
+  - A. 自己写最简单的 `{{var}}` 替换 + 段落迭代（轻、可控、不依赖外部包）
+  - B. Scriban（.NET 流行模板引擎，类 Jinja2）+ OpenXML SDK 段落 walk
+  - C. 找 docxtemplater 等专门 Word 模板包（已封装段落 / 表格行 / 图片占位）
+- 看用户现有 `templates/*.docx` 的模板复杂度来选 —— 简单填空 A 够；复杂表格循环就 B/C
 
-**T5.5 起手清单（任何时候启动）：**
-1. 新建 `dotnet/civ-doc/` 子项目（.NET 9 + OpenXML SDK）
-2. 同样的 JSON-RPC over stdin/stdout 协议（参考 `src/civ_core/api/server.py`）
-3. 第一个方法：`doc.fill_template(template_path, context)` 走 docxtpl 类似的变量填充，但用 OpenXML 实现
-4. 后续 `xlsx.read_leeb_workbook` 系列方法切 C#（合并单元格 / 复杂格式靠它）；前端 `data_processing` controller 不需改，按 method 前缀路由会自动走 C# sidecar
-5. Tauri `src-tauri/src/lib.rs` 加第二个 sidecar 管理（按 method 前缀路由）
-6. PyInstaller + dotnet publish 都放进 `tauri.conf.json` 的 externalBin
+**T5.5 起手清单（Step 1 已完成）：**
+1. ✅ 新建 `dotnet/civ-doc/` 子项目（.NET 9）+ NuGet 华为云镜像
+2. ✅ JSON-RPC over stdin/stdout 协议（Server/JsonRpcServer.cs 对齐 Python server.py）
+3. ⏳ 第一个业务方法 `doc.fill_template`（Step 2）
+4. ⏳ `xlsx.*` 系列方法（Step 3，把 leeb Excel 读取切过来）
+5. ✅ Tauri `sidecar.rs` 抽通用 `JsonRpcSidecar` + `SidecarRouter` 按 method 前缀路由；`lib.rs` 启动时 spawn 两个 sidecar
+6. ⏳ T6 阶段：PyInstaller + dotnet publish 都放进 `tauri.conf.json` 的 externalBin
 
 ---
 

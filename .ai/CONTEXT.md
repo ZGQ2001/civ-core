@@ -6,7 +6,18 @@
 
 ## 当前焦点（2026-05-21）
 
-**T5 完结：4 个工具页全部对齐范式（中间预览 + 右侧参数）**。下一步看用户选 T5.5（C# sidecar）还是 T6（打包）。
+**T5.5 Step 1 完成：C# sidecar 链路通了**。`dotnet/civ-doc/` 建好 + JSON-RPC server + Tauri 双 sidecar 路由 + 前端并行 ping 两边。下一步 Step 2 选业务用例（`doc.fill_template` 是首选）+ 模板引擎选型。
+
+T5.5 Step 1 关键决策记录：
+- 项目命名空间 `CivCore.Doc.*`（预留 `CivCore.Xlsx.*`）
+- C# Handler 类型 `Func<JsonElement?, object?>`（不像 Python 用反射自动按位置/关键字解包）—— 反射性能差且需 PropertyInfo 一堆代码，handler 自己解参数更直接
+- dev 模式 Rust 端用 `dotnet exec dll` 跑（**不是 `dotnet run`**）—— 避免 build 输出污染 stdout 协议流；run.sh 启动前先 `dotnet build` 预 build
+- BOM 容错：JsonRpcServer 在 trim 时剥 `﻿`，因为 PowerShell echo / 部分工具会在首行加 UTF-8 BOM 导致 `JsonDocument.Parse` 拒收
+- 中文乱码防护：C# Program.cs 强制 `Console.InputEncoding/OutputEncoding = UTF8`（Windows 默认 GBK）
+- NuGet 镜像：项目级 `dotnet/civ-doc/NuGet.config` 走华为云 + nuget.org fallback
+- 前端 App.tsx 用 `Promise.all([ping, doc.ping])` 并行验证两边；状态栏显示 `后端就绪 (py=pong, doc=pong)`
+
+布局：`ActivityBar | SideBar(全高) | (Editor + 底部输出 Panel) | RightPanel(全高，tab 化)`。
 
 布局：`ActivityBar | SideBar(全高) | (Editor + 底部输出 Panel) | RightPanel(全高，tab 化)`。
 
@@ -56,14 +67,15 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 
 ## 下一步候选（按价值排）
 
-1. **T5.5 起手 C# sidecar**：建 `dotnet/civ-doc/`（.NET 9 + OpenXML SDK）+ JSON-RPC over stdin/stdout；第一个方法 `doc.fill_template`（Word 模板填充）；之后 `xlsx.read_leeb_workbook` 切 C# 解决合并单元格问题
-2. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + Tauri `tauri:build` 出安装包（如果 T5.5 在后做，T6 先打 Python 版本）
-3. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
-4. **报告填充工具**：新建 ActivityBar 项（报告处理类别？），Word 模板 + 数据 → 自动填表；走 T5.5 的 doc.fill_template
-5. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
-6. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
-7. **流式进度**：plot_curves / word2pdf 跑大批量时无 N/M 反馈（协议升级方案见妥协项）
-8. **Toast 通知**：把现在的 alert() 换成右下角 toast
+1. **T5.5 Step 2: doc.fill_template**：Word 模板填充第一个业务方法；先看用户 `templates/*.docx` 复杂度选模板引擎（自写 vs Scriban vs docxtemplater 类库）；用户可以提供一个真实模板 + 期望数据样本作为目标
+2. **T5.5 Step 3: 把 leeb Excel 读取切到 xlsx.\*** —— 解决合并单元格 openpyxl 解析弱问题
+3. **报告填充工具页**：等 doc.fill_template 通了之后新增 ActivityBar 项（直接复用范式）
+4. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + dotnet publish C# + Tauri externalBin 同时引两个 + `tauri:build` 出安装包
+5. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
+6. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
+7. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
+8. **流式进度**：plot_curves / word2pdf 跑大批量时无 N/M 反馈（协议升级方案见妥协项）
+9. **Toast 通知**：把现在的 alert() 换成右下角 toast
 
 ---
 
@@ -124,6 +136,9 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 | `pdf_tools.inspect` | pdf_tools 中间预览：每个 PDF 的 pages + size_kb，单个失败带 error |
 | `word2pdf.convert` | Word→PDF 批量（COM） |
 | `word2pdf.inspect` | word2pdf 中间预览：每个 docx 的 size_kb + paragraphs + (pages 可选) |
+| `doc.ping` / `doc.version` | **C# sidecar 链路验证** —— 已通；前端 App.tsx 启动时并行 ping 两边 |
+| `doc.fill_template` *(T5.5 Step 2)* | Word 模板填充，OpenXML SDK 实现，对齐 docxtpl 行为 |
+| `xlsx.*` *(T5.5 Step 3)* | leeb Excel 读取迁过来：合并单元格 / 复杂格式靠 OpenXML SDK 原生 |
 
 **新加 RPC 必须在 handler 模块加 `__all__` 白名单** — 否则顶部 import 的 Path/dataclass 会被 `register_module` 误暴露成 RPC 方法（已在 server.py 修过这个 bug，但行为依赖 `__all__`）。
 
@@ -132,13 +147,16 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ## 验收清单（每次 commit 前过一遍）
 
 ```bash
-cd frontend && npx tsc -b --noEmit        # TS 类型
-uv run --frozen ruff check .              # Python lint
-uv run --frozen pytest -q                 # 测试（当前 322 passed）
-uv run --frozen python scripts/healthcheck.py  # 6 项冒烟
+cd frontend && npx tsc -b --noEmit              # TS 类型
+uv run --frozen ruff check .                    # Python lint
+uv run --frozen pytest -q                       # Python 测试（当前 322 passed）
+uv run --frozen python scripts/healthcheck.py   # 6 项冒烟
+cd frontend/src-tauri && cargo check            # Rust 编译（改了 sidecar.rs / lib.rs 时跑）
+cd frontend/src-tauri && cargo test --lib       # Rust 单测（sidecar routing 等）
+cd dotnet/civ-doc && dotnet build               # C# build（改了 civ-doc/ 时跑）
 ```
 
-只动前端时仅前 1 项必跑；改了 Python 必跑全部 4 项。
+只动前端时仅 TS 必跑；改 Python 跑 ruff/pytest/healthcheck；改 Rust 跑 cargo check/test；改 C# 跑 dotnet build。
 
 ---
 

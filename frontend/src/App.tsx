@@ -66,8 +66,12 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const pong = await rpc<string>("ping");
-        setSidecarStatus(`后端就绪 (${pong})`);
+        // 并行 ping 两个 sidecar（Python + C#），任一失败状态栏显示错误
+        const [pyPong, docPong] = await Promise.all([
+          rpc<string>("ping"),
+          rpc<string>("doc.ping"),
+        ]);
+        setSidecarStatus(`后端就绪 (py=${pyPong}, doc=${docPong})`);
         const ws = await rpc<WorkspaceLast>("workspace.last");
         if (ws.path) setWorkspacePath(ws.path);
       } catch (e) {

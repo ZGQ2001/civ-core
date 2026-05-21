@@ -46,7 +46,7 @@
 | `frontend/src/tools/_shared/` | 跨工具共用 form 控件 | `forms.tsx` Field / Picker / ResetBtn / RunBtn |
 | `frontend/src/tools/<tool>/` | 单工具子目录 | 全部 4 个工具（plot_curves / data_processing / pdf_tools / word2pdf）统一用 controller/Page/SettingsForm/index 范式 |
 | `frontend/src-tauri/` | Tauri 2 主进程（Rust） | spawn Python/C# sidecar，`rpc_call` 按前缀转发 |
-| `dotnet/civ-doc/` *(T5.5 新建)* | .NET 9 + OpenXML SDK | C# sidecar：`doc.*` / `xlsx_complex.*` 方法 |
+| `dotnet/civ-doc/` | .NET 9 + OpenXML SDK | C# sidecar：`doc.*` / `xlsx.*` 方法；`Program.cs` + `Server/JsonRpcServer.cs` + `Handlers/DocHandlers.cs`；命名空间 `CivCore.Doc.*` |
 | `presets/` | 系统预设（只读） | 程序运行时禁写 |
 | `~/.civ-core/` | 用户家目录 | `presets/` 用户预设、`workspace.json` 上次工作区、`standards.db` 规范库、`logs/` |
 | `templates/` | docx/xlsx 空白模板（docxtpl 填充） | 不是预设 |
@@ -60,8 +60,8 @@
 |---|---|---|
 | `workspace.*` / `files.*` | Python | `workspace.last`、`files.list_dir` |
 | `plot_curves.*` / `leeb.*` / `pdf_tools.*` / `word2pdf.*` | Python | 业务计算与出图 |
-| `doc.*` *(T5.5)* | C# | `doc.fill_template`（Word 模板填充走 OpenXML，不靠 COM） |
-| `xlsx_complex.*` *(T5.5 后期)* | C# | **leeb 等 Excel 读取也会迁此**：合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生 |
+| `doc.*` | C# | `doc.ping` / `doc.version` 已通；`doc.fill_template` 下一步加（Word 模板填充走 OpenXML，不靠 COM） |
+| `xlsx.*` *(T5.5 后期)* | C# | **leeb 等 Excel 读取会迁此**：合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生 |
 
 **handler 强约束**：每个 `api/handlers/*.py` 必须在文件顶部写 `__all__` 显式列出要暴露的 RPC 方法。`register_module` 优先读 `__all__`；不写会把顶部 `import Path` 等工具类误暴露成 RPC 方法（API 边界泄漏）。
 
@@ -99,7 +99,10 @@ StatusBar (22px)
 | `api/handlers/leeb.py` | `leeb.{run,preview_excel}` —— preview_excel 给 data_processing 中间预览用 |
 | `api/handlers/pdf_tools.py` | `pdf_tools.{merge,split_per_page,split_by_ranges,inspect}` —— inspect 给中间预览拉每个 PDF 页数 |
 | `api/handlers/word2pdf.py` | `word2pdf.{convert,inspect}` —— inspect 读 docx 段落数 + size + Word 缓存 Pages |
-| `frontend/src-tauri/src/lib.rs` / `sidecar.rs` | Tauri 启动 + Python sidecar Mutex 串行 RPC |
+| `dotnet/civ-doc/Program.cs` | C# sidecar 入口；强制 UTF-8 stdin/stdout 防中文乱码 |
+| `dotnet/civ-doc/Server/JsonRpcServer.cs` | C# 端 Dispatcher + 行循环；和 Python 端 server.py 同协议同错误码 |
+| `dotnet/civ-doc/Handlers/DocHandlers.cs` | `doc.{ping,version}`；handler 类型 `Func<JsonElement?, object?>` |
+| `frontend/src-tauri/src/lib.rs` / `sidecar.rs` | Tauri 启动 + 双 sidecar (Python + C#) Mutex 串行 RPC；`SidecarRouter` 按 method 前缀路由 |
 | `frontend/src/App.tsx` | 顶层 layout + 快捷键（Ctrl+B / Ctrl+J / Ctrl+Alt+B）+ 嵌套 Providers（plot_curves / data_processing / pdf_tools / word2pdf）|
 | `frontend/src/lib/rpc.ts` | `invoke('rpc_call', ...)` 包装 |
 | `frontend/src/tools/plot_curves/` | controller/Page/SettingsForm + tabs/ 子目录范式（form 复杂 tabs 拆） |
@@ -161,10 +164,10 @@ cd frontend && npm run build                  # 仅前端 build
 cd frontend/src-tauri && cargo check          # 仅 Rust 检查
 cd frontend && npm run tauri:build            # 安装包（T6 PyInstaller + dotnet publish 配好才完整）
 
-# C# sidecar（T5.5 起；当前还没建项目）
-# cd dotnet/civ-doc && dotnet run            # dev 跑 sidecar
-# cd dotnet/civ-doc && dotnet test           # 测试
-# cd dotnet/civ-doc && dotnet publish -c Release --self-contained -r win-x64
+# C# sidecar
+cd dotnet/civ-doc && dotnet build              # 预 build（run.sh 启动前必跑；Rust 端用 dotnet exec dll）
+cd dotnet/civ-doc && dotnet run                # 手测：写一行 JSON-RPC 到 stdin 验证
+# T6 时：dotnet publish -c Release --self-contained -r win-x64
 ```
 
 ### 中国镜像（必走，国外直连超时）
@@ -175,6 +178,7 @@ cd frontend && npm run tauri:build            # 安装包（T6 PyInstaller + dot
 | rustup | shell env | `RUSTUP_DIST_SERVER=https://rsproxy.cn` + `RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup` |
 | npm | 暂未配；需要时项目级 `.npmrc` 加 `registry=https://registry.npmmirror.com` | 淘宝 |
 | pip / uv | 暂未配；需要时 `UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/` | 阿里 |
+| NuGet | `dotnet/civ-doc/NuGet.config`（项目级已配） | 华为云 `mirrors.huaweicloud.com/repository/nuget/v3/` + nuget.org fallback |
 
 ---
 

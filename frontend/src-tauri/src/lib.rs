@@ -1,23 +1,27 @@
 //! Tauri 主进程入口。
 //!
-//! 启动时 spawn Python sidecar 子进程，注册 rpc_call command 给前端调用。
+//! 启动时 spawn 两个 sidecar 子进程：
+//!   - Python (`civ_core.api`) — 业务计算/IO 主力
+//!   - C# (`civ-doc`) — Word/Excel 重资产场景（OpenXML SDK）
+//!
+//! 注册 rpc_call command 给前端调用；SidecarRouter 按 method 前缀路由。
 
 mod sidecar;
 
 use std::sync::Arc;
 
 use serde_json::Value;
-use sidecar::PythonSidecar;
+use sidecar::{SidecarRouter, spawn_csharp_dev, spawn_python_dev};
 use tauri::{Manager, async_runtime::block_on};
 
-/// 把 method+params 转发到 Python sidecar，返回 RPC result 或错误字符串。
+/// 把 method+params 转发到对应 sidecar（按前缀路由），返回 RPC result 或错误字符串。
 #[tauri::command]
 async fn rpc_call(
-    sidecar: tauri::State<'_, Arc<PythonSidecar>>,
+    router: tauri::State<'_, Arc<SidecarRouter>>,
     method: String,
     params: Value,
 ) -> Result<Value, String> {
-    sidecar
+    router
         .call(&method, params)
         .await
         .map_err(|e| e.to_string())
@@ -50,12 +54,18 @@ pub fn run() {
 
             log::info!("启动 sidecar，仓库根 = {}", repo_root.display());
 
-            // 同步等 sidecar 启动；失败则应用直接报错退出（前端没 backend 也跑不了）
-            let sidecar =
-                block_on(async { PythonSidecar::spawn_dev(&repo_root).await })
-                    .expect("启动 Python sidecar 失败");
+            // 串行启两个 sidecar；任一失败应用直接退出（前端没 backend 也跑不了）
+            let router = block_on(async {
+                let python = spawn_python_dev(&repo_root).await?;
+                let csharp = spawn_csharp_dev(&repo_root).await?;
+                Ok::<_, anyhow::Error>(SidecarRouter::new(
+                    Arc::new(python),
+                    Arc::new(csharp),
+                ))
+            })
+            .expect("启动 sidecar 失败");
 
-            app.manage(Arc::new(sidecar));
+            app.manage(Arc::new(router));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![rpc_call])

@@ -10,9 +10,18 @@ interface Props {
   workspacePath: string | null;
   toolLabel: string | null;
   sidecarStatus?: string;
+  /** 底部 Panel 当前是否展开（决定按钮高亮 + 图标方向） */
+  bottomPanelOpen: boolean;
+  onToggleBottomPanel: () => void;
 }
 
-export function StatusBar({ workspacePath, toolLabel, sidecarStatus }: Props) {
+export function StatusBar({
+  workspacePath,
+  toolLabel,
+  sidecarStatus,
+  bottomPanelOpen,
+  onToggleBottomPanel,
+}: Props) {
   const bg = workspacePath ? "#007acc" : "#68217a";
   return (
     <div
@@ -30,6 +39,19 @@ export function StatusBar({ workspacePath, toolLabel, sidecarStatus }: Props) {
       <div className="ml-auto flex items-center gap-3">
         {sidecarStatus && <span className="opacity-80">{sidecarStatus}</span>}
         {toolLabel && <span>{toolLabel}</span>}
+        <button
+          type="button"
+          onClick={onToggleBottomPanel}
+          title={`${bottomPanelOpen ? "隐藏" : "显示"}面板 (Ctrl+J)`}
+          className="flex items-center gap-1 px-1.5 h-[18px] rounded hover:bg-white/15 transition-colors"
+        >
+          <i
+            className={`codicon !text-[12px] ${
+              bottomPanelOpen ? "codicon-chevron-down" : "codicon-chevron-up"
+            }`}
+          />
+          <span>面板</span>
+        </button>
       </div>
     </div>
   );

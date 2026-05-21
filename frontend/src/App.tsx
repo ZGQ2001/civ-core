@@ -47,6 +47,7 @@ export default function App() {
   const [sidecarStatus, setSidecarStatus] = useState<string>("连接中…");
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [bottomVisible, setBottomVisible] = useState(true);
   const [outputLog, setOutputLog] = useState("");
 
   // Panel refs：用于命令式 collapse/expand
@@ -86,9 +87,35 @@ export default function App() {
   const appendOutput = useCallback((text: string) => {
     setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
     bottomRef.current?.expand();
+    setBottomVisible(true);
   }, []);
 
-  const closeBottom = useCallback(() => bottomRef.current?.collapse(), []);
+  const toggleBottom = useCallback(() => {
+    const p = bottomRef.current;
+    if (!p) return;
+    if (p.isCollapsed()) {
+      p.expand();
+      setBottomVisible(true);
+    } else {
+      p.collapse();
+      setBottomVisible(false);
+    }
+  }, []);
+
+  // Ctrl+J 全局快捷键（与 VSCode 一致）
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        toggleBottom();
+      } else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        handleExplorerToggle();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [toggleBottom, handleExplorerToggle]);
 
   // SideBar 4 个按钮
   const handleOpenFolder = useCallback(async () => {
@@ -199,11 +226,12 @@ export default function App() {
             collapsible
             collapsedSize={0}
             id="bottom-panel"
+            onResize={(s) => setBottomVisible(s.asPercentage > 0.5)}
           >
             <BottomPanel
               output={outputLog}
-              settingsSlot={undefined /* 第二刀填 plot_curves 设置 */}
-              onClose={closeBottom}
+              settingsSlot={undefined /* batch 3 填 plot_curves form */}
+              onClose={toggleBottom}
             />
           </Panel>
         </Group>
@@ -213,6 +241,8 @@ export default function App() {
         workspacePath={workspacePath}
         toolLabel={toolLabel}
         sidecarStatus={sidecarStatus}
+        bottomPanelOpen={bottomVisible}
+        onToggleBottomPanel={toggleBottom}
       />
     </div>
   );

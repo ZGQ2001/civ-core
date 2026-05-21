@@ -6,7 +6,14 @@
 
 ## 当前焦点（2026-05-21）
 
-**T5.5 Step 1 完成：C# sidecar 链路通了**。`dotnet/civ-doc/` 建好 + JSON-RPC server + Tauri 双 sidecar 路由 + 前端并行 ping 两边。下一步 Step 2 选业务用例（`doc.fill_template` 是首选）+ 模板引擎选型。
+**T5.5 Step 2 完成：C# 端写精致「报告插入表」xlsx + Python leeb.run 串行链路**。用户工作流 ①数据处理 → ②曲线图 → ③报告生成 → ④Word→PDF；当前完成 ①升级（leeb 输出从粗糙 7 列改为对齐报告格式的 14 列 + 合并 + 字体 + 边框）。
+
+T5.5 方向调整记录（重要）：
+- 原计划 Step 2 做 `doc.fill_template`（Word 模板填充 + 209 循环）—— **不做了**
+- 用户实际工作流是：数据处理工具直接输出「报告级精致 Excel」+ 报告生成工具吃 Excel + 图 + 模板 → 出 docx；不是「模板循环引擎」式
+- 新 Step 2: `xlsx.write_leeb_report_table` 解决「Excel 输出格式微调」用户痛点
+- 新 Step 3（未做）: `doc.compose_report`（轻量 Word 变量替换 + Excel sheet 嵌入 + 图片嵌入）—— 用户准备做新的「报告生成」工具页
+- 新 Step 4（未做）: 把 leeb.run 的 Excel 读取切 C#（解决合并单元格 + 用户提的"速度慢"痛点）
 
 T5.5 Step 1 关键决策记录：
 - 项目命名空间 `CivCore.Doc.*`（预留 `CivCore.Xlsx.*`）
@@ -67,10 +74,10 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 
 ## 下一步候选（按价值排）
 
-1. **T5.5 Step 2: doc.fill_template**：Word 模板填充第一个业务方法；先看用户 `templates/*.docx` 复杂度选模板引擎（自写 vs Scriban vs docxtemplater 类库）；用户可以提供一个真实模板 + 期望数据样本作为目标
-2. **T5.5 Step 3: 把 leeb Excel 读取切到 xlsx.\*** —— 解决合并单元格 openpyxl 解析弱问题
-3. **报告填充工具页**：等 doc.fill_template 通了之后新增 ActivityBar 项（直接复用范式）
-4. **T6 打包**：PyInstaller 把 Python sidecar 打成 exe + dotnet publish C# + Tauri externalBin 同时引两个 + `tauri:build` 出安装包
+1. **用户实测 T5.5 Step 2**：`bash run.sh` → data_processing 工具页选真实 leeb Excel 跑 → 打开输出对照精致格式（合并 / 字体 / 边框 / 列宽）是否满足；列宽偏差或字体可微调
+2. **T5.5 Step 3: 报告生成工具页 + doc.compose_report**：新 ActivityBar 项「报告生成」；C# 端实现轻量 Word 变量替换 + xlsx sheet 嵌入 Word + 图片嵌入；模板 docx 公司信息写死（用户只一份），项目元信息（委托方/编号/日期/工程概况）从前端 form 拿
+3. **T5.5 Step 4: leeb Excel 读取切 C#**：解决「计算速度慢」痛点 + 合并单元格 openpyxl 解析弱；要先 profile 确认瓶颈在读 Excel 而不是算法
+4. **T6 打包**：PyInstaller Python sidecar + dotnet publish C# + Tauri externalBin 同时引两个
 5. **AI 助手 tab 真接通**：当前是占位；接 Anthropic SDK，能看到当前工具 + 工作区上下文，调 RPC 跑工具
 6. **Command Palette (Ctrl+P)**：键盘快速触发任何动作（切预设、运行工具、跳文件）
 7. **EditorArea Tab 化**：每个工具一个 tab，可关闭可切换（VSCode 多文件 tab 风）
@@ -136,9 +143,10 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 | `pdf_tools.inspect` | pdf_tools 中间预览：每个 PDF 的 pages + size_kb，单个失败带 error |
 | `word2pdf.convert` | Word→PDF 批量（COM） |
 | `word2pdf.inspect` | word2pdf 中间预览：每个 docx 的 size_kb + paragraphs + (pages 可选) |
-| `doc.ping` / `doc.version` | **C# sidecar 链路验证** —— 已通；前端 App.tsx 启动时并行 ping 两边 |
-| `doc.fill_template` *(T5.5 Step 2)* | Word 模板填充，OpenXML SDK 实现，对齐 docxtpl 行为 |
-| `xlsx.*` *(T5.5 Step 3)* | leeb Excel 读取迁过来：合并单元格 / 复杂格式靠 OpenXML SDK 原生 |
+| `doc.ping` / `doc.version` | C# sidecar 链路验证；前端 App.tsx 启动时并行 ping 两边 |
+| `xlsx.write_leeb_report_table` | **T5.5 Step 2 已交付**：ClosedXML 写精致「报告插入表」sheet 追加到 leeb 输出 xlsx |
+| `doc.compose_report` *(T5.5 Step 3 未做)* | 报告生成：模板 docx + 变量替换 + xlsx sheet 嵌入 + 图片嵌入 |
+| `xlsx.read_leeb_workbook` *(T5.5 Step 4 未做)* | leeb Excel 读取迁 C#：合并单元格 / 加速 |
 
 **新加 RPC 必须在 handler 模块加 `__all__` 白名单** — 否则顶部 import 的 Path/dataclass 会被 `register_module` 误暴露成 RPC 方法（已在 server.py 修过这个 bug，但行为依赖 `__all__`）。
 
@@ -149,7 +157,7 @@ plot_curves 工具页（中间预览 + 右侧参数 范式）：
 ```bash
 cd frontend && npx tsc -b --noEmit              # TS 类型
 uv run --frozen ruff check .                    # Python lint
-uv run --frozen pytest -q                       # Python 测试（当前 322 passed）
+uv run --frozen pytest -q                       # Python 测试（当前 323 passed）
 uv run --frozen python scripts/healthcheck.py   # 6 项冒烟
 cd frontend/src-tauri && cargo check            # Rust 编译（改了 sidecar.rs / lib.rs 时跑）
 cd frontend/src-tauri && cargo test --lib       # Rust 单测（sidecar routing 等）

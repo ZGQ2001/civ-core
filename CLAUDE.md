@@ -46,7 +46,7 @@
 | `frontend/src/tools/_shared/` | 跨工具共用 form 控件 | `forms.tsx` Field / Picker / ResetBtn / RunBtn |
 | `frontend/src/tools/<tool>/` | 单工具子目录 | 全部 4 个工具（plot_curves / data_processing / pdf_tools / word2pdf）统一用 controller/Page/SettingsForm/index 范式 |
 | `frontend/src-tauri/` | Tauri 2 主进程（Rust） | spawn Python/C# sidecar，`rpc_call` 按前缀转发 |
-| `dotnet/civ-doc/` | .NET 9 + OpenXML SDK | C# sidecar：`doc.*` / `xlsx.*` 方法；`Program.cs` + `Server/JsonRpcServer.cs` + `Handlers/DocHandlers.cs`；命名空间 `CivCore.Doc.*` |
+| `dotnet/civ-doc/` | .NET 9 + ClosedXML + OpenXML SDK | C# sidecar：`doc.*` / `xlsx.*` 方法；`Program.cs` + `Server/JsonRpcServer.cs` + `Handlers/{DocHandlers,XlsxHandlers}.cs` + `ReportTables/LeebReportTable.cs`；命名空间 `CivCore.Doc.*` |
 | `presets/` | 系统预设（只读） | 程序运行时禁写 |
 | `~/.civ-core/` | 用户家目录 | `presets/` 用户预设、`workspace.json` 上次工作区、`standards.db` 规范库、`logs/` |
 | `templates/` | docx/xlsx 空白模板（docxtpl 填充） | 不是预设 |
@@ -60,8 +60,8 @@
 |---|---|---|
 | `workspace.*` / `files.*` | Python | `workspace.last`、`files.list_dir` |
 | `plot_curves.*` / `leeb.*` / `pdf_tools.*` / `word2pdf.*` | Python | 业务计算与出图 |
-| `doc.*` | C# | `doc.ping` / `doc.version` 已通；`doc.fill_template` 下一步加（Word 模板填充走 OpenXML，不靠 COM） |
-| `xlsx.*` *(T5.5 后期)* | C# | **leeb 等 Excel 读取会迁此**：合并单元格 / 复杂格式 openpyxl 解析弱，OpenXML SDK 原生 |
+| `doc.*` | C# | `doc.ping` / `doc.version` 已通；`doc.compose_report` 下一步加（轻量 Word 变量替换 + xlsx sheet 嵌入 + 图片嵌入） |
+| `xlsx.*` | C# | `xlsx.write_leeb_report_table` 已通（ClosedXML 写精致 sheet）；`xlsx.read_leeb_workbook` 后期加（合并单元格 + 加速） |
 
 **handler 强约束**：每个 `api/handlers/*.py` 必须在文件顶部写 `__all__` 显式列出要暴露的 RPC 方法。`register_module` 优先读 `__all__`；不写会把顶部 `import Path` 等工具类误暴露成 RPC 方法（API 边界泄漏）。
 
@@ -102,6 +102,8 @@ StatusBar (22px)
 | `dotnet/civ-doc/Program.cs` | C# sidecar 入口；强制 UTF-8 stdin/stdout 防中文乱码 |
 | `dotnet/civ-doc/Server/JsonRpcServer.cs` | C# 端 Dispatcher + 行循环；和 Python 端 server.py 同协议同错误码 |
 | `dotnet/civ-doc/Handlers/DocHandlers.cs` | `doc.{ping,version}`；handler 类型 `Func<JsonElement?, object?>` |
+| `dotnet/civ-doc/Handlers/XlsxHandlers.cs` | `xlsx.write_leeb_report_table` —— 用 ClosedXML 把精致「报告插入表」sheet 追加到 leeb 输出 xlsx |
+| `dotnet/civ-doc/ReportTables/LeebReportTable.cs` | 里氏硬度报告插入表的列定义 / 合并规则 / 字体 / 列宽 / 边框（用 ClosedXML API） |
 | `frontend/src-tauri/src/lib.rs` / `sidecar.rs` | Tauri 启动 + 双 sidecar (Python + C#) Mutex 串行 RPC；`SidecarRouter` 按 method 前缀路由 |
 | `frontend/src/App.tsx` | 顶层 layout + 快捷键（Ctrl+B / Ctrl+J / Ctrl+Alt+B）+ 嵌套 Providers（plot_curves / data_processing / pdf_tools / word2pdf）|
 | `frontend/src/lib/rpc.ts` | `invoke('rpc_call', ...)` 包装 |

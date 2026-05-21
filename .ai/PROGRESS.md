@@ -19,12 +19,17 @@ T5 ✅ 工具页迁移 — 4 个工具全部 controller/Page/SettingsForm 范式
      plot_curves（实时 PNG）/ data_processing（Excel 表格）/ pdf_tools（PDF 列表）/
      word2pdf（docx 列表）。data_processing 用 calcType 下拉留接口（未来加钻芯/回弹）
 ─────────────────── 当前在这里 ───────────────────
-T5.5 🚧 加 C# sidecar
+T5.5 🚧 加 C# sidecar（方向调整：先做 Excel 精致输出，Word 模板填充延后）
      ✅ Step 1: 建 dotnet/civ-doc/（.NET 9 + JSON-RPC server + doc.ping/version + NuGet 华为云镜像）
                 + Tauri 双 sidecar (Python + C#) + SidecarRouter 按 method 前缀路由
                 + 前端 App.tsx 并行 ping 两边
-     ⏳ Step 2: 第一个业务方法 doc.fill_template（Word 模板填充，OpenXML SDK + 模板引擎选型）
-     ⏳ Step 3: leeb 的 Excel 读取迁 xlsx.* 系列方法（合并单元格 OpenXML 原生）
+     ✅ Step 2: xlsx.write_leeb_report_table —— C# ClosedXML 写精致「报告插入表」
+                14 列 / 每构件 3 行 / 4 处合并 / 仿宋表头 / Times New Roman 数据 / 宋体 N 列
+                Python leeb.run 改成只写「过程数据」sheet + 返回 report_table_data；
+                前端 controller 串行调两个 RPC（Tauri 主进程按前缀路由分发）
+     ⏳ Step 3: 报告生成工具页（doc.compose_report）—— 委托方 / 编号 / 日期变量替换
+                + Excel sheet 嵌入 + 图片嵌入（按用户工作流：①数据处理 → ②曲线图 → ③报告生成）
+     ⏳ Step 4: 把 leeb.run 的 Excel 读取也切 C# OpenXML（解决合并单元格 + 加速）
 T6 ⏳ 打包（PyInstaller 把 Python sidecar 打成 exe；dotnet publish 把 C# 打成 exe
         → Tauri externalBin 同时引两个）
 T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
@@ -91,6 +96,8 @@ T7 ✅ 删旧 Qt UI（提前做了 —— 见 2026-05-20 大清理）
 
 | commit | 内容 |
 |---|---|
+| `a6676c1` 2026-05-21 | T5.5 Step 2：C# ClosedXML 写精致里氏报告插入表 + leeb.run 串行链路（Python 算 + C# 写） |
+| `47de0e8` 2026-05-21 | T5.5 Step 1：C# sidecar 链路通了（dotnet/civ-doc/ + Tauri 双 sidecar + 前端并行 ping） |
 | `1ae71f1` 2026-05-21 | T5 完结：word2pdf 工具页对齐范式 + word2pdf.inspect RPC（读 docx 段落数 + size + Word 缓存 Pages）+ 3 个 pytest |
 | `7175729` 2026-05-21 | pdf_tools 工具页对齐范式（3 个 mode 共享 state） + pdf_tools.inspect RPC（PDF 页数 + size） + fix 数据处理图标 codicon-calculator 不存在→透明 改 symbol-method |
 | `94751e0` 2026-05-21 | leeb_hardness → data_processing 模块改名 + Page 顶部加「计算类型」下拉（留接口给未来钻芯/回弹）+ 去 INSP 字眼 + ActivityBar 改名「数据处理」 |

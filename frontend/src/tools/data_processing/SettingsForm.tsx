@@ -7,6 +7,7 @@ import { useCallback, useState } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 
+import { logLine, useShell } from "../../lib/shell";
 import { Field, Picker, ResetBtn } from "../_shared/forms";
 import { useDataProcessing } from "./controller";
 import {
@@ -66,19 +67,39 @@ export function DataProcessingSettingsForm() {
 
 function AnchorSubForm() {
   const c = useDataProcessing();
+  const shell = useShell();
 
   const genTemplate = useCallback(async () => {
-    const savePath = await saveDialog({
-      title: "保存锚杆抗拔输入模板为",
-      defaultPath: "锚杆抗拔输入模板.xlsx",
-      filters: [{ name: "Excel", extensions: ["xlsx"] }],
-    });
-    if (typeof savePath !== "string") return;
+    // saveDialog 自身可能抛 permission/IO 错——必须 catch，否则错误进 unhandledrejection 静默
+    shell.appendOutput(logLine("[锚杆] 点击「生成模板」→ 打开保存对话框"));
+    let savePath: string | null = null;
+    try {
+      const sel = await saveDialog({
+        title: "保存锚杆抗拔输入模板为",
+        defaultPath: "锚杆抗拔输入模板.xlsx",
+        filters: [{ name: "Excel", extensions: ["xlsx"] }],
+      });
+      if (typeof sel !== "string") {
+        shell.appendOutput(logLine("[锚杆] 已取消"));
+        return;
+      }
+      savePath = sel;
+    } catch (e) {
+      const msg = String(e);
+      console.error("saveDialog 失败:", e);
+      shell.appendOutput(logLine(`[锚杆] 保存对话框失败: ${msg}`));
+      return;
+    }
     const written = await c.generateAnchorTemplate(savePath);
     if (written) {
-      try { await openPath(written); } catch { /* 没装关联程序就忽略 */ }
+      try {
+        await openPath(written);
+      } catch (e) {
+        // 没装关联程序就忽略，但日志记一笔便于排查
+        shell.appendOutput(logLine(`[锚杆] 自动打开失败（已生成，请手动打开）: ${String(e)}`));
+      }
     }
-  }, [c]);
+  }, [c, shell]);
 
   return (
     <>

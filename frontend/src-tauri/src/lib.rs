@@ -8,11 +8,28 @@
 
 mod sidecar;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::Value;
 use sidecar::{SidecarRouter, spawn_csharp_dev, spawn_python_dev};
 use tauri::{Manager, async_runtime::block_on};
+
+/// 从 cwd 向上查找含 `pyproject.toml` 的目录作为仓库根。
+/// dev 模式 cwd 可能是 frontend/src-tauri 也可能是 frontend，靠 marker 判断比 parent 计数稳。
+fn find_repo_root() -> PathBuf {
+    let start = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut cur = start.as_path();
+    loop {
+        if cur.join("pyproject.toml").is_file() {
+            return cur.to_path_buf();
+        }
+        match cur.parent() {
+            Some(p) => cur = p,
+            None => return start,
+        }
+    }
+}
 
 /// 把 method+params 转发到对应 sidecar（按前缀路由），返回 RPC result 或错误字符串。
 #[tauri::command]
@@ -38,19 +55,10 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // 仓库根目录：src-tauri/ → frontend/ → civ-core/
-            let repo_root = app
-                .path()
-                .resource_dir()
-                .ok()
-                .and_then(|p| p.parent().and_then(|q| q.parent()).map(|q| q.to_path_buf()))
-                .unwrap_or_else(|| {
-                    // dev 启动时 resource_dir 可能不指向仓库根，回退到 cwd 的祖父
-                    std::env::current_dir()
-                        .ok()
-                        .and_then(|cwd| cwd.parent().map(|p| p.to_path_buf()))
-                        .unwrap_or_else(|| std::path::PathBuf::from("."))
-                });
+            // dev 模式：沿 cwd 向上找 pyproject.toml 定位仓库根。
+            // resource_dir 在 dev 模式指向 target/debug，parent 计数容易错；
+            // 用 marker 文件判断稳得多。生产打包（T6）改走 externalBin，不再用 repo_root。
+            let repo_root = find_repo_root();
 
             log::info!("启动 sidecar，仓库根 = {}", repo_root.display());
 

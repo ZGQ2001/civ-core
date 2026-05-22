@@ -11,15 +11,68 @@ Windows 平台，内部自用，非编程人员操作。
 
 ## 架构
 
-```
-Frontend (React/TS) ──rpc_call──▶ Tauri 2 (Rust)
-                                    ├─ 默认 ▶ C# sidecar (.NET 9, ClosedXML/OpenXML)
-                                    └─ 白名单 ▶ Python sidecar (uv, openpyxl/docxtpl/matplotlib)
-                                                 │
-                                                 └─ seeds ~/.civ-core/standards.db（C# 只读）
+```mermaid
+graph TB
+    subgraph Frontend ["前端 (Vite + React 19 + TS + Tailwind v4)"]
+        UI["VSCode 风格布局<br/>TitleBar / SideBar / Editor / StatusBar"]
+        RPC_Client["rpc.ts (JSON-RPC 2.0 客户端)"]
+        UI --> RPC_Client
+    end
+
+    subgraph Tauri ["Tauri 2 主进程 (Rust)"]
+        IPC_Cmd["rpc_call (tauri::command)"]
+        Router["SidecarRouter<br/>前缀路由分发"]
+        RPC_Client -- "invoke('rpc_call')" --> IPC_Cmd
+        IPC_Cmd --> Router
+    end
+
+    subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
+        CS_RPC["JsonRpcServer.RunAsync()"]
+        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx"]
+        CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator"]
+        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写"]
+        CS_SQL["Microsoft.Data.Sqlite<br/>SQLite 只读查询"]
+        CS_RPC --> CS_Handlers
+        CS_Handlers --> CS_Calc
+        CS_Handlers --> CS_CL
+        CS_Handlers --> CS_SQL
+    end
+
+    subgraph Python ["Python Sidecar (3.12 · civ_core.api)"]
+        Py_RPC["server.serve() / Dispatcher"]
+        Py_Handlers["Handlers<br/>Workspace / Files / Plot / PDF"]
+        Py_Core["Core 业务<br/>matplotlib 绘图"]
+        Py_Infra["Infra IO<br/>file_manager / pdf_io / standards_db"]
+        Py_COM["pywin32<br/>MS Word / WPS Office COM"]
+        Py_RPC --> Py_Handlers
+        Py_Handlers --> Py_Core
+        Py_Handlers --> Py_Infra
+        Py_Handlers --> Py_COM
+    end
+
+    subgraph Storage ["外部存储"]
+        DB["~/.civ-core/standards.db<br/>规范数据库"]
+        COM_App["本地 Word / WPS"]
+        Disk["工作区目录"]
+    end
+
+    Router -- "默认路由<br/>leeb.* doc.* xlsx.* anchor.*" --> CS_RPC
+    Router -- "白名单路由<br/>workspace.* files.* plot_curves.* pdf_tools.* word2pdf.*" --> Py_RPC
+
+    CS_SQL -- "只读查询" --> DB
+    Py_Infra -- "Seed 写入" --> DB
+    Py_COM -- "COM 驱动" --> COM_App
+    Py_Infra -- "读写" --> Disk
+    CS_CL -- "读写" --> Disk
+
+    style Frontend fill:#1e1e2e,stroke:#cba6f7,color:#cdd6f4
+    style Tauri fill:#11111b,stroke:#89b4fa,color:#cdd6f4
+    style CSharp fill:#181825,stroke:#a6e3a1,color:#cdd6f4
+    style Python fill:#181825,stroke:#f9e2af,color:#cdd6f4
+    style Storage fill:#313244,stroke:#f5c2e7,color:#cdd6f4
 ```
 
-**双 sidecar 通过 stdin/stdout JSON-RPC 2.0 通信。同协议、同错误码。前端不感知 sidecar 边界。**
+**双 sidecar 通过 stdin/stdout JSON-RPC 2.0 行协议通信。同协议、同错误码。前端不感知 sidecar 边界。Python 负责 standards.db 初始化写入，C# 以只读方式查询。**
 
 ## 技术栈
 

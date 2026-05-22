@@ -102,10 +102,7 @@ def test_list_dir_hides_dotfiles_by_default(tmp_path) -> None:
     (tmp_path / "README.md").write_text("y")
     default = [e["name"] for e in files_handler.list_dir(str(tmp_path))["entries"]]
     assert ".gitignore" not in default
-    shown = [
-        e["name"]
-        for e in files_handler.list_dir(str(tmp_path), show_hidden=True)["entries"]
-    ]
+    shown = [e["name"] for e in files_handler.list_dir(str(tmp_path), show_hidden=True)["entries"]]
     assert ".gitignore" in shown
 
 

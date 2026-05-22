@@ -31,8 +31,7 @@ def convert(inputs: list[str], output_dir: str) -> dict:
     return {
         "written": [str(p) for p in result.written],
         "failed": [
-            {"path": str(src), "error": f"{type(e).__name__}: {e}"}
-            for src, e in result.failed
+            {"path": str(src), "error": f"{type(e).__name__}: {e}"} for src, e in result.failed
         ],
         "total": len(inputs),
     }

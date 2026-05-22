@@ -46,9 +46,7 @@ def split_by_ranges(
     expr: str,
     name_template: str = "{stem}_{start}-{end}.pdf",
 ) -> dict:
-    written = split_pdf_by_ranges(
-        Path(input), Path(output_dir), expr, name_template=name_template
-    )
+    written = split_pdf_by_ranges(Path(input), Path(output_dir), expr, name_template=name_template)
     return {"written": [str(p) for p in written], "count": len(written)}
 
 

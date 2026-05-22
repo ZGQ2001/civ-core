@@ -123,9 +123,9 @@ class ReboundResult:
     test_areas: tuple[ReboundTestArea, ...]
     n: int
     mode: str
-    m_fcu: float       # 测区强度换算值平均（MPa，0.1）
-    s_fcu: float       # 测区强度换算值标准差（MPa，0.01）
-    f_cu_e: float      # 推定值（MPa，0.1）
+    m_fcu: float  # 测区强度换算值平均（MPa，0.1）
+    s_fcu: float  # 测区强度换算值标准差（MPa，0.01）
+    f_cu_e: float  # 推定值（MPa，0.1）
 
     def __post_init__(self) -> None:
         if self.mode not in _REBOUND_MODE_KINDS:

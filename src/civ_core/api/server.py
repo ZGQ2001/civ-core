@@ -88,9 +88,7 @@ class Dispatcher:
         if handler is None:
             if req_id is None:
                 return ""  # notification 不回任何响应
-            return self._error_response(
-                req_id, ERR_METHOD_NOT_FOUND, f"未知 method: {method!r}"
-            )
+            return self._error_response(req_id, ERR_METHOD_NOT_FOUND, f"未知 method: {method!r}")
 
         try:
             result = self._invoke(handler, params)

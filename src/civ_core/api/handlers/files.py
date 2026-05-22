@@ -53,7 +53,10 @@ _ALWAYS_HIDDEN = {".civ-core"}
 # 非法字符（Windows 文件名）
 _FORBIDDEN_NAME_CHARS = set('<>:"/\\|?*')
 _FORBIDDEN_NAMES = {
-    "CON", "PRN", "AUX", "NUL",
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
 }
@@ -175,55 +178,52 @@ def rename(path: str, new_name: str) -> dict:
 
 
 import time
-from pathlib import Path
-from send2trash import send2trash
+
 import win32com.client
 
 _undo_stack: list[dict] = []
+
 
 def delete(path: str) -> dict:
     """直接发送到回收站，并记录原始路径以支持 5 分钟内撤销。"""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"不存在：{path}")
-    
+
     send2trash(str(p))
-    
-    _undo_stack.append({
-        "original_path": str(p),
-        "name": p.name,
-        "timestamp": time.time()
-    })
+
+    _undo_stack.append({"original_path": str(p), "name": p.name, "timestamp": time.time()})
     return {"ok": True}
+
 
 def undo_delete() -> dict:
     """从回收站捞回最近一次删除的文件（仅限 5 分钟内）。"""
     if not _undo_stack:
         raise ValueError("没有可撤销的删除操作")
-        
+
     item = _undo_stack.pop()
     if time.time() - item.get("timestamp", 0) > 300:
         _undo_stack.clear()
         raise ValueError("超过 5 分钟的删除不支持在 App 内撤销，请前往系统回收站手动还原。")
-        
+
     orig = Path(item["original_path"])
     orig_name = item["name"]
     orig_dir = str(orig.parent)
-    
+
     if orig.exists():
         # 如果原位置被占用，撤销失败，把记录塞回去
         _undo_stack.append(item)
         raise FileExistsError(f"无法还原：目标位置已有同名文件 {orig_name}")
-        
+
     shell = win32com.client.Dispatch("Shell.Application")
     rb = shell.NameSpace(10)
-    
+
     restored = False
     # 因为可能存在同名文件，需要倒序遍历以找到最近删除的匹配项
     for i in range(rb.Items().Count - 1, -1, -1):
         rb_item = rb.Items().Item(i)
         if rb_item.Name == orig_name:
-            clean_dir = rb.GetDetailsOf(rb_item, 1).replace('\u200e', '').replace('\u200f', '')
+            clean_dir = rb.GetDetailsOf(rb_item, 1).replace("\u200e", "").replace("\u200f", "")
             if clean_dir == orig_dir:
                 try:
                     rb_item.InvokeVerb("undelete")
@@ -232,16 +232,16 @@ def undo_delete() -> dict:
                 except Exception:
                     # 备用方案：通过动词名称匹配
                     for verb in rb_item.Verbs():
-                        if '还原' in verb.Name or 'Restore' in verb.Name:
+                        if "还原" in verb.Name or "Restore" in verb.Name:
                             verb.DoIt()
                             restored = True
                             break
                 if restored:
                     break
-                    
+
     if not restored:
         raise FileNotFoundError("在回收站中未找到匹配的文件，可能已被彻底删除。")
-        
+
     return {"restored_path": str(orig), "parent": str(orig.parent)}
 
 

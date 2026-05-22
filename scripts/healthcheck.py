@@ -196,9 +196,7 @@ def _check_standards_db_calc_pipeline() -> str:
             finally:
                 conn.close()
 
-        return _ok(
-            "规范库 + 钻芯法计算正常；里氏硬度三表已 seed (C# sidecar 读)"
-        )
+        return _ok("规范库 + 钻芯法计算正常；里氏硬度三表已 seed (C# sidecar 读)")
     except Exception as e:
         return _fail("规范库计算管线异常", f"原因：{e}")
 

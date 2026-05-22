@@ -27,7 +27,6 @@ import {
   useState,
 } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 
 import { cn } from "../lib/cn";
 import { rpc, type FileEntry } from "../lib/rpc";

@@ -28,10 +28,10 @@ graph TB
 
     subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
         CS_RPC["JsonRpcServer.RunAsync()"]
-        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>word2pdf（待迁）"]
+        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>Workspace / Files / PDF<br/>word2pdf（待迁）"]
         CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator"]
         CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写 + docx→PDF"]
-        CS_SQL["Microsoft.Data.Sqlite<br/>SQLite 只读查询"]
+        CS_SQL["Microsoft.Data.Sqlite<br/>standards.db 管理"]
         CS_RPC --> CS_Handlers
         CS_Handlers --> CS_Calc
         CS_Handlers --> CS_CL
@@ -40,12 +40,8 @@ graph TB
 
     subgraph Python ["Python Sidecar (3.12 · civ_core.api)"]
         Py_RPC["server.serve() / Dispatcher"]
-        Py_Handlers["Handlers<br/>Workspace / Files / Plot / PDF"]
-        Py_Core["Core 业务<br/>matplotlib 绘图"]
-        Py_Infra["Infra IO<br/>file_manager / pdf_io / standards_db"]
+        Py_Handlers["plot_curves.*<br/>matplotlib 图表引擎"]
         Py_RPC --> Py_Handlers
-        Py_Handlers --> Py_Core
-        Py_Handlers --> Py_Infra
     end
 
     subgraph Storage ["外部存储"]
@@ -53,12 +49,10 @@ graph TB
         Disk["工作区目录"]
     end
 
-    Router -- "默认路由<br/>leeb.* doc.* xlsx.* anchor.*<br/>word2pdf.*（待迁）" --> CS_RPC
-    Router -- "白名单路由<br/>workspace.* files.* plot_curves.* pdf_tools.*" --> Py_RPC
+    Router -- "默认路由（全部）" --> CS_RPC
+    Router -- "白名单路由<br/>plot_curves.*" --> Py_RPC
 
-    CS_SQL -- "只读查询" --> DB
-    Py_Infra -- "Seed 写入" --> DB
-    Py_Infra -- "读写" --> Disk
+    CS_SQL -- "读写" --> DB
     CS_CL -- "读写" --> Disk
 
     style Frontend fill:#1e1e2e,stroke:#cba6f7,color:#cdd6f4
@@ -68,7 +62,7 @@ graph TB
     style Storage fill:#313244,stroke:#f5c2e7,color:#cdd6f4
 ```
 
-**双 sidecar 通过 stdin/stdout JSON-RPC 2.0 行协议通信。同协议、同错误码。前端不感知 sidecar 边界。Python 负责 standards.db 初始化写入，C# 以只读方式查询。**
+**双 sidecar 通过 stdin/stdout JSON-RPC 2.0 行协议通信。同协议、同错误码。前端不感知 sidecar 边界。Python 仅保留 plot_curves（matplotlib 图表引擎），其余全由 C# 接管（含 standards.db 管理）。**
 
 ## 技术栈
 
@@ -84,8 +78,8 @@ graph TB
 
 | sidecar | 方法前缀 |
 |---------|---------|
-| **C#（默认）** | `leeb.*` `doc.*` `xlsx.*` `calc.*` `word2pdf.*`（待迁）— 及所有未列出的新方法 |
-| **Python（白名单）** | `ping` `version` `workspace.*` `files.*` `plot_curves.*` `pdf_tools.*` |
+| **C#（默认）** | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*`（待迁） `files.*`（待迁） `pdf_tools.*`（待迁） `word2pdf.*`（待迁）— 及所有新方法 |
+| **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代） |
 
 ## 不可变规则
 

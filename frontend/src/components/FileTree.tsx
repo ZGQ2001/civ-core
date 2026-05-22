@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 
 import { cn } from "../lib/cn";
 import { rpc, type FileEntry } from "../lib/rpc";
@@ -45,6 +46,7 @@ interface NodeState {
   loading: boolean;
   error: string | null;
   expanded: boolean;
+  isNew?: boolean;
 }
 
 interface RenderRow {
@@ -55,6 +57,7 @@ interface RenderRow {
   expanded: boolean;
   /** 选中时高亮 */
   selected: boolean;
+  isNew?: boolean;
 }
 
 type EditState =
@@ -180,6 +183,7 @@ function buildVisibleRows(
       depth,
       expanded: s.expanded,
       selected: path === selectedPath,
+      isNew: s.isNew,
     });
     if (s.isDir && s.expanded && s.entries) {
       for (const e of s.entries) walk(e.path, depth + 1);
@@ -294,6 +298,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
               loading: false,
               error: null,
               expanded: false,
+              isNew: cur.entries !== null,
             });
           }
         }
@@ -332,7 +337,12 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   useEffect(() => {
     const onFocus = () => refetchExpanded();
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    // 实时刷新：每 2 秒轮询展开的目录
+    const timer = setInterval(() => refetchExpanded(), 2000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(timer);
+    };
   }, [refetchExpanded]);
 
   const refreshSkip = useRef(true);
@@ -367,8 +377,9 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
 
   const select = useCallback((path: string) => {
     setSelectedPath(path);
+    patchNode(path, { isNew: false });
     containerRef.current?.focus();
-  }, []);
+  }, [patchNode]);
 
   const activate = useCallback((path: string, shift: boolean) => {
     const cur = nodesRef.current.get(path);
@@ -450,7 +461,6 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const doDelete = useCallback(async (path: string) => {
     const cur = nodesRef.current.get(path);
     if (!cur || cur.parent === null) return;
-    if (!window.confirm(`将「${cur.name}」移到回收站？`)) return;
     try {
       await rpc("files.delete", { path });
       if (selectedRef.current === path) setSelectedPath(null);
@@ -687,7 +697,14 @@ function NodeRow({ row }: { row: RenderRow }) {
           onCancel={c.cancelEdit}
         />
       ) : (
-        <span className="truncate">{row.name}</span>
+        <>
+          <span className={cn("truncate flex-1", row.isNew && "text-[#73c991]")}>
+            {row.name}
+          </span>
+          {row.isNew && (
+            <span className="text-[#73c991] text-[10px] mr-1 font-medium select-none flex-shrink-0" title="Untracked">U</span>
+          )}
+        </>
       )}
     </div>
   );

@@ -85,7 +85,17 @@ interface Actions {
   generateAnchorTemplate: (outputPath: string) => Promise<string | null>;
 }
 
-type Ctx = State & Actions & { defaultOutput: string };
+/** 模板生成结果（按钮下方反馈用）。 */
+export type TemplateStatus =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "ok"; path: string }
+  | { kind: "error"; message: string };
+
+type Ctx = State & Actions & {
+  defaultOutput: string;
+  anchorTemplateStatus: TemplateStatus;
+};
 
 const DataProcessingContext = createContext<Ctx | null>(null);
 
@@ -124,6 +134,8 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   const [anchorBatchesError, setAnchorBatchesError] = useState<string | null>(null);
   const [anchorParamsByBatch, setAnchorParamsByBatch] =
     useState<Record<string, AnchorParams>>({});
+  const [anchorTemplateStatus, setAnchorTemplateStatus] =
+    useState<TemplateStatus>({ kind: "idle" });
 
   // 切 Excel → 清掉旧预览 + 清 sheet 选择 + 清结果 + 清批次
   const setExcelPath = useCallback((p: string) => {
@@ -256,14 +268,19 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
 
   const generateAnchorTemplate = useCallback(
     async (savePath: string): Promise<string | null> => {
+      setAnchorTemplateStatus({ kind: "running" });
       try {
         const r = await rpc<{ ok: boolean; path: string }>("anchor.generate_template", {
           output_xlsx: savePath,
           standard: anchorStandard,
         });
+        setAnchorTemplateStatus({ kind: "ok", path: r.path });
         return r.path;
       } catch (e) {
-        setRunError(String(e));
+        const message = String(e);
+        // 同时打到 console，便于 DevTools 排查（用户/我都能看到完整 stack）
+        console.error("anchor.generate_template 失败:", e);
+        setAnchorTemplateStatus({ kind: "error", message });
         return null;
       }
     }, [anchorStandard]);
@@ -358,6 +375,7 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
       defaultOutput,
       anchorStandard, anchorBatchIdColumn, anchorBatchIds,
       anchorBatchesLoading, anchorBatchesError, anchorParamsByBatch,
+      anchorTemplateStatus,
       setCalcType, setExcelPath, setSheet, setHeaderRow, setAngle, setOutputPath,
       run,
       setAnchorStandard, setAnchorBatchIdColumn,
@@ -373,6 +391,7 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
       defaultOutput,
       anchorStandard, anchorBatchIdColumn, anchorBatchIds,
       anchorBatchesLoading, anchorBatchesError, anchorParamsByBatch,
+      anchorTemplateStatus,
       setExcelPath, setCalcType, run,
       setAnchorParamsForBatch, setAnchorParamsForAllBatches, generateAnchorTemplate,
     ],

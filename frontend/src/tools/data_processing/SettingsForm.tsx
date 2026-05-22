@@ -98,11 +98,28 @@ function AnchorSubForm() {
         <button
           type="button"
           onClick={genTemplate}
-          className="w-full px-3 py-1.5 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center justify-center gap-2"
+          disabled={c.anchorTemplateStatus.kind === "running"}
+          className="w-full px-3 py-1.5 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          <i className="codicon codicon-new-file !text-[12px]" />
-          生成模板…
+          {c.anchorTemplateStatus.kind === "running" ? (
+            <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+          ) : (
+            <i className="codicon codicon-new-file !text-[12px]" />
+          )}
+          {c.anchorTemplateStatus.kind === "running" ? "生成中…" : "生成模板…"}
         </button>
+        {c.anchorTemplateStatus.kind === "ok" && (
+          <div className="mt-1 text-[11px] text-green-400 flex items-center gap-1">
+            <i className="codicon codicon-pass !text-[12px]" />
+            已生成：{c.anchorTemplateStatus.path}
+          </div>
+        )}
+        {c.anchorTemplateStatus.kind === "error" && (
+          <div className="mt-1 text-[11px] text-red-400 whitespace-pre-wrap">
+            <i className="codicon codicon-error !text-[12px] mr-1" />
+            生成失败：{c.anchorTemplateStatus.message}
+          </div>
+        )}
       </Field>
 
       <Field label="批次列名" hint="输入 Excel 里用于区分批次的列名">

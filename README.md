@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="docs/plot_curves_demo.png" alt="筑核" width="600">
+  <img src="docs/plot_curves_demo.png" alt="曲线图工具" width="400">
+  <img src="docs/data_processing_demo.png" alt="数据处理" width="400">
 </p>
 
 <h1 align="center">筑核 · civ-core</h1>

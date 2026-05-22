@@ -8,28 +8,27 @@
 
 ## 当前焦点（2026-05-22）
 
-**锚杆抗拔试验（GB 50086-2015）全套上线**：data_processing 第二个子模块。
+**锚杆抗拔（GB 50086-2015）上线 + UX 可观察性补齐**：等待新方向。
 
-- C# Calc/Anchor：Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter
-- ReportTables：AnchorAnalysisSheet（横排）+ AnchorReportTable（每锚杆 1 张 15×17 表）
-- Handlers/AnchorHandlers：anchor.run / list_batches / generate_template
-- 前端 data_processing calcType 加 'anchor'：规范下拉 + 生成模板按钮 + 按批次参数表
-- C# 65 个 xUnit 测试（64 通过 + 1 skip）；前端 TS 0 错
+- 锚杆全套：C# Calc/Anchor 7 文件（Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter）+ 2 ReportTables + 3 RPC（anchor.run / list_batches / generate_template）+ 前端 calcType=anchor 子 form（规范下拉 + 生成模板按钮 + 按批次参数卡片）。C# 65 xUnit（64 通过 + 1 skip）；TS 0 错。
+- 锚杆参数 UX 重做：每批一张可折叠卡片，每字段中文名 + 变量符号 + input + 单位 suffix + hint —— 字母不再裸露。
+- ShellContext（`frontend/src/lib/shell.ts`）：全局壳能力（appendOutput / activeToolId / activatedFile）。Provider 内 useShell()，RightPanel 里的操作也能写底部日志面板。
+- 文件树双击 .xlsx/.xls/.docx/.doc/.pdf 联动当前工具（目前只 data_processing 接 xlsx）。Shift+双击 = 强制系统打开（逃生口）。
+- **capability bug**：`dialog:allow-save` 漏授权 → 所有 saveDialog() 静默被拒（"点了没反应"）。已加 `dialog:allow-save`。
+- FileTree 由用户重构为 VSCode 风扁平渲染 + 右键菜单 + in-place 编辑 + 剪贴板 + 删除回收站 + 焦点自动 refetch（720+ 行）。
 
 **Python 剩余职责**：workspace/files/plot_curves/pdf_tools/word2pdf + seeds standards.db
-
-**前置（T5.5 Step 4）**：leeb 整套迁 C# — C# sidecar 默认路由，Python 白名单（[[PROGRESS.md]]）
 
 ---
 
 ## 下一步候选（按价值排）
 
-1. **真实数据端到端验证**：让用户用真实工程 Excel 跑 anchor.run，看输出 sheet 布局是否够用
-2. **修复 3 个前端 stale closure**：plot_curves/pdf_tools/word2pdf 的 `handleRun` 闭包陈旧
-3. **T5.5 Step 3：报告生成工具页** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）
-4. **Tauri sidecar 加超时 + 自动重启** — read_line 加 tokio::time::timeout，崩溃自动 respawn
-5. **钻芯/回弹切 C#** — data_processing calcType 下拉再加项
-6. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
+1. **真实数据端到端验证**：用户用真实工程 Excel 跑 anchor.run，看输出 sheet 布局是否够用
+2. **其他 3 个工具接 useShell**：plot_curves/pdf_tools/word2pdf 的 Provider 也接 shell.activatedFile，让文件树双击对应文件类型时自动灌入
+3. **报告生成工具页（T5.5 Step 3）** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）
+4. **钻芯/回弹切 C#** — data_processing calcType 下拉再加项
+5. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
+6. **App.tsx 拆 useShellState hook** — 当前 270+ 行嵌套 4 个 Provider，重构降低复杂度
 
 ---
 
@@ -43,6 +42,8 @@
 | 大需求分多次 commit，每次独立验收 | 2026-05-21 |
 | 以后代码都用 C#（Python 已交付的不动） | 2026-05-22 |
 | 文档对 AI 友好、易于维护、不需要用户写专业内容 | 2026-05-22 |
+| UI 任何操作必须可观察，禁黑盒——每个 onClick 入口先 appendOutput 一行 | 2026-05-22 |
+| 字段命名要让非编程用户看得懂——中文名 + 变量符号 + 单位 + 一句话 hint 同行展示 | 2026-05-22 |
 
 ---
 
@@ -52,12 +53,17 @@
 - ~~plot_curves 调曲线只能编辑 JSON~~ → RightPanel form + 实时预览
 - ~~预设无法新建/重命名/删除~~ → CRUD 全套
 - ~~leeb/pdf/word2pdf 工具页没用范式~~ → 已迁
-- **3 个工具 handleRun 陈旧闭包** → 底部输出面板永不触发（🔴）
-- `data_processing` OpenXML 切 C# 后合并单元格已解决；前端不变
+- ~~3 个工具 handleRun 陈旧闭包~~ → 已修（395f05e）
 - ~~data_processing calcType 下拉只 1 项~~ → 已加锚杆抗拔（2 项）；等加钻芯/回弹
+- ~~锚杆参数表横排 + 裸字母 P/Lf/La/A/E~~ → 已改纵向卡片（中文名 + 单位 + hint）
+- ~~RightPanel 内操作无日志反馈~~ → ShellContext + 入口 appendOutput
+- ~~点击「生成模板」无反应~~ → 加 dialog:allow-save capability
+- ~~文件树双击只 openPath~~ → 双击 xlsx → 自动灌给 data_processing（其他工具未接）
+- **其他 3 个工具未接 shell.activatedFile** → 文件树双击 .docx/.pdf 暂无人接收（🟡）
+- `data_processing` OpenXML 切 C# 后合并单元格已解决；前端不变
 - word2pdf pages 字段只在 Word 保存过的 docx 有——显示「N 段」即可
 - 流式进度未做——协议升级方案：JSON-RPC notification → Tauri event
-- `App.tsx` 比较胖（200+ 行）+ 嵌套 4 个 Provider——可考虑 `useShellState` hook
+- `App.tsx` 比较胖（270+ 行）+ 嵌套 4 个 Provider——可考虑 `useShellState` hook
 - 「新建标准结构」用 `window.prompt`——后续换自定义 modal+toast
 - plot_curves 数据对照表格 cell 暂不能跳到曲线上对应点
 
@@ -65,9 +71,13 @@
 
 ## 会话历史
 
-### [2026-05-22] 锚杆抗拔试验（GB 50086-2015）全套上线
+### [2026-05-22] 锚杆抗拔上线 + UX 可观察性补齐
 
-新增 data_processing 第二子模块。C# 侧 Calc/Anchor 全套（Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter）+ 两个 ReportTables（横排数据分析 + 每锚杆 1 张 15×17 报告内插表）+ 3 个 anchor.* RPC（generate_template/list_batches/run）。前端 calcType 加 'anchor'，SettingsForm 子 form 含规范下拉/生成模板按钮/批次列名/按批次参数表（5 字段 P/Lf/La/A/E 默认值 180000/500/7500/804.25/200000）。+24 xUnit 全过，TS 0 错。4 个 commit。
+锚杆抗拔（GB 50086-2015）4 commit：C# 计算底座（11 xUnit）→ Excel 读/模板生成/报告表写入（+9 xUnit）→ 3 个 RPC（+4 xUnit）→ 前端 calcType=anchor 子 form。
+
+UX 修复 3 commit：参数表纵向卡片重做、ShellContext 全局可观察性、文件树双击联动、`dialog:allow-save` capability 修复（根因：Tauri 2 显式白名单，saveDialog 未授权被静默拒）。
+
+用户后续重构 FileTree 为 VSCode 风扁平渲染（720+ 行：右键菜单 + in-place 编辑 + 剪贴板 + 删除回收站 + 焦点 refetch + diff），SideBar 拆 refreshNonce/collapseNonce 双触发，App 默认工具改 data_processing 排首位。
 
 ### [2026-05-22] AI 上下文文件重构
 

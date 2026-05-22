@@ -6,6 +6,10 @@
 ![Last Commit](https://img.shields.io/github/last-commit/ZGQ2001/civ-core?style=flat-square)
 ![Release](https://img.shields.io/github/v/release/ZGQ2001/civ-core?style=flat-square)
 ![Contributors](https://img.shields.io/github/contributors/ZGQ2001/civ-core?style=flat-square)
+![Rust](https://img.shields.io/badge/Rust-Tauri_2.11-orange?style=flat-square)
+![C#](https://img.shields.io/badge/C%23-.NET_9-purple?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TS-React_19-blue?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12-yellow?style=flat-square)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=ZGQ2001/civ-core&type=Date)](https://star-history.com/#ZGQ2001/civ-core&Date)
 

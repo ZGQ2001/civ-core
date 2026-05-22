@@ -36,18 +36,15 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
   }, [c]);
 
   const handleRun = useCallback(async () => {
-    await c.run();
+    const r = await c.run();
+    if (!r) return;
     const ts = new Date().toLocaleTimeString();
-    if (c.mergeResult) {
-      appendOutput?.(
-        `[${ts}] pdf merge: ${c.mergeResult.count} 个 → ${c.mergeResult.output}`,
-      );
-    } else if (c.splitResult) {
-      appendOutput?.(
-        `[${ts}] pdf ${c.mode}: 拆出 ${c.splitResult.count} 个文件`,
-      );
-    } else if (c.runError) {
-      appendOutput?.(`[${ts}] pdf ${c.mode} 失败: ${c.runError}`);
+    if (r.kind === "merge") {
+      appendOutput?.(`[${ts}] pdf merge: ${r.res.count} 个 → ${r.res.output}`);
+    } else if (r.kind === "split") {
+      appendOutput?.(`[${ts}] pdf ${c.mode}: 拆出 ${r.res.count} 个文件`);
+    } else if (r.kind === "error") {
+      appendOutput?.(`[${ts}] pdf ${c.mode} 失败: ${r.message}`);
     }
   }, [c, appendOutput]);
 

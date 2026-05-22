@@ -37,10 +37,9 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
   }, [c]);
 
   const handleRun = useCallback(async () => {
-    await c.run();
-    if (c.result) {
+    const r = await c.run();
+    if (r) {
       const ts = new Date().toLocaleTimeString();
-      const r = c.result;
       appendOutput?.(
         [
           `[${ts}] plot_curves: 曲线=${c.preset}  输入=${c.excelPath}`,

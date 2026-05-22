@@ -63,8 +63,16 @@ interface Actions {
   setSplitTemplate: (s: string) => void;
   setSplitExpr: (s: string) => void;
 
-  run: () => Promise<void>;
+  run: () => Promise<RunOutcome>;
 }
+
+/// run() 返回值：mode 不同结果类型不同，让 Page handleRun 拿快照而不是读
+/// ctx state（state 更新异步，await 后读 c.mergeResult 永远是旧值）。
+export type RunOutcome =
+  | { kind: "merge"; res: MergeRes }
+  | { kind: "split"; res: SplitRes }
+  | { kind: "error"; message: string }
+  | null;
 
 type Ctx = State & Actions & { defaultTemplate: string };
 
@@ -195,8 +203,8 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [inspectTargets]);
 
-  const run = useCallback(async () => {
-    if (running) return;
+  const run = useCallback(async (): Promise<RunOutcome> => {
+    if (running) return null;
     setRunning(true);
     setRunError(null);
     setMergeResult(null);
@@ -211,6 +219,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
           output: mergeOutput.trim(),
         });
         setMergeResult(res);
+        return { kind: "merge", res };
       } else {
         if (!splitInput || !splitOutDir.trim()) {
           throw new Error("缺少输入文件或输出目录");
@@ -226,9 +235,12 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
         if (mode === "split_by_ranges") params.expr = splitExpr.trim();
         const res = await rpc<SplitRes>(`pdf_tools.${mode}`, params);
         setSplitResult(res);
+        return { kind: "split", res };
       }
     } catch (e) {
-      setRunError(String(e));
+      const message = String(e);
+      setRunError(message);
+      return { kind: "error", message };
     } finally {
       setRunning(false);
     }

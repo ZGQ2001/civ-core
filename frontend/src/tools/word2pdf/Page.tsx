@@ -28,14 +28,15 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
   }, [c]);
 
   const handleRun = useCallback(async () => {
-    await c.run();
+    const r = await c.run();
+    if (!r) return;
     const ts = new Date().toLocaleTimeString();
-    if (c.result) {
+    if (r.kind === "ok") {
       appendOutput?.(
-        `[${ts}] word2pdf: 成功 ${c.result.written.length} / 失败 ${c.result.failed.length} (共 ${c.result.total})`,
+        `[${ts}] word2pdf: 成功 ${r.res.written.length} / 失败 ${r.res.failed.length} (共 ${r.res.total})`,
       );
-    } else if (c.runError) {
-      appendOutput?.(`[${ts}] word2pdf 失败: ${c.runError}`);
+    } else {
+      appendOutput?.(`[${ts}] word2pdf 失败: ${r.message}`);
     }
   }, [c, appendOutput]);
 

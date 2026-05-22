@@ -35,8 +35,16 @@ interface Actions {
   removeAt: (i: number) => void;
   clearInputs: () => void;
   setOutDir: (p: string) => void;
-  run: () => Promise<void>;
+  run: () => Promise<RunOutcome>;
 }
+
+/// run() 返回值：成功 / 失败 / 无操作（前置校验不过或 running 中）。
+/// Page handleRun 拿这个快照而不是读 ctx state —— state 异步更新，
+/// await 后读 c.result / c.runError 永远是上一次的旧值。
+export type RunOutcome =
+  | { kind: "ok"; res: ConvertRes }
+  | { kind: "error"; message: string }
+  | null;
 
 type Ctx = State & Actions;
 
@@ -113,8 +121,8 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
     };
   }, [inputs]);
 
-  const run = useCallback(async () => {
-    if (running || inputs.length === 0 || !outDir.trim()) return;
+  const run = useCallback(async (): Promise<RunOutcome> => {
+    if (running || inputs.length === 0 || !outDir.trim()) return null;
     setRunning(true);
     setRunError(null);
     setResult(null);
@@ -124,8 +132,11 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
         output_dir: outDir.trim(),
       });
       setResult(res);
+      return { kind: "ok", res };
     } catch (e) {
-      setRunError(String(e));
+      const message = String(e);
+      setRunError(message);
+      return { kind: "error", message };
     } finally {
       setRunning(false);
     }

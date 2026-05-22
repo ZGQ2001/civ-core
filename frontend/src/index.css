@@ -19,8 +19,18 @@
   --color-vscode-text-faint: #6e7681;
   --color-vscode-status: #007acc;
 
+  /* 字体栈对齐 VSCode (Windows) workbench：
+     - UI：Segoe WPC（VSCode 自带的 Segoe 变体）→ Segoe UI → CJK 回退（国内环境显式列出）
+     - Mono：Consolas（与 VSCode 编辑器默认一致）
+     注：Tailwind v4 自动从 --font-sans / --font-mono 生成同名 utility */
   --font-ui:
-    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    "Segoe WPC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --font-sans:
+    "Segoe WPC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --font-mono:
+    Consolas, "Courier New", "Microsoft YaHei UI", monospace;
 }
 
 * {
@@ -42,11 +52,22 @@ body,
   width: 100vw;
   overflow: hidden;
   font-family: var(--font-ui);
+  /* VSCode workbench 基础字号 13px；状态栏/标题栏自身覆盖为 12px，编辑器 14px。 */
   font-size: 13px;
+  line-height: 1.4;
   color: var(--color-vscode-text);
   background: var(--color-vscode-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 等宽场景（数值/代码/路径）显式用 font-mono utility 或 .font-mono / <code>，
+   保证不被 UI 字体的中文 hinting 拖累。 */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
 }
 
 /* 全局滚动条：VSCode 风极细透明 */
@@ -74,3 +95,4 @@ body,
   display: inline-block;
   vertical-align: middle;
 }
+

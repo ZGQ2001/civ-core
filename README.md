@@ -1,6 +1,5 @@
 <p align="center">
-  <img src="docs/plot_curves_demo.png" alt="曲线图工具" width="400">
-  <img src="docs/data_processing_demo.png" alt="数据处理" width="400">
+  <!-- TODO: Logo / Banner -->
 </p>
 
 <h1 align="center">筑核 · civ-core</h1>
@@ -41,6 +40,15 @@
 土木工程检测内业报告自动化工具。
 
 > **Excel / CSV / Word → 自动数据格式化 → 规范评定 → 图表生成 → Word 报告填充**
+
+---
+
+## 📸 界面预览
+
+<p align="center">
+  <img src="docs/plot_curves_demo.png" alt="曲线图工具" width="400">
+  <img src="docs/data_processing_demo.png" alt="数据处理" width="400">
+</p>
 
 ---
 

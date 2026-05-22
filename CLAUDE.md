@@ -28,9 +28,9 @@ graph TB
 
     subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
         CS_RPC["JsonRpcServer.RunAsync()"]
-        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx"]
+        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>word2pdf（待迁）"]
         CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator"]
-        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写"]
+        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写 + docx→PDF"]
         CS_SQL["Microsoft.Data.Sqlite<br/>SQLite 只读查询"]
         CS_RPC --> CS_Handlers
         CS_Handlers --> CS_Calc
@@ -43,25 +43,21 @@ graph TB
         Py_Handlers["Handlers<br/>Workspace / Files / Plot / PDF"]
         Py_Core["Core 业务<br/>matplotlib 绘图"]
         Py_Infra["Infra IO<br/>file_manager / pdf_io / standards_db"]
-        Py_COM["pywin32<br/>MS Word / WPS Office COM"]
         Py_RPC --> Py_Handlers
         Py_Handlers --> Py_Core
         Py_Handlers --> Py_Infra
-        Py_Handlers --> Py_COM
     end
 
     subgraph Storage ["外部存储"]
         DB["~/.civ-core/standards.db<br/>规范数据库"]
-        COM_App["本地 Word / WPS"]
         Disk["工作区目录"]
     end
 
-    Router -- "默认路由<br/>leeb.* doc.* xlsx.* anchor.*" --> CS_RPC
-    Router -- "白名单路由<br/>workspace.* files.* plot_curves.* pdf_tools.* word2pdf.*" --> Py_RPC
+    Router -- "默认路由<br/>leeb.* doc.* xlsx.* anchor.*<br/>word2pdf.*（待迁）" --> CS_RPC
+    Router -- "白名单路由<br/>workspace.* files.* plot_curves.* pdf_tools.*" --> Py_RPC
 
     CS_SQL -- "只读查询" --> DB
     Py_Infra -- "Seed 写入" --> DB
-    Py_COM -- "COM 驱动" --> COM_App
     Py_Infra -- "读写" --> Disk
     CS_CL -- "读写" --> Disk
 
@@ -88,8 +84,8 @@ graph TB
 
 | sidecar | 方法前缀 |
 |---------|---------|
-| **C#（默认）** | `leeb.*` `doc.*` `xlsx.*` `calc.*` — 及所有未列出的新方法 |
-| **Python（白名单）** | `ping` `version` `workspace.*` `files.*` `plot_curves.*` `pdf_tools.*` `word2pdf.*` |
+| **C#（默认）** | `leeb.*` `doc.*` `xlsx.*` `calc.*` `word2pdf.*`（待迁）— 及所有未列出的新方法 |
+| **Python（白名单）** | `ping` `version` `workspace.*` `files.*` `plot_curves.*` `pdf_tools.*` |
 
 ## 不可变规则
 

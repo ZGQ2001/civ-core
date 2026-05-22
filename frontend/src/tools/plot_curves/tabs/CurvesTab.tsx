@@ -130,7 +130,6 @@ function PointsEditor({
 }) {
   const c = usePlotCurves();
   const columnSuggestions = Object.keys(c.previewRowData);
-  const datalistId = "pcols-datalist";
 
   const updatePoint = (i: number, patch: Partial<PointDef>) => {
     onChange(points.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -185,14 +184,21 @@ function PointsEditor({
                   />
                 </td>
                 <td className="px-2 py-1">
-                  <input
-                    type="text"
+                  <select
                     value={pt.var_column}
                     onChange={(e) => updatePoint(i, { var_column: e.target.value })}
-                    placeholder="例：60kN 位移读数"
-                    list={columnSuggestions.length > 0 ? datalistId : undefined}
                     className={cn(inputClass, "py-0.5")}
-                  />
+                  >
+                    <option value="">（选择 Excel 表头）</option>
+                    {columnSuggestions.map((col) => (
+                      <option key={col} value={col}>
+                        {col}
+                      </option>
+                    ))}
+                    {pt.var_column && !columnSuggestions.includes(pt.var_column) && (
+                      <option value={pt.var_column}>{pt.var_column}</option>
+                    )}
+                  </select>
                 </td>
                 <td className="px-1 py-1">
                   <button
@@ -208,14 +214,6 @@ function PointsEditor({
             ))}
           </tbody>
         </table>
-      )}
-
-      {columnSuggestions.length > 0 && (
-        <datalist id={datalistId}>
-          {columnSuggestions.map((k) => (
-            <option key={k} value={k} />
-          ))}
-        </datalist>
       )}
 
       <button

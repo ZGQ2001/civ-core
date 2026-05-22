@@ -3,6 +3,9 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![Stars](https://img.shields.io/github/stars/ZGQ2001/civ-core?style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/ZGQ2001/civ-core?style=flat-square)
+![Release](https://img.shields.io/github/v/release/ZGQ2001/civ-core?style=flat-square)
+![Contributors](https://img.shields.io/github/contributors/ZGQ2001/civ-core?style=flat-square)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=ZGQ2001/civ-core&type=Date)](https://star-history.com/#ZGQ2001/civ-core&Date)
 
@@ -26,6 +29,14 @@
 | 测试 / Lint | pytest / ruff |
 | CI | GitHub Actions（Windows） |
 
+
+## 功能截图
+
+### 曲线图工具
+![曲线图](docs/plot_curves_demo.png)
+
+### 数据处理（里氏硬度 / 锚杆抗拔）
+![数据处理](docs/data_processing_demo.png)
 
 ## 当前功能
 

@@ -13,7 +13,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { rpc } from "../../lib/rpc";
+import { logLine, useShell } from "../../lib/shell";
 import type { PlotPreset, PreviewRes, RunRes } from "./types";
+
+const TOOL_ID = "plot_curves";
+const ACCEPTED_EXTS = new Set([".xlsx", ".xls"]);
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
@@ -97,6 +101,7 @@ export function usePlotCurves(): Ctx {
 }
 
 export function PlotCurvesProvider({ children }: { children: React.ReactNode }) {
+  const shell = useShell();
   const [presets, setPresets] = useState<string[]>([]);
   const [presetDetails, setPresetDetails] = useState<Record<string, PlotPreset>>({});
   const [presetSources, setPresetSources] = useState<Record<string, PresetSource>>({});
@@ -298,6 +303,20 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
     };
   }, [effectivePreset, excelPath, sheet, headerRow, rowIndex]);
+
+  // ── 文件树双击 .xlsx/.xls 联动：自动设为 excelPath ──
+  useEffect(() => {
+    const f = shell.activatedFile;
+    if (!f) return;
+    if (shell.activeToolId !== TOOL_ID) return;
+    const idx = f.path.lastIndexOf(".");
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
+    if (!ACCEPTED_EXTS.has(ext)) return;
+    // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
+    setExcelPath(f.path);
+    shell.appendOutput(logLine(`[绘曲线图] 已接收文件: ${f.path}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shell.activatedFile?.key, shell.activeToolId]);
 
   // ── 运行（同步阻塞，结果走 result）─────────────────────
   const run = useCallback(async (): Promise<RunOutcome> => {

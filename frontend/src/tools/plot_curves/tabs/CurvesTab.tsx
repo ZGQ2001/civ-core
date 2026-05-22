@@ -155,7 +155,7 @@ function PointsEditor({
           <thead className="bg-[#1d1d1d] text-vscode-text-faint">
             <tr>
               <th className="text-left px-2 py-1 font-normal w-12">#</th>
-              <th className="text-left px-2 py-1 font-normal w-20">固定轴</th>
+              <th className="text-left px-2 py-1 font-normal w-24">固定轴</th>
               <th className="text-left px-2 py-1 font-normal w-24">固定值</th>
               <th className="text-left px-2 py-1 font-normal">变化列（Excel 表头）</th>
               <th className="w-8"></th>

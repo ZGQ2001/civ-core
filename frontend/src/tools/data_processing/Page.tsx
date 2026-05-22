@@ -55,7 +55,12 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
           <label className="text-xs text-vscode-text-dim">计算:</label>
           <select
             value={c.calcType}
-            onChange={(e) => c.setCalcType(e.target.value as CalcType)}
+            onChange={(e) => {
+              // 守 select 的 value：理论上 options 只来自 CALC_TYPE_LABELS 的 key，
+              // 防御性兜底以防将来 options 改动遗漏 / DevTools 篡改
+              const v = e.target.value;
+              if (v in CALC_TYPE_LABELS) c.setCalcType(v as CalcType);
+            }}
             title="未来会有更多计算类型（钻芯法 / 回弹法 等）"
             className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
           >

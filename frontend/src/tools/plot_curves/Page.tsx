@@ -8,6 +8,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 
 import { cn } from "../../lib/cn";
 import { usePlotCurves } from "./controller";
+import type { PlotPreset } from "./types";
 
 interface Props {
   appendOutput?: (text: string) => void;
@@ -476,7 +477,7 @@ function PresetCrudButtons() {
     const name = window.prompt("新建曲线；输入名字：", "新曲线");
     if (!name?.trim()) return;
     // 默认模板：必填字段 + 一条默认曲线（避免用户进 form 看到"还没定义曲线"困惑）
-    const blank = {
+    const blank: PlotPreset = {
       id_column: "",
       filename_template: "{id}.png",
       title_template: "{id}",
@@ -494,7 +495,7 @@ function PresetCrudButtons() {
       ],
     };
     try {
-      await c.savePreset(name.trim(), blank as never);
+      await c.savePreset(name.trim(), blank);
     } catch (e) {
       alert(`新建失败：${String(e)}`);
     }

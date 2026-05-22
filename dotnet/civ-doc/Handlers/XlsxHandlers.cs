@@ -58,6 +58,8 @@ public static class XlsxHandlers
         var batchesEl = p.GetProperty("batches");
         if (batchesEl.ValueKind != JsonValueKind.Array)
             throw new ArgumentException("batches 必须是 array");
+        if (batchesEl.GetArrayLength() == 0)
+            throw new ArgumentException("batches 为空 —— 没有可写的报告数据（上游 leeb.run 返回 0 个 batch）");
 
         var batches = new List<LeebReportBatch>();
         foreach (var b in batchesEl.EnumerateArray())
@@ -107,6 +109,8 @@ public static class XlsxHandlers
         var compsEl = b.GetProperty("components");
         if (compsEl.ValueKind != JsonValueKind.Array)
             throw new ArgumentException("batch.components 必须是 array");
+        if (compsEl.GetArrayLength() == 0)
+            throw new ArgumentException($"batch「{sheetName}」.components 为空");
 
         var components = new List<LeebComponent>();
         foreach (var c in compsEl.EnumerateArray())
@@ -118,6 +122,8 @@ public static class XlsxHandlers
             var areasEl = c.GetProperty("test_areas_raw");
             if (areasEl.ValueKind != JsonValueKind.Array)
                 throw new ArgumentException("component.test_areas_raw 必须是 array");
+            if (areasEl.GetArrayLength() == 0)
+                throw new ArgumentException($"构件「{name}」test_areas_raw 为空 —— 无原始读数，无法写报告");
 
             var areas = new List<int[]>();
             foreach (var area in areasEl.EnumerateArray())

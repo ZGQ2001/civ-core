@@ -51,9 +51,12 @@ public static class LeebExcelReader
                     headerRows: 1,
                     defaultAngleDegrees: defaultAngleDegrees);
             }
-            catch (ArgumentException)
+            catch (ArgumentException ex)
             {
                 // sheet 没有可解析数据（可能是元信息 sheet 如「委托信息」）—— 跳过
+                // 通过 stderr 报出来：Rust 端 stderr drain 会转 Tauri log，
+                // 用户「构件少了」时能从日志看到具体跳过的 sheet 名 + 原因。
+                Console.Error.WriteLine($"[leeb] 跳过 sheet「{ws.Name}」：{ex.Message}");
                 continue;
             }
 

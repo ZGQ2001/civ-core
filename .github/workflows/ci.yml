@@ -1,7 +1,6 @@
 # .github/workflows/ci.yml
 name: CI 流水线
 
-# 触发条件：推送到 main 或提交 PR 时，自动检查代码能不能跑。
 on:
   push:
     branches: ["main"]
@@ -11,11 +10,9 @@ on:
 jobs:
   quality-gate:
     name: 代码质检 / Windows
-    # civ-core 是 Windows 桌面工具：pywin32、QSettings、Qt 行为都必须优先在 Windows 上验。
     runs-on: windows-latest
 
     env:
-      # 让 PySide6 在无真实显示器的 CI 环境里也能创建 QApplication。
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: "1"
       PYTHONIOENCODING: utf-8
@@ -23,6 +20,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+
+      # ── Python ──────────────────────────────────
 
       - name: 安装 uv
         uses: astral-sh/setup-uv@v5
@@ -34,16 +33,51 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: 还原依赖
+      - name: 还原 Python 依赖
         run: uv sync --dev
 
-      - name: 检查格式和代码规范
-        run: |
-          uv run ruff format --check .
-          uv run ruff check .
+      - name: Ruff 格式检查
+        run: uv run ruff format --check .
 
-      - name: 运行单元测试
+      - name: Ruff 代码规范
+        run: uv run ruff check .
+
+      - name: Python 单元测试
         run: uv run pytest
 
-      - name: 运行项目健康检查
+      - name: 项目健康检查
         run: uv run python scripts/healthcheck.py
+
+      # ── C# ──────────────────────────────────────
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: C# 编译
+        run: dotnet build
+        working-directory: dotnet/civ-doc
+
+      - name: C# 单元测试
+        run: dotnet test
+        working-directory: dotnet/civ-doc
+
+      # ── 前端 (TypeScript) ───────────────────────
+
+      - name: 安装前端依赖
+        run: npm ci
+        working-directory: frontend
+
+      - name: TypeScript 类型检查
+        run: npx tsc -b --noEmit
+        working-directory: frontend
+
+      # ── Rust (Tauri 主进程) ─────────────────────
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust 编译检查
+        run: cargo check --lib
+        working-directory: frontend/src-tauri

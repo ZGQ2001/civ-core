@@ -44,6 +44,7 @@ __all__ = [
     "copy",
     "move",
     "reveal",
+    "undo_delete",
 ]
 
 # 总是隐藏的应用专属目录（用户 show_hidden=True 也不显示，避免污染业务视图）
@@ -173,14 +174,47 @@ def rename(path: str, new_name: str) -> dict:
     return {"path": str(dst)}
 
 
+import tempfile
+import uuid
+
+_undo_stack: list[dict] = []
+
 def delete(path: str) -> dict:
-    """发送到回收站（不是直接 unlink）。"""
+    """移动到临时目录以支持撤销（替代 send2trash）。"""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"不存在：{path}")
-    # send2trash 接受 str / PathLike
-    send2trash(str(p))
+    
+    trash_dir = Path(tempfile.gettempdir()) / "civ_core_trash"
+    trash_dir.mkdir(parents=True, exist_ok=True)
+    trash_path = trash_dir / f"{p.name}_{uuid.uuid4().hex}"
+    
+    shutil.move(str(p), str(trash_path))
+    
+    _undo_stack.append({
+        "original_path": str(p),
+        "trash_path": str(trash_path)
+    })
     return {"ok": True}
+
+def undo_delete() -> dict:
+    """撤销上一次删除。"""
+    if not _undo_stack:
+        raise ValueError("没有可撤销的删除操作")
+    
+    item = _undo_stack.pop()
+    orig = Path(item["original_path"])
+    trash = Path(item["trash_path"])
+    
+    if not trash.exists():
+        raise FileNotFoundError("备份文件已丢失，无法撤销")
+    if orig.exists():
+        # 如果原位置被占用，撤销失败，把记录塞回去
+        _undo_stack.append(item)
+        raise FileExistsError(f"无法还原：目标位置已有同名文件 {orig.name}")
+        
+    shutil.move(str(trash), str(orig))
+    return {"restored_path": str(orig), "parent": str(orig.parent)}
 
 
 def copy(src: str, dst_parent: str) -> dict:

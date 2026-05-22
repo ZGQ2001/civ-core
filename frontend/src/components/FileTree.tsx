@@ -93,6 +93,7 @@ interface TreeCtx {
   commitEdit(value: string): void;
   cancelEdit(): void;
   doDelete(path: string): void;
+  doUndoDelete(): void;
   doCopyToClipboard(path: string): void;
   doCutToClipboard(path: string): void;
   doPaste(targetDir: string): void;
@@ -229,6 +230,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const [editing, setEditing] = useState<EditState>(null);
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // refs：让 effect/callback 拿到最新值而不污染 deps
   const nodesRef = useRef(nodes);
@@ -331,6 +333,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     setSelectedPath(null);
     setEditing(null);
     setMenu(null);
+    setDeleteTarget(null);
     fetchDir(rootPath);
   }, [rootPath, fetchDir]);
 
@@ -458,8 +461,17 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     }
   }, [editing, fetchDir]);
 
-  const doDelete = useCallback(async (path: string) => {
+  const doDelete = useCallback((path: string) => {
     const cur = nodesRef.current.get(path);
+    if (!cur || cur.parent === null) return;
+    setDeleteTarget(path);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const path = deleteTarget;
+    const cur = nodesRef.current.get(path);
+    setDeleteTarget(null);
     if (!cur || cur.parent === null) return;
     try {
       await rpc("files.delete", { path });
@@ -467,6 +479,16 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
       if (cur.parent) await fetchDir(cur.parent);
     } catch (e) {
       alert(`删除失败：${String(e)}`);
+    }
+  }, [deleteTarget, fetchDir]);
+
+  const doUndoDelete = useCallback(async () => {
+    try {
+      const r = await rpc<{ restored_path: string; parent: string }>("files.undo_delete", {});
+      await fetchDir(r.parent);
+      setSelectedPath(r.restored_path);
+    } catch (e) {
+      alert(`撤销删除失败：${String(e)}`);
     }
   }, [fetchDir]);
 
@@ -524,6 +546,11 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (editing) return;
     if (menu) return;
+    if (deleteTarget) {
+      if (e.key === "Escape") setDeleteTarget(null);
+      if (e.key === "Enter") confirmDelete();
+      return;
+    }
     const rows = visibleRowsRef.current;
     if (rows.length === 0) return;
     const cur = selectedRef.current;
@@ -556,6 +583,9 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     if (e.key === "F2")    { e.preventDefault(); beginRename(row.path); return; }
     if (e.key === "Delete"){ e.preventDefault(); doDelete(row.path); return; }
     if (e.key === "Escape"){ e.preventDefault(); setSelectedPath(null); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault(); doUndoDelete(); return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
       e.preventDefault(); doCopyToClipboard(row.path); return;
     }
@@ -565,26 +595,26 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
       e.preventDefault(); doPaste(row.path); return;
     }
-  }, [editing, menu, toggle, activate, beginRename, doDelete, doCopyToClipboard, doCutToClipboard, doPaste]);
+  }, [editing, menu, deleteTarget, confirmDelete, toggle, activate, beginRename, doDelete, doCopyToClipboard, doCutToClipboard, doPaste]);
 
   // ─── Context value ─────────────────────────────────────────────────────
 
   const ctxValue = useMemo<TreeCtx>(() => ({
     rootPath, nodes, visibleRows, selectedPath, editing, clipboard,
     toggle, select, activate, beginRename, beginCreate, commitEdit, cancelEdit,
-    doDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
+    doDelete, doUndoDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
     openMenu,
   }), [
     rootPath, nodes, visibleRows, selectedPath, editing, clipboard,
     toggle, select, activate, beginRename, beginCreate, commitEdit, cancelEdit,
-    doDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
+    doDelete, doUndoDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
     openMenu,
   ]);
 
   // 在编辑/新建结束后 / 选中变化后让容器拿到焦点（便于继续键盘操作）
   useEffect(() => {
-    if (!editing) containerRef.current?.focus();
-  }, [editing]);
+    if (!editing && !deleteTarget && !menu) containerRef.current?.focus();
+  }, [editing, deleteTarget, menu]);
 
   return (
     <Ctx.Provider value={ctxValue}>
@@ -619,7 +649,51 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
           onClose={() => setMenu(null)}
         />
       )}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          targetName={nodes.get(deleteTarget)?.name ?? "此项"}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </Ctx.Provider>
+  );
+}
+
+function DeleteConfirmModal({ targetName, onConfirm, onCancel }: { targetName: string; onConfirm: () => void; onCancel: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onConfirm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+      <div className="bg-[#252526] border border-vscode-border rounded-[4px] shadow-2xl p-5 max-w-[400px] w-full text-vscode-text">
+        <h2 className="text-[14px] font-medium mb-3">确认删除</h2>
+        <p className="text-[13px] text-vscode-text-dim mb-6">
+          确定要将「<span className="text-white">{targetName}</span>」移到回收站吗？
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            autoFocus
+            className="px-4 py-1.5 text-[13px] rounded-[2px] bg-vscode-button hover:bg-vscode-button-hover text-white transition-colors outline-none"
+            onClick={onConfirm}
+          >
+            确定
+          </button>
+          <button
+            className="px-4 py-1.5 text-[13px] rounded-[2px] bg-[#3a3d41] hover:bg-[#4a4d51] text-vscode-text transition-colors outline-none"
+            onClick={onCancel}
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -939,6 +1013,15 @@ function ContextMenuView({ menu, onClose }: { menu: MenuState; onClose: () => vo
     });
     items.push("sep");
   }
+  
+  // 撤销删除
+  items.push({
+    label: "撤销删除",
+    icon: "discard",
+    shortcut: "Ctrl+Z",
+    onClick: () => { c.doUndoDelete(); onClose(); },
+  });
+  items.push("sep");
 
   // Reveal
   items.push({

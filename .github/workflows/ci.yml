@@ -63,6 +63,10 @@ jobs:
         run: dotnet test
         working-directory: dotnet/civ-doc
 
+      - name: C# 格式检查
+        run: dotnet format style --verify-no-changes
+        working-directory: dotnet/civ-doc
+
       # ── 前端 (TypeScript) ───────────────────────
 
       - name: 安装前端依赖
@@ -80,4 +84,12 @@ jobs:
 
       - name: Rust 编译检查
         run: cargo check --lib
+        working-directory: frontend/src-tauri
+
+      - name: Rust 格式检查
+        run: cargo fmt --check
+        working-directory: frontend/src-tauri
+
+      - name: Rust Clippy 规范
+        run: cargo clippy -- -D warnings
         working-directory: frontend/src-tauri

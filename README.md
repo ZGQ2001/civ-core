@@ -1,10 +1,14 @@
 # 筑核（civ-core）
 
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![Stars](https://img.shields.io/github/stars/ZGQ2001/civ-core?style=flat-square)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ZGQ2001/civ-core&type=Date)](https://star-history.com/#ZGQ2001/civ-core&Date)
+
 土木工程检测内业报告自动化工具。
 
 输入 Excel/CSV/Word → 自动完成数据格式化、规范评定、图表生成、Word 报告填充。
-
-Windows 平台 · 内部自用 · AI 辅助开发 · 非商业分发
 
 
 ## 技术栈

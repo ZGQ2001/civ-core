@@ -77,7 +77,7 @@
 
 UX 修复 3 commit：参数表纵向卡片重做、ShellContext 全局可观察性、文件树双击联动、`dialog:allow-save` capability 修复（根因：Tauri 2 显式白名单，saveDialog 未授权被静默拒）。
 
-用户后续重构 FileTree 为 VSCode 风扁平渲染（720+ 行：右键菜单 + in-place 编辑 + 剪贴板 + 删除回收站 + 焦点 refetch + diff），SideBar 拆 refreshNonce/collapseNonce 双触发，App 默认工具改 data_processing 排首位。
+用户后续重构 FileTree 为 VSCode 风扁平渲染（980 行：右键菜单 + in-place 编辑 + 剪贴板 + 删除回收站 + 焦点 refetch + diff），SideBar 拆 refreshNonce/collapseNonce 双触发，App 默认工具改 data_processing 排首位。后端 `files.py` 加 create_file/create_folder/rename/delete（回收站，send2trash）/copy/move/reveal 共 7 个 RPC，Windows 文件名校验。App 全局拦截 webview 网页式行为：原生 contextmenu / F5 / Ctrl+R / Ctrl+P / Ctrl+S / 文件拖入导航，保留 F12 开发者工具。
 
 ### [2026-05-22] AI 上下文文件重构
 

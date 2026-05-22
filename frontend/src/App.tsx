@@ -37,8 +37,8 @@ import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves"
 import { Word2PdfProvider, Word2PdfSettingsForm } from "./tools/word2pdf";
 
 const TOP_TOOLS: ActivityItem[] = [
-  { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
   { id: "data_processing", icon: "symbol-method", tooltip: "数据处理" },
+  { id: "plot_curves", icon: "graph-line", tooltip: "绘曲线图" },
   { id: "pdf_tools", icon: "file-pdf", tooltip: "PDF 工具" },
   { id: "word2pdf", icon: "file-binary", tooltip: "Word → PDF" },
 ];
@@ -49,10 +49,11 @@ const BOTTOM_TOOLS: ActivityItem[] = [
 const ALL_TOOLS = [...TOP_TOOLS, ...BOTTOM_TOOLS];
 
 export default function App() {
-  const [activeToolId, setActiveToolId] = useState<string>("plot_curves");
+  const [activeToolId, setActiveToolId] = useState<string>("data_processing");
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [sidecarStatus, setSidecarStatus] = useState<string>("连接中…");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [collapseNonce, setCollapseNonce] = useState(0);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [bottomVisible, setBottomVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(true);
@@ -141,6 +142,37 @@ export default function App() {
     }
   }, []);
 
+  // 拦截 webview 网页式行为：原生右键菜单 / F5 / Ctrl+R 重载 / Ctrl+P 打印 / Ctrl+S 另存 /
+  // 拖文件到窗口被当作导航（会把 app 替换成 file:// URL）。
+  // 自定义右键菜单（如 FileTree）自己在 onContextMenu 里 preventDefault，事件冒到 document
+  // 时已被取消，这里再 preventDefault 也是 no-op；浏览器原生菜单不会出现。
+  // 不拦 F12 / Ctrl+Shift+I，留给开发者工具。
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F5") {
+        e.preventDefault();
+        return;
+      }
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === "r" || k === "p" || k === "s") e.preventDefault();
+      }
+    };
+    const onDragOver = (e: DragEvent) => e.preventDefault();
+    const onDrop = (e: DragEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   // 快捷键：Ctrl+J（底部 Panel）/ Ctrl+B（SideBar）/ Ctrl+Alt+B（右侧 Panel）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -171,7 +203,8 @@ export default function App() {
       if (typeof selected !== "string") return;
       await rpc("workspace.set", { path: selected });
       setWorkspacePath(selected);
-      setRefreshKey((k) => k + 1);
+      // 兜底：若用户重选了同一个路径，rootPath 不变，靠 nonce 触发 refetch
+      setRefreshNonce((n) => n + 1);
     } catch (e) {
       console.error("打开文件夹失败:", e);
       alert(`打开文件夹失败：${String(e)}`);
@@ -194,15 +227,15 @@ export default function App() {
       );
       await rpc("workspace.set", { path: res.path });
       setWorkspacePath(res.path);
-      setRefreshKey((k) => k + 1);
+      setRefreshNonce((n) => n + 1);
     } catch (e) {
       console.error("新建工作区失败:", e);
       alert(`新建工作区失败：${String(e)}`);
     }
   }, []);
 
-  const handleRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
-  const handleCollapseAll = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const handleRefresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
+  const handleCollapseAll = useCallback(() => setCollapseNonce((n) => n + 1), []);
 
   const workspaceName = workspacePath
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null
@@ -293,7 +326,8 @@ export default function App() {
             >
               <SideBar
                 workspacePath={workspacePath}
-                refreshKey={refreshKey}
+                refreshNonce={refreshNonce}
+                collapseNonce={collapseNonce}
                 onOpenFolder={handleOpenFolder}
                 onNewWorkspace={handleNewWorkspace}
                 onRefresh={handleRefresh}

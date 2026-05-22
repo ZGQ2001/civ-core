@@ -32,6 +32,7 @@ dependencies = [
     "python-dateutil>=2.9",
     "javaobj-py3>=0.4.4",
     "pyyaml>=6.0.3",
+    "send2trash>=2.1.0",
 ]
 
 [project.optional-dependencies]

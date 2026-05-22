@@ -8,8 +8,10 @@ import { FileTree } from "./FileTree";
 
 interface Props {
   workspacePath: string | null;
-  /** 由父组件递增；变化时 FileTree 整树重挂（实现刷新/全部折叠） */
-  refreshKey: number;
+  /** 由父组件递增；变化时 FileTree 静默 refetch 所有当前展开的目录（保留展开状态） */
+  refreshNonce: number;
+  /** 由父组件递增；变化时 FileTree 折叠除根目录外所有节点（保留 entries 缓存） */
+  collapseNonce: number;
   onOpenFolder: () => void;
   onNewWorkspace: () => void;
   onRefresh: () => void;
@@ -20,7 +22,8 @@ interface Props {
 
 export function SideBar({
   workspacePath,
-  refreshKey,
+  refreshNonce,
+  collapseNonce,
   onOpenFolder,
   onNewWorkspace,
   onRefresh,
@@ -45,10 +48,13 @@ export function SideBar({
       {/* 内容 */}
       <div className="flex-1 overflow-auto">
         {workspacePath ? (
-          // key 让 refreshKey/路径变化时整棵树重挂
+          // workspacePath 变化时 key 触发 FileTree 重挂（清空 nodes Map）；
+          // refreshNonce/collapseNonce 由 FileTree 内部 effect 处理，不丢展开状态
           <FileTree
-            key={`${workspacePath}::${refreshKey}`}
+            key={workspacePath}
             rootPath={workspacePath}
+            refreshNonce={refreshNonce}
+            collapseNonce={collapseNonce}
             onFileActivate={onFileActivate}
           />
         ) : (

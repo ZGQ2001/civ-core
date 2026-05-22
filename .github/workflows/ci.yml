@@ -77,6 +77,14 @@ jobs:
         run: npx tsc -b --noEmit
         working-directory: frontend
 
+      - name: ESLint 代码规范
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Prettier 格式检查
+        run: npm run format:check
+        working-directory: frontend
+
       # ── Rust (Tauri 主进程) ─────────────────────
 
       - name: 安装 Rust 工具链

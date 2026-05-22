@@ -128,10 +128,10 @@ graph TB
 
 1. 会话开始：`git add -A && git commit -m "chore: 会话检查点"` → 读本文件 + `.ai/CONTEXT.md` → 报告状态→确认后动手
 2. 单步完成：`git add -A && git commit -m "feat: xxx"`（不用 emoji）
-3. 改 Python：`uv run --frozen ruff check . && uv run --frozen pytest -q && uv run --frozen python scripts/healthcheck.py`
-4. 改 C#：`cd dotnet/civ-doc && dotnet build && dotnet test`
-5. 改 Rust：`cd frontend/src-tauri && cargo check && cargo test --lib`
-6. 改前端：`cd frontend && npx tsc -b --noEmit`
+3. 改 Python：`uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q && uv run --frozen python scripts/healthcheck.py`
+4. 改 C#：`cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test`
+5. 改 Rust：`cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib && cargo test --lib`
+6. 改前端：`cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check`
 7. 阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`
 
 ## 边界

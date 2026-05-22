@@ -4,7 +4,7 @@
 Windows 平台，内部自用，非编程人员操作。
 
 **角色**：本文件是 AI 的宪法级上下文。放不可变的架构规则和边界。≤4000 字。每次会话必读。
-**配套文件**：`docs/VISION.md`（产品愿景+路线图）| `.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `docs/plans/`（技术方案）
+**配套文件**：`.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `docs/plans/`（技术方案）
 **子域规则**：`dotnet/CLAUDE.md` | `frontend/CLAUDE.md`（仅在操作对应目录时加载）
 
 ---

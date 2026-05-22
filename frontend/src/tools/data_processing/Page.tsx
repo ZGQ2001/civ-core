@@ -31,7 +31,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
     const calcLabel = CALC_TYPE_LABELS[c.calcType];
     if (res) {
       appendOutput?.(
-        `[${new Date().toLocaleTimeString()}] ${calcLabel}: ${res.batches} 批 / ${res.components} 构件 → ${res.output}`,
+        `[${new Date().toLocaleTimeString()}] ${calcLabel}: ${res.summary} → ${res.output}`,
       );
     } else if (c.runError) {
       appendOutput?.(
@@ -148,7 +148,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
             <div className="flex items-center gap-2">
               <i className="codicon codicon-pass !text-[14px] text-green-400" />
               <span className="text-vscode-text">
-                计算完成 · {c.result.batches} 批 / {c.result.components} 构件
+                计算完成 · {c.result.summary}
               </span>
               <button
                 type="button"

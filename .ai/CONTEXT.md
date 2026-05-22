@@ -8,26 +8,28 @@
 
 ## 当前焦点（2026-05-22）
 
-**T5.5 Step 4 完成**：leeb 整套迁 C#。
+**锚杆抗拔试验（GB 50086-2015）全套上线**：data_processing 第二个子模块。
 
-- C# sidecar 已接管 leeb.run / leeb.preview_excel / xlsx.write_leeb_report_table
-- Python 端 6 文件已删（handler/leeb_excel/calc_leeb_* + 4 个测试文件）
-- SidecarRouter 路由默认 C#，Python 白名单
-- C# 41 个 xUnit 测试（40 通过，1 Skip 真实数据集成）
-- Python 283 pytest 全过
-- C# 数值与 Python 黄金值完全一致（comp_fb_min_avg=512）
+- C# Calc/Anchor：Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter
+- ReportTables：AnchorAnalysisSheet（横排）+ AnchorReportTable（每锚杆 1 张 15×17 表）
+- Handlers/AnchorHandlers：anchor.run / list_batches / generate_template
+- 前端 data_processing calcType 加 'anchor'：规范下拉 + 生成模板按钮 + 按批次参数表
+- C# 65 个 xUnit 测试（64 通过 + 1 skip）；前端 TS 0 错
 
 **Python 剩余职责**：workspace/files/plot_curves/pdf_tools/word2pdf + seeds standards.db
+
+**前置（T5.5 Step 4）**：leeb 整套迁 C# — C# sidecar 默认路由，Python 白名单（[[PROGRESS.md]]）
 
 ---
 
 ## 下一步候选（按价值排）
 
-1. **修复 3 个前端 stale closure**：plot_curves/pdf_tools/word2pdf 的 `handleRun` 闭包陈旧
-2. **T5.5 Step 3：报告生成工具页** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）
-3. **Tauri sidecar 加超时 + 自动重启** — read_line 加 tokio::time::timeout，崩溃自动 respawn
-4. **钻芯/回弹切 C#** — data_processing calcType 下拉加新项
-5. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
+1. **真实数据端到端验证**：让用户用真实工程 Excel 跑 anchor.run，看输出 sheet 布局是否够用
+2. **修复 3 个前端 stale closure**：plot_curves/pdf_tools/word2pdf 的 `handleRun` 闭包陈旧
+3. **T5.5 Step 3：报告生成工具页** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）
+4. **Tauri sidecar 加超时 + 自动重启** — read_line 加 tokio::time::timeout，崩溃自动 respawn
+5. **钻芯/回弹切 C#** — data_processing calcType 下拉再加项
+6. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
 
 ---
 
@@ -52,7 +54,7 @@
 - ~~leeb/pdf/word2pdf 工具页没用范式~~ → 已迁
 - **3 个工具 handleRun 陈旧闭包** → 底部输出面板永不触发（🔴）
 - `data_processing` OpenXML 切 C# 后合并单元格已解决；前端不变
-- data_processing calcType 下拉只 1 项——等加钻芯/回弹就自然了
+- ~~data_processing calcType 下拉只 1 项~~ → 已加锚杆抗拔（2 项）；等加钻芯/回弹
 - word2pdf pages 字段只在 Word 保存过的 docx 有——显示「N 段」即可
 - 流式进度未做——协议升级方案：JSON-RPC notification → Tauri event
 - `App.tsx` 比较胖（200+ 行）+ 嵌套 4 个 Provider——可考虑 `useShellState` hook
@@ -62,6 +64,10 @@
 ---
 
 ## 会话历史
+
+### [2026-05-22] 锚杆抗拔试验（GB 50086-2015）全套上线
+
+新增 data_processing 第二子模块。C# 侧 Calc/Anchor 全套（Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter）+ 两个 ReportTables（横排数据分析 + 每锚杆 1 张 15×17 报告内插表）+ 3 个 anchor.* RPC（generate_template/list_batches/run）。前端 calcType 加 'anchor'，SettingsForm 子 form 含规范下拉/生成模板按钮/批次列名/按批次参数表（5 字段 P/Lf/La/A/E 默认值 180000/500/7500/804.25/200000）。+24 xUnit 全过，TS 0 错。4 个 commit。
 
 ### [2026-05-22] AI 上下文文件重构
 

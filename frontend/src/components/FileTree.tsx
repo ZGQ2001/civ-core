@@ -94,6 +94,7 @@ interface TreeCtx {
   cancelEdit(): void;
   doDelete(path: string): void;
   doUndoDelete(): void;
+  undoStack: number[];
   doCopyToClipboard(path: string): void;
   doCutToClipboard(path: string): void;
   doPaste(targetDir: string): void;
@@ -231,6 +232,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<number[]>([]);
 
   // refs：让 effect/callback 拿到最新值而不污染 deps
   const nodesRef = useRef(nodes);
@@ -475,6 +477,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     if (!cur || cur.parent === null) return;
     try {
       await rpc("files.delete", { path });
+      setUndoStack((prev) => [...prev, Date.now()]);
       if (selectedRef.current === path) setSelectedPath(null);
       if (cur.parent) await fetchDir(cur.parent);
     } catch (e) {
@@ -485,6 +488,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const doUndoDelete = useCallback(async () => {
     try {
       const r = await rpc<{ restored_path: string; parent: string }>("files.undo_delete", {});
+      setUndoStack((prev) => prev.slice(0, -1));
       await fetchDir(r.parent);
       setSelectedPath(r.restored_path);
     } catch (e) {
@@ -602,12 +606,12 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   const ctxValue = useMemo<TreeCtx>(() => ({
     rootPath, nodes, visibleRows, selectedPath, editing, clipboard,
     toggle, select, activate, beginRename, beginCreate, commitEdit, cancelEdit,
-    doDelete, doUndoDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
+    doDelete, doUndoDelete, undoStack, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
     openMenu,
   }), [
     rootPath, nodes, visibleRows, selectedPath, editing, clipboard,
     toggle, select, activate, beginRename, beginCreate, commitEdit, cancelEdit,
-    doDelete, doUndoDelete, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
+    doDelete, doUndoDelete, undoStack, doCopyToClipboard, doCutToClipboard, doPaste, doCopyPath, doReveal,
     openMenu,
   ]);
 
@@ -1014,11 +1018,13 @@ function ContextMenuView({ menu, onClose }: { menu: MenuState; onClose: () => vo
     items.push("sep");
   }
   
-  // 撤销删除
+  // 撤销删除（仅5分钟内有效且有记录）
+  const canUndo = c.undoStack.length > 0 && (Date.now() - c.undoStack[c.undoStack.length - 1] <= 300000);
   items.push({
     label: "撤销删除",
     icon: "discard",
     shortcut: "Ctrl+Z",
+    disabled: !canUndo,
     onClick: () => { c.doUndoDelete(); onClose(); },
   });
   items.push("sep");

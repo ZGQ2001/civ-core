@@ -57,6 +57,11 @@ interface State {
   runError: string | null;
 }
 
+export type RunOutcome =
+  | { kind: "ok"; res: RunRes; preset: string; excelPath: string }
+  | { kind: "error"; message: string }
+  | null;
+
 interface Actions {
   setPreset: (name: string) => void;
   setExcelPath: (p: string) => void;
@@ -67,7 +72,7 @@ interface Actions {
   /** form 编辑：传 updater 改 workingPreset（若 null 先初始化为当前预设的深拷贝） */
   patchPreset: (updater: (p: PlotPreset) => PlotPreset) => void;
   resetPreset: () => void;
-  run: () => Promise<RunRes | null>;
+  run: () => Promise<RunOutcome>;
   // CRUD（操作完会自动 refresh 预设列表）
   savePreset: (name: string, data: PlotPreset) => Promise<void>;
   deletePreset: (name: string) => Promise<void>;
@@ -295,7 +300,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   }, [effectivePreset, excelPath, sheet, headerRow, rowIndex]);
 
   // ── 运行（同步阻塞，结果走 result）─────────────────────
-  const run = useCallback(async (): Promise<RunRes | null> => {
+  const run = useCallback(async (): Promise<RunOutcome> => {
     if (!excelPath || !preset || running) return null;
     setRunning(true);
     setRunError(null);
@@ -311,10 +316,11 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       if (workingPreset) params.preset_override = workingPreset;
       const res = await rpc<RunRes>("plot_curves.run", params);
       setResult(res);
-      return res;
+      return { kind: "ok", res, preset, excelPath };
     } catch (e) {
-      setRunError(String(e));
-      return null;
+      const message = String(e);
+      setRunError(message);
+      return { kind: "error", message };
     } finally {
       setRunning(false);
     }

@@ -38,14 +38,15 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
   }, [c]);
 
   const handleRun = useCallback(async () => {
-    const r = await c.run();
-    if (r) {
+    const outcome = await c.run();
+    if (outcome && outcome.kind === "ok") {
+      const { res, preset, excelPath } = outcome;
       const ts = new Date().toLocaleTimeString();
       appendOutput?.(
         [
-          `[${ts}] plot_curves: 曲线=${c.preset}  输入=${c.excelPath}`,
-          `  → 已写 ${r.summary.written_count} / 失败 ${r.summary.failed_count} / 跳过空ID ${r.summary.skipped_empty_id} / 跳过缺数据 ${r.summary.skipped_bad_data}`,
-          `  → 输出目录: ${r.output_dir}`,
+          `[${ts}] plot_curves: 曲线=${preset}  输入=${excelPath}`,
+          `  → 已写 ${res.summary.written_count} / 失败 ${res.summary.failed_count} / 跳过空ID ${res.summary.skipped_empty_id} / 跳过缺数据 ${res.summary.skipped_bad_data}`,
+          `  → 输出目录: ${res.output_dir}`,
         ].join("\n"),
       );
     }

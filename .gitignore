@@ -19,6 +19,7 @@
 *.jpg
 *.jpeg
 *.png
+*.svg
 *.xlsx
 *.docx
 *.pptx

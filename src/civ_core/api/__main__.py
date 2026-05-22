@@ -85,7 +85,19 @@ def _ensure_standards_db_seeded() -> None:
         log.warning("规范库初始化失败：%s（C# leeb.* 调用可能挂）", e)
 
 
+def _force_utf8_streams() -> None:
+    """Windows 默认 sys.stdin/stdout/stderr 用 GBK（cp936），中文写入会变成
+    非 UTF-8 字节流；Tauri 端按 UTF-8 读 stderr 时直接失败。
+    跟 C# sidecar 一样在入口强制三个流都用 UTF-8，跨语言协议一致。
+    """
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
+
 def main() -> int:
+    _force_utf8_streams()
     _setup_api_logger()
     log = logging.getLogger(__name__)
     log.info("civ-core api server 启动")

@@ -17,7 +17,8 @@
 
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
@@ -25,17 +26,27 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
+/// 单次 RPC 调用超时：30 秒。
+/// 内业工具计算 / Excel 写出 / Word 转 PDF 偶有大文件场景，30s 是经验上限；
+/// 超时不代表 sidecar 死，但拿不到响应时立刻让出 stdout 锁，避免全局 RPC 瘫痪。
+const RPC_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// 通用 JSON-RPC sidecar。Python / C# 共用同一份调用逻辑。
 pub struct JsonRpcSidecar {
     name: &'static str,
     stdin: Mutex<ChildStdin>,
     stdout: Mutex<BufReader<ChildStdout>>,
     next_id: AtomicU64,
+    /// 子进程是否还活着：read_line 拿到 EOF / 严重错误时置 false，
+    /// 后续 call 直接 fast-fail 不再排队等死锁。
+    alive: AtomicBool,
     _child: Child, // 持有避免 drop 杀进程
 }
 
 impl JsonRpcSidecar {
-    /// 从已配置好的 Command spawn。调用方负责设置 cwd / args / pipe / kill_on_drop。
+    /// 从已配置好的 Command spawn。调用方负责设置 cwd / args / kill_on_drop。
+    /// 三个 pipe 这里统一设；stderr 启 drain 任务实时按行 log，避免 OS 64KB
+    /// buffer 填满导致子进程 Console.Error 阻塞（C# sidecar 用 stderr 输出日志）。
     pub async fn spawn(name: &'static str, mut cmd: Command) -> Result<Self> {
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -46,18 +57,49 @@ impl JsonRpcSidecar {
             .with_context(|| format!("启动 sidecar 失败: {name}"))?;
         let stdin = child.stdin.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdin"))?;
         let stdout = child.stdout.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdout"))?;
+        let stderr = child.stderr.take().ok_or_else(|| anyhow!("{name}: 拿不到 stderr"))?;
         log::info!("{name} sidecar 启动 (pid={:?})", child.id());
+
+        // stderr drain 任务：按行读到 EOF，每行转发到 log（INFO 级，前缀带 sidecar 名）。
+        // 不读会让 stderr buffer 填满阻塞子进程；这里只读不解析，sidecar 自己负责日志格式。
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr).lines();
+            loop {
+                match reader.next_line().await {
+                    Ok(Some(line)) => log::info!("[{name}] {line}"),
+                    Ok(None) => {
+                        log::info!("[{name}] stderr EOF");
+                        break;
+                    }
+                    Err(e) => {
+                        log::warn!("[{name}] stderr 读失败: {e}");
+                        break;
+                    }
+                }
+            }
+        });
+
         Ok(Self {
             name,
             stdin: Mutex::new(stdin),
             stdout: Mutex::new(BufReader::new(stdout)),
             next_id: AtomicU64::new(1),
+            alive: AtomicBool::new(true),
             _child: child,
         })
     }
 
     /// JSON-RPC 调用：method + params(JSON) → result(JSON) | 错误。
+    ///
+    /// 可靠性保护：
+    /// - sidecar 已标记 dead：直接 fast-fail，不再排队
+    /// - read_line 套 30s 超时：sidecar 卡住时让出 stdout 锁，单次失败不拖垮全局
+    /// - read_line EOF / 超时 → 标记 dead，后续调用立即失败（无重启，需重开应用）
     pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
+        if !self.alive.load(Ordering::Acquire) {
+            return Err(anyhow!("{} sidecar 已死（进程崩溃或超时），请重启应用", self.name));
+        }
+
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let req = json!({
             "jsonrpc": "2.0",
@@ -78,9 +120,24 @@ impl JsonRpcSidecar {
 
         let mut stdout = self.stdout.lock().await;
         let mut line = String::new();
-        let n = stdout.read_line(&mut line).await
-            .with_context(|| format!("{}: 读 stdout 失败", self.name))?;
+        let read_result = tokio::time::timeout(RPC_TIMEOUT, stdout.read_line(&mut line)).await;
+        let n = match read_result {
+            Ok(Ok(n)) => n,
+            Ok(Err(e)) => {
+                self.alive.store(false, Ordering::Release);
+                return Err(anyhow!("{}: 读 stdout 失败 ({e})", self.name));
+            }
+            Err(_) => {
+                self.alive.store(false, Ordering::Release);
+                return Err(anyhow!(
+                    "{}: RPC 调用 {method} 超过 {}s 无响应",
+                    self.name,
+                    RPC_TIMEOUT.as_secs()
+                ));
+            }
+        };
         if n == 0 {
+            self.alive.store(false, Ordering::Release);
             return Err(anyhow!("{}: stdout 关闭（进程崩溃?）", self.name));
         }
 

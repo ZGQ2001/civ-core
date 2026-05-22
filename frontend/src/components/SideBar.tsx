@@ -14,6 +14,8 @@ interface Props {
   onNewWorkspace: () => void;
   onRefresh: () => void;
   onCollapseAll: () => void;
+  /** 双击 .xlsx/.docx/.pdf 时上抛，App 转发给当前活跃工具的 controller */
+  onFileActivate?: (path: string) => void;
 }
 
 export function SideBar({
@@ -23,6 +25,7 @@ export function SideBar({
   onNewWorkspace,
   onRefresh,
   onCollapseAll,
+  onFileActivate,
 }: Props) {
   return (
     <div className="flex h-full flex-col bg-vscode-bg border-r border-vscode-border">
@@ -43,7 +46,11 @@ export function SideBar({
       <div className="flex-1 overflow-auto">
         {workspacePath ? (
           // key 让 refreshKey/路径变化时整棵树重挂
-          <FileTree key={`${workspacePath}::${refreshKey}`} rootPath={workspacePath} />
+          <FileTree
+            key={`${workspacePath}::${refreshKey}`}
+            rootPath={workspacePath}
+            onFileActivate={onFileActivate}
+          />
         ) : (
           <EmptyState onOpenFolder={onOpenFolder} onNewWorkspace={onNewWorkspace} />
         )}

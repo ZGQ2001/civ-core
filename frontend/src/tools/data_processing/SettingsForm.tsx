@@ -1,9 +1,9 @@
 /**
  * data_processing 右侧 RightPanel「调参」tab：按 calcType 切对应算法的参数面板。
  *   - leeb: 输出路径 + 默认测量角度
- *   - anchor: 规范下拉 + 生成模板按钮 + batch_id 列名 + 按批次参数表
+ *   - anchor: 规范下拉 + 生成模板按钮 + batch_id 列名 + 按批次参数卡片
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 
@@ -30,7 +30,7 @@ export function DataProcessingSettingsForm() {
 
   return (
     <div className="flex flex-col h-full text-xs overflow-auto p-4 space-y-4">
-      <Field label="输出 Excel 路径" hint="留空 = <输入同级>/<stem>_<类型>_结果.xlsx">
+      <Field label="输出 Excel 路径" hint="留空 = 与输入同级 / 同名加后缀">
         <Picker
           value={c.outputPath || c.defaultOutput}
           onPick={pickOutput}
@@ -76,7 +76,7 @@ function AnchorSubForm() {
     if (typeof savePath !== "string") return;
     const written = await c.generateAnchorTemplate(savePath);
     if (written) {
-      try { await openPath(written); } catch { /* 忽略：用户可能没装关联 */ }
+      try { await openPath(written); } catch { /* 没装关联程序就忽略 */ }
     }
   }, [c]);
 
@@ -109,9 +109,9 @@ function AnchorSubForm() {
           {c.anchorTemplateStatus.kind === "running" ? "生成中…" : "生成模板…"}
         </button>
         {c.anchorTemplateStatus.kind === "ok" && (
-          <div className="mt-1 text-[11px] text-green-400 flex items-center gap-1">
-            <i className="codicon codicon-pass !text-[12px]" />
-            已生成：{c.anchorTemplateStatus.path}
+          <div className="mt-1 text-[11px] text-green-400 flex items-start gap-1">
+            <i className="codicon codicon-pass !text-[12px] mt-0.5 shrink-0" />
+            <span className="break-all">已生成：{c.anchorTemplateStatus.path}</span>
           </div>
         )}
         {c.anchorTemplateStatus.kind === "error" && (
@@ -131,12 +131,42 @@ function AnchorSubForm() {
         />
       </Field>
 
-      <AnchorParamsTable />
+      <AnchorParamsSection />
     </>
   );
 }
 
-function AnchorParamsTable() {
+/** 锚杆 5 个工程参数的字段定义 —— 中文名 + 变量符号 + 单位 + 解释。 */
+const ANCHOR_PARAM_FIELDS: Array<{
+  key: keyof AnchorParams;
+  symbol: string;
+  name: string;
+  unit: string;
+  hint: string;
+}> = [
+  {
+    key: "P", symbol: "P", name: "轴向拉力设计值", unit: "N",
+    hint: "锚杆设计承受的最大轴向拉力（即 Nt）；用于算各级荷载 0.1Nt/0.4Nt/.../1.2Nt",
+  },
+  {
+    key: "Lf", symbol: "Lf", name: "自由段长度", unit: "mm",
+    hint: "锚杆从锚头到锚固段起点的长度；与 La 共同决定位移上下限",
+  },
+  {
+    key: "La", symbol: "La", name: "锚固段长度", unit: "mm",
+    hint: "锚杆嵌入岩土的有效锚固长度（与水泥浆体接触段）",
+  },
+  {
+    key: "A", symbol: "A", name: "钢筋截面面积", unit: "mm²",
+    hint: "锚杆杆体钢筋截面积；E·A 决定弹性变形量",
+  },
+  {
+    key: "E", symbol: "E", name: "弹性模量", unit: "N/mm²",
+    hint: "锚杆杆体材料弹性模量（钢筋取 2.0×10⁵）",
+  },
+];
+
+function AnchorParamsSection() {
   const c = useDataProcessing();
 
   if (!c.excelPath) {
@@ -169,18 +199,10 @@ function AnchorParamsTable() {
     );
   }
 
-  const cols: Array<{ key: keyof AnchorParams; label: string; hint: string }> = [
-    { key: "P", label: "P", hint: "轴向拉力设计值（N）" },
-    { key: "Lf", label: "Lf", hint: "自由段长度（mm）" },
-    { key: "La", label: "La", hint: "锚固段长度（mm）" },
-    { key: "A", label: "A", hint: "钢筋面积（mm²）" },
-    { key: "E", label: "E", hint: "弹性模量（N/mm²）" },
-  ];
-
   return (
     <Field
-      label={`锚杆参数（按批次，共 ${c.anchorBatchIds.length} 批）`}
-      hint="单位：P=N, Lf/La=mm, A=mm², E=N/mm²"
+      label={`锚杆工程参数（共 ${c.anchorBatchIds.length} 批）`}
+      hint="同批次所有锚杆共用一组参数；点卡片标题展开/收起"
     >
       <div className="space-y-2">
         <div className="flex justify-end">
@@ -188,63 +210,100 @@ function AnchorParamsTable() {
             type="button"
             onClick={() => c.setAnchorParamsForAllBatches(DEFAULT_ANCHOR_PARAMS)}
             className="text-[11px] text-vscode-focus hover:underline"
-            title={`P=${DEFAULT_ANCHOR_PARAMS.P}, Lf=${DEFAULT_ANCHOR_PARAMS.Lf}, La=${DEFAULT_ANCHOR_PARAMS.La}, A=${DEFAULT_ANCHOR_PARAMS.A}, E=${DEFAULT_ANCHOR_PARAMS.E}`}
+            title={ANCHOR_PARAM_FIELDS
+              .map((f) => `${f.symbol}=${DEFAULT_ANCHOR_PARAMS[f.key]}${f.unit}`)
+              .join(" / ")}
           >
-            全部填默认值
+            全部批次填默认值
           </button>
         </div>
 
-        <div className="overflow-x-auto border border-vscode-border rounded-[2px]">
-          <table className="w-full text-[11px]">
-            <thead className="bg-[#1f1f1f]">
-              <tr>
-                <th className="text-left px-2 py-1 text-vscode-text-dim font-medium border-b border-vscode-border">
-                  批次
-                </th>
-                {cols.map((col) => (
-                  <th
-                    key={col.key}
-                    title={col.hint}
-                    className="text-left px-2 py-1 text-vscode-text-dim font-medium border-b border-vscode-border"
-                  >
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {c.anchorBatchIds.map((batchId, i) => {
-                const params = c.anchorParamsByBatch[batchId] ?? DEFAULT_ANCHOR_PARAMS;
-                return (
-                  <tr key={batchId} className={i % 2 === 0 ? "bg-[#252525]" : "bg-[#2a2a2a]"}>
-                    <td
-                      className="px-2 py-1 text-vscode-text border-b border-[#333] truncate max-w-[80px]"
-                      title={batchId}
-                    >
-                      {batchId}
-                    </td>
-                    {cols.map((col) => (
-                      <td key={col.key} className="px-1 py-0.5 border-b border-[#333]">
-                        <input
-                          type="number"
-                          value={params[col.key]}
-                          onChange={(e) =>
-                            c.setAnchorParamsForBatch(batchId, {
-                              ...params,
-                              [col.key]: parseFloat(e.target.value || "0"),
-                            })
-                          }
-                          className="w-full bg-vscode-input border border-vscode-border px-1 py-0.5 text-[11px] text-vscode-text rounded-[2px]"
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {c.anchorBatchIds.map((batchId, idx) => (
+            <BatchParamsCard
+              key={batchId}
+              batchId={batchId}
+              params={c.anchorParamsByBatch[batchId] ?? DEFAULT_ANCHOR_PARAMS}
+              defaultExpanded={c.anchorBatchIds.length <= 3 || idx === 0}
+              onChange={(p) => c.setAnchorParamsForBatch(batchId, p)}
+              onFillDefault={() =>
+                c.setAnchorParamsForBatch(batchId, { ...DEFAULT_ANCHOR_PARAMS })
+              }
+            />
+          ))}
         </div>
       </div>
     </Field>
+  );
+}
+
+function BatchParamsCard({
+  batchId,
+  params,
+  defaultExpanded,
+  onChange,
+  onFillDefault,
+}: {
+  batchId: string;
+  params: AnchorParams;
+  defaultExpanded: boolean;
+  onChange: (p: AnchorParams) => void;
+  onFillDefault: () => void;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="border border-vscode-border rounded-[3px] bg-[#252525]">
+      <div
+        className="flex items-center px-2 py-1.5 cursor-pointer hover:bg-vscode-hover select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <i
+          className={`codicon codicon-chevron-${expanded ? "down" : "right"} !text-[12px] text-vscode-text-dim mr-1`}
+        />
+        <i className="codicon codicon-symbol-misc !text-[12px] text-vscode-text-dim mr-1.5" />
+        <span className="text-[12px] text-vscode-text font-medium truncate" title={batchId}>
+          {batchId}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onFillDefault(); }}
+          className="ml-auto text-[10px] text-vscode-focus hover:underline"
+          title="给本批次填默认值"
+        >
+          填默认
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="px-3 py-2 space-y-2.5 border-t border-vscode-border">
+          {ANCHOR_PARAM_FIELDS.map((f) => (
+            <div key={f.key}>
+              <div className="flex items-baseline gap-1.5 mb-0.5">
+                <span className="text-[11px] text-vscode-text font-medium">{f.name}</span>
+                <span className="text-[11px] text-vscode-text-dim font-mono">{f.symbol}</span>
+              </div>
+              <div className="flex">
+                <input
+                  type="number"
+                  value={params[f.key]}
+                  step="any"
+                  onChange={(e) =>
+                    onChange({ ...params, [f.key]: parseFloat(e.target.value || "0") })
+                  }
+                  className="flex-1 min-w-0 bg-vscode-input border border-vscode-border px-2 py-1 text-[11px] text-vscode-text rounded-l-[2px] focus:outline-none focus:border-vscode-focus"
+                />
+                <span className="inline-flex items-center px-2 bg-[#1f1f1f] border border-l-0 border-vscode-border text-[11px] text-vscode-text-dim rounded-r-[2px] min-w-[40px] justify-center">
+                  {f.unit}
+                </span>
+              </div>
+              <div className="text-[10px] text-vscode-text-faint mt-0.5 leading-tight">
+                {f.hint}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

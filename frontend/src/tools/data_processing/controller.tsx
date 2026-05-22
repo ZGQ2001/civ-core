@@ -22,6 +22,7 @@ import {
 } from "react";
 
 import { rpc } from "../../lib/rpc";
+import { logLine, useShell } from "../../lib/shell";
 import type {
   AnchorParams,
   AnchorStandard,
@@ -31,6 +32,10 @@ import type {
   RunRes,
 } from "./types";
 import { ANCHOR_DEFAULT_BATCH_COL, DEFAULT_ANCHOR_PARAMS } from "./types";
+
+const TOOL_ID = "data_processing";
+/** 本工具可接收的文件扩展名（文件树双击时由 useShell 自动灌进来）。 */
+const ACCEPTED_EXTS = new Set([".xlsx", ".xls"]);
 
 const PREVIEW_DEBOUNCE_MS = 300;
 const PREVIEW_MAX_ROWS = 50;
@@ -106,6 +111,7 @@ export function useDataProcessing(): Ctx {
 }
 
 export function DataProcessingProvider({ children }: { children: React.ReactNode }) {
+  const shell = useShell();
   const [calcType, setCalcTypeRaw] = useState<CalcType>("leeb");
 
   const [excelPath, setExcelPathRaw] = useState("");
@@ -269,27 +275,31 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   const generateAnchorTemplate = useCallback(
     async (savePath: string): Promise<string | null> => {
       setAnchorTemplateStatus({ kind: "running" });
+      shell.appendOutput(logLine(`[锚杆] 生成模板 → ${savePath}`));
       try {
         const r = await rpc<{ ok: boolean; path: string }>("anchor.generate_template", {
           output_xlsx: savePath,
           standard: anchorStandard,
         });
         setAnchorTemplateStatus({ kind: "ok", path: r.path });
+        shell.appendOutput(logLine(`[锚杆] 模板已生成: ${r.path}`));
         return r.path;
       } catch (e) {
         const message = String(e);
-        // 同时打到 console，便于 DevTools 排查（用户/我都能看到完整 stack）
         console.error("anchor.generate_template 失败:", e);
         setAnchorTemplateStatus({ kind: "error", message });
+        shell.appendOutput(logLine(`[锚杆] 生成模板失败: ${message}`));
         return null;
       }
-    }, [anchorStandard]);
+    }, [anchorStandard, shell]);
 
   const run = useCallback(async (): Promise<RunRes | null> => {
     if (!excelPath || running) return null;
     setRunning(true);
     setRunError(null);
     setResult(null);
+    const label = calcType === "anchor" ? "锚杆" : "里氏";
+    shell.appendOutput(logLine(`[${label}] 开始计算: ${excelPath}`));
     try {
       if (calcType === "leeb") {
         const params: Record<string, unknown> = {
@@ -327,6 +337,7 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
           summary: `${res.batches} 批 / ${res.components} 构件`,
         };
         setResult(display);
+        shell.appendOutput(logLine(`[里氏] 完成: ${display.summary} → ${display.output}`));
         return display;
       }
 
@@ -353,17 +364,34 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
         summary: `${res.batches} 批 / ${res.anchors_qualified}/${res.anchors_total} 合格`,
       };
       setResult(display);
+      shell.appendOutput(logLine(`[锚杆] 完成: ${display.summary} → ${display.output}`));
       return display;
     } catch (e) {
-      setRunError(String(e));
+      const message = String(e);
+      setRunError(message);
+      shell.appendOutput(logLine(`[${label}] 失败: ${message}`));
       return null;
     } finally {
       setRunning(false);
     }
   }, [
     excelPath, sheet, outputPath, angle, running, calcType,
-    anchorStandard, anchorBatchIdColumn, anchorParamsByBatch,
+    anchorStandard, anchorBatchIdColumn, anchorParamsByBatch, shell,
   ]);
+
+  // ── 文件树双击 .xlsx/.xls 联动：自动设为 excelPath ──
+  useEffect(() => {
+    const f = shell.activatedFile;
+    if (!f) return;
+    if (shell.activeToolId !== TOOL_ID) return;
+    const idx = f.path.lastIndexOf(".");
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
+    if (!ACCEPTED_EXTS.has(ext)) return;
+    // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
+    setExcelPath(f.path);
+    shell.appendOutput(logLine(`[数据处理] 已接收文件: ${f.path}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shell.activatedFile?.key, shell.activeToolId]);
 
   const ctx: Ctx = useMemo(
     () => ({

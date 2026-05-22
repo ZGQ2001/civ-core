@@ -30,6 +30,7 @@ import { SideBar } from "./components/SideBar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { rpc, type WorkspaceLast } from "./lib/rpc";
+import { ShellContext, logLine, type ActivatedFile } from "./lib/shell";
 import { DataProcessingProvider, DataProcessingSettingsForm } from "./tools/data_processing";
 import { PdfToolsProvider, PdfToolsSettingsForm } from "./tools/pdf_tools";
 import { PlotCurvesProvider, PlotCurvesSettingsForm } from "./tools/plot_curves";
@@ -56,12 +57,26 @@ export default function App() {
   const [bottomVisible, setBottomVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(true);
   const [outputLog, setOutputLog] = useState("");
+  const [activatedFile, setActivatedFile] = useState<ActivatedFile | null>(null);
+  const fileKeyRef = useRef(0);
 
   const sidebarRef = useRef<PanelImperativeHandle>(null);
   const bottomRef = useRef<PanelImperativeHandle>(null);
   const rightRef = useRef<PanelImperativeHandle>(null);
 
+  /** 文件树双击 .xlsx/.docx/.pdf 时上抛；工具 Provider 自己用 useShell 监听 + 决定是否接收。 */
+  const handleFileActivate = useCallback((path: string) => {
+    fileKeyRef.current += 1;
+    setActivatedFile({ path, key: fileKeyRef.current });
+  }, []);
+
   const toolLabel = ALL_TOOLS.find((t) => t.id === activeToolId)?.tooltip ?? null;
+
+  const appendOutput = useCallback((text: string) => {
+    setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
+    bottomRef.current?.expand();
+    setBottomVisible(true);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -71,14 +86,22 @@ export default function App() {
           rpc<string>("ping"),
           rpc<string>("doc.ping"),
         ]);
-        setSidecarStatus(`后端就绪 (py=${pyPong}, doc=${docPong})`);
+        const status = `后端就绪 (py=${pyPong}, doc=${docPong})`;
+        setSidecarStatus(status);
+        appendOutput(logLine(status));
         const ws = await rpc<WorkspaceLast>("workspace.last");
-        if (ws.path) setWorkspacePath(ws.path);
+        if (ws.path) {
+          setWorkspacePath(ws.path);
+          appendOutput(logLine(`恢复工作区: ${ws.path}`));
+        }
       } catch (e) {
-        setSidecarStatus(`后端连接失败：${String(e)}`);
+        const msg = `后端连接失败: ${String(e)}`;
+        setSidecarStatus(msg);
+        appendOutput(logLine(msg));
       }
     })();
-  }, []);
+    // 仅启动跑一次；appendOutput 是 useCallback 稳定引用，加进 deps 不影响
+  }, [appendOutput]);
 
   const handleExplorerToggle = useCallback(() => {
     const p = sidebarRef.current;
@@ -92,11 +115,7 @@ export default function App() {
     }
   }, []);
 
-  const appendOutput = useCallback((text: string) => {
-    setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
-    bottomRef.current?.expand();
-    setBottomVisible(true);
-  }, []);
+
 
   const toggleBottom = useCallback(() => {
     const p = bottomRef.current;
@@ -236,7 +255,14 @@ export default function App() {
   ];
   const rightAvailable = rightTabs.length > 0;
 
+  const shellValue = {
+    appendOutput,
+    activeToolId,
+    activatedFile,
+  };
+
   return (
+    <ShellContext.Provider value={shellValue}>
     <PlotCurvesProvider>
       <DataProcessingProvider>
       <PdfToolsProvider>
@@ -272,6 +298,7 @@ export default function App() {
                 onNewWorkspace={handleNewWorkspace}
                 onRefresh={handleRefresh}
                 onCollapseAll={handleCollapseAll}
+                onFileActivate={handleFileActivate}
               />
             </Panel>
             <Separator className="w-px bg-vscode-border hover:bg-vscode-focus transition-colors" />
@@ -340,5 +367,6 @@ export default function App() {
       </PdfToolsProvider>
       </DataProcessingProvider>
     </PlotCurvesProvider>
+    </ShellContext.Provider>
   );
 }

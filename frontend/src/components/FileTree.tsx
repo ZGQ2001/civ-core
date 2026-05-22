@@ -16,13 +16,24 @@ import { rpc, type FileEntry } from "../lib/rpc";
 
 interface Props {
   rootPath: string;
+  /** 双击 .xlsx/.xls/.docx/.pdf 时调，用于把文件灌给当前工具 */
+  onFileActivate?: (path: string) => void;
 }
 
-export function FileTree({ rootPath }: Props) {
+/** 可被「灌入工具」的扩展名集合。其他扩展走系统 openPath 原行为。 */
+const TOOL_INPUT_EXTS = new Set([".xlsx", ".xls", ".docx", ".doc", ".pdf"]);
+
+export function FileTree({ rootPath, onFileActivate }: Props) {
   const name = rootPath.split(/[\\/]/).filter(Boolean).pop() ?? rootPath;
   return (
     <div className="py-1 text-[13px] text-vscode-text">
-      <DirNode path={rootPath} name={name} depth={0} defaultExpanded />
+      <DirNode
+        path={rootPath}
+        name={name}
+        depth={0}
+        defaultExpanded
+        onFileActivate={onFileActivate}
+      />
     </div>
   );
 }
@@ -32,11 +43,13 @@ function DirNode({
   name,
   depth,
   defaultExpanded = false,
+  onFileActivate,
 }: {
   path: string;
   name: string;
   depth: number;
   defaultExpanded?: boolean;
+  onFileActivate?: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [entries, setEntries] = useState<FileEntry[] | null>(null);
@@ -72,9 +85,21 @@ function DirNode({
           )}
           {entries?.map((e) =>
             e.is_dir ? (
-              <DirNode key={e.path} path={e.path} name={e.name} depth={depth + 1} />
+              <DirNode
+                key={e.path}
+                path={e.path}
+                name={e.name}
+                depth={depth + 1}
+                onFileActivate={onFileActivate}
+              />
             ) : (
-              <FileNode key={e.path} path={e.path} name={e.name} depth={depth + 1} />
+              <FileNode
+                key={e.path}
+                path={e.path}
+                name={e.name}
+                depth={depth + 1}
+                onFileActivate={onFileActivate}
+              />
             ),
           )}
         </>
@@ -87,18 +112,35 @@ function FileNode({
   path,
   name,
   depth,
+  onFileActivate,
 }: {
   path: string;
   name: string;
   depth: number;
+  onFileActivate?: (path: string) => void;
 }) {
+  const ext = (() => {
+    const idx = name.lastIndexOf(".");
+    return idx > 0 ? name.slice(idx).toLowerCase() : "";
+  })();
+  const canActivate = !!onFileActivate && TOOL_INPUT_EXTS.has(ext);
+  const tooltip = canActivate
+    ? `双击：作为当前工具输入\n（按住 Shift 双击：用系统默认程序打开）`
+    : `双击：用系统默认程序打开`;
+
   return (
     <Row
       depth={depth}
-      icon="file"
+      icon={canActivate ? "file-symlink-file" : "file"}
       label={name}
-      onDoubleClick={() => {
-        openPath(path).catch((e) => console.error("openPath failed:", e));
+      title={tooltip}
+      onDoubleClick={(e) => {
+        // Shift+双击 强制系统打开；普通双击优先灌给工具
+        if (canActivate && !e?.shiftKey) {
+          onFileActivate!(path);
+        } else {
+          openPath(path).catch((err) => console.error("openPath failed:", err));
+        }
       }}
     />
   );
@@ -110,6 +152,7 @@ function Row({
   icon,
   label,
   muted,
+  title,
   onClick,
   onDoubleClick,
 }: {
@@ -118,14 +161,16 @@ function Row({
   icon?: string;
   label: string;
   muted?: boolean;
+  title?: string;
   onClick?: () => void;
-  onDoubleClick?: () => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
 }) {
   // 缩进按 depth*12px 累加；chevron 占 16px 槽位即使没有也保留对齐
   return (
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      title={title}
       style={{ paddingLeft: depth * 12 + 4 }}
       className={cn(
         "flex h-[22px] items-center gap-1 pr-2 cursor-pointer select-none",

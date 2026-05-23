@@ -376,12 +376,8 @@ export function FileTree({
   useEffect(() => {
     const onFocus = () => refetchExpanded();
     window.addEventListener('focus', onFocus);
-    // 实时刷新：每 2 秒轮询展开的目录
-    const timer = setInterval(() => refetchExpanded(), 2000);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      clearInterval(timer);
-    };
+    return () => window.removeEventListener('focus', onFocus);
+    // 注：文件系统变更的实时感知待后端提供 watch/notify RPC 后接入，当前仅依赖 focus + refreshNonce
   }, [refetchExpanded]);
 
   const refreshSkip = useRef(true);

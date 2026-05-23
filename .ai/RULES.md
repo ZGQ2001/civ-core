@@ -176,12 +176,9 @@ git add -A && git commit -m "feat: xxx"
 
 | 问题 | 位置 | 严重度 |
 |------|------|--------|
-| 3 个工具 `handleRun` 陈旧闭包 | `plot_curves/pdf_tools/word2pdf` 的 `Page.tsx` | 🔴 |
-| Tauri `read_line` 无超时 | `sidecar.rs:81` | 🔴 |
 | Tauri sidecar 崩溃不自动重启 | `sidecar.rs` | 🔴 |
 | `rpc.ts` 无校验的 `as T` 强转 | `frontend/src/lib/rpc.ts` | 🟠 |
 | `IconBtn` 在两处重复定义 | `plot_curves/Page.tsx` + `pdf_tools/Page.tsx` | 🟡 |
-| Tauri stderr 管道创建但不读取 | `sidecar.rs:42` | 🟡 |
 | 空壳文件 `core/steel_hardness.py` | `src/civ_core/core/` | 🟡 |
 | `design_fb_min` 死参数（Python 旧代码） | `core/calc_functions.py` | 🟡 |
 | 常量在 `calc_schema.py` 和 `calc_functions.py` 各定义一份 | Python | 🟡 |

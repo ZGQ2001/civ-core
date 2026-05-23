@@ -2,6 +2,7 @@
  * word2pdf 状态控制中心。和 pdf_tools 同思路：inputs[] 变 → 200ms debounce 拉 inspect。
  * run() 走 COM 单进程串行；结果区分 written / failed。
  */
+/* eslint-disable react-refresh/only-export-components -- hook 与 Provider 同文件共存，是工具页范式（见 frontend/CLAUDE.md） */
 import {
   createContext,
   useCallback,
@@ -89,9 +90,13 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (inputs.length === 0) {
+      // 输入清空 → 同步清掉旧预览。这是与 inputs 关联的派生状态重置，
+      // 移到 action 里会让 removeAt/clearInputs 重复逻辑，留在 effect 更内聚
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPreviewInfos([]);
       setPreviewError(null);
       setPreviewLoading(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     if (debounceRef.current !== null) {

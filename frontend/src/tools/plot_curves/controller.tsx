@@ -10,6 +10,7 @@
  *    300ms 后调 render_preview 拉新预览图；快速键入不卡 IO
  *  - run() 时若 workingPreset 非 null 就作为 preset_override 传后端
  */
+/* eslint-disable react-refresh/only-export-components -- hook 与 Provider 同文件共存，是工具页范式（见 frontend/CLAUDE.md） */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { rpc } from "../../lib/rpc";
@@ -155,21 +156,29 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
+    // 启动期拉预设。setState 在 reloadPresets 内异步完成
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reloadPresets();
   }, [reloadPresets]);
 
   // 切换预设 → 丢编辑、重置行号
   useEffect(() => {
+    // preset 变 → 关联派生状态重置；move 到 setPreset action 会漏掉外部 setPreset 路径
+    /* eslint-disable react-hooks/set-state-in-effect */
     setWorkingPreset(null);
     setRowIndex(0);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [preset]);
 
   // 切换 Excel → 拉 sheets 列表；自动选第一个；重置 row index
   useEffect(() => {
     if (!excelPath) {
+      // excelPath 清空 → 同步清掉 sheets
+      /* eslint-disable react-hooks/set-state-in-effect */
       setSheets([]);
       setSheetsError(null);
       setSheet("");
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     let cancelled = false;
@@ -260,9 +269,12 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     // 没选 Excel / 没预设 → 跳过预览
     if (!excelPath || !effectivePreset) {
+      // 关联输入清空 → 同步清旧预览
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPreviewPng(null);
       setPreviewError(null);
       setPreviewLoading(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
 
@@ -313,6 +325,8 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
     if (!ACCEPTED_EXTS.has(ext)) return;
     // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
+    // 外部事件（文件树双击）→ 必须在 effect 里把 path 灌进 state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExcelPath(f.path);
     shell.appendOutput(logLine(`[绘曲线图] 已接收文件: ${f.path}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps

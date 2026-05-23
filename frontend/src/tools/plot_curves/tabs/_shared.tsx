@@ -88,6 +88,7 @@ export function NumberCell({
 
 // matplotlib 接受多种颜色格式；HTML color picker 只认 "#RRGGBB"
 // 已是 # 开头取前 7 位（防 "#RRGGBBAA"），否则返灰色兜底
+// eslint-disable-next-line react-refresh/only-export-components -- 颜色工具与 form 子组件同文件共存
 export function normalizeColor(c: string): string {
   if (c.startsWith("#") && (c.length === 7 || c.length === 9)) return c.slice(0, 7);
   return "#888888";

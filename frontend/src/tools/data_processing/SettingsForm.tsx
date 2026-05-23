@@ -72,7 +72,7 @@ function AnchorSubForm() {
   const genTemplate = useCallback(async () => {
     // saveDialog 自身可能抛 permission/IO 错——必须 catch，否则错误进 unhandledrejection 静默
     shell.appendOutput(logLine("[锚杆] 点击「生成模板」→ 打开保存对话框"));
-    let savePath: string | null = null;
+    let savePath: string;
     try {
       const sel = await saveDialog({
         title: "保存锚杆抗拔输入模板为",

@@ -35,6 +35,8 @@ export function RightPanel({ tabs, defaultActiveId, onClose }: Props) {
   // tabs 变了（切工具）→ 若当前 active 不在新 tabs 里，退回第一个
   useEffect(() => {
     if (!tabs.some((t) => t.id === activeId)) {
+      // tabs 改变是外部 prop 变动（切工具）→ 需要在 effect 里修正 activeId
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveId(tabs[0]?.id ?? "");
     }
   }, [tabs, activeId]);

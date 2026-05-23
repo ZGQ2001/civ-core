@@ -8,6 +8,7 @@
  *
  * 设计选择：previewInfos 始终是数组，split 模式数组长度 1。让 Page 渲染统一。
  */
+/* eslint-disable react-refresh/only-export-components -- hook 与 Provider 同文件共存，是工具页范式（见 frontend/CLAUDE.md） */
 import {
   createContext,
   useCallback,
@@ -168,10 +169,13 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (inspectTargets.length === 0) {
+      // 输入清空 → 同步清掉旧预览。与 inspectTargets 派生绑定，留 effect 内
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPreviewInfos([]);
       setPreviewTotalPages(0);
       setPreviewError(null);
       setPreviewLoading(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     if (debounceRef.current !== null) {

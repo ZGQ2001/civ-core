@@ -321,7 +321,8 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
   // ─── 顶层 effect：rootPath / focus / refreshNonce / collapseNonce ──────
 
   useEffect(() => {
-    // 重置（rootPath 变化）
+    // 重置（rootPath 变化）— prop 切换触发的强制全清，必须在 effect 里
+    /* eslint-disable react-hooks/set-state-in-effect */
     setNodes(new Map([[rootPath, {
       isDir: true,
       name: rootName(rootPath),
@@ -335,6 +336,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     setEditing(null);
     setMenu(null);
     setDeleteTarget(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     fetchDir(rootPath);
   }, [rootPath, fetchDir]);
 
@@ -598,7 +600,7 @@ export function FileTree({ rootPath, refreshNonce, collapseNonce, onFileActivate
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
       e.preventDefault(); doPaste(row.path); return;
     }
-  }, [editing, menu, deleteTarget, confirmDelete, toggle, activate, beginRename, doDelete, doCopyToClipboard, doCutToClipboard, doPaste]);
+  }, [editing, menu, deleteTarget, confirmDelete, toggle, activate, beginRename, doDelete, doUndoDelete, doCopyToClipboard, doCutToClipboard, doPaste]);
 
   // ─── Context value ─────────────────────────────────────────────────────
 
@@ -1018,7 +1020,10 @@ function ContextMenuView({ menu, onClose }: { menu: MenuState; onClose: () => vo
   }
   
   // 撤销删除（仅5分钟内有效且有记录）
-  const canUndo = c.undoStack.length > 0 && (Date.now() - c.undoStack[c.undoStack.length - 1] <= 300000);
+  // Date.now() 是非纯函数，不能在 render 里直接读。菜单短暂存在，开启时
+  // 锁一次时间足以判断 5 分钟窗口；菜单常开 5 分钟以上的场景不存在
+  const [menuOpenedAt] = useState(() => Date.now());
+  const canUndo = c.undoStack.length > 0 && (menuOpenedAt - c.undoStack[c.undoStack.length - 1] <= 300000);
   items.push({
     label: "撤销删除",
     icon: "discard",

@@ -302,6 +302,8 @@ function RowNavBar({
   // 跳转用本地 draft，让用户能边输边改；blur / Enter 时提交
   const [jumpDraft, setJumpDraft] = useState("");
   useEffect(() => {
+    // 外部改 rowIndex（next/prev 按钮）→ 同步 draft 输入框
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setJumpDraft(String(c.rowIndex + 1));
   }, [c.rowIndex]);
 

@@ -11,6 +11,7 @@
  *   - 用户在 SettingsForm 按批次填工程参数 (P/Lf/La/A/E)
  *   - generateTemplate() 调 anchor.generate_template 写空白模板让用户下载填
  */
+/* eslint-disable react-refresh/only-export-components -- hook 与 Provider 同文件共存，是工具页范式（见 frontend/CLAUDE.md） */
 import {
   createContext,
   useCallback,
@@ -182,6 +183,8 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (!excelPath) {
+      // excelPath 清空 → 关掉残留的 loading
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreviewLoading(false);
       return;
     }
@@ -230,8 +233,11 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (calcType !== "anchor" || !excelPath) return;
     const myId = ++batchReqIdRef.current;
+    // 拉批次清单前先翻 loading flag — 异步 IO 的标准前置
+    /* eslint-disable react-hooks/set-state-in-effect */
     setAnchorBatchesLoading(true);
     setAnchorBatchesError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     rpc<{ batches: string[] }>("anchor.list_batches", {
       input_xlsx: excelPath,
       sheet: sheet || null,
@@ -388,6 +394,8 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
     const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
     if (!ACCEPTED_EXTS.has(ext)) return;
     // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
+    // 外部事件（文件树双击）→ 必须在 effect 里把 path 灌进 state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExcelPath(f.path);
     shell.appendOutput(logLine(`[数据处理] 已接收文件: ${f.path}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps

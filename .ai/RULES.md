@@ -160,7 +160,12 @@ git add -A && git commit -m "chore: 会话检查点"
 git add -A && git commit -m "feat: xxx"
 ```
 
+commit 信息写**为什么**，不写做了什么——diff 已经告诉读者改了啥，commit 要补充原因。
 阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`。
+
+## 编码规范
+
+- **类型注解全开**：Python `from __future__ import annotations` + mypy/pyright，TS 显式类型。不只是给 IDE 看，也是给 AI 看——AI 看到类型能给出准确得多的补全和重构。
 
 ## 中国镜像
 

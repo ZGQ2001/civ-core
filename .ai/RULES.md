@@ -17,7 +17,7 @@
 | `src/civ_core/configs/` | 配置加载，`lru_cache` 单例 | Python |
 | `src/civ_core/utils/` | 日志/异常/工具函数，无业务逻辑 | Python |
 | `dotnet/civ-doc/` | C# sidecar：JSON-RPC server + Calc/Handlers/StandardsDb/ReportTables | C# |
-| `dotnet/civ-doc.Tests/` | xUnit 测试项目（65 个测试） | C# |
+| `dotnet/civ-doc.Tests/` | xUnit 测试项目 | C# |
 | `frontend/src/` | React 前端，`components/` + `tools/` + `lib/` | TS/TSX |
 | `frontend/src-tauri/` | Tauri 主进程，`sidecar.rs` + `lib.rs` | Rust |
 | `presets/` | 系统预设，运行时只读 | — |
@@ -136,14 +136,14 @@ const handleRun = useCallback(async () => {
 ## 测试命令
 
 ```bash
-# Python（283 pytest）
+# Python
 uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q
-uv run --frozen python scripts/healthcheck.py   # 6 项冒烟（每次验收必跑）
+uv run --frozen python scripts/healthcheck.py   # 冒烟检查（每次验收必跑）
 
-# C#（65 xUnit）
+# C#
 cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test
 
-# Rust（2 cargo test）
+# Rust
 cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib && cargo test --lib
 
 # 前端 TS

@@ -1,0 +1,3 @@
+# 跨平台行尾统一：所有文本文件强制 LF
+# 防止 Windows CI runner 默认 autocrlf=true 把文件 checkout 成 CRLF 后 prettier --check 挂
+* text=auto eol=lf

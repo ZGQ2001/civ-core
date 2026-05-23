@@ -84,8 +84,6 @@ export function Page({ appendOutput }: { appendOutput?: (line: string) => void }
 }
 ```
 
-**当前状态**：`data_processing` 已正确实现。`plot_curves`/`pdf_tools`/`word2pdf` 的 `handleRun` 有陈旧闭包 bug。
-
 ### SettingsForm 模板
 
 ```tsx
@@ -132,8 +130,7 @@ StatusBar (22px)
 
 ## 公共组件
 
-`tools/_shared/forms.tsx`：`Field` / `Picker` / `ResetBtn` / `RunBtn`（4 个工具共用）
-`IconBtn` 已在此抽为公共组件（从 plot_curves/pdf_tools 的重复定义合并）
+`tools/_shared/forms.tsx`：`Field` / `Picker` / `ResetBtn` / `RunBtn`（4 个工具共用的 form 控件）
 
 ## 快捷键
 

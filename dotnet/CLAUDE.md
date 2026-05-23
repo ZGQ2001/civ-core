@@ -29,7 +29,7 @@ public static class XxxHandlers
     {
         dispatcher.Register("xxx.method1", HandleMethod1);
     }
-    
+
     private static object? HandleMethod1(JsonElement? @params)
     {
         // 入参从 @params 手动解（不用反射）
@@ -54,7 +54,7 @@ XxxHandlers.RegisterAll(dispatcher);
 public record LeebHardnessResult
 {
     public double CompFbMinAvg { get; }
-    
+
     public LeebHardnessResult(double compFbMinAvg)
     {
         if (compFbMinAvg <= 0)
@@ -78,14 +78,11 @@ public record LeebHardnessResult
 ```bash
 cd dotnet/civ-doc
 dotnet build                     # 编译
-dotnet test                      # 运行 40 个 xUnit 测试
+dotnet test                      # 跑 xUnit 测试套件
 dotnet test --filter "FullyQualifiedName~LeebCalculator"  # 只跑某类
 ```
 
 xUnit 项目在 `dotnet/civ-doc.Tests/`，引用 `civ-doc.csproj`。
 测试文件命名：`<被测类>Tests.cs`，一个测试类对应一个被测类。
 
-## 已知问题
-
-- `read_line` 无超时（Rust 端 `sidecar.rs` 的问题，C# 端不受影响）
-- `doc.compose_report` 未实现（T5.5 Step 3 预留）
+技术债清单和未实现的 RPC 集中在根目录 [`.ai/RULES.md`](../.ai/RULES.md)。

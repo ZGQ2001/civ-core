@@ -163,24 +163,35 @@ git add -A && git commit -m "feat: xxx"
 commit 信息写**为什么**，不写做了什么——diff 已经告诉读者改了啥，commit 要补充原因。
 阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`。
 
-### 写完代码就跑质检（不是 push 前）
+### 质检分层频次（不是"改一行跑一次"，也不是"攒到 push"）
 
-每改完一段代码就跑该语言全链——format + lint + 类型检查 + 测试。push 时跑只是兜底，不是第一道闸。
+反馈越快越省事，但跑全链有启动成本。两个极端都要避：
 
-**为什么不能拖到 push**：
+- **太稀疏**（攒到 push）：错误堆叠、定位翻倍、CI 必挂
+- **太频繁**（字符级跑）：启动成本占大头、打断 flow、收益边际递减
 
-- 改动小、上下文新鲜时修最快；多个改动堆叠后再发现错误，定位成本翻倍
-- 一次 push 可能涉及多语言多文件，最后才发现错误等于推迟反馈
-- format/lint 也是 CI 一票否决项，漏跑等于 push 后必挂
+正确做法是**分层**——不同检查在不同时机跑：
 
-| 改完这种文件    | 立刻跑                                                                                               |
+| 层级         | 跑什么                                   | 何时触发                                          | 成本        |
+| ------------ | ---------------------------------------- | ------------------------------------------------- | ----------- |
+| IDE 实时     | LSP 类型 / ESLint / Pyright 红波浪       | 敲字符时                                          | 0 摩擦      |
+| 保存时       | `format on save`（Prettier/ruff format） | Ctrl+S                                            | <100ms      |
+| **单元完成** | **该语言全链**（见下表）                 | **写完一个函数/组件/effect/handler/修完一个 bug** | 数秒~数十秒 |
+| commit/push  | 跨语言全跑                               | 提交前兜底                                        | 同上        |
+
+**关键判断**——什么是「一个有意义的改动单元」：一个完整函数、一个 effect、一个 handler、一个 bug 修完、一个组件的 Provider 加完。**不是**每改一行、每加个注释、每改个变量名。
+
+**单元完成层的全链命令**：
+
+| 改完这种文件    | 跑                                                                                                   |
 | --------------- | ---------------------------------------------------------------------------------------------------- |
 | 前端 `.ts/.tsx` | `cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check`                         |
 | Python `.py`    | `uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q` |
 | C# `.cs`        | `cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test`        |
 | Rust `.rs`      | `cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib`     |
+| Markdown `.md`  | `cd frontend && npx prettier --check <相对路径>`（Prettier 也管 markdown 表格对齐）                  |
 
-发现 format/lint 报错立刻用 `--write`/`--fix` 自动修，不要攒到 push 前。**"只跑通了类型检查就 commit/push" 是 CI 失败的常见根因。**
+发现 format/lint 报错立刻用 `--write`/`--fix` 自动修。**别把 format/lint 留到 push 前——它们是 CI 一票否决项。**
 
 ## 编码规范
 

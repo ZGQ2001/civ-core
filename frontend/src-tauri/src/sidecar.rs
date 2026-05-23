@@ -16,12 +16,12 @@
 //! SidecarRouter 按 method 前缀路由：`doc.*` / `xlsx.*` → C#，其余 → Python。
 
 use std::process::Stdio;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{anyhow, Context, Result};
+use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
@@ -55,9 +55,18 @@ impl JsonRpcSidecar {
         let mut child = cmd
             .spawn()
             .with_context(|| format!("启动 sidecar 失败: {name}"))?;
-        let stdin = child.stdin.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow!("{name}: 拿不到 stdout"))?;
-        let stderr = child.stderr.take().ok_or_else(|| anyhow!("{name}: 拿不到 stderr"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow!("{name}: 拿不到 stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("{name}: 拿不到 stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("{name}: 拿不到 stderr"))?;
         log::info!("{name} sidecar 启动 (pid={:?})", child.id());
 
         // stderr drain 任务：按行读到 EOF，每行转发到 log（INFO 级，前缀带 sidecar 名）。
@@ -97,7 +106,10 @@ impl JsonRpcSidecar {
     /// - read_line EOF / 超时 → 标记 dead，后续调用立即失败（无重启，需重开应用）
     pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
         if !self.alive.load(Ordering::Acquire) {
-            return Err(anyhow!("{} sidecar 已死（进程崩溃或超时），请重启应用", self.name));
+            return Err(anyhow!(
+                "{} sidecar 已死（进程崩溃或超时），请重启应用",
+                self.name
+            ));
         }
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -115,7 +127,10 @@ impl JsonRpcSidecar {
             .write_all(req_line.as_bytes())
             .await
             .with_context(|| format!("{}: 写 stdin 失败", self.name))?;
-        stdin.flush().await.with_context(|| format!("{}: flush stdin 失败", self.name))?;
+        stdin
+            .flush()
+            .await
+            .with_context(|| format!("{}: flush stdin 失败", self.name))?;
         drop(stdin); // 早释放 stdin，让 sidecar 处理时其他 caller 可以排队
 
         let mut stdout = self.stdout.lock().await;
@@ -159,7 +174,8 @@ impl JsonRpcSidecar {
 /// 开发模式：仓库根目录跑 `uv run python -m civ_core.api`。
 pub async fn spawn_python_dev(repo_root: &std::path::Path) -> Result<JsonRpcSidecar> {
     let mut cmd = Command::new("uv");
-    cmd.args(["run", "python", "-m", "civ_core.api"]).current_dir(repo_root);
+    cmd.args(["run", "python", "-m", "civ_core.api"])
+        .current_dir(repo_root);
     JsonRpcSidecar::spawn("python", cmd).await
 }
 
@@ -244,7 +260,9 @@ mod tests {
     fn default_csharp_for_everything_else() {
         // 已切 C#
         assert!(!SidecarRouter::is_python_method("doc.ping"));
-        assert!(!SidecarRouter::is_python_method("xlsx.write_leeb_report_table"));
+        assert!(!SidecarRouter::is_python_method(
+            "xlsx.write_leeb_report_table"
+        ));
         // 本轮切 C#（Step 4）
         assert!(!SidecarRouter::is_python_method("leeb.run"));
         assert!(!SidecarRouter::is_python_method("leeb.preview_excel"));

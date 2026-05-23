@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::Value;
-use sidecar::{SidecarRouter, spawn_csharp_dev, spawn_python_dev};
-use tauri::{Manager, async_runtime::block_on};
+use sidecar::{spawn_csharp_dev, spawn_python_dev, SidecarRouter};
+use tauri::{async_runtime::block_on, Manager};
 
 /// 从 cwd 向上查找含 `pyproject.toml` 的目录作为仓库根。
 /// dev 模式 cwd 可能是 frontend/src-tauri 也可能是 frontend，靠 marker 判断比 parent 计数稳。
@@ -66,10 +66,7 @@ pub fn run() {
             let router = block_on(async {
                 let python = spawn_python_dev(&repo_root).await?;
                 let csharp = spawn_csharp_dev(&repo_root).await?;
-                Ok::<_, anyhow::Error>(SidecarRouter::new(
-                    Arc::new(python),
-                    Arc::new(csharp),
-                ))
+                Ok::<_, anyhow::Error>(SidecarRouter::new(Arc::new(python), Arc::new(csharp)))
             })
             .expect("启动 sidecar 失败");
 

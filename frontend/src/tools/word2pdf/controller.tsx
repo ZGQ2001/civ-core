@@ -14,7 +14,11 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
+import { logLine, useShell } from '../../lib/shell';
 import type { ConvertRes, DocxFileInfo, InspectRes } from './types';
+
+const TOOL_ID = 'word2pdf';
+const ACCEPTED_EXTS = new Set(['.docx', '.doc']);
 
 const INSPECT_DEBOUNCE_MS = 200;
 
@@ -58,6 +62,7 @@ export function useWord2Pdf(): Ctx {
 }
 
 export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
+  const shell = useShell();
   const [inputs, setInputs] = useState<string[]>([]);
   const [outDir, setOutDir] = useState('');
 
@@ -126,6 +131,21 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
         window.clearTimeout(debounceRef.current);
     };
   }, [inputs]);
+
+  // ── 文件树双击 .docx/.doc 联动：追加到 inputs（去重） ──
+  useEffect(() => {
+    const f = shell.activatedFile;
+    if (!f) return;
+    if (shell.activeToolId !== TOOL_ID) return;
+    const idx = f.path.lastIndexOf('.');
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
+    if (!ACCEPTED_EXTS.has(ext)) return;
+    // 外部事件灌 state — 必须留在 effect 里
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInputs((prev) => (prev.includes(f.path) ? prev : [...prev, f.path]));
+    shell.appendOutput(logLine(`[Word→PDF] 已接收文件: ${f.path}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shell.activatedFile?.key, shell.activeToolId]);
 
   const run = useCallback(async (): Promise<RunOutcome> => {
     if (running || inputs.length === 0 || !outDir.trim()) return null;

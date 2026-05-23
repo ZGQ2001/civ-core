@@ -20,6 +20,7 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
+import { logLine, useShell } from '../../lib/shell';
 import type {
   InspectRes,
   MergeRes,
@@ -27,6 +28,9 @@ import type {
   PdfFileInfo,
   SplitRes,
 } from './types';
+
+const TOOL_ID = 'pdf_tools';
+const ACCEPTED_EXTS = new Set(['.pdf']);
 
 const INSPECT_DEBOUNCE_MS = 200;
 
@@ -98,7 +102,13 @@ export function usePdfTools(): Ctx {
 }
 
 export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
+  const shell = useShell();
   const [mode, setModeRaw] = useState<Mode>('merge');
+  // 文件树双击 effect 里读 mode 不能用闭包（deps 只有 activatedFile.key），用 ref
+  const modeRef = useRef<Mode>('merge');
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const [mergeInputs, setMergeInputs] = useState<string[]>([]);
   const [mergeOutput, setMergeOutput] = useState('');
@@ -215,6 +225,29 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
         window.clearTimeout(debounceRef.current);
     };
   }, [inspectTargets]);
+
+  // ── 文件树双击 .pdf 联动：merge 追加（去重），split 覆盖 ──
+  useEffect(() => {
+    const f = shell.activatedFile;
+    if (!f) return;
+    if (shell.activeToolId !== TOOL_ID) return;
+    const idx = f.path.lastIndexOf('.');
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
+    if (!ACCEPTED_EXTS.has(ext)) return;
+    // 外部事件灌 state — 必须留在 effect 里
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (modeRef.current === 'merge') {
+      setMergeInputs((prev) => (prev.includes(f.path) ? prev : [...prev, f.path]));
+      shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));
+    } else {
+      setSplitInputRaw(f.path);
+      setSplitResult(null);
+      setRunError(null);
+      shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shell.activatedFile?.key, shell.activeToolId]);
 
   const run = useCallback(async (): Promise<RunOutcome> => {
     if (running) return null;

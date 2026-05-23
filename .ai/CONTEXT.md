@@ -6,9 +6,9 @@
 
 ---
 
-## 当前焦点（2026-05-22）
+## 当前焦点（2026-05-23）
 
-**锚杆抗拔（GB 50086-2015）上线 + UX 可观察性补齐**：等待新方向。
+**4 个工具全部接 ShellContext.activatedFile**：文件树双击对应扩展名自动灌入当前工具。下一步：报告生成工具页（T5.5 Step 3）。
 
 - 锚杆全套：C# Calc/Anchor 7 文件（Domain/Math/Calculator/Standards/Columns/ExcelReader/TemplateWriter）+ 2 ReportTables + 3 RPC（anchor.run / list_batches / generate_template）+ 前端 calcType=anchor 子 form（规范下拉 + 生成模板按钮 + 按批次参数卡片）。C# 65 xUnit（64 通过 + 1 skip）；TS 0 错。
 - 锚杆参数 UX 重做：每批一张可折叠卡片，每字段中文名 + 变量符号 + input + 单位 suffix + hint —— 字母不再裸露。
@@ -23,12 +23,10 @@
 
 ## 下一步候选（按价值排）
 
-1. **真实数据端到端验证**：用户用真实工程 Excel 跑 anchor.run，看输出 sheet 布局是否够用
-2. **其他 3 个工具接 useShell**：plot_curves/pdf_tools/word2pdf 的 Provider 也接 shell.activatedFile，让文件树双击对应文件类型时自动灌入
-3. **报告生成工具页（T5.5 Step 3）** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）
-4. **钻芯/回弹切 C#** — data_processing calcType 下拉再加项
-5. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
-6. **App.tsx 拆 useShellState hook** — 当前 270+ 行嵌套 4 个 Provider，重构降低复杂度
+1. **报告生成工具页（T5.5 Step 3）** — 新 ActivityBar 项，doc.compose_report（变量替换 + xlsx 嵌入 + 图片嵌入）。模板填充归此阶段（不在计算阶段做）。
+2. **钻芯/回弹切 C#** — data_processing calcType 下拉再加项
+3. **T6 打包** — PyInstaller + dotnet publish + Tauri externalBin
+4. **App.tsx 拆 useShellState hook** — 当前 270+ 行嵌套 4 个 Provider，重构降低复杂度
 
 ---
 
@@ -58,8 +56,8 @@
 - ~~锚杆参数表横排 + 裸字母 P/Lf/La/A/E~~ → 已改纵向卡片（中文名 + 单位 + hint）
 - ~~RightPanel 内操作无日志反馈~~ → ShellContext + 入口 appendOutput
 - ~~点击「生成模板」无反应~~ → 加 dialog:allow-save capability
-- ~~文件树双击只 openPath~~ → 双击 xlsx → 自动灌给 data_processing（其他工具未接）
-- **其他 3 个工具未接 shell.activatedFile** → 文件树双击 .docx/.pdf 暂无人接收（🟡）
+- ~~文件树双击只 openPath~~ → 双击 xlsx/pdf/docx 自动灌给对应工具
+- ~~其他 3 个工具未接 shell.activatedFile~~ → 4 个工具全接（plot_curves/data_processing 收 .xlsx，pdf_tools 收 .pdf 按 mode 分支，word2pdf 收 .docx/.doc 追加去重）
 - `data_processing` OpenXML 切 C# 后合并单元格已解决；前端不变
 - word2pdf pages 字段只在 Word 保存过的 docx 有——显示「N 段」即可
 - 流式进度未做——协议升级方案：JSON-RPC notification → Tauri event
@@ -70,6 +68,10 @@
 ---
 
 ## 会话历史
+
+### [2026-05-23] pdf_tools / word2pdf 接 ShellContext.activatedFile
+
+两个 controller 加 `useShell` + activatedFile useEffect。pdf_tools 按 mode 分支（merge 追加去重、split 覆盖），mode 用 modeRef 防陈旧闭包；word2pdf 追加到 inputs 去重。每个入口先 `appendOutput` 写日志。锚杆数据 sheet 验收通过，模板填充归到「报告生成」阶段（docs/plans/2026-05-29-template-editor.md），计算阶段不再做。
 
 ### [2026-05-22] 锚杆抗拔上线 + UX 可观察性补齐
 

@@ -79,7 +79,7 @@ export function Page({ appendOutput }: { appendOutput?: (line: string) => void }
     }, [c, appendOutput]);
 
     // ❌ 禁止：await c.run() 后读 c.result（陈旧闭包）
-    
+
     return (/* JSX */);
 }
 ```
@@ -91,12 +91,8 @@ export function Page({ appendOutput }: { appendOutput?: (line: string) => void }
 ```tsx
 // SettingsForm.tsx
 export function SettingsForm() {
-    const c = useXxxCtrl();
-    return (
-        <div className="p-3 space-y-4">
-            {/* 参数表单 */}
-        </div>
-    );
+  const c = useXxxCtrl();
+  return <div className="space-y-4 p-3">{/* 参数表单 */}</div>;
 }
 ```
 
@@ -104,8 +100,11 @@ export function SettingsForm() {
 
 ```tsx
 // lib/rpc.ts
-export async function rpc<T>(method: string, params?: Record<string, unknown>): Promise<T> {
-    return await invoke<T>("rpc_call", { method, params: params ?? {} });
+export async function rpc<T>(
+  method: string,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  return await invoke<T>('rpc_call', { method, params: params ?? {} });
 }
 ```
 
@@ -138,10 +137,10 @@ StatusBar (22px)
 
 ## 快捷键
 
-| 快捷键 | 功能 |
-|--------|------|
-| Ctrl+B | toggle SideBar |
-| Ctrl+J | toggle 底部 Panel |
+| 快捷键     | 功能              |
+| ---------- | ----------------- |
+| Ctrl+B     | toggle SideBar    |
+| Ctrl+J     | toggle 底部 Panel |
 | Ctrl+Alt+B | toggle RightPanel |
 
 ## 构建

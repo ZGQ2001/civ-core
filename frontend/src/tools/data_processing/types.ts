@@ -8,11 +8,11 @@
  * preview_excel 是通用读 Excel（与 calcType 无关），沿用 leeb.preview_excel；
  * 列表加批次清单（anchor 独有）走 anchor.list_batches。
  */
-export type CalcType = "leeb" | "anchor";
+export type CalcType = 'leeb' | 'anchor';
 
 export const CALC_TYPE_LABELS: Record<CalcType, string> = {
-  leeb: "里氏硬度",
-  anchor: "锚杆抗拔试验",
+  leeb: '里氏硬度',
+  anchor: '锚杆抗拔试验',
 };
 
 export type CellValue = string | number | boolean | null;
@@ -48,10 +48,14 @@ export interface AnchorParams {
 }
 
 export const DEFAULT_ANCHOR_PARAMS: AnchorParams = {
-  P: 180000, Lf: 500, La: 7500, A: 804.25, E: 200000,
+  P: 180000,
+  Lf: 500,
+  La: 7500,
+  A: 804.25,
+  E: 200000,
 };
 
-export const ANCHOR_STANDARDS = ["GB 50086-2015"] as const;
-export type AnchorStandard = typeof ANCHOR_STANDARDS[number];
+export const ANCHOR_STANDARDS = ['GB 50086-2015'] as const;
+export type AnchorStandard = (typeof ANCHOR_STANDARDS)[number];
 
-export const ANCHOR_DEFAULT_BATCH_COL = "批次";
+export const ANCHOR_DEFAULT_BATCH_COL = '批次';

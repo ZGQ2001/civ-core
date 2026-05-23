@@ -11,18 +11,26 @@
  *  - run() 时若 workingPreset 非 null 就作为 preset_override 传后端
  */
 /* eslint-disable react-refresh/only-export-components -- hook 与 Provider 同文件共存，是工具页范式（见 frontend/CLAUDE.md） */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import { rpc } from "../../lib/rpc";
-import { logLine, useShell } from "../../lib/shell";
-import type { PlotPreset, PreviewRes, RunRes } from "./types";
+import { rpc } from '../../lib/rpc';
+import { logLine, useShell } from '../../lib/shell';
+import type { PlotPreset, PreviewRes, RunRes } from './types';
 
-const TOOL_ID = "plot_curves";
-const ACCEPTED_EXTS = new Set([".xlsx", ".xls"]);
+const TOOL_ID = 'plot_curves';
+const ACCEPTED_EXTS = new Set(['.xlsx', '.xls']);
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
-type PresetSource = "system" | "user";
+type PresetSource = 'system' | 'user';
 
 interface State {
   // 静态预设库
@@ -63,8 +71,8 @@ interface State {
 }
 
 export type RunOutcome =
-  | { kind: "ok"; res: RunRes; preset: string; excelPath: string }
-  | { kind: "error"; message: string }
+  | { kind: 'ok'; res: RunRes; preset: string; excelPath: string }
+  | { kind: 'error'; message: string }
   | null;
 
 interface Actions {
@@ -97,26 +105,35 @@ const PlotCurvesContext = createContext<Ctx | null>(null);
 
 export function usePlotCurves(): Ctx {
   const v = useContext(PlotCurvesContext);
-  if (!v) throw new Error("usePlotCurves must be used within <PlotCurvesProvider>");
+  if (!v)
+    throw new Error('usePlotCurves must be used within <PlotCurvesProvider>');
   return v;
 }
 
-export function PlotCurvesProvider({ children }: { children: React.ReactNode }) {
+export function PlotCurvesProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const shell = useShell();
   const [presets, setPresets] = useState<string[]>([]);
-  const [presetDetails, setPresetDetails] = useState<Record<string, PlotPreset>>({});
-  const [presetSources, setPresetSources] = useState<Record<string, PresetSource>>({});
+  const [presetDetails, setPresetDetails] = useState<
+    Record<string, PlotPreset>
+  >({});
+  const [presetSources, setPresetSources] = useState<
+    Record<string, PresetSource>
+  >({});
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
 
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetsLoading, setSheetsLoading] = useState(false);
   const [sheetsError, setSheetsError] = useState<string | null>(null);
 
-  const [preset, setPreset] = useState<string>("");
-  const [excelPath, setExcelPath] = useState<string>("");
-  const [sheet, setSheet] = useState<string>("");
+  const [preset, setPreset] = useState<string>('');
+  const [excelPath, setExcelPath] = useState<string>('');
+  const [sheet, setSheet] = useState<string>('');
   const [headerRow, setHeaderRow] = useState<number>(1);
-  const [outputDir, setOutputDir] = useState<string>("");
+  const [outputDir, setOutputDir] = useState<string>('');
   const [rowIndex, setRowIndex] = useState<number>(0);
 
   const [workingPreset, setWorkingPreset] = useState<PlotPreset | null>(null);
@@ -125,8 +142,8 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTotal, setPreviewTotal] = useState(0);
-  const [previewTitle, setPreviewTitle] = useState("");
-  const [previewRowId, setPreviewRowId] = useState("");
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewRowId, setPreviewRowId] = useState('');
   const [previewRowData, setPreviewRowData] = useState<
     Record<string, string | number | boolean | null>
   >({});
@@ -143,13 +160,15 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
         default: string | null;
         details: Record<string, PlotPreset>;
         sources: Record<string, PresetSource>;
-      }>("plot_curves.list_presets");
+      }>('plot_curves.list_presets');
       setPresets(r.presets);
       setPresetDetails(r.details);
       setPresetSources(r.sources);
       setPresetLoadError(null);
       // 当前选中的预设如果没了 → 退回 default
-      setPreset((cur) => (cur && r.presets.includes(cur) ? cur : r.default ?? ""));
+      setPreset((cur) =>
+        cur && r.presets.includes(cur) ? cur : (r.default ?? ''),
+      );
     } catch (e) {
       setPresetLoadError(String(e));
     }
@@ -177,26 +196,28 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       /* eslint-disable react-hooks/set-state-in-effect */
       setSheets([]);
       setSheetsError(null);
-      setSheet("");
+      setSheet('');
       /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     let cancelled = false;
     setSheetsLoading(true);
     setSheetsError(null);
-    rpc<{ sheets: string[] }>("plot_curves.list_sheets", { excel_path: excelPath })
+    rpc<{ sheets: string[] }>('plot_curves.list_sheets', {
+      excel_path: excelPath,
+    })
       .then((r) => {
         if (cancelled) return;
         setSheets(r.sheets);
         // 当前选中 sheet 不在新文件里 → 退回第一个；空文件 → 清空
-        setSheet((cur) => (r.sheets.includes(cur) ? cur : r.sheets[0] ?? ""));
+        setSheet((cur) => (r.sheets.includes(cur) ? cur : (r.sheets[0] ?? '')));
         setRowIndex(0);
       })
       .catch((e) => {
         if (cancelled) return;
         setSheetsError(String(e));
         setSheets([]);
-        setSheet("");
+        setSheet('');
       })
       .finally(() => {
         if (!cancelled) setSheetsLoading(false);
@@ -206,14 +227,17 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     };
   }, [excelPath]);
 
-  const effectivePreset: PlotPreset | null = workingPreset ?? presetDetails[preset] ?? null;
+  const effectivePreset: PlotPreset | null =
+    workingPreset ?? presetDetails[preset] ?? null;
   const edited = workingPreset !== null;
-  const currentSource: PresetSource | null = preset ? presetSources[preset] ?? null : null;
+  const currentSource: PresetSource | null = preset
+    ? (presetSources[preset] ?? null)
+    : null;
 
   // CRUD —— 调完后 reload 确保前端拿到最新预设列表 + sources
   const savePreset = useCallback(
     async (name: string, data: PlotPreset) => {
-      await rpc("plot_curves.save_preset", { name, data });
+      await rpc('plot_curves.save_preset', { name, data });
       await reloadPresets();
       // 切到刚保存的，清掉 working override
       setPreset(name);
@@ -224,7 +248,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
 
   const deletePreset = useCallback(
     async (name: string) => {
-      await rpc("plot_curves.delete_preset", { name });
+      await rpc('plot_curves.delete_preset', { name });
       await reloadPresets();
     },
     [reloadPresets],
@@ -232,7 +256,10 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
 
   const renamePreset = useCallback(
     async (oldName: string, newName: string) => {
-      await rpc("plot_curves.rename_preset", { old_name: oldName, new_name: newName });
+      await rpc('plot_curves.rename_preset', {
+        old_name: oldName,
+        new_name: newName,
+      });
       await reloadPresets();
       // 切到新名
       setPreset(newName);
@@ -242,14 +269,17 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
 
   const copyPreset = useCallback(
     async (sourceName: string, newName: string) => {
-      await rpc("plot_curves.copy_preset", { source_name: sourceName, new_name: newName });
+      await rpc('plot_curves.copy_preset', {
+        source_name: sourceName,
+        new_name: newName,
+      });
       await reloadPresets();
       setPreset(newName);
     },
     [reloadPresets],
   );
 
-  const patchPreset: Actions["patchPreset"] = useCallback(
+  const patchPreset: Actions['patchPreset'] = useCallback(
     (updater) => {
       const base = workingPreset ?? presetDetails[preset];
       if (!base) return;
@@ -285,7 +315,7 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       const myId = ++reqIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
-      rpc<PreviewRes>("plot_curves.render_preview", {
+      rpc<PreviewRes>('plot_curves.render_preview', {
         preset_dict: effectivePreset,
         excel_path: excelPath,
         sheet: sheet.trim() || null,
@@ -312,7 +342,8 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     }, PREVIEW_DEBOUNCE_MS);
 
     return () => {
-      if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+      if (debounceRef.current !== null)
+        window.clearTimeout(debounceRef.current);
     };
   }, [effectivePreset, excelPath, sheet, headerRow, rowIndex]);
 
@@ -321,8 +352,8 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
     const f = shell.activatedFile;
     if (!f) return;
     if (shell.activeToolId !== TOOL_ID) return;
-    const idx = f.path.lastIndexOf(".");
-    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
+    const idx = f.path.lastIndexOf('.');
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
     if (!ACCEPTED_EXTS.has(ext)) return;
     // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
     // 外部事件（文件树双击）→ 必须在 effect 里把 path 灌进 state
@@ -347,13 +378,13 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       if (sheet.trim()) params.sheet = sheet.trim();
       if (outputDir.trim()) params.output_dir = outputDir.trim();
       if (workingPreset) params.preset_override = workingPreset;
-      const res = await rpc<RunRes>("plot_curves.run", params);
+      const res = await rpc<RunRes>('plot_curves.run', params);
       setResult(res);
-      return { kind: "ok", res, preset, excelPath };
+      return { kind: 'ok', res, preset, excelPath };
     } catch (e) {
       const message = String(e);
       setRunError(message);
-      return { kind: "error", message };
+      return { kind: 'error', message };
     } finally {
       setRunning(false);
     }
@@ -404,16 +435,47 @@ export function PlotCurvesProvider({ children }: { children: React.ReactNode }) 
       reloadPresets,
     }),
     [
-      presets, presetDetails, presetSources, presetLoadError,
-      sheets, sheetsLoading, sheetsError,
-      preset, excelPath, sheet, headerRow, outputDir, rowIndex,
-      workingPreset, previewPng, previewError, previewLoading,
-      previewTotal, previewTitle, previewRowId, previewRowData,
-      running, result, runError, edited, effectivePreset, currentSource,
-      patchPreset, resetPreset, run,
-      savePreset, deletePreset, renamePreset, copyPreset, reloadPresets,
+      presets,
+      presetDetails,
+      presetSources,
+      presetLoadError,
+      sheets,
+      sheetsLoading,
+      sheetsError,
+      preset,
+      excelPath,
+      sheet,
+      headerRow,
+      outputDir,
+      rowIndex,
+      workingPreset,
+      previewPng,
+      previewError,
+      previewLoading,
+      previewTotal,
+      previewTitle,
+      previewRowId,
+      previewRowData,
+      running,
+      result,
+      runError,
+      edited,
+      effectivePreset,
+      currentSource,
+      patchPreset,
+      resetPreset,
+      run,
+      savePreset,
+      deletePreset,
+      renamePreset,
+      copyPreset,
+      reloadPresets,
     ],
   );
 
-  return <PlotCurvesContext.Provider value={ctx}>{children}</PlotCurvesContext.Provider>;
+  return (
+    <PlotCurvesContext.Provider value={ctx}>
+      {children}
+    </PlotCurvesContext.Provider>
+  );
 }

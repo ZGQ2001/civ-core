@@ -2,8 +2,8 @@
  * 基础 tab：图标题模板 + 标识列 + 网格 + 图例位置。
  * 不暴露 filename_template（一般跟 title_template 形态固定）。
  */
-import { usePlotCurves } from "../controller";
-import { Row, inputClass } from "./_shared";
+import { usePlotCurves } from '../controller';
+import { Row, inputClass } from './_shared';
 
 export function BasicTab() {
   const c = usePlotCurves();
@@ -14,7 +14,9 @@ export function BasicTab() {
         <input
           type="text"
           value={preset.title_template}
-          onChange={(e) => c.patchPreset((p) => ({ ...p, title_template: e.target.value }))}
+          onChange={(e) =>
+            c.patchPreset((p) => ({ ...p, title_template: e.target.value }))
+          }
           className={inputClass}
         />
       </Row>
@@ -22,12 +24,14 @@ export function BasicTab() {
         <input
           type="text"
           value={preset.id_column}
-          onChange={(e) => c.patchPreset((p) => ({ ...p, id_column: e.target.value }))}
+          onChange={(e) =>
+            c.patchPreset((p) => ({ ...p, id_column: e.target.value }))
+          }
           className={inputClass}
         />
       </Row>
       <Row label="网格线">
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={preset.style?.grid ?? true}
@@ -43,13 +47,13 @@ export function BasicTab() {
       </Row>
       <Row label="图例位置" hint="留空 = 不显示图例">
         <select
-          value={preset.style?.legend ?? ""}
+          value={preset.style?.legend ?? ''}
           onChange={(e) =>
             c.patchPreset((p) => ({
               ...p,
               style: {
                 ...(p.style ?? {}),
-                legend: e.target.value === "" ? null : e.target.value,
+                legend: e.target.value === '' ? null : e.target.value,
               },
             }))
           }

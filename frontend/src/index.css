@@ -1,7 +1,7 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* VSCode 官方 codicon 字体（@vscode/codicons 提供） */
-@import "@vscode/codicons/dist/codicon.css";
+@import '@vscode/codicons/dist/codicon.css';
 
 /* VSCode Dark+ 主题 token —— Tailwind v4 通过 @theme 注册成可在 className 里写的 utility */
 @theme {
@@ -24,13 +24,12 @@
      - Mono：Consolas（与 VSCode 编辑器默认一致）
      注：Tailwind v4 自动从 --font-sans / --font-mono 生成同名 utility */
   --font-ui:
-    "Segoe WPC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
-    system-ui, sans-serif;
+    'Segoe WPC', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
+    sans-serif;
   --font-sans:
-    "Segoe WPC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
-    system-ui, sans-serif;
-  --font-mono:
-    Consolas, "Courier New", "Microsoft YaHei UI", monospace;
+    'Segoe WPC', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
+    sans-serif;
+  --font-mono: Consolas, 'Courier New', 'Microsoft YaHei UI', monospace;
 }
 
 * {
@@ -95,4 +94,3 @@ pre {
   display: inline-block;
   vertical-align: middle;
 }
-

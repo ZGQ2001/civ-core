@@ -3,8 +3,8 @@
  * 顶部 32px header：标题 "资源管理器" + 4 个图标按钮
  * 内容区：文件树 / empty state（B1 阶段是 placeholder，T4 接 Python 文件树）
  */
-import { cn } from "../lib/cn";
-import { FileTree } from "./FileTree";
+import { cn } from '../lib/cn';
+import { FileTree } from './FileTree';
 
 interface Props {
   workspacePath: string | null;
@@ -31,17 +31,29 @@ export function SideBar({
   onFileActivate,
 }: Props) {
   return (
-    <div className="flex h-full flex-col bg-vscode-bg border-r border-vscode-border">
+    <div className="bg-vscode-bg border-vscode-border flex h-full flex-col border-r">
       {/* Header（VSCode Explorer header 风） */}
-      <div className="flex h-8 items-center px-3 border-b border-vscode-border shrink-0">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-vscode-text">
+      <div className="border-vscode-border flex h-8 shrink-0 items-center border-b px-3">
+        <span className="text-vscode-text text-[11px] font-semibold tracking-wider uppercase">
           资源管理器
         </span>
         <div className="ml-auto flex items-center gap-0.5">
-          <HeaderBtn icon="folder-opened" title="打开文件夹" onClick={onOpenFolder} />
-          <HeaderBtn icon="new-folder" title="新建标准结构" onClick={onNewWorkspace} />
+          <HeaderBtn
+            icon="folder-opened"
+            title="打开文件夹"
+            onClick={onOpenFolder}
+          />
+          <HeaderBtn
+            icon="new-folder"
+            title="新建标准结构"
+            onClick={onNewWorkspace}
+          />
           <HeaderBtn icon="refresh" title="刷新" onClick={onRefresh} />
-          <HeaderBtn icon="collapse-all" title="全部折叠" onClick={onCollapseAll} />
+          <HeaderBtn
+            icon="collapse-all"
+            title="全部折叠"
+            onClick={onCollapseAll}
+          />
         </div>
       </div>
 
@@ -58,7 +70,10 @@ export function SideBar({
             onFileActivate={onFileActivate}
           />
         ) : (
-          <EmptyState onOpenFolder={onOpenFolder} onNewWorkspace={onNewWorkspace} />
+          <EmptyState
+            onOpenFolder={onOpenFolder}
+            onNewWorkspace={onNewWorkspace}
+          />
         )}
       </div>
     </div>
@@ -81,11 +96,11 @@ function HeaderBtn({
       aria-label={title}
       onClick={onClick}
       className={cn(
-        "flex h-[22px] w-[22px] items-center justify-center rounded-[3px]",
-        "text-vscode-text-dim hover:bg-vscode-hover hover:text-white",
+        'flex h-[22px] w-[22px] items-center justify-center rounded-[3px]',
+        'text-vscode-text-dim hover:bg-vscode-hover hover:text-white',
       )}
     >
-      <i className={cn("codicon", `codicon-${icon}`, "!text-[14px]")} />
+      <i className={cn('codicon', `codicon-${icon}`, '!text-[14px]')} />
     </button>
   );
 }
@@ -99,13 +114,13 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-      <p className="text-xs text-vscode-text-dim">尚未打开工作区。</p>
+      <p className="text-vscode-text-dim text-xs">尚未打开工作区。</p>
       <button
         type="button"
         onClick={onOpenFolder}
         className={cn(
-          "w-full bg-vscode-button px-3 py-1.5 text-xs text-white rounded-[2px]",
-          "hover:bg-vscode-button-hover transition-colors",
+          'bg-vscode-button w-full rounded-[2px] px-3 py-1.5 text-xs text-white',
+          'hover:bg-vscode-button-hover transition-colors',
         )}
       >
         打开文件夹
@@ -114,8 +129,8 @@ function EmptyState({
         type="button"
         onClick={onNewWorkspace}
         className={cn(
-          "w-full bg-[#2d2d2d] border border-vscode-border px-3 py-1.5 text-xs rounded-[2px]",
-          "hover:bg-[#3a3a3a] transition-colors",
+          'border-vscode-border w-full rounded-[2px] border bg-[#2d2d2d] px-3 py-1.5 text-xs',
+          'transition-colors hover:bg-[#3a3a3a]',
         )}
       >
         新建标准结构
@@ -123,4 +138,3 @@ function EmptyState({
     </div>
   );
 }
-

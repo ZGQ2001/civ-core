@@ -20,10 +20,10 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 
-import { rpc } from "../../lib/rpc";
-import { logLine, useShell } from "../../lib/shell";
+import { rpc } from '../../lib/rpc';
+import { logLine, useShell } from '../../lib/shell';
 import type {
   AnchorParams,
   AnchorStandard,
@@ -31,12 +31,12 @@ import type {
   CellValue,
   PreviewRes,
   RunRes,
-} from "./types";
-import { ANCHOR_DEFAULT_BATCH_COL, DEFAULT_ANCHOR_PARAMS } from "./types";
+} from './types';
+import { ANCHOR_DEFAULT_BATCH_COL, DEFAULT_ANCHOR_PARAMS } from './types';
 
-const TOOL_ID = "data_processing";
+const TOOL_ID = 'data_processing';
 /** 本工具可接收的文件扩展名（文件树双击时由 useShell 自动灌进来）。 */
-const ACCEPTED_EXTS = new Set([".xlsx", ".xls"]);
+const ACCEPTED_EXTS = new Set(['.xlsx', '.xls']);
 
 const PREVIEW_DEBOUNCE_MS = 300;
 const PREVIEW_MAX_ROWS = 50;
@@ -48,7 +48,7 @@ interface State {
   excelPath: string;
   sheet: string;
   headerRow: number;
-  angle: number;             // leeb 默认测量角度
+  angle: number; // leeb 默认测量角度
   outputPath: string;
 
   // 表格预览
@@ -93,37 +93,47 @@ interface Actions {
 
 /** 模板生成结果（按钮下方反馈用）。 */
 export type TemplateStatus =
-  | { kind: "idle" }
-  | { kind: "running" }
-  | { kind: "ok"; path: string }
-  | { kind: "error"; message: string };
+  | { kind: 'idle' }
+  | { kind: 'running' }
+  | { kind: 'ok'; path: string }
+  | { kind: 'error'; message: string };
 
-type Ctx = State & Actions & {
-  defaultOutput: string;
-  anchorTemplateStatus: TemplateStatus;
-};
+type Ctx = State &
+  Actions & {
+    defaultOutput: string;
+    anchorTemplateStatus: TemplateStatus;
+  };
 
 const DataProcessingContext = createContext<Ctx | null>(null);
 
 export function useDataProcessing(): Ctx {
   const v = useContext(DataProcessingContext);
-  if (!v) throw new Error("useDataProcessing must be used within <DataProcessingProvider>");
+  if (!v)
+    throw new Error(
+      'useDataProcessing must be used within <DataProcessingProvider>',
+    );
   return v;
 }
 
-export function DataProcessingProvider({ children }: { children: React.ReactNode }) {
+export function DataProcessingProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const shell = useShell();
-  const [calcType, setCalcTypeRaw] = useState<CalcType>("leeb");
+  const [calcType, setCalcTypeRaw] = useState<CalcType>('leeb');
 
-  const [excelPath, setExcelPathRaw] = useState("");
-  const [sheet, setSheet] = useState("");
+  const [excelPath, setExcelPathRaw] = useState('');
+  const [sheet, setSheet] = useState('');
   const [headerRow, setHeaderRow] = useState(1);
   const [angle, setAngle] = useState(0);
-  const [outputPath, setOutputPath] = useState("");
+  const [outputPath, setOutputPath] = useState('');
 
   const [sheets, setSheets] = useState<string[]>([]);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
-  const [previewRows, setPreviewRows] = useState<Record<string, CellValue>[]>([]);
+  const [previewRows, setPreviewRows] = useState<Record<string, CellValue>[]>(
+    [],
+  );
   const [previewTotalRows, setPreviewTotalRows] = useState(0);
   const [previewShownRows, setPreviewShownRows] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -134,20 +144,26 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   const [runError, setRunError] = useState<string | null>(null);
 
   // anchor 专属 state
-  const [anchorStandard, setAnchorStandard] = useState<AnchorStandard>("GB 50086-2015");
-  const [anchorBatchIdColumn, setAnchorBatchIdColumn] = useState(ANCHOR_DEFAULT_BATCH_COL);
+  const [anchorStandard, setAnchorStandard] =
+    useState<AnchorStandard>('GB 50086-2015');
+  const [anchorBatchIdColumn, setAnchorBatchIdColumn] = useState(
+    ANCHOR_DEFAULT_BATCH_COL,
+  );
   const [anchorBatchIds, setAnchorBatchIds] = useState<string[]>([]);
   const [anchorBatchesLoading, setAnchorBatchesLoading] = useState(false);
-  const [anchorBatchesError, setAnchorBatchesError] = useState<string | null>(null);
-  const [anchorParamsByBatch, setAnchorParamsByBatch] =
-    useState<Record<string, AnchorParams>>({});
+  const [anchorBatchesError, setAnchorBatchesError] = useState<string | null>(
+    null,
+  );
+  const [anchorParamsByBatch, setAnchorParamsByBatch] = useState<
+    Record<string, AnchorParams>
+  >({});
   const [anchorTemplateStatus, setAnchorTemplateStatus] =
-    useState<TemplateStatus>({ kind: "idle" });
+    useState<TemplateStatus>({ kind: 'idle' });
 
   // 切 Excel → 清掉旧预览 + 清 sheet 选择 + 清结果 + 清批次
   const setExcelPath = useCallback((p: string) => {
     setExcelPathRaw(p);
-    setSheet("");
+    setSheet('');
     setSheets([]);
     setPreviewHeaders([]);
     setPreviewRows([]);
@@ -167,13 +183,13 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
 
   // 默认输出：<excel 同级>/<stem>_<类型>_结果.xlsx
   const defaultOutput = useMemo(() => {
-    if (!excelPath) return "";
-    const sep = excelPath.includes("\\") ? "\\" : "/";
+    if (!excelPath) return '';
+    const sep = excelPath.includes('\\') ? '\\' : '/';
     const idx = excelPath.lastIndexOf(sep);
-    const dir = idx > 0 ? excelPath.slice(0, idx) : "";
+    const dir = idx > 0 ? excelPath.slice(0, idx) : '';
     const file = idx > 0 ? excelPath.slice(idx + 1) : excelPath;
-    const stem = file.replace(/\.[^.]+$/, "");
-    const tag = calcType === "anchor" ? "锚杆" : "里氏";
+    const stem = file.replace(/\.[^.]+$/, '');
+    const tag = calcType === 'anchor' ? '锚杆' : '里氏';
     return `${dir}${sep}${stem}_${tag}_结果.xlsx`;
   }, [excelPath, calcType]);
 
@@ -195,7 +211,7 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
       const myId = ++reqIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
-      rpc<PreviewRes>("leeb.preview_excel", {
+      rpc<PreviewRes>('leeb.preview_excel', {
         path: excelPath,
         sheet: sheet || null,
         header_row: headerRow,
@@ -224,21 +240,22 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
     }, PREVIEW_DEBOUNCE_MS);
 
     return () => {
-      if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+      if (debounceRef.current !== null)
+        window.clearTimeout(debounceRef.current);
     };
   }, [excelPath, sheet, headerRow]);
 
   // ── anchor 批次清单（calcType=anchor 时按 excelPath/sheet/列名 变化拉）──
   const batchReqIdRef = useRef(0);
   useEffect(() => {
-    if (calcType !== "anchor" || !excelPath) return;
+    if (calcType !== 'anchor' || !excelPath) return;
     const myId = ++batchReqIdRef.current;
     // 拉批次清单前先翻 loading flag — 异步 IO 的标准前置
     /* eslint-disable react-hooks/set-state-in-effect */
     setAnchorBatchesLoading(true);
     setAnchorBatchesError(null);
     /* eslint-enable react-hooks/set-state-in-effect */
-    rpc<{ batches: string[] }>("anchor.list_batches", {
+    rpc<{ batches: string[] }>('anchor.list_batches', {
       input_xlsx: excelPath,
       sheet: sheet || null,
       batch_id_column: anchorBatchIdColumn,
@@ -268,7 +285,9 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   const setAnchorParamsForBatch = useCallback(
     (batchId: string, params: AnchorParams) => {
       setAnchorParamsByBatch((prev) => ({ ...prev, [batchId]: params }));
-    }, []);
+    },
+    [],
+  );
 
   const setAnchorParamsForAllBatches = useCallback((params: AnchorParams) => {
     setAnchorParamsByBatch((prev) => {
@@ -280,34 +299,39 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
 
   const generateAnchorTemplate = useCallback(
     async (savePath: string): Promise<string | null> => {
-      setAnchorTemplateStatus({ kind: "running" });
+      setAnchorTemplateStatus({ kind: 'running' });
       shell.appendOutput(logLine(`[锚杆] 生成模板 → ${savePath}`));
       try {
-        const r = await rpc<{ ok: boolean; path: string }>("anchor.generate_template", {
-          output_xlsx: savePath,
-          standard: anchorStandard,
-        });
-        setAnchorTemplateStatus({ kind: "ok", path: r.path });
+        const r = await rpc<{ ok: boolean; path: string }>(
+          'anchor.generate_template',
+          {
+            output_xlsx: savePath,
+            standard: anchorStandard,
+          },
+        );
+        setAnchorTemplateStatus({ kind: 'ok', path: r.path });
         shell.appendOutput(logLine(`[锚杆] 模板已生成: ${r.path}`));
         return r.path;
       } catch (e) {
         const message = String(e);
-        console.error("anchor.generate_template 失败:", e);
-        setAnchorTemplateStatus({ kind: "error", message });
+        console.error('anchor.generate_template 失败:', e);
+        setAnchorTemplateStatus({ kind: 'error', message });
         shell.appendOutput(logLine(`[锚杆] 生成模板失败: ${message}`));
         return null;
       }
-    }, [anchorStandard, shell]);
+    },
+    [anchorStandard, shell],
+  );
 
   const run = useCallback(async (): Promise<RunRes | null> => {
     if (!excelPath || running) return null;
     setRunning(true);
     setRunError(null);
     setResult(null);
-    const label = calcType === "anchor" ? "锚杆" : "里氏";
+    const label = calcType === 'anchor' ? '锚杆' : '里氏';
     shell.appendOutput(logLine(`[${label}] 开始计算: ${excelPath}`));
     try {
-      if (calcType === "leeb") {
+      if (calcType === 'leeb') {
         const params: Record<string, unknown> = {
           input_xlsx: excelPath,
           angle_degrees: angle,
@@ -328,22 +352,24 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
             }>;
             batch_fb_char_avg: number;
           }>;
-        }>("leeb.run", params);
+        }>('leeb.run', params);
 
         if (res.report_table_data && res.report_table_data.length > 0) {
-          await rpc("xlsx.write_leeb_report_table", {
+          await rpc('xlsx.write_leeb_report_table', {
             output_path: res.output,
             batches: res.report_table_data,
           });
         }
 
         const display: RunRes = {
-          calcType: "leeb",
+          calcType: 'leeb',
           output: res.output,
           summary: `${res.batches} 批 / ${res.components} 构件`,
         };
         setResult(display);
-        shell.appendOutput(logLine(`[里氏] 完成: ${display.summary} → ${display.output}`));
+        shell.appendOutput(
+          logLine(`[里氏] 完成: ${display.summary} → ${display.output}`),
+        );
         return display;
       }
 
@@ -362,15 +388,17 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
         anchors_total: number;
         anchors_qualified: number;
         output: string;
-      }>("anchor.run", params);
+      }>('anchor.run', params);
 
       const display: RunRes = {
-        calcType: "anchor",
+        calcType: 'anchor',
         output: res.output,
         summary: `${res.batches} 批 / ${res.anchors_qualified}/${res.anchors_total} 合格`,
       };
       setResult(display);
-      shell.appendOutput(logLine(`[锚杆] 完成: ${display.summary} → ${display.output}`));
+      shell.appendOutput(
+        logLine(`[锚杆] 完成: ${display.summary} → ${display.output}`),
+      );
       return display;
     } catch (e) {
       const message = String(e);
@@ -381,8 +409,16 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
       setRunning(false);
     }
   }, [
-    excelPath, sheet, outputPath, angle, running, calcType,
-    anchorStandard, anchorBatchIdColumn, anchorParamsByBatch, shell,
+    excelPath,
+    sheet,
+    outputPath,
+    angle,
+    running,
+    calcType,
+    anchorStandard,
+    anchorBatchIdColumn,
+    anchorParamsByBatch,
+    shell,
   ]);
 
   // ── 文件树双击 .xlsx/.xls 联动：自动设为 excelPath ──
@@ -390,8 +426,8 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
     const f = shell.activatedFile;
     if (!f) return;
     if (shell.activeToolId !== TOOL_ID) return;
-    const idx = f.path.lastIndexOf(".");
-    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : "";
+    const idx = f.path.lastIndexOf('.');
+    const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
     if (!ACCEPTED_EXTS.has(ext)) return;
     // 同 key 在依赖里变化 → effect 重跑；同 path 也会触发（因 key 每次 ++）
     // 外部事件（文件树双击）→ 必须在 effect 里把 path 灌进 state
@@ -404,34 +440,79 @@ export function DataProcessingProvider({ children }: { children: React.ReactNode
   const ctx: Ctx = useMemo(
     () => ({
       calcType,
-      excelPath, sheet, headerRow, angle, outputPath,
-      sheets, previewHeaders, previewRows, previewTotalRows, previewShownRows,
-      previewLoading, previewError,
-      running, result, runError,
+      excelPath,
+      sheet,
+      headerRow,
+      angle,
+      outputPath,
+      sheets,
+      previewHeaders,
+      previewRows,
+      previewTotalRows,
+      previewShownRows,
+      previewLoading,
+      previewError,
+      running,
+      result,
+      runError,
       defaultOutput,
-      anchorStandard, anchorBatchIdColumn, anchorBatchIds,
-      anchorBatchesLoading, anchorBatchesError, anchorParamsByBatch,
+      anchorStandard,
+      anchorBatchIdColumn,
+      anchorBatchIds,
+      anchorBatchesLoading,
+      anchorBatchesError,
+      anchorParamsByBatch,
       anchorTemplateStatus,
-      setCalcType, setExcelPath, setSheet, setHeaderRow, setAngle, setOutputPath,
+      setCalcType,
+      setExcelPath,
+      setSheet,
+      setHeaderRow,
+      setAngle,
+      setOutputPath,
       run,
-      setAnchorStandard, setAnchorBatchIdColumn,
-      setAnchorParamsForBatch, setAnchorParamsForAllBatches,
+      setAnchorStandard,
+      setAnchorBatchIdColumn,
+      setAnchorParamsForBatch,
+      setAnchorParamsForAllBatches,
       generateAnchorTemplate,
     }),
     [
       calcType,
-      excelPath, sheet, headerRow, angle, outputPath,
-      sheets, previewHeaders, previewRows, previewTotalRows, previewShownRows,
-      previewLoading, previewError,
-      running, result, runError,
+      excelPath,
+      sheet,
+      headerRow,
+      angle,
+      outputPath,
+      sheets,
+      previewHeaders,
+      previewRows,
+      previewTotalRows,
+      previewShownRows,
+      previewLoading,
+      previewError,
+      running,
+      result,
+      runError,
       defaultOutput,
-      anchorStandard, anchorBatchIdColumn, anchorBatchIds,
-      anchorBatchesLoading, anchorBatchesError, anchorParamsByBatch,
+      anchorStandard,
+      anchorBatchIdColumn,
+      anchorBatchIds,
+      anchorBatchesLoading,
+      anchorBatchesError,
+      anchorParamsByBatch,
       anchorTemplateStatus,
-      setExcelPath, setCalcType, run,
-      setAnchorParamsForBatch, setAnchorParamsForAllBatches, generateAnchorTemplate,
+      setExcelPath,
+      setCalcType,
+      run,
+      setAnchorParamsForBatch,
+      setAnchorParamsForAllBatches,
+      generateAnchorTemplate,
     ],
   );
 
-  return <DataProcessingContext.Provider value={ctx}>{children}</DataProcessingContext.Provider>;
+  return (
+    <DataProcessingContext.Provider value={ctx}>
+      {children}
+    </DataProcessingContext.Provider>
+  );
 }

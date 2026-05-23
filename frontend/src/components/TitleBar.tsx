@@ -5,10 +5,10 @@
  * 整条 div 设 data-tauri-drag-region：用户在空白处可拖动窗口（Tauri 2 自动处理）。
  * 系统按钮区（最小化/最大化/关闭）不能进 drag region，否则点不到。
  */
-import { useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useEffect, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
-import { cn } from "../lib/cn";
+import { cn } from '../lib/cn';
 
 interface Props {
   workspaceName: string | null;
@@ -29,31 +29,30 @@ export function TitleBar({ workspaceName, toolLabel }: Props) {
     };
   }, []);
 
-  const titleParts = [
-    workspaceName ?? "未打开工作区",
-    toolLabel,
-  ].filter(Boolean);
+  const titleParts = [workspaceName ?? '未打开工作区', toolLabel].filter(
+    Boolean,
+  );
 
   return (
     <div
       data-tauri-drag-region
-      className="flex h-[30px] items-center bg-vscode-activity border-b border-vscode-border select-none shrink-0"
+      className="bg-vscode-activity border-vscode-border flex h-[30px] shrink-0 items-center border-b select-none"
     >
       {/* 左侧 logo 占位（48px 对齐下面的 Activity Bar） */}
       <div
         data-tauri-drag-region
         className="flex w-12 items-center justify-center"
       >
-        <i className="codicon codicon-symbol-misc !text-[14px] text-vscode-text-dim" />
+        <i className="codicon codicon-symbol-misc text-vscode-text-dim !text-[14px]" />
       </div>
 
       {/* 居中标题 —— 也是 drag region */}
       <div
         data-tauri-drag-region
-        className="flex flex-1 items-center justify-center text-[12px] text-vscode-text-dim"
+        className="text-vscode-text-dim flex flex-1 items-center justify-center text-[12px]"
       >
         <span data-tauri-drag-region className="truncate px-2">
-          {titleParts.join("  —  ")}
+          {titleParts.join('  —  ')}
         </span>
       </div>
 
@@ -65,8 +64,8 @@ export function TitleBar({ workspaceName, toolLabel }: Props) {
           onClick={() => getCurrentWindow().minimize()}
         />
         <CtlBtn
-          icon={maximized ? "chrome-restore" : "chrome-maximize"}
-          aria={maximized ? "还原" : "最大化"}
+          icon={maximized ? 'chrome-restore' : 'chrome-maximize'}
+          aria={maximized ? '还原' : '最大化'}
           onClick={() => getCurrentWindow().toggleMaximize()}
         />
         <CtlBtn
@@ -88,7 +87,7 @@ function CtlBtn({
 }: {
   icon: string;
   aria: string;
-  variant?: "close";
+  variant?: 'close';
   onClick: () => void;
 }) {
   return (
@@ -98,14 +97,14 @@ function CtlBtn({
       title={aria}
       onClick={onClick}
       className={cn(
-        "flex h-full w-[46px] items-center justify-center transition-colors",
-        "text-vscode-text",
-        variant === "close"
-          ? "hover:bg-[#e81123] hover:text-white"
-          : "hover:bg-vscode-hover",
+        'flex h-full w-[46px] items-center justify-center transition-colors',
+        'text-vscode-text',
+        variant === 'close'
+          ? 'hover:bg-[#e81123] hover:text-white'
+          : 'hover:bg-vscode-hover',
       )}
     >
-      <i className={cn("codicon", `codicon-${icon}`, "!text-[12px]")} />
+      <i className={cn('codicon', `codicon-${icon}`, '!text-[12px]')} />
     </button>
   );
 }

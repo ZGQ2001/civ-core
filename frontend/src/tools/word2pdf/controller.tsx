@@ -11,10 +11,10 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 
-import { rpc } from "../../lib/rpc";
-import type { ConvertRes, DocxFileInfo, InspectRes } from "./types";
+import { rpc } from '../../lib/rpc';
+import type { ConvertRes, DocxFileInfo, InspectRes } from './types';
 
 const INSPECT_DEBOUNCE_MS = 200;
 
@@ -43,8 +43,8 @@ interface Actions {
 /// Page handleRun 拿这个快照而不是读 ctx state —— state 异步更新，
 /// await 后读 c.result / c.runError 永远是上一次的旧值。
 export type RunOutcome =
-  | { kind: "ok"; res: ConvertRes }
-  | { kind: "error"; message: string }
+  | { kind: 'ok'; res: ConvertRes }
+  | { kind: 'error'; message: string }
   | null;
 
 type Ctx = State & Actions;
@@ -53,13 +53,13 @@ const Word2PdfContext = createContext<Ctx | null>(null);
 
 export function useWord2Pdf(): Ctx {
   const v = useContext(Word2PdfContext);
-  if (!v) throw new Error("useWord2Pdf must be used within <Word2PdfProvider>");
+  if (!v) throw new Error('useWord2Pdf must be used within <Word2PdfProvider>');
   return v;
 }
 
 export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
   const [inputs, setInputs] = useState<string[]>([]);
-  const [outDir, setOutDir] = useState("");
+  const [outDir, setOutDir] = useState('');
 
   const [previewInfos, setPreviewInfos] = useState<DocxFileInfo[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -106,7 +106,7 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
       const myId = ++reqIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
-      rpc<InspectRes>("word2pdf.inspect", { paths: inputs })
+      rpc<InspectRes>('word2pdf.inspect', { paths: inputs })
         .then((r) => {
           if (myId !== reqIdRef.current) return;
           setPreviewInfos(r.files);
@@ -122,7 +122,8 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
     }, INSPECT_DEBOUNCE_MS);
 
     return () => {
-      if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+      if (debounceRef.current !== null)
+        window.clearTimeout(debounceRef.current);
     };
   }, [inputs]);
 
@@ -132,16 +133,16 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
     setRunError(null);
     setResult(null);
     try {
-      const res = await rpc<ConvertRes>("word2pdf.convert", {
+      const res = await rpc<ConvertRes>('word2pdf.convert', {
         inputs,
         output_dir: outDir.trim(),
       });
       setResult(res);
-      return { kind: "ok", res };
+      return { kind: 'ok', res };
     } catch (e) {
       const message = String(e);
       setRunError(message);
-      return { kind: "error", message };
+      return { kind: 'error', message };
     } finally {
       setRunning(false);
     }
@@ -149,18 +150,37 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
 
   const ctx: Ctx = useMemo(
     () => ({
-      inputs, outDir,
-      previewInfos, previewLoading, previewError,
-      running, result, runError,
-      addInputs, removeAt, clearInputs, setOutDir, run,
+      inputs,
+      outDir,
+      previewInfos,
+      previewLoading,
+      previewError,
+      running,
+      result,
+      runError,
+      addInputs,
+      removeAt,
+      clearInputs,
+      setOutDir,
+      run,
     }),
     [
-      inputs, outDir,
-      previewInfos, previewLoading, previewError,
-      running, result, runError,
-      addInputs, removeAt, clearInputs, run,
+      inputs,
+      outDir,
+      previewInfos,
+      previewLoading,
+      previewError,
+      running,
+      result,
+      runError,
+      addInputs,
+      removeAt,
+      clearInputs,
+      run,
     ],
   );
 
-  return <Word2PdfContext.Provider value={ctx}>{children}</Word2PdfContext.Provider>;
+  return (
+    <Word2PdfContext.Provider value={ctx}>{children}</Word2PdfContext.Provider>
+  );
 }

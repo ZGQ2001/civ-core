@@ -5,38 +5,38 @@
  * 后端 schema curves 是数组（兼容性），UI 上只暴露 curves[0]；
  * 旧预设 curves 为空时自动初始化一条默认曲线（兜底，正常路径下不会触发）。
  */
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
-import { cn } from "../../../lib/cn";
-import { usePlotCurves } from "../controller";
-import type { CurveDef, PointDef } from "../types";
-import { Row, SliderInput, inputClass, normalizeColor } from "./_shared";
+import { cn } from '../../../lib/cn';
+import { usePlotCurves } from '../controller';
+import type { CurveDef, PointDef } from '../types';
+import { Row, SliderInput, inputClass, normalizeColor } from './_shared';
 
 const MARKERS = [
-  { v: "o", label: "圆形" },
-  { v: "s", label: "方形" },
-  { v: "^", label: "三角形" },
-  { v: "v", label: "倒三角" },
-  { v: "D", label: "菱形" },
-  { v: "x", label: "叉" },
-  { v: "+", label: "加号" },
-  { v: ".", label: "小点" },
-  { v: "None", label: "无（仅线）" },
+  { v: 'o', label: '圆形' },
+  { v: 's', label: '方形' },
+  { v: '^', label: '三角形' },
+  { v: 'v', label: '倒三角' },
+  { v: 'D', label: '菱形' },
+  { v: 'x', label: '叉' },
+  { v: '+', label: '加号' },
+  { v: '.', label: '小点' },
+  { v: 'None', label: '无（仅线）' },
 ];
 
 const DEFAULT_CURVE: CurveDef = {
-  name: "曲线",
-  color: "#1F4FE0",
-  marker: "o",
+  name: '曲线',
+  color: '#1F4FE0',
+  marker: 'o',
   linewidth: 2,
   markersize: 6,
   points: [],
 };
 
 const DEFAULT_POINT: PointDef = {
-  fixed_axis: "x",
+  fixed_axis: 'x',
   fixed_value: 0,
-  var_column: "",
+  var_column: '',
 };
 
 export function CurvesTab() {
@@ -70,14 +70,18 @@ export function CurvesTab() {
           <input
             type="color"
             value={normalizeColor(curve.color)}
-            onChange={(e) => patchCurve((cv) => ({ ...cv, color: e.target.value }))}
-            className="h-7 w-12 bg-vscode-input border border-vscode-border rounded-[2px] cursor-pointer"
+            onChange={(e) =>
+              patchCurve((cv) => ({ ...cv, color: e.target.value }))
+            }
+            className="bg-vscode-input border-vscode-border h-7 w-12 cursor-pointer rounded-[2px] border"
           />
           <input
             type="text"
             value={curve.color}
-            onChange={(e) => patchCurve((cv) => ({ ...cv, color: e.target.value }))}
-            className={cn(inputClass, "w-28 font-mono")}
+            onChange={(e) =>
+              patchCurve((cv) => ({ ...cv, color: e.target.value }))
+            }
+            className={cn(inputClass, 'w-28 font-mono')}
           />
         </div>
       </Row>
@@ -101,8 +105,10 @@ export function CurvesTab() {
       </Row>
       <Row label="点样式">
         <select
-          value={curve.marker ?? "o"}
-          onChange={(e) => patchCurve((cv) => ({ ...cv, marker: e.target.value }))}
+          value={curve.marker ?? 'o'}
+          onChange={(e) =>
+            patchCurve((cv) => ({ ...cv, marker: e.target.value }))
+          }
           className={inputClass}
         >
           {MARKERS.map((m) => (
@@ -138,38 +144,44 @@ function PointsEditor({
   const removePoint = (i: number) => onChange(points.filter((_, j) => j !== i));
 
   return (
-    <div className="border border-vscode-border rounded-[2px]">
-      <div className="px-2 py-1.5 bg-[#252525] border-b border-vscode-border text-[11px] uppercase tracking-wider text-vscode-text-dim">
+    <div className="border-vscode-border rounded-[2px] border">
+      <div className="border-vscode-border text-vscode-text-dim border-b bg-[#252525] px-2 py-1.5 text-[11px] tracking-wider uppercase">
         数据点（{points.length}）
-        <span className="ml-2 normal-case text-[10px] text-vscode-text-faint tracking-normal">
+        <span className="text-vscode-text-faint ml-2 text-[10px] tracking-normal normal-case">
           固定一个轴的值，另一个轴的值从 Excel 某列读
         </span>
       </div>
 
       {points.length === 0 ? (
-        <div className="p-2 text-[11px] text-vscode-text-faint italic">
+        <div className="text-vscode-text-faint p-2 text-[11px] italic">
           （还没有数据点。点下方按钮添加。）
         </div>
       ) : (
         <table className="w-full text-[11px]">
-          <thead className="bg-[#1d1d1d] text-vscode-text-faint">
+          <thead className="text-vscode-text-faint bg-[#1d1d1d]">
             <tr>
-              <th className="text-left px-2 py-1 font-normal w-12">#</th>
-              <th className="text-left px-2 py-1 font-normal w-24">固定轴</th>
-              <th className="text-left px-2 py-1 font-normal w-24">固定值</th>
-              <th className="text-left px-2 py-1 font-normal">变化列（Excel 表头）</th>
+              <th className="w-12 px-2 py-1 text-left font-normal">#</th>
+              <th className="w-24 px-2 py-1 text-left font-normal">固定轴</th>
+              <th className="w-24 px-2 py-1 text-left font-normal">固定值</th>
+              <th className="px-2 py-1 text-left font-normal">
+                变化列（Excel 表头）
+              </th>
               <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {points.map((pt, i) => (
-              <tr key={i} className="border-t border-vscode-border">
-                <td className="px-2 py-1 text-vscode-text-dim">{i + 1}</td>
+              <tr key={i} className="border-vscode-border border-t">
+                <td className="text-vscode-text-dim px-2 py-1">{i + 1}</td>
                 <td className="px-2 py-1">
                   <select
                     value={pt.fixed_axis}
-                    onChange={(e) => updatePoint(i, { fixed_axis: e.target.value as "x" | "y" })}
-                    className={cn(inputClass, "py-0.5")}
+                    onChange={(e) =>
+                      updatePoint(i, {
+                        fixed_axis: e.target.value as 'x' | 'y',
+                      })
+                    }
+                    className={cn(inputClass, 'py-0.5')}
                   >
                     <option value="x">X 固定</option>
                     <option value="y">Y 固定</option>
@@ -179,15 +191,21 @@ function PointsEditor({
                   <input
                     type="number"
                     value={pt.fixed_value}
-                    onChange={(e) => updatePoint(i, { fixed_value: parseFloat(e.target.value || "0") })}
-                    className={cn(inputClass, "py-0.5")}
+                    onChange={(e) =>
+                      updatePoint(i, {
+                        fixed_value: parseFloat(e.target.value || '0'),
+                      })
+                    }
+                    className={cn(inputClass, 'py-0.5')}
                   />
                 </td>
                 <td className="px-2 py-1">
                   <select
                     value={pt.var_column}
-                    onChange={(e) => updatePoint(i, { var_column: e.target.value })}
-                    className={cn(inputClass, "py-0.5")}
+                    onChange={(e) =>
+                      updatePoint(i, { var_column: e.target.value })
+                    }
+                    className={cn(inputClass, 'py-0.5')}
                   >
                     <option value="">（选择 Excel 表头）</option>
                     {columnSuggestions.map((col) => (
@@ -195,9 +213,10 @@ function PointsEditor({
                         {col}
                       </option>
                     ))}
-                    {pt.var_column && !columnSuggestions.includes(pt.var_column) && (
-                      <option value={pt.var_column}>{pt.var_column}</option>
-                    )}
+                    {pt.var_column &&
+                      !columnSuggestions.includes(pt.var_column) && (
+                        <option value={pt.var_column}>{pt.var_column}</option>
+                      )}
                   </select>
                 </td>
                 <td className="px-1 py-1">
@@ -205,7 +224,7 @@ function PointsEditor({
                     type="button"
                     onClick={() => removePoint(i)}
                     title="删除该点"
-                    className="h-5 w-5 flex items-center justify-center rounded text-vscode-text-dim hover:text-red-400 hover:bg-vscode-hover"
+                    className="text-vscode-text-dim hover:bg-vscode-hover flex h-5 w-5 items-center justify-center rounded hover:text-red-400"
                   >
                     <i className="codicon codicon-close !text-[12px]" />
                   </button>
@@ -219,7 +238,7 @@ function PointsEditor({
       <button
         type="button"
         onClick={addPoint}
-        className="w-full px-2 py-1.5 text-[11px] border-t border-vscode-border text-vscode-text-dim hover:text-white hover:bg-vscode-hover flex items-center justify-center gap-1"
+        className="border-vscode-border text-vscode-text-dim hover:bg-vscode-hover flex w-full items-center justify-center gap-1 border-t px-2 py-1.5 text-[11px] hover:text-white"
       >
         <i className="codicon codicon-add !text-[12px]" />
         新增数据点

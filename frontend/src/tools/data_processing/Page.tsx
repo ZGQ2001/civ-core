@@ -2,13 +2,13 @@
  * data_processing 工具页主区：顶部操作行（含「计算类型」下拉）+ 中间 Excel 前 N 行预览 + 底部结果。
  * 所有状态走 useDataProcessing；右侧参数（输出路径 / 默认角度 / 其他算法特定参数）在 SettingsForm。
  */
-import { useCallback } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { useCallback } from 'react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { openPath } from '@tauri-apps/plugin-opener';
 
-import { cn } from "../../lib/cn";
-import { useDataProcessing } from "./controller";
-import { CALC_TYPE_LABELS, type CalcType, type CellValue } from "./types";
+import { cn } from '../../lib/cn';
+import { useDataProcessing } from './controller';
+import { CALC_TYPE_LABELS, type CalcType, type CellValue } from './types';
 
 interface Props {
   appendOutput?: (text: string) => void;
@@ -19,11 +19,11 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
 
   const pickExcel = useCallback(async () => {
     const sel = await openDialog({
-      title: "选择检测数据 Excel",
+      title: '选择检测数据 Excel',
       multiple: false,
-      filters: [{ name: "Excel", extensions: ["xlsx", "xls"] }],
+      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
     });
-    if (typeof sel === "string") c.setExcelPath(sel);
+    if (typeof sel === 'string') c.setExcelPath(sel);
   }, [c]);
 
   const handleRun = useCallback(async () => {
@@ -41,18 +41,20 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
   }, [c, appendOutput]);
 
   const canRun = !!c.excelPath && !c.running;
-  const calcOptions = Object.entries(CALC_TYPE_LABELS) as Array<[CalcType, string]>;
+  const calcOptions = Object.entries(CALC_TYPE_LABELS) as Array<
+    [CalcType, string]
+  >;
 
   return (
     <div className="flex h-full flex-col">
       {/* 顶部：计算类型 + 选 Excel + Sheet + 表头行 + 跑 */}
-      <div className="px-6 pt-4 pb-3 border-b border-vscode-border space-y-2">
-        <h1 className="text-base font-medium text-vscode-text flex items-center gap-2">
+      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
+        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
           <i className="codicon codicon-symbol-method !text-[16px]" />
           数据处理
         </h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-vscode-text-dim">计算:</label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-vscode-text-dim text-xs">计算:</label>
           <select
             value={c.calcType}
             onChange={(e) => {
@@ -62,52 +64,60 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
               if (v in CALC_TYPE_LABELS) c.setCalcType(v as CalcType);
             }}
             title="未来会有更多计算类型（钻芯法 / 回弹法 等）"
-            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px]"
+            className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
           >
             {calcOptions.map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
+              <option key={id} value={id}>
+                {label}
+              </option>
             ))}
           </select>
           <span className="text-vscode-text-faint">·</span>
           <button
             type="button"
             onClick={pickExcel}
-            className="px-2 py-1 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center gap-1 shrink-0"
+            className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
           >
-            <i className="codicon codicon-folder-opened !text-[12px]" />
-            选 Excel…
+            <i className="codicon codicon-folder-opened !text-[12px]" />选
+            Excel…
           </button>
           {c.excelPath && (
             <span
-              className="text-xs text-vscode-text-dim truncate max-w-[400px]"
+              className="text-vscode-text-dim max-w-[400px] truncate text-xs"
               title={c.excelPath}
             >
               {c.excelPath.split(/[\\/]/).pop()}
             </span>
           )}
           <span className="text-vscode-text-faint">·</span>
-          <label className="text-xs text-vscode-text-dim">Sheet:</label>
+          <label className="text-vscode-text-dim text-xs">Sheet:</label>
           <select
             value={c.sheet}
             onChange={(e) => c.setSheet(e.target.value)}
             disabled={!c.excelPath || c.sheets.length === 0}
-            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] min-w-[8rem] max-w-[16rem]"
+            className="bg-vscode-input border-vscode-border text-vscode-text max-w-[16rem] min-w-[8rem] rounded-[2px] border px-2 py-1 text-xs"
           >
             {!c.excelPath && <option value="">（先选 Excel）</option>}
-            {c.excelPath && c.sheets.length === 0 && <option value="">（加载中…）</option>}
+            {c.excelPath && c.sheets.length === 0 && (
+              <option value="">（加载中…）</option>
+            )}
             {c.sheets.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
           <span className="text-vscode-text-faint">·</span>
-          <label className="text-xs text-vscode-text-dim">表头行:</label>
+          <label className="text-vscode-text-dim text-xs">表头行:</label>
           <input
             type="number"
             min={1}
             value={c.headerRow}
-            onChange={(e) => c.setHeaderRow(Math.max(1, parseInt(e.target.value || "1", 10)))}
+            onChange={(e) =>
+              c.setHeaderRow(Math.max(1, parseInt(e.target.value || '1', 10)))
+            }
             title="表头所在的 1-based 行号；数据从下一行开始读"
-            className="bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-14"
+            className="bg-vscode-input border-vscode-border text-vscode-text w-14 rounded-[2px] border px-2 py-1 text-xs"
           />
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -115,32 +125,32 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
               disabled={!canRun}
               onClick={handleRun}
               className={cn(
-                "px-3 py-1 text-xs rounded-[2px] flex items-center gap-1.5",
+                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
                 canRun
-                  ? "bg-vscode-button hover:bg-vscode-button-hover text-white"
-                  : "bg-[#3a3a3a] text-vscode-text-dim cursor-not-allowed",
+                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
+                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
               )}
             >
               {c.running && (
                 <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
               )}
-              {c.running ? "计算中…" : "开始计算"}
+              {c.running ? '计算中…' : '开始计算'}
             </button>
           </div>
         </div>
       </div>
 
       {/* 中间：表格预览 */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-[#252525]">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
         <PreviewPane />
       </div>
 
       {/* 结果 / 错误（跑完才显示）*/}
       {(c.result || c.runError) && (
-        <div className="px-6 py-3 border-t border-vscode-border text-xs max-h-[200px] overflow-auto">
+        <div className="border-vscode-border max-h-[200px] overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="text-red-400 whitespace-pre-wrap">
-              <i className="codicon codicon-error !text-[14px] mr-1" />
+            <div className="whitespace-pre-wrap text-red-400">
+              <i className="codicon codicon-error mr-1 !text-[14px]" />
               {c.runError}
             </div>
           )}
@@ -153,7 +163,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
               <button
                 type="button"
                 onClick={() => openPath(c.result!.output).catch(console.error)}
-                className="ml-auto text-vscode-focus hover:underline truncate"
+                className="text-vscode-focus ml-auto truncate hover:underline"
                 title={c.result.output}
               >
                 打开输出 Excel
@@ -171,11 +181,13 @@ function PreviewPane() {
 
   if (!c.excelPath) {
     return (
-      <div className="flex h-full items-center justify-center text-center px-8">
+      <div className="flex h-full items-center justify-center px-8 text-center">
         <div>
-          <i className="codicon codicon-table !text-[48px] text-vscode-text-faint" />
-          <div className="mt-3 text-sm text-vscode-text-dim">请先选 Excel 数据文件</div>
-          <div className="mt-1 text-xs text-vscode-text-faint">
+          <i className="codicon codicon-table text-vscode-text-faint !text-[48px]" />
+          <div className="text-vscode-text-dim mt-3 text-sm">
+            请先选 Excel 数据文件
+          </div>
+          <div className="text-vscode-text-faint mt-1 text-xs">
             选好后会显示前 50 行供检查
           </div>
         </div>
@@ -185,9 +197,9 @@ function PreviewPane() {
 
   if (c.previewError) {
     return (
-      <div className="flex h-full items-center justify-center text-center px-8">
-        <div className="max-w-2xl text-xs text-red-400 whitespace-pre-wrap">
-          <i className="codicon codicon-error !text-[20px] block mb-2" />
+      <div className="flex h-full items-center justify-center px-8 text-center">
+        <div className="max-w-2xl text-xs whitespace-pre-wrap text-red-400">
+          <i className="codicon codicon-error mb-2 block !text-[20px]" />
           预览失败：{c.previewError}
         </div>
       </div>
@@ -196,8 +208,8 @@ function PreviewPane() {
 
   if (c.previewLoading && c.previewHeaders.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-vscode-text-dim text-xs">
-        <i className="codicon codicon-loading codicon-modifier-spin !text-[16px] mr-2" />
+      <div className="text-vscode-text-dim flex h-full items-center justify-center text-xs">
+        <i className="codicon codicon-loading codicon-modifier-spin mr-2 !text-[16px]" />
         正在读取…
       </div>
     );
@@ -205,9 +217,9 @@ function PreviewPane() {
 
   if (c.previewHeaders.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-center px-8">
-        <div className="text-xs text-vscode-text-dim">
-          <i className="codicon codicon-warning !text-[16px] mr-1" />
+      <div className="flex h-full items-center justify-center px-8 text-center">
+        <div className="text-vscode-text-dim text-xs">
+          <i className="codicon codicon-warning mr-1 !text-[16px]" />
           没有读到表头；检查 Sheet / 表头行号是否正确
         </div>
       </div>
@@ -215,10 +227,11 @@ function PreviewPane() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center px-4 py-2 border-b border-vscode-border text-xs shrink-0 text-vscode-text-dim">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-vscode-border text-vscode-text-dim flex shrink-0 items-center border-b px-4 py-2 text-xs">
         <span>
-          预览 {c.previewShownRows} / 共 {c.previewTotalRows} 行 · {c.previewHeaders.length} 列
+          预览 {c.previewShownRows} / 共 {c.previewTotalRows} 行 ·{' '}
+          {c.previewHeaders.length} 列
         </span>
         {c.previewLoading && (
           <span className="ml-3 flex items-center gap-1">
@@ -227,17 +240,17 @@ function PreviewPane() {
           </span>
         )}
       </div>
-      <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-full text-[11px] border-collapse">
-          <thead className="bg-[#1f1f1f] sticky top-0">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full border-collapse text-[11px]">
+          <thead className="sticky top-0 bg-[#1f1f1f]">
             <tr>
-              <th className="text-right px-2 py-1 text-vscode-text-faint font-normal border-b border-vscode-border w-12">
+              <th className="text-vscode-text-faint border-vscode-border w-12 border-b px-2 py-1 text-right font-normal">
                 #
               </th>
               {c.previewHeaders.map((h) => (
                 <th
                   key={h}
-                  className="text-left px-2 py-1 text-vscode-text font-medium border-b border-vscode-border whitespace-nowrap"
+                  className="text-vscode-text border-vscode-border border-b px-2 py-1 text-left font-medium whitespace-nowrap"
                 >
                   {h}
                 </th>
@@ -246,14 +259,17 @@ function PreviewPane() {
           </thead>
           <tbody>
             {c.previewRows.map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? "bg-[#252525]" : "bg-[#2a2a2a]"}>
-                <td className="text-right px-2 py-1 text-vscode-text-faint border-b border-[#333]">
+              <tr
+                key={i}
+                className={i % 2 === 0 ? 'bg-[#252525]' : 'bg-[#2a2a2a]'}
+              >
+                <td className="text-vscode-text-faint border-b border-[#333] px-2 py-1 text-right">
                   {i + 1}
                 </td>
                 {c.previewHeaders.map((h) => (
                   <td
                     key={h}
-                    className="px-2 py-1 text-vscode-text border-b border-[#333] whitespace-nowrap"
+                    className="text-vscode-text border-b border-[#333] px-2 py-1 whitespace-nowrap"
                   >
                     {formatCell(row[h])}
                   </td>
@@ -268,7 +284,7 @@ function PreviewPane() {
 }
 
 function formatCell(v: CellValue | undefined): React.ReactNode {
-  if (v === null || v === undefined || v === "") {
+  if (v === null || v === undefined || v === '') {
     return <span className="text-vscode-text-faint italic">—</span>;
   }
   return String(v);

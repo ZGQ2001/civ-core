@@ -29,19 +29,19 @@ export function StatusBar({
   onToggleRightPanel,
   rightPanelAvailable,
 }: Props) {
-  const bg = workspacePath ? "#007acc" : "#68217a";
+  const bg = workspacePath ? '#007acc' : '#68217a';
   return (
     <div
       style={{ backgroundColor: bg }}
-      className="flex h-[22px] items-center text-white text-[11px] px-3 shrink-0 select-none"
+      className="flex h-[22px] shrink-0 items-center px-3 text-[11px] text-white select-none"
     >
-      <span className="truncate flex items-center gap-1">
+      <span className="flex items-center gap-1 truncate">
         <i
           className={`codicon !text-[12px] ${
-            workspacePath ? "codicon-folder-active" : "codicon-warning"
+            workspacePath ? 'codicon-folder-active' : 'codicon-warning'
           }`}
         />
-        {workspacePath ?? "尚未打开工作区"}
+        {workspacePath ?? '尚未打开工作区'}
       </span>
       <div className="ml-auto flex items-center gap-3">
         {sidecarStatus && <span className="opacity-80">{sidecarStatus}</span>}
@@ -49,12 +49,12 @@ export function StatusBar({
         <button
           type="button"
           onClick={onToggleBottomPanel}
-          title={`${bottomPanelOpen ? "隐藏" : "显示"}底部面板 (Ctrl+J)`}
-          className="flex items-center gap-1 px-1.5 h-[18px] rounded hover:bg-white/15 transition-colors"
+          title={`${bottomPanelOpen ? '隐藏' : '显示'}底部面板 (Ctrl+J)`}
+          className="flex h-[18px] items-center gap-1 rounded px-1.5 transition-colors hover:bg-white/15"
         >
           <i
             className={`codicon !text-[12px] ${
-              bottomPanelOpen ? "codicon-chevron-down" : "codicon-chevron-up"
+              bottomPanelOpen ? 'codicon-chevron-down' : 'codicon-chevron-up'
             }`}
           />
           <span>面板</span>
@@ -63,12 +63,14 @@ export function StatusBar({
           <button
             type="button"
             onClick={onToggleRightPanel}
-            title={`${rightPanelOpen ? "隐藏" : "显示"}右侧调参 (Ctrl+Alt+B)`}
-            className="flex items-center gap-1 px-1.5 h-[18px] rounded hover:bg-white/15 transition-colors"
+            title={`${rightPanelOpen ? '隐藏' : '显示'}右侧调参 (Ctrl+Alt+B)`}
+            className="flex h-[18px] items-center gap-1 rounded px-1.5 transition-colors hover:bg-white/15"
           >
             <i
               className={`codicon !text-[12px] ${
-                rightPanelOpen ? "codicon-layout-sidebar-right" : "codicon-layout-sidebar-right-off"
+                rightPanelOpen
+                  ? 'codicon-layout-sidebar-right'
+                  : 'codicon-layout-sidebar-right-off'
               }`}
             />
             <span>调参</span>

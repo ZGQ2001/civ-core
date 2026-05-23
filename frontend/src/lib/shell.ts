@@ -7,7 +7,7 @@
  *
  * Provider 内通过 useShell() 读，无需 prop drilling。
  */
-import { createContext, useContext } from "react";
+import { createContext, useContext } from 'react';
 
 export interface ActivatedFile {
   path: string;
@@ -25,15 +25,15 @@ export const ShellContext = createContext<ShellContextValue | null>(null);
 
 export function useShell(): ShellContextValue {
   const v = useContext(ShellContext);
-  if (!v) throw new Error("useShell 必须在 <ShellContext.Provider> 内调用");
+  if (!v) throw new Error('useShell 必须在 <ShellContext.Provider> 内调用');
   return v;
 }
 
 /** 给日志加 [HH:MM:SS] 前缀的小工具，所有工具统一格式。 */
 export function logLine(msg: string): string {
   const t = new Date();
-  const hh = String(t.getHours()).padStart(2, "0");
-  const mm = String(t.getMinutes()).padStart(2, "0");
-  const ss = String(t.getSeconds()).padStart(2, "0");
+  const hh = String(t.getHours()).padStart(2, '0');
+  const mm = String(t.getMinutes()).padStart(2, '0');
+  const ss = String(t.getSeconds()).padStart(2, '0');
   return `[${hh}:${mm}:${ss}] ${msg}`;
 }

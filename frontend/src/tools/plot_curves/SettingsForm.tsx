@@ -6,42 +6,62 @@
  *
  * 共用控件（Row/SliderInput/NumberCell）抽到 tabs/_shared.tsx。
  */
-import { useState } from "react";
+import { useState } from 'react';
 
-import { cn } from "../../lib/cn";
-import { usePlotCurves } from "./controller";
-import { AxisTab } from "./tabs/AxisTab";
-import { BasicTab } from "./tabs/BasicTab";
-import { CurvesTab } from "./tabs/CurvesTab";
+import { cn } from '../../lib/cn';
+import { usePlotCurves } from './controller';
+import { AxisTab } from './tabs/AxisTab';
+import { BasicTab } from './tabs/BasicTab';
+import { CurvesTab } from './tabs/CurvesTab';
 
-type TabId = "basic" | "xaxis" | "yaxis" | "curve";
+type TabId = 'basic' | 'xaxis' | 'yaxis' | 'curve';
 
 export function PlotCurvesSettingsForm() {
   const c = usePlotCurves();
-  const [tab, setTab] = useState<TabId>("basic");
+  const [tab, setTab] = useState<TabId>('basic');
   const preset = c.effectivePreset;
 
   if (!preset) {
     return (
-      <div className="p-6 text-xs text-vscode-text-faint italic">
+      <div className="text-vscode-text-faint p-6 text-xs italic">
         （未加载曲线；请确认后端预设库可用。）
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full text-xs">
-      <div className="flex items-center border-b border-vscode-border px-2 shrink-0 gap-1">
-        <TabBtn label="基础" icon="symbol-misc" active={tab === "basic"} onClick={() => setTab("basic")} />
-        <TabBtn label="X 轴" icon="arrow-right" active={tab === "xaxis"} onClick={() => setTab("xaxis")} />
-        <TabBtn label="Y 轴" icon="arrow-up" active={tab === "yaxis"} onClick={() => setTab("yaxis")} />
-        <TabBtn label="曲线" icon="symbol-color" active={tab === "curve"} onClick={() => setTab("curve")} />
+    <div className="flex h-full flex-col text-xs">
+      <div className="border-vscode-border flex shrink-0 items-center gap-1 border-b px-2">
+        <TabBtn
+          label="基础"
+          icon="symbol-misc"
+          active={tab === 'basic'}
+          onClick={() => setTab('basic')}
+        />
+        <TabBtn
+          label="X 轴"
+          icon="arrow-right"
+          active={tab === 'xaxis'}
+          onClick={() => setTab('xaxis')}
+        />
+        <TabBtn
+          label="Y 轴"
+          icon="arrow-up"
+          active={tab === 'yaxis'}
+          onClick={() => setTab('yaxis')}
+        />
+        <TabBtn
+          label="曲线"
+          icon="symbol-color"
+          active={tab === 'curve'}
+          onClick={() => setTab('curve')}
+        />
         {c.edited && (
           <button
             type="button"
             onClick={c.resetPreset}
             title="撤销所有改动，回到曲线原版"
-            className="ml-auto px-2 h-7 text-xs text-vscode-focus hover:underline flex items-center gap-1"
+            className="text-vscode-focus ml-auto flex h-7 items-center gap-1 px-2 text-xs hover:underline"
           >
             <i className="codicon codicon-discard !text-[12px]" />
             还原
@@ -49,23 +69,23 @@ export function PlotCurvesSettingsForm() {
         )}
       </div>
 
-      <div className="flex-1 overflow-auto p-3 space-y-3">
-        {tab === "basic" && <BasicTab />}
-        {tab === "xaxis" && (
+      <div className="flex-1 space-y-3 overflow-auto p-3">
+        {tab === 'basic' && <BasicTab />}
+        {tab === 'xaxis' && (
           <AxisTab
             axisName="X 轴"
             spec={preset.x_axis}
             onChange={(spec) => c.patchPreset((p) => ({ ...p, x_axis: spec }))}
           />
         )}
-        {tab === "yaxis" && (
+        {tab === 'yaxis' && (
           <AxisTab
             axisName="Y 轴"
             spec={preset.y_axis}
             onChange={(spec) => c.patchPreset((p) => ({ ...p, y_axis: spec }))}
           />
         )}
-        {tab === "curve" && <CurvesTab />}
+        {tab === 'curve' && <CurvesTab />}
       </div>
     </div>
   );
@@ -87,13 +107,13 @@ function TabBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-7 px-3 text-xs flex items-center gap-1.5 border-b-2 transition-colors -mb-px",
+        '-mb-px flex h-7 items-center gap-1.5 border-b-2 px-3 text-xs transition-colors',
         active
-          ? "text-white border-vscode-focus"
-          : "text-vscode-text-dim border-transparent hover:text-white",
+          ? 'border-vscode-focus text-white'
+          : 'text-vscode-text-dim border-transparent hover:text-white',
       )}
     >
-      <i className={cn("codicon", `codicon-${icon}`, "!text-[12px]")} />
+      <i className={cn('codicon', `codicon-${icon}`, '!text-[12px]')} />
       {label}
     </button>
   );

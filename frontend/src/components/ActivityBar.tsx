@@ -9,7 +9,7 @@
  *
  * 选中态：左侧 2px 蓝条 indicator + 图标变白。
  */
-import { cn } from "../lib/cn";
+import { cn } from '../lib/cn';
 
 export interface ActivityItem {
   id: string;
@@ -36,11 +36,15 @@ export function ActivityBar({
   onExplorerToggle,
 }: Props) {
   return (
-    <div className="flex h-full w-12 flex-col bg-vscode-activity border-r border-vscode-border">
+    <div className="bg-vscode-activity border-vscode-border flex h-full w-12 flex-col border-r">
       <div className="flex flex-col">
         <Btn
           icon="files"
-          tooltip={explorerActive ? "隐藏资源管理器 (Ctrl+B)" : "显示资源管理器 (Ctrl+B)"}
+          tooltip={
+            explorerActive
+              ? '隐藏资源管理器 (Ctrl+B)'
+              : '显示资源管理器 (Ctrl+B)'
+          }
           active={explorerActive}
           onClick={onExplorerToggle}
         />
@@ -88,17 +92,17 @@ function Btn({
       aria-label={tooltip}
       onClick={onClick}
       className={cn(
-        "relative flex h-12 w-12 items-center justify-center transition-colors",
-        active ? "text-white" : "text-vscode-text-dim hover:text-white",
+        'relative flex h-12 w-12 items-center justify-center transition-colors',
+        active ? 'text-white' : 'text-vscode-text-dim hover:text-white',
       )}
     >
       <span
         className={cn(
-          "absolute left-0 top-0 h-full w-[2px]",
-          active ? "bg-vscode-focus" : "bg-transparent",
+          'absolute top-0 left-0 h-full w-[2px]',
+          active ? 'bg-vscode-focus' : 'bg-transparent',
         )}
       />
-      <i className={cn("codicon", `codicon-${icon}`, "!text-[22px]")} />
+      <i className={cn('codicon', `codicon-${icon}`, '!text-[22px]')} />
     </button>
   );
 }

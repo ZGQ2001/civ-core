@@ -7,13 +7,13 @@
  *
  * 错误：sidecar 抛错时 Promise reject，message 由 Rust 端拼好。
  */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from '@tauri-apps/api/core';
 
 export async function rpc<T = unknown>(
   method: string,
   params: Record<string, unknown> | unknown[] = {},
 ): Promise<T> {
-  return (await invoke("rpc_call", { method, params })) as T;
+  return (await invoke('rpc_call', { method, params })) as T;
 }
 
 // 文件树用的 entry 类型（与 Python files.list_dir 返回对齐）

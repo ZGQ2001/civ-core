@@ -2,8 +2,8 @@
  * X 轴 / Y 轴 tab：标签 + 范围 + 对数刻度。
  * 通用组件，X 和 Y tab 都用它，只是传入不同的 spec/onChange。
  */
-import type { AxisSpec } from "../types";
-import { NumberCell, Row, inputClass } from "./_shared";
+import type { AxisSpec } from '../types';
+import { NumberCell, Row, inputClass } from './_shared';
 
 export function AxisTab({
   axisName,
@@ -29,7 +29,7 @@ export function AxisTab({
       </Row>
       <Row label="范围">
         <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={autoRange}
@@ -47,24 +47,30 @@ export function AxisTab({
               <NumberCell
                 label="最小"
                 value={range[0]}
-                onChange={(v) => onChange({ ...spec, range: [v, range[1], range[2]] })}
+                onChange={(v) =>
+                  onChange({ ...spec, range: [v, range[1], range[2]] })
+                }
               />
               <NumberCell
                 label="最大"
                 value={range[1]}
-                onChange={(v) => onChange({ ...spec, range: [range[0], v, range[2]] })}
+                onChange={(v) =>
+                  onChange({ ...spec, range: [range[0], v, range[2]] })
+                }
               />
               <NumberCell
                 label="刻度间隔"
                 value={range[2]}
-                onChange={(v) => onChange({ ...spec, range: [range[0], range[1], v] })}
+                onChange={(v) =>
+                  onChange({ ...spec, range: [range[0], range[1], v] })
+                }
               />
             </div>
           )}
         </div>
       </Row>
       <Row label="对数刻度" hint="数据跨度大时勾选；适合幂律 / 振幅类">
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={spec.log ?? false}

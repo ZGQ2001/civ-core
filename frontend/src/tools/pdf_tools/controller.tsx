@@ -17,10 +17,16 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 
-import { rpc } from "../../lib/rpc";
-import type { InspectRes, MergeRes, Mode, PdfFileInfo, SplitRes } from "./types";
+import { rpc } from '../../lib/rpc';
+import type {
+  InspectRes,
+  MergeRes,
+  Mode,
+  PdfFileInfo,
+  SplitRes,
+} from './types';
 
 const INSPECT_DEBOUNCE_MS = 200;
 
@@ -70,38 +76,40 @@ interface Actions {
 /// run() 返回值：mode 不同结果类型不同，让 Page handleRun 拿快照而不是读
 /// ctx state（state 更新异步，await 后读 c.mergeResult 永远是旧值）。
 export type RunOutcome =
-  | { kind: "merge"; res: MergeRes }
-  | { kind: "split"; res: SplitRes }
-  | { kind: "error"; message: string }
+  | { kind: 'merge'; res: MergeRes }
+  | { kind: 'split'; res: SplitRes }
+  | { kind: 'error'; message: string }
   | null;
 
 type Ctx = State & Actions & { defaultTemplate: string };
 
 const DEFAULT_TEMPLATE: Record<Mode, string> = {
-  merge: "",  // merge 不用 template
-  split_per_page: "{stem}_p{n}.pdf",
-  split_by_ranges: "{stem}_{start}-{end}.pdf",
+  merge: '', // merge 不用 template
+  split_per_page: '{stem}_p{n}.pdf',
+  split_by_ranges: '{stem}_{start}-{end}.pdf',
 };
 
 const PdfToolsContext = createContext<Ctx | null>(null);
 
 export function usePdfTools(): Ctx {
   const v = useContext(PdfToolsContext);
-  if (!v) throw new Error("usePdfTools must be used within <PdfToolsProvider>");
+  if (!v) throw new Error('usePdfTools must be used within <PdfToolsProvider>');
   return v;
 }
 
 export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeRaw] = useState<Mode>("merge");
+  const [mode, setModeRaw] = useState<Mode>('merge');
 
   const [mergeInputs, setMergeInputs] = useState<string[]>([]);
-  const [mergeOutput, setMergeOutput] = useState("");
+  const [mergeOutput, setMergeOutput] = useState('');
   const [mergeResult, setMergeResult] = useState<MergeRes | null>(null);
 
-  const [splitInput, setSplitInputRaw] = useState("");
-  const [splitOutDir, setSplitOutDir] = useState("");
-  const [splitTemplate, setSplitTemplate] = useState<string>(DEFAULT_TEMPLATE.split_per_page);
-  const [splitExpr, setSplitExpr] = useState("");
+  const [splitInput, setSplitInputRaw] = useState('');
+  const [splitOutDir, setSplitOutDir] = useState('');
+  const [splitTemplate, setSplitTemplate] = useState<string>(
+    DEFAULT_TEMPLATE.split_per_page,
+  );
+  const [splitExpr, setSplitExpr] = useState('');
   const [splitResult, setSplitResult] = useState<SplitRes | null>(null);
 
   const [previewInfos, setPreviewInfos] = useState<PdfFileInfo[]>([]);
@@ -118,7 +126,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     setMergeResult(null);
     setSplitResult(null);
     setRunError(null);
-    if (m !== "merge") {
+    if (m !== 'merge') {
       setSplitTemplate(DEFAULT_TEMPLATE[m]);
     }
   }, []);
@@ -159,7 +167,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
 
   // 当前 mode 关注的 path 列表（用于 inspect）
   const inspectTargets = useMemo<string[]>(() => {
-    if (mode === "merge") return mergeInputs;
+    if (mode === 'merge') return mergeInputs;
     return splitInput ? [splitInput] : [];
   }, [mode, mergeInputs, splitInput]);
 
@@ -185,7 +193,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       const myId = ++reqIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
-      rpc<InspectRes>("pdf_tools.inspect", { paths: inspectTargets })
+      rpc<InspectRes>('pdf_tools.inspect', { paths: inspectTargets })
         .then((r) => {
           if (myId !== reqIdRef.current) return;
           setPreviewInfos(r.files);
@@ -203,7 +211,8 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     }, INSPECT_DEBOUNCE_MS);
 
     return () => {
-      if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+      if (debounceRef.current !== null)
+        window.clearTimeout(debounceRef.current);
     };
   }, [inspectTargets]);
 
@@ -214,21 +223,21 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     setMergeResult(null);
     setSplitResult(null);
     try {
-      if (mode === "merge") {
+      if (mode === 'merge') {
         if (mergeInputs.length === 0 || !mergeOutput.trim()) {
-          throw new Error("缺少输入或输出路径");
+          throw new Error('缺少输入或输出路径');
         }
-        const res = await rpc<MergeRes>("pdf_tools.merge", {
+        const res = await rpc<MergeRes>('pdf_tools.merge', {
           inputs: mergeInputs,
           output: mergeOutput.trim(),
         });
         setMergeResult(res);
-        return { kind: "merge", res };
+        return { kind: 'merge', res };
       } else {
         if (!splitInput || !splitOutDir.trim()) {
-          throw new Error("缺少输入文件或输出目录");
+          throw new Error('缺少输入文件或输出目录');
         }
-        if (mode === "split_by_ranges" && !splitExpr.trim()) {
+        if (mode === 'split_by_ranges' && !splitExpr.trim()) {
           throw new Error('缺少页号范围表达式（例如 "1-3,5,7-9"）');
         }
         const params: Record<string, unknown> = {
@@ -236,52 +245,89 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
           output_dir: splitOutDir.trim(),
           name_template: splitTemplate.trim() || DEFAULT_TEMPLATE[mode],
         };
-        if (mode === "split_by_ranges") params.expr = splitExpr.trim();
+        if (mode === 'split_by_ranges') params.expr = splitExpr.trim();
         const res = await rpc<SplitRes>(`pdf_tools.${mode}`, params);
         setSplitResult(res);
-        return { kind: "split", res };
+        return { kind: 'split', res };
       }
     } catch (e) {
       const message = String(e);
       setRunError(message);
-      return { kind: "error", message };
+      return { kind: 'error', message };
     } finally {
       setRunning(false);
     }
   }, [
-    mode, running,
-    mergeInputs, mergeOutput,
-    splitInput, splitOutDir, splitTemplate, splitExpr,
+    mode,
+    running,
+    mergeInputs,
+    mergeOutput,
+    splitInput,
+    splitOutDir,
+    splitTemplate,
+    splitExpr,
   ]);
 
-  const defaultTemplate = mode === "merge" ? "" : DEFAULT_TEMPLATE[mode];
+  const defaultTemplate = mode === 'merge' ? '' : DEFAULT_TEMPLATE[mode];
 
   const ctx: Ctx = useMemo(
     () => ({
       mode,
-      mergeInputs, mergeOutput, mergeResult,
-      splitInput, splitOutDir, splitTemplate, splitExpr, splitResult,
-      previewInfos, previewTotalPages, previewLoading, previewError,
-      running, runError,
+      mergeInputs,
+      mergeOutput,
+      mergeResult,
+      splitInput,
+      splitOutDir,
+      splitTemplate,
+      splitExpr,
+      splitResult,
+      previewInfos,
+      previewTotalPages,
+      previewLoading,
+      previewError,
+      running,
+      runError,
       defaultTemplate,
       setMode,
-      addMergeInputs, removeMergeAt, moveMergeUp, moveMergeDown, setMergeOutput,
-      setSplitInput, setSplitOutDir, setSplitTemplate, setSplitExpr,
+      addMergeInputs,
+      removeMergeAt,
+      moveMergeUp,
+      moveMergeDown,
+      setMergeOutput,
+      setSplitInput,
+      setSplitOutDir,
+      setSplitTemplate,
+      setSplitExpr,
       run,
     }),
     [
       mode,
-      mergeInputs, mergeOutput, mergeResult,
-      splitInput, splitOutDir, splitTemplate, splitExpr, splitResult,
-      previewInfos, previewTotalPages, previewLoading, previewError,
-      running, runError,
+      mergeInputs,
+      mergeOutput,
+      mergeResult,
+      splitInput,
+      splitOutDir,
+      splitTemplate,
+      splitExpr,
+      splitResult,
+      previewInfos,
+      previewTotalPages,
+      previewLoading,
+      previewError,
+      running,
+      runError,
       defaultTemplate,
       setMode,
-      addMergeInputs, removeMergeAt, moveMergeUp, moveMergeDown,
+      addMergeInputs,
+      removeMergeAt,
+      moveMergeUp,
+      moveMergeDown,
       setSplitInput,
       run,
     ],
   );
 
-  return <PdfToolsContext.Provider value={ctx}>{children}</PdfToolsContext.Provider>;
+  return (
+    <PdfToolsContext.Provider value={ctx}>{children}</PdfToolsContext.Provider>
+  );
 }

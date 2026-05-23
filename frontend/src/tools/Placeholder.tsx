@@ -12,10 +12,14 @@ export function Placeholder({ icon, label, detail }: Props) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
-        <i className={`codicon codicon-${icon} !text-[48px] text-vscode-text-faint`} />
-        <div className="mt-3 text-2xl font-light text-vscode-text-dim">{label}</div>
-        <div className="mt-1 text-xs text-vscode-text-faint">
-          {detail ?? "T5 后续轮次接入"}
+        <i
+          className={`codicon codicon-${icon} text-vscode-text-faint !text-[48px]`}
+        />
+        <div className="text-vscode-text-dim mt-3 text-2xl font-light">
+          {label}
+        </div>
+        <div className="text-vscode-text-faint mt-1 text-xs">
+          {detail ?? 'T5 后续轮次接入'}
         </div>
       </div>
     </div>

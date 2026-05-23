@@ -2,13 +2,13 @@
  * word2pdf 工具页主区：顶部添加 docx + 跑；中间 Word 文件信息列表；底部结果。
  * 右侧参数（输出目录）在 SettingsForm。
  */
-import { useCallback } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { useCallback } from 'react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { openPath } from '@tauri-apps/plugin-opener';
 
-import { cn } from "../../lib/cn";
-import { useWord2Pdf } from "./controller";
-import type { DocxFileInfo } from "./types";
+import { cn } from '../../lib/cn';
+import { useWord2Pdf } from './controller';
+import type { DocxFileInfo } from './types';
 
 interface Props {
   appendOutput?: (text: string) => void;
@@ -19,19 +19,19 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
 
   const addDocs = useCallback(async () => {
     const sel = await openDialog({
-      title: "选择 Word 文件（可多选）",
+      title: '选择 Word 文件（可多选）',
       multiple: true,
-      filters: [{ name: "Word", extensions: ["docx", "doc"] }],
+      filters: [{ name: 'Word', extensions: ['docx', 'doc'] }],
     });
     if (Array.isArray(sel)) c.addInputs(sel);
-    else if (typeof sel === "string") c.addInputs([sel]);
+    else if (typeof sel === 'string') c.addInputs([sel]);
   }, [c]);
 
   const handleRun = useCallback(async () => {
     const r = await c.run();
     if (!r) return;
     const ts = new Date().toLocaleTimeString();
-    if (r.kind === "ok") {
+    if (r.kind === 'ok') {
       appendOutput?.(
         `[${ts}] word2pdf: 成功 ${r.res.written.length} / 失败 ${r.res.failed.length} (共 ${r.res.total})`,
       );
@@ -44,16 +44,16 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-6 pt-4 pb-3 border-b border-vscode-border space-y-2">
-        <h1 className="text-base font-medium text-vscode-text flex items-center gap-2">
+      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
+        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
           <i className="codicon codicon-file-binary !text-[16px]" />
           Word → PDF 批量转换
         </h1>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={addDocs}
-            className="px-2 py-1 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center gap-1"
+            className="border-vscode-border flex items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
           >
             <i className="codicon codicon-add !text-[12px]" />
             添加 Word…
@@ -62,13 +62,13 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
             <button
               type="button"
               onClick={c.clearInputs}
-              className="px-2 py-1 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center gap-1"
+              className="border-vscode-border flex items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
             >
               <i className="codicon codicon-clear-all !text-[12px]" />
               清空
             </button>
           )}
-          <span className="text-xs text-vscode-text-faint">
+          <span className="text-vscode-text-faint text-xs">
             （走 COM 单进程：需装 Microsoft Word 或 WPS）
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -77,30 +77,30 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
               disabled={!canRun}
               onClick={handleRun}
               className={cn(
-                "px-3 py-1 text-xs rounded-[2px] flex items-center gap-1.5",
+                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
                 canRun
-                  ? "bg-vscode-button hover:bg-vscode-button-hover text-white"
-                  : "bg-[#3a3a3a] text-vscode-text-dim cursor-not-allowed",
+                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
+                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
               )}
             >
               {c.running && (
                 <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
               )}
-              {c.running ? "转换中…" : "开始转换"}
+              {c.running ? '转换中…' : '开始转换'}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden bg-[#252525]">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
         <PreviewPane />
       </div>
 
       {(c.result || c.runError) && (
-        <div className="px-6 py-3 border-t border-vscode-border text-xs max-h-[200px] overflow-auto space-y-2">
+        <div className="border-vscode-border max-h-[200px] space-y-2 overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="text-red-400 whitespace-pre-wrap">
-              <i className="codicon codicon-error !text-[14px] mr-1" />
+            <div className="whitespace-pre-wrap text-red-400">
+              <i className="codicon codicon-error mr-1 !text-[14px]" />
               {c.runError}
             </div>
           )}
@@ -109,22 +109,24 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
               <div className="flex items-center gap-2">
                 <i
                   className={cn(
-                    "codicon !text-[14px]",
+                    'codicon !text-[14px]',
                     c.result.failed.length === 0
-                      ? "codicon-pass text-green-400"
-                      : "codicon-warning text-yellow-400",
+                      ? 'codicon-pass text-green-400'
+                      : 'codicon-warning text-yellow-400',
                   )}
                 />
                 <span
                   className={
-                    c.result.failed.length === 0 ? "text-green-400" : "text-yellow-400"
+                    c.result.failed.length === 0
+                      ? 'text-green-400'
+                      : 'text-yellow-400'
                   }
                 >
-                  {c.result.failed.length === 0 ? "全部成功" : "部分失败"}
+                  {c.result.failed.length === 0 ? '全部成功' : '部分失败'}
                 </span>
                 <span className="text-vscode-text-dim">
-                  成功 {c.result.written.length} / 失败 {c.result.failed.length} / 共{" "}
-                  {c.result.total}
+                  成功 {c.result.written.length} / 失败 {c.result.failed.length}{' '}
+                  / 共 {c.result.total}
                 </span>
               </div>
               {c.result.written.length > 0 && (
@@ -138,7 +140,7 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
                         <button
                           type="button"
                           onClick={() => openPath(p).catch(console.error)}
-                          className="text-vscode-focus hover:underline truncate text-left"
+                          className="text-vscode-focus truncate text-left hover:underline"
                         >
                           {p.split(/[\\/]/).pop()}
                         </button>
@@ -158,7 +160,7 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
                         <div className="truncate" title={f.path}>
                           {f.path.split(/[\\/]/).pop()}
                         </div>
-                        <div className="text-red-400 ml-2">{f.error}</div>
+                        <div className="ml-2 text-red-400">{f.error}</div>
                       </li>
                     ))}
                   </ul>
@@ -177,11 +179,13 @@ function PreviewPane() {
 
   if (c.previewInfos.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-center px-8">
+      <div className="flex h-full items-center justify-center px-8 text-center">
         <div>
-          <i className="codicon codicon-file-binary !text-[48px] text-vscode-text-faint" />
-          <div className="mt-3 text-sm text-vscode-text-dim">请添加要转换的 Word 文件</div>
-          <div className="mt-1 text-xs text-vscode-text-faint">
+          <i className="codicon codicon-file-binary text-vscode-text-faint !text-[48px]" />
+          <div className="text-vscode-text-dim mt-3 text-sm">
+            请添加要转换的 Word 文件
+          </div>
+          <div className="text-vscode-text-faint mt-1 text-xs">
             选好后会显示每个文件的段落数 / 大小（若有页数缓存也会显示）
           </div>
         </div>
@@ -191,9 +195,9 @@ function PreviewPane() {
 
   if (c.previewError) {
     return (
-      <div className="flex h-full items-center justify-center text-center px-8">
-        <div className="max-w-2xl text-xs text-red-400 whitespace-pre-wrap">
-          <i className="codicon codicon-error !text-[20px] block mb-2" />
+      <div className="flex h-full items-center justify-center px-8 text-center">
+        <div className="max-w-2xl text-xs whitespace-pre-wrap text-red-400">
+          <i className="codicon codicon-error mb-2 block !text-[20px]" />
           预览失败：{c.previewError}
         </div>
       </div>
@@ -201,8 +205,8 @@ function PreviewPane() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center px-4 py-2 border-b border-vscode-border text-xs shrink-0 text-vscode-text-dim">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-vscode-border text-vscode-text-dim flex shrink-0 items-center border-b px-4 py-2 text-xs">
         <span>{c.previewInfos.length} 个 Word 文件</span>
         {c.previewLoading && (
           <span className="ml-3 flex items-center gap-1">
@@ -211,7 +215,7 @@ function PreviewPane() {
           </span>
         )}
       </div>
-      <div className="flex-1 min-h-0 overflow-auto px-4 py-2 space-y-1">
+      <div className="min-h-0 flex-1 space-y-1 overflow-auto px-4 py-2">
         {c.previewInfos.map((info, i) => (
           <DocInfoRow key={`${info.path}_${i}`} info={info} index={i} />
         ))}
@@ -227,23 +231,25 @@ function DocInfoRow({ info, index }: { info: DocxFileInfo; index: number }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-2 py-1.5 rounded-[2px] border text-xs",
+        'flex items-center gap-2 rounded-[2px] border px-2 py-1.5 text-xs',
         info.error
-          ? "bg-[#3a1f1f] border-red-900"
-          : "bg-[#2a2a2a] border-[#3a3a3a] hover:border-vscode-border",
+          ? 'border-red-900 bg-[#3a1f1f]'
+          : 'hover:border-vscode-border border-[#3a3a3a] bg-[#2a2a2a]',
       )}
     >
-      <span className="w-6 text-right text-vscode-text-faint">{index + 1}.</span>
-      <div className="flex-1 min-w-0">
+      <span className="text-vscode-text-faint w-6 text-right">
+        {index + 1}.
+      </span>
+      <div className="min-w-0 flex-1">
         <div className="text-vscode-text truncate" title={info.path}>
           {filename}
         </div>
         {info.error ? (
-          <div className="text-[11px] text-red-400 truncate" title={info.error}>
+          <div className="truncate text-[11px] text-red-400" title={info.error}>
             {info.error}
           </div>
         ) : (
-          <div className="text-[11px] text-vscode-text-faint">
+          <div className="text-vscode-text-faint text-[11px]">
             {info.paragraphs !== undefined && `${info.paragraphs} 段`}
             {info.pages !== undefined && ` · ${info.pages} 页`}
             {info.size_kb !== undefined && ` · ${info.size_kb.toFixed(1)} KB`}
@@ -254,7 +260,7 @@ function DocInfoRow({ info, index }: { info: DocxFileInfo; index: number }) {
         type="button"
         title="移除"
         onClick={() => c.removeAt(index)}
-        className="h-6 w-6 flex items-center justify-center rounded text-vscode-text-dim hover:bg-vscode-hover hover:text-red-400"
+        className="text-vscode-text-dim hover:bg-vscode-hover flex h-6 w-6 items-center justify-center rounded hover:text-red-400"
       >
         <i className="codicon codicon-close !text-[12px]" />
       </button>

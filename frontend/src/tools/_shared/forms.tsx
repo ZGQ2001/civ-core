@@ -5,7 +5,7 @@
  * 历史：原本耦合在 LeebHardnessTool.tsx 末尾，被 PdfTools / Word2Pdf 跨文件 import；
  * 随 leeb 拆 controller/Page/SettingsForm 范式，搬到这里作为三个工具共用底座。
  */
-import { cn } from "../../lib/cn";
+import { cn } from '../../lib/cn';
 
 export function Field({
   label,
@@ -18,11 +18,13 @@ export function Field({
 }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-vscode-text-dim mb-1">
+      <div className="text-vscode-text-dim mb-1 text-[11px] tracking-wider uppercase">
         {label}
       </div>
       {children}
-      {hint && <div className="mt-1 text-[11px] text-vscode-text-faint">{hint}</div>}
+      {hint && (
+        <div className="text-vscode-text-faint mt-1 text-[11px]">{hint}</div>
+      )}
     </div>
   );
 }
@@ -48,14 +50,14 @@ export function Picker({
         readOnly
         placeholder={placeholder}
         className={cn(
-          "flex-1 bg-vscode-input border border-vscode-border px-2 py-1 text-xs rounded-[2px] truncate",
-          muted ? "text-vscode-text-dim italic" : "text-vscode-text",
+          'bg-vscode-input border-vscode-border flex-1 truncate rounded-[2px] border px-2 py-1 text-xs',
+          muted ? 'text-vscode-text-dim italic' : 'text-vscode-text',
         )}
       />
       <button
         type="button"
         onClick={onPick}
-        className="px-2 py-1 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center gap-1 shrink-0"
+        className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
       >
         <i className="codicon codicon-folder-opened !text-[12px]" />
         选择…
@@ -70,7 +72,7 @@ export function ResetBtn({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="px-2 py-1 text-xs bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-vscode-border rounded-[2px] flex items-center gap-1 shrink-0"
+      className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
       title="回到默认"
     >
       <i className="codicon codicon-discard !text-[12px]" />
@@ -95,13 +97,15 @@ export function RunBtn({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "px-4 py-1.5 text-xs rounded-[2px] flex items-center gap-2",
+        'flex items-center gap-2 rounded-[2px] px-4 py-1.5 text-xs',
         !disabled
-          ? "bg-vscode-button hover:bg-vscode-button-hover text-white"
-          : "bg-[#3a3a3a] text-vscode-text-dim cursor-not-allowed",
+          ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
+          : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
       )}
     >
-      {running && <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />}
+      {running && (
+        <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+      )}
       {children}
     </button>
   );

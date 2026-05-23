@@ -235,9 +235,11 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
     if (!ACCEPTED_EXTS.has(ext)) return;
     // 外部事件灌 state — 必须留在 effect 里
-    /* eslint-disable react-hooks/set-state-in-effect */
+
     if (modeRef.current === 'merge') {
-      setMergeInputs((prev) => (prev.includes(f.path) ? prev : [...prev, f.path]));
+      setMergeInputs((prev) =>
+        prev.includes(f.path) ? prev : [...prev, f.path],
+      );
       shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));
     } else {
       setSplitInputRaw(f.path);
@@ -245,7 +247,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       setRunError(null);
       shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shell.activatedFile?.key, shell.activeToolId]);
 

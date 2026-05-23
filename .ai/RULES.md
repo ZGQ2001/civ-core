@@ -163,6 +163,19 @@ git add -A && git commit -m "feat: xxx"
 commit 信息写**为什么**，不写做了什么——diff 已经告诉读者改了啥，commit 要补充原因。
 阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`。
 
+### push 前强制检查（按改动涉及的语言全跑，不要只跑 tsc）
+
+CI 跑什么本地就得跑什么。只跑 `tsc -b --noEmit` 不够——format/lint 也是 CI 一票否决项。
+
+| 改动涉及 | 必跑全链 |
+|---------|---------|
+| 前端 `.ts/.tsx` | `cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check` |
+| Python `.py` | `uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q` |
+| C# `.cs` | `cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test` |
+| Rust `.rs` | `cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib` |
+
+发现 format/lint 报错先用 `--write`/`--fix` 自动修，再 push。**只跑通了类型检查就 push 是 CI 失败的常见根因。**
+
 ## 编码规范
 
 - **类型注解全开**：Python `from __future__ import annotations` + mypy/pyright，TS 显式类型。不只是给 IDE 看，也是给 AI 看——AI 看到类型能给出准确得多的补全和重构。

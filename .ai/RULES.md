@@ -1,6 +1,6 @@
 # 编码规范与参考清单
 
-> **角色**：AI 编码时的详细参考。当需要查 RPC 方法清单、目录结构、测试命令、已知技术债时加载。
+> **角色**：AI 编码时的详细参考。当需要查 RPC 方法清单、目录结构、测试命令、Git 工作流、已知技术债时加载。
 > **维护**：AI 每次改架构/RPC/技术栈后更新。用户不改。
 > **配套**：`CLAUDE.md`（宪法）| `PROGRESS.md`（里程碑）| `CONTEXT.md`（当前焦点）
 
@@ -17,7 +17,7 @@
 | `src/civ_core/configs/` | 配置加载，`lru_cache` 单例 | Python |
 | `src/civ_core/utils/` | 日志/异常/工具函数，无业务逻辑 | Python |
 | `dotnet/civ-doc/` | C# sidecar：JSON-RPC server + Calc/Handlers/StandardsDb/ReportTables | C# |
-| `dotnet/civ-doc.Tests/` | xUnit 测试项目（40 个测试） | C# |
+| `dotnet/civ-doc.Tests/` | xUnit 测试项目（65 个测试） | C# |
 | `frontend/src/` | React 前端，`components/` + `tools/` + `lib/` | TS/TSX |
 | `frontend/src-tauri/` | Tauri 主进程，`sidecar.rs` + `lib.rs` | Rust |
 | `presets/` | 系统预设，运行时只读 | — |
@@ -137,18 +137,30 @@ const handleRun = useCallback(async () => {
 
 ```bash
 # Python（283 pytest）
-uv run --frozen ruff check . && uv run --frozen pytest -q
+uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q
 uv run --frozen python scripts/healthcheck.py   # 6 项冒烟（每次验收必跑）
 
-# C#（40 xUnit）
-cd dotnet/civ-doc && dotnet build && dotnet test
+# C#（65 xUnit）
+cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test
 
 # Rust（2 cargo test）
-cd frontend/src-tauri && cargo check && cargo test --lib
+cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib && cargo test --lib
 
 # 前端 TS
-cd frontend && npx tsc -b --noEmit
+cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check
 ```
+
+## Git 工作流
+
+```bash
+# 会话开始：保存检查点
+git add -A && git commit -m "chore: 会话检查点"
+
+# 每步完成：独立提交（不用 emoji）
+git add -A && git commit -m "feat: xxx"
+```
+
+阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`。
 
 ## 中国镜像
 

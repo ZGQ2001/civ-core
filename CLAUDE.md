@@ -91,11 +91,11 @@ graph TB
 
 ## 技术栈
 
-- Python 3.12+, `uv` 管理，禁 pip install
-- C# .NET 9, ClosedXML 0.105, Microsoft.Data.Sqlite 10.0
-- 前端 Vite + React 19 + TypeScript + Tailwind v4 + @vscode/codicons
-- 主进程 Tauri 2.11 (Rust)
-- JSON-RPC 2.0 over stdin/stdout，行协议
+- Python + uv（禁 pip install）
+- C# .NET + ClosedXML + Microsoft.Data.Sqlite
+- 前端 Vite + React + TypeScript + Tailwind + codicons
+- 主进程 Tauri (Rust)
+- JSON-RPC 2.0 over stdin/stdout
 
 ## RPC 路由
 
@@ -124,15 +124,24 @@ graph TB
 - [ ] handler 写了 `__all__` 吗？
 - [ ] 前端 `run()` 是 `return` 值还是读闭包？
 
-## 工作流
+## 行为准则
 
-1. 会话开始：`git add -A && git commit -m "chore: 会话检查点"` → 读本文件 + `.ai/CONTEXT.md` → 报告状态→确认后动手
-2. 单步完成：`git add -A && git commit -m "feat: xxx"`（不用 emoji）
-3. 改 Python：`uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q && uv run --frozen python scripts/healthcheck.py`
-4. 改 C#：`cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test`
-5. 改 Rust：`cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib && cargo test --lib`
-6. 改前端：`cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check`
-7. 阶段结束→更新 `.ai/CONTEXT.md`；里程碑完成→更新 `.ai/PROGRESS.md`
+### 1. 先想再动手
+不确定就问，别猜。有多个方案就列出来比，别自作主张。
+觉得哪里不对直接说出来，推回去也要说为什么。
+
+### 2. 最简方案
+只写被要求的东西。别为「以后可能用」加功能。
+单次调用的代码不做抽象。200 行能缩到 50 就缩。
+
+### 3. 手术刀改动
+只碰跟你任务相关的代码。
+不改相邻代码的格式和注释——哪怕你觉得不好。
+不该删的东西别删。你造成的 orphan 自己清，跟你无关的 dead code 别碰。
+
+### 4. 跑通才算完
+把任务转成可验证目标：「加校验」→「先写失败测试，再让它过」。
+每一步有验证点。跑通验证才算这步完了，没跑通别往下一步走。
 
 ## 边界
 

@@ -27,13 +27,18 @@ import { logLine, useShell } from '../../lib/shell';
 import type {
   AnchorParams,
   AnchorStandard,
+  AnchorUserInputs,
   CalcType,
   CellValue,
   MergeRange,
   PreviewRes,
   RunRes,
 } from './types';
-import { ANCHOR_DEFAULT_BATCH_COL, DEFAULT_ANCHOR_PARAMS } from './types';
+import {
+  ANCHOR_DEFAULT_BATCH_COL,
+  DEFAULT_ANCHOR_PARAMS,
+  DEFAULT_ANCHOR_USER_INPUTS,
+} from './types';
 
 const TOOL_ID = 'data_processing';
 /** 本工具可接收的文件扩展名（文件树双击时由 useShell 自动灌进来）。 */
@@ -74,6 +79,9 @@ interface State {
   anchorBatchesLoading: boolean;
   anchorBatchesError: string | null;
   anchorParamsByBatch: Record<string, AnchorParams>;
+  anchorWordTemplate: string;
+  anchorWordOutputDir: string;
+  anchorUserInputs: AnchorUserInputs;
 }
 
 interface Actions {
@@ -91,6 +99,9 @@ interface Actions {
   setAnchorParamsForBatch: (batchId: string, params: AnchorParams) => void;
   setAnchorParamsForAllBatches: (params: AnchorParams) => void;
   generateAnchorTemplate: (outputPath: string) => Promise<string | null>;
+  setAnchorWordTemplate: (path: string) => void;
+  setAnchorWordOutputDir: (path: string) => void;
+  setAnchorUserInput: (field: keyof AnchorUserInputs, value: string) => void;
 }
 
 /** 模板生成结果（按钮下方反馈用）。 */
@@ -162,6 +173,11 @@ export function DataProcessingProvider({
   >({});
   const [anchorTemplateStatus, setAnchorTemplateStatus] =
     useState<TemplateStatus>({ kind: 'idle' });
+  const [anchorWordTemplate, setAnchorWordTemplate] = useState('');
+  const [anchorWordOutputDir, setAnchorWordOutputDir] = useState('');
+  const [anchorUserInputs, setAnchorUserInputs] = useState<AnchorUserInputs>({
+    ...DEFAULT_ANCHOR_USER_INPUTS,
+  });
 
   // 切 Excel → 清掉旧预览 + 清 sheet 选择 + 清结果 + 清批次
   const setExcelPath = useCallback((p: string) => {
@@ -303,6 +319,13 @@ export function DataProcessingProvider({
     });
   }, []);
 
+  const setAnchorUserInput = useCallback(
+    (field: keyof AnchorUserInputs, value: string) => {
+      setAnchorUserInputs((prev) => ({ ...prev, [field]: value }));
+    },
+    [],
+  );
+
   const generateAnchorTemplate = useCallback(
     async (savePath: string): Promise<string | null> => {
       setAnchorTemplateStatus({ kind: 'running' });
@@ -390,23 +413,38 @@ export function DataProcessingProvider({
       };
       if (sheet) params.sheet = sheet;
       if (outputPath.trim()) params.output_xlsx = outputPath.trim();
+      if (anchorWordTemplate.trim()) {
+        params.word_template_path = anchorWordTemplate.trim();
+        if (anchorWordOutputDir.trim())
+          params.word_output_dir = anchorWordOutputDir.trim();
+        params.user_inputs = anchorUserInputs;
+      }
 
       const res = await rpc<{
         batches: number;
         anchors_total: number;
         anchors_qualified: number;
         output: string;
+        word_outputs?: string[];
       }>('anchor.run', params);
 
       const display: RunRes = {
         calcType: 'anchor',
         output: res.output,
         summary: `${res.batches} 批 / ${res.anchors_qualified}/${res.anchors_total} 合格`,
+        wordOutputs: res.word_outputs,
       };
       setResult(display);
       shell.appendOutput(
         logLine(`[锚杆] 完成: ${display.summary} → ${display.output}`),
       );
+      if (display.wordOutputs && display.wordOutputs.length > 0) {
+        shell.appendOutput(
+          logLine(
+            `[锚杆] Word 报告: ${display.wordOutputs.length} 份 → ${display.wordOutputs.join(', ')}`,
+          ),
+        );
+      }
       shell.notifyFilesChanged();
       return display;
     } catch (e) {
@@ -427,6 +465,9 @@ export function DataProcessingProvider({
     anchorStandard,
     anchorBatchIdColumn,
     anchorParamsByBatch,
+    anchorWordTemplate,
+    anchorWordOutputDir,
+    anchorUserInputs,
     shell,
   ]);
 
@@ -472,6 +513,9 @@ export function DataProcessingProvider({
       anchorBatchesLoading,
       anchorBatchesError,
       anchorParamsByBatch,
+      anchorWordTemplate,
+      anchorWordOutputDir,
+      anchorUserInputs,
       anchorTemplateStatus,
       setCalcType,
       setExcelPath,
@@ -485,6 +529,9 @@ export function DataProcessingProvider({
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
       generateAnchorTemplate,
+      setAnchorWordTemplate,
+      setAnchorWordOutputDir,
+      setAnchorUserInput,
     }),
     [
       calcType,
@@ -511,6 +558,9 @@ export function DataProcessingProvider({
       anchorBatchesLoading,
       anchorBatchesError,
       anchorParamsByBatch,
+      anchorWordTemplate,
+      anchorWordOutputDir,
+      anchorUserInputs,
       anchorTemplateStatus,
       setExcelPath,
       setCalcType,
@@ -518,6 +568,7 @@ export function DataProcessingProvider({
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
       generateAnchorTemplate,
+      setAnchorUserInput,
     ],
   );
 

@@ -160,19 +160,42 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
             </div>
           )}
           {c.result && (
-            <div className="flex items-center gap-2">
-              <i className="codicon codicon-pass !text-[14px] text-green-400" />
-              <span className="text-vscode-text">
-                计算完成 · {c.result.summary}
-              </span>
-              <button
-                type="button"
-                onClick={() => openPath(c.result!.output).catch(console.error)}
-                className="text-vscode-focus ml-auto truncate hover:underline"
-                title={c.result.output}
-              >
-                打开输出 Excel
-              </button>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <i className="codicon codicon-pass !text-[14px] text-green-400" />
+                <span className="text-vscode-text">
+                  计算完成 · {c.result.summary}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openPath(c.result!.output).catch(console.error)
+                  }
+                  className="text-vscode-focus ml-auto truncate hover:underline"
+                  title={c.result.output}
+                >
+                  打开输出 Excel
+                </button>
+              </div>
+              {c.result.wordOutputs && c.result.wordOutputs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5">
+                  <i className="codicon codicon-file-text text-vscode-text-dim !text-[13px]" />
+                  <span className="text-vscode-text-dim text-[11px]">
+                    Word 报告 ({c.result.wordOutputs.length} 份):
+                  </span>
+                  {c.result.wordOutputs.map((wp) => (
+                    <button
+                      key={wp}
+                      type="button"
+                      onClick={() => openPath(wp).catch(console.error)}
+                      className="text-vscode-focus truncate text-[11px] hover:underline"
+                      title={wp}
+                    >
+                      {wp.split(/[\\/]/).pop()}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

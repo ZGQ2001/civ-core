@@ -29,6 +29,7 @@ import type {
   AnchorStandard,
   CalcType,
   CellValue,
+  MergeRange,
   PreviewRes,
   RunRes,
 } from './types';
@@ -55,6 +56,7 @@ interface State {
   sheets: string[];
   previewHeaders: string[];
   previewRows: Record<string, CellValue>[];
+  previewMerges: MergeRange[];
   previewTotalRows: number;
   previewShownRows: number;
   previewLoading: boolean;
@@ -134,6 +136,7 @@ export function DataProcessingProvider({
   const [previewRows, setPreviewRows] = useState<Record<string, CellValue>[]>(
     [],
   );
+  const [previewMerges, setPreviewMerges] = useState<MergeRange[]>([]);
   const [previewTotalRows, setPreviewTotalRows] = useState(0);
   const [previewShownRows, setPreviewShownRows] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -167,6 +170,7 @@ export function DataProcessingProvider({
     setSheets([]);
     setPreviewHeaders([]);
     setPreviewRows([]);
+    setPreviewMerges([]);
     setPreviewError(null);
     setResult(null);
     setRunError(null);
@@ -222,6 +226,7 @@ export function DataProcessingProvider({
           setSheets(r.sheets);
           setPreviewHeaders(r.headers);
           setPreviewRows(r.rows);
+          setPreviewMerges(r.merges ?? []);
           setPreviewTotalRows(r.total_rows);
           setPreviewShownRows(r.shown_rows);
           if (r.sheet && r.sheet !== sheet) setSheet(r.sheet);
@@ -231,6 +236,7 @@ export function DataProcessingProvider({
           setPreviewError(String(e));
           setPreviewHeaders([]);
           setPreviewRows([]);
+          setPreviewMerges([]);
           setPreviewTotalRows(0);
           setPreviewShownRows(0);
         })
@@ -451,6 +457,7 @@ export function DataProcessingProvider({
       sheets,
       previewHeaders,
       previewRows,
+      previewMerges,
       previewTotalRows,
       previewShownRows,
       previewLoading,
@@ -489,6 +496,7 @@ export function DataProcessingProvider({
       sheets,
       previewHeaders,
       previewRows,
+      previewMerges,
       previewTotalRows,
       previewShownRows,
       previewLoading,

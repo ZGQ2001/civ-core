@@ -47,9 +47,7 @@ async fn watch_workspace(
 
 /// 停止文件系统监控。
 #[tauri::command]
-async fn unwatch_workspace(
-    state: tauri::State<'_, watcher::WatcherState>,
-) -> Result<(), String> {
+async fn unwatch_workspace(state: tauri::State<'_, watcher::WatcherState>) -> Result<(), String> {
     state.0.lock().map_err(|e| e.to_string())?.take();
     Ok(())
 }

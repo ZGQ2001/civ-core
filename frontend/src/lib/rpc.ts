@@ -17,9 +17,16 @@ function translateError(raw: unknown): string {
     return '操作超时，请重试';
   if (msg.includes('FileNotFoundException') || msg.includes('文件不存在'))
     return '文件不存在，请检查路径是否正确';
-  if (msg.includes('FileFormatException') || msg.includes('not a valid package'))
+  if (
+    msg.includes('FileFormatException') ||
+    msg.includes('not a valid package')
+  )
     return '该文件不是有效的 Excel 文件，请检查文件是否损坏';
-  if (msg.includes('PermissionError') || msg.includes('Access') || msg.includes('被占用'))
+  if (
+    msg.includes('PermissionError') ||
+    msg.includes('Access') ||
+    msg.includes('被占用')
+  )
     return '文件被占用，请关闭 Excel/Word 后重试';
   return msg;
 }

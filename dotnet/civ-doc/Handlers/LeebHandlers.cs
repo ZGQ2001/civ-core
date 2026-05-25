@@ -176,6 +176,22 @@ public static class LeebHandlers
             rows.Add(rowDict);
         }
 
+        // 合并单元格信息（0-based，相对于数据区起始行）
+        var merges = new List<Dictionary<string, int>>();
+        foreach (var range in ws.MergedRanges)
+        {
+            int sr = range.FirstRow().RowNumber() - headerRow - 1;
+            int er = range.LastRow().RowNumber() - headerRow - 1;
+            int sc = range.FirstColumn().ColumnNumber() - 1;
+            int ec = range.LastColumn().ColumnNumber() - 1;
+            if (er < 0 || sc >= maxCol) continue;
+            if (sr < 0) sr = 0;
+            merges.Add(new Dictionary<string, int>
+            {
+                ["sr"] = sr, ["sc"] = sc, ["er"] = er, ["ec"] = ec,
+            });
+        }
+
         return new Dictionary<string, object?>
         {
             ["sheets"] = sheets,
@@ -184,6 +200,7 @@ public static class LeebHandlers
             ["rows"] = rows,
             ["total_rows"] = totalRows,
             ["shown_rows"] = rows.Count,
+            ["merges"] = merges,
         };
     }
 

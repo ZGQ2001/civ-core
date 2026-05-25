@@ -17,6 +17,13 @@ export const CALC_TYPE_LABELS: Record<CalcType, string> = {
 
 export type CellValue = string | number | boolean | null;
 
+export interface MergeRange {
+  sr: number;
+  sc: number;
+  er: number;
+  ec: number;
+}
+
 export interface PreviewRes {
   sheets: string[];
   sheet: string;
@@ -24,6 +31,7 @@ export interface PreviewRes {
   rows: Record<string, CellValue>[];
   total_rows: number;
   shown_rows: number;
+  merges?: MergeRange[];
 }
 
 /**

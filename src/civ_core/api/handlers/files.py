@@ -26,6 +26,7 @@ RPC 方法：
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -94,6 +95,11 @@ def _unique_dst(parent: Path, name: str) -> Path:
     raise OSError(f"无法生成不冲突的名字（已尝试 1000 次）：{parent / name}")
 
 
+def _natural_sort_key(name: str) -> list:
+    """'file2' < 'file10' < 'file100'（数字段按数值比较，其余按小写字母序）。"""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
+
+
 def list_dir(path: str, show_hidden: bool = False) -> dict:
     """列举目录下一级内容。子目录排前，按名字升序。"""
     p = Path(path)
@@ -122,8 +128,8 @@ def list_dir(path: str, show_hidden: bool = False) -> dict:
                 "mtime": mtime,
             }
         )
-    # 目录在前 + 字母序
-    entries.sort(key=lambda e: (not e["is_dir"], e["name"].lower()))
+    # 目录在前 + 自然排序（"file2" < "file10" < "file100"）
+    entries.sort(key=lambda e: (not e["is_dir"], _natural_sort_key(e["name"])))
     return {"entries": entries}
 
 

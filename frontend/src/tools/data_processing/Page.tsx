@@ -2,13 +2,18 @@
  * data_processing 工具页主区：顶部操作行（含「计算类型」下拉）+ 中间 Excel 前 N 行预览 + 底部结果。
  * 所有状态走 useDataProcessing；右侧参数（输出路径 / 默认角度 / 其他算法特定参数）在 SettingsForm。
  */
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
 import { useDataProcessing } from './controller';
-import { CALC_TYPE_LABELS, type CalcType, type CellValue } from './types';
+import {
+  CALC_TYPE_LABELS,
+  type CalcType,
+  type CellValue,
+  type MergeRange,
+} from './types';
 
 interface Props {
   appendOutput?: (text: string) => void;
@@ -240,45 +245,85 @@ function PreviewPane() {
           </span>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse text-[11px]">
-          <thead className="sticky top-0 bg-[#1f1f1f]">
-            <tr>
-              <th className="text-vscode-text-faint border-vscode-border w-12 border-b px-2 py-1 text-right font-normal">
-                #
-              </th>
-              {c.previewHeaders.map((h) => (
-                <th
-                  key={h}
-                  className="text-vscode-text border-vscode-border border-b px-2 py-1 text-left font-medium whitespace-nowrap"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {c.previewRows.map((row, i) => (
-              <tr
-                key={i}
-                className={i % 2 === 0 ? 'bg-[#252525]' : 'bg-[#2a2a2a]'}
+      <MergeAwareTable
+        headers={c.previewHeaders}
+        rows={c.previewRows}
+        merges={c.previewMerges}
+      />
+    </div>
+  );
+}
+
+function MergeAwareTable({
+  headers,
+  rows,
+  merges,
+}: {
+  headers: string[];
+  rows: Record<string, CellValue>[];
+  merges: MergeRange[];
+}) {
+  const { suppressedSet, mergeMap } = useMemo(() => {
+    const sup = new Set<string>();
+    const mm = new Map<string, { rowSpan: number; colSpan: number }>();
+    for (const m of merges) {
+      const rs = m.er - m.sr + 1;
+      const cs = m.ec - m.sc + 1;
+      mm.set(`${m.sr}-${m.sc}`, { rowSpan: rs, colSpan: cs });
+      for (let r = m.sr; r <= m.er; r++) {
+        for (let c = m.sc; c <= m.ec; c++) {
+          if (r !== m.sr || c !== m.sc) sup.add(`${r}-${c}`);
+        }
+      }
+    }
+    return { suppressedSet: sup, mergeMap: mm };
+  }, [merges]);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      <table className="w-full border-collapse text-[11px]">
+        <thead className="sticky top-0 bg-[#1f1f1f]">
+          <tr>
+            <th className="text-vscode-text-faint border-vscode-border w-12 border-b px-2 py-1 text-right font-normal">
+              #
+            </th>
+            {headers.map((h) => (
+              <th
+                key={h}
+                className="text-vscode-text border-vscode-border border-b px-2 py-1 text-left font-medium whitespace-nowrap"
               >
-                <td className="text-vscode-text-faint border-b border-[#333] px-2 py-1 text-right">
-                  {i + 1}
-                </td>
-                {c.previewHeaders.map((h) => (
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr
+              key={i}
+              className={i % 2 === 0 ? 'bg-[#252525]' : 'bg-[#2a2a2a]'}
+            >
+              <td className="text-vscode-text-faint border-b border-[#333] px-2 py-1 text-right">
+                {i + 1}
+              </td>
+              {headers.map((h, ci) => {
+                if (suppressedSet.has(`${i}-${ci}`)) return null;
+                const span = mergeMap.get(`${i}-${ci}`);
+                return (
                   <td
                     key={h}
+                    rowSpan={span?.rowSpan}
+                    colSpan={span?.colSpan}
                     className="text-vscode-text border-b border-[#333] px-2 py-1 whitespace-nowrap"
                   >
                     {formatCell(row[h])}
                   </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

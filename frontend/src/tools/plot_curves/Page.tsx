@@ -412,18 +412,24 @@ function RowDataStrip() {
   const c = usePlotCurves();
   const rowData = c.previewRowData;
 
-  const referenced = new Set<string>();
+  const orderedKeys: string[] = [];
+  const seen = new Set<string>();
   if (c.effectivePreset) {
-    if (c.effectivePreset.id_column)
-      referenced.add(c.effectivePreset.id_column);
+    const add = (k: string) => {
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        orderedKeys.push(k);
+      }
+    };
+    add(c.effectivePreset.id_column);
     for (const curve of c.effectivePreset.curves) {
       for (const pt of curve.points as Array<{ var_column?: string }>) {
-        if (pt?.var_column) referenced.add(pt.var_column);
+        if (pt?.var_column) add(pt.var_column);
       }
     }
   }
 
-  const visibleKeys = Object.keys(rowData).filter((k) => referenced.has(k));
+  const visibleKeys = orderedKeys.filter((k) => k in rowData);
 
   return (
     <div className="border-vscode-border shrink-0 border-t bg-[#1a1a1a]">

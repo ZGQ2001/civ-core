@@ -74,6 +74,7 @@ public static class AnchorHandlers
             ? bEl.GetString() ?? AnchorColumns.DefaultBatchIdColumn
             : AnchorColumns.DefaultBatchIdColumn;
 
+        FileGuard.CheckExcelSize(inputXlsx);
         var batches = AnchorExcelReader.ListBatchIds(inputXlsx, sheet, batchCol);
         return new Dictionary<string, object?> { ["batches"] = batches };
     }
@@ -99,6 +100,8 @@ public static class AnchorHandlers
             && bEl.ValueKind == JsonValueKind.String
             ? bEl.GetString() ?? AnchorColumns.DefaultBatchIdColumn
             : AnchorColumns.DefaultBatchIdColumn;
+
+        FileGuard.CheckExcelSize(inputXlsx);
 
         // params_by_batch: { "B1": {P,Lf,La,A,E}, "B2": {...}, ... }
         var paramsByBatch = ParseParamsByBatch(p.GetProperty("params_by_batch"));

@@ -51,6 +51,9 @@ public static class LeebHandlers
             ?? Path.Combine(src.DirectoryName ?? "",
                 $"{Path.GetFileNameWithoutExtension(src.Name)}_{CalcTypeSuffix}_结果.xlsx");
 
+        // 大文件守卫
+        FileGuard.CheckExcelSize(inputXlsx);
+
         // 读 Excel + 算
         var workbook = LeebExcelReader.ReadWorkbook(
             inputXlsx, defaultAngleDegrees: angleDegrees);
@@ -100,9 +103,10 @@ public static class LeebHandlers
         var p = @params.Value;
 
         var path = p.GetProperty("path").GetString()
-            ?? throw new ArgumentException("未指定 Excel 文件路径");
+            ?? throw new ArgumentException("未指定 Excel 文��路径");
         if (!File.Exists(path))
             throw new ArgumentException($"文件不存在：{path}");
+        FileGuard.CheckExcelSize(path);
         string? sheetParam = p.TryGetProperty("sheet", out var sEl)
             && sEl.ValueKind == JsonValueKind.String ? sEl.GetString() : null;
         int headerRow = p.TryGetProperty("header_row", out var hEl) ? hEl.GetInt32() : 1;

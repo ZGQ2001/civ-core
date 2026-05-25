@@ -16,7 +16,7 @@
 | **P1** | `audit/2026-05-24-04-点击顺序错误.md` | 计算中切换模式无 abort，旧结果写错 state | WONTFIX (reqIdRef 已防数据串位；真 abort 需 sidecar 支持) |
 | **P1** | `audit/2026-05-24-03-按钮防重复点击.md` | 预设操作 + FileTree 粘贴/撤销无 running 守卫 | DONE (busy 状态守卫) |
 | **P2** | `audit/2026-05-24-05-数据格式有误.md` | 错误码统一 -32603（应 -32602） | DONE (-32602 分流已加) |
-| **P2** | `audit/2026-05-24-07-大文件与内存.md` | Excel 全量加载无上限守卫（正常数据量安全） | TODO |
+| **P2** | `audit/2026-05-24-07-大文件与内存.md` | Excel 全量加载无上限守卫 | DONE (FileGuard.CheckExcelSize > 50MB 拦截) |
 
 ### 下一步
 

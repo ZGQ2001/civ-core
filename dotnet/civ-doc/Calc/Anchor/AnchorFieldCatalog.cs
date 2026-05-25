@@ -19,6 +19,9 @@ public static class AnchorFieldCatalog
     /// <summary>所有可绑定字段（按报告版面分组顺序排列，方便前端 BindingPanel 直接渲染）。</summary>
     public static readonly FieldDef[] All =
     [
+        // ── 批次标识 ──
+        FieldDef.Create("batch_id", "批次编号", FieldSource.Parameter, "string"),
+
         // ── 委托方/工程参数（同批次共享，从 AnchorParams 取） ──
         FieldDef.Create("axial_design_load", "轴向拉力设计值 P (N)", FieldSource.Parameter, "double", "0.00"),
         FieldDef.Create("free_length",       "自由段长度 Lf (mm)",   FieldSource.Parameter, "double", "0.0"),

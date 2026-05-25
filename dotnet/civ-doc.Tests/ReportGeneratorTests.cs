@@ -222,4 +222,177 @@ public class ReportGeneratorTests : IDisposable
         Assert.DoesNotContain(customMarker, inner); // 自定义 marker 段也已删
         Assert.Contains("X", inner);
     }
+
+    // ── GenerateMultiBatch 三级模板 ────────────────────────
+
+    private string MakeMultiBatchTemplate(
+        string fileName,
+        string? globalIntro = null,
+        string? footer = null)
+    {
+        var path = Path.Combine(_tmp.Dir, fileName);
+        using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
+        var mainPart = doc.AddMainDocumentPart();
+        mainPart.Document = new Document(new Body());
+        var body = mainPart.Document.Body!;
+
+        if (globalIntro != null)
+            body.AppendChild(MakePara(globalIntro));
+
+        body.AppendChild(MakePara("[[批次]]"));
+        body.AppendChild(MakePara("批次：{batch_id}，设计值：{axial_design_load}"));
+        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowMarker));
+
+        var tb = new DocxTableBuilder();
+        tb.Row(new CellSpec("编号"), new CellSpec("位移"), new CellSpec("结果"));
+        tb.Row(new CellSpec("{anchor_id}"), new CellSpec("{elastic_displacement}"), new CellSpec("{judgement_result}"));
+        body.AppendChild(tb.Build());
+
+        body.AppendChild(MakePara("[[/批次]]"));
+
+        if (footer != null)
+            body.AppendChild(MakePara(footer));
+
+        return path;
+    }
+
+    private static Paragraph MakePara(string text)
+        => new(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
+
+    [Fact]
+    public void MultiBatch_单批次_等价于单级()
+    {
+        var src = MakeMultiBatchTemplate("mb_single.docx", globalIntro: "项目：{project_name}");
+        var global = new DictResolver(new() { ["project_name"] = "测试工程" });
+        var batch = new BatchSection(
+            new DictResolver(new() { ["batch_id"] = "B1", ["axial_design_load"] = "180000" }),
+            new IFieldResolver[]
+            {
+                new DictResolver(new() { ["anchor_id"] = "P-01", ["elastic_displacement"] = "1.23", ["judgement_result"] = "合格" }),
+            });
+        var outPath = Path.Combine(_tmp.Dir, "mb_single_out.docx");
+
+        var res = ReportGenerator.GenerateMultiBatch(src, global, new[] { batch }, outPath);
+
+        Assert.Equal(1, res.RowsRendered);
+        var inner = ReadAllText(outPath);
+        Assert.Contains("项目：测试工程", inner);
+        Assert.Contains("批次：B1", inner);
+        Assert.Contains("P-01", inner);
+        Assert.Contains("合格", inner);
+        Assert.DoesNotContain("[[批次]]", inner);
+        Assert.DoesNotContain("[[/批次]]", inner);
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowMarker, inner);
+    }
+
+    [Fact]
+    public void MultiBatch_多批次_各批次独立填充()
+    {
+        var src = MakeMultiBatchTemplate("mb_multi.docx", globalIntro: "委托方：{client_name}");
+        var global = new DictResolver(new() { ["client_name"] = "ABC集团" });
+        var batches = new BatchSection[]
+        {
+            new(
+                new DictResolver(new() { ["batch_id"] = "B1", ["axial_design_load"] = "100" }),
+                new IFieldResolver[]
+                {
+                    new DictResolver(new() { ["anchor_id"] = "P-01", ["elastic_displacement"] = "1.0", ["judgement_result"] = "合格" }),
+                    new DictResolver(new() { ["anchor_id"] = "P-02", ["elastic_displacement"] = "2.0", ["judgement_result"] = "不合格" }),
+                }),
+            new(
+                new DictResolver(new() { ["batch_id"] = "B2", ["axial_design_load"] = "200" }),
+                new IFieldResolver[]
+                {
+                    new DictResolver(new() { ["anchor_id"] = "P-03", ["elastic_displacement"] = "3.0", ["judgement_result"] = "合格" }),
+                }),
+        };
+        var outPath = Path.Combine(_tmp.Dir, "mb_multi_out.docx");
+
+        var res = ReportGenerator.GenerateMultiBatch(src, global, batches, outPath);
+
+        Assert.Equal(3, res.RowsRendered);
+        var inner = ReadAllText(outPath);
+        // 全局
+        Assert.Contains("委托方：ABC集团", inner);
+        // B1 批次区块
+        Assert.Contains("批次：B1", inner);
+        Assert.Contains("设计值：100", inner);
+        Assert.Contains("P-01", inner);
+        Assert.Contains("P-02", inner);
+        // B2 批次区块
+        Assert.Contains("批次：B2", inner);
+        Assert.Contains("设计值：200", inner);
+        Assert.Contains("P-03", inner);
+        // marker 全部已删
+        Assert.DoesNotContain("[[批次]]", inner);
+        Assert.DoesNotContain("[[/批次]]", inner);
+        // 表数量 = 3（B1 两张 + B2 一张）
+        var tables = ReadTables(outPath);
+        Assert.Equal(3, tables.Count);
+    }
+
+    [Fact]
+    public void MultiBatch_全局字段不侵入批次区块()
+    {
+        var src = MakeMultiBatchTemplate("mb_scope.docx", globalIntro: "项目：{project_name}");
+        var global = new DictResolver(new() { ["project_name"] = "全局值" });
+        var batch = new BatchSection(
+            new DictResolver(new() { ["batch_id"] = "X", ["axial_design_load"] = "999" }),
+            new IFieldResolver[]
+            {
+                new DictResolver(new() { ["anchor_id"] = "R1", ["elastic_displacement"] = "0", ["judgement_result"] = "Y" }),
+            });
+        var outPath = Path.Combine(_tmp.Dir, "mb_scope_out.docx");
+
+        var res = ReportGenerator.GenerateMultiBatch(src, global, new[] { batch }, outPath);
+
+        Assert.Empty(res.UnknownKeys);
+        var inner = ReadAllText(outPath);
+        Assert.Contains("项目：全局值", inner);
+        Assert.Contains("批次：X", inner);
+    }
+
+    [Fact]
+    public void MultiBatch_模板后有尾部内容_保留()
+    {
+        var src = MakeMultiBatchTemplate("mb_footer.docx",
+            globalIntro: "头部", footer: "检测结论：全部合格");
+        var global = new DictResolver(new());
+        var batch = new BatchSection(
+            new DictResolver(new() { ["batch_id"] = "B1", ["axial_design_load"] = "0" }),
+            new IFieldResolver[]
+            {
+                new DictResolver(new() { ["anchor_id"] = "A", ["elastic_displacement"] = "0", ["judgement_result"] = "OK" }),
+            });
+        var outPath = Path.Combine(_tmp.Dir, "mb_footer_out.docx");
+
+        ReportGenerator.GenerateMultiBatch(src, global, new[] { batch }, outPath);
+
+        var inner = ReadAllText(outPath);
+        Assert.Contains("头部", inner);
+        Assert.Contains("检测结论：全部合格", inner);
+        Assert.Contains("批次：B1", inner);
+    }
+
+    [Fact]
+    public void MultiBatch_缺起始marker_抛异常()
+    {
+        var src = MakeTemplate("mb_no_start.docx", null); // 没有 [[批次]]
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.GenerateMultiBatch(src, new DictResolver(new()),
+                new[] { new BatchSection(new DictResolver(new()), Array.Empty<IFieldResolver>()) },
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains("[[批次]]", ex.Message);
+    }
+
+    [Fact]
+    public void MultiBatch_零批次_抛异常()
+    {
+        var src = MakeMultiBatchTemplate("mb_empty.docx");
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.GenerateMultiBatch(src, new DictResolver(new()),
+                Array.Empty<BatchSection>(),
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains("没有可填", ex.Message);
+    }
 }

@@ -502,11 +502,24 @@ function PreviewImage() {
 function PresetCrudButtons() {
   const c = usePlotCurves();
   const isUser = c.currentSource === 'user';
+  const [busy, setBusy] = useState(false);
 
-  const handleNewBlank = async () => {
+  const guard = useCallback(
+    (fn: () => Promise<void>) => async () => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        await fn();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy],
+  );
+
+  const handleNewBlank = guard(async () => {
     const name = window.prompt('新建曲线；输入名字：', '新曲线');
     if (!name?.trim()) return;
-    // 默认模板：必填字段 + 一条默认曲线（避免用户进 form 看到"还没定义曲线"困惑）
     const blank: PlotPreset = {
       id_column: '',
       filename_template: '{id}.png',
@@ -529,11 +542,10 @@ function PresetCrudButtons() {
     } catch (e) {
       alert(`新建失败：${String(e)}`);
     }
-  };
+  });
 
-  const handleSave = async () => {
+  const handleSave = guard(async () => {
     if (!c.effectivePreset || !c.preset) return;
-    // 内置曲线 + 已编辑 → 强制弹"另存为"；自己的曲线直接覆盖
     if (c.currentSource === 'system') {
       const name = window.prompt(
         `当前曲线「${c.preset}」是内置曲线（只读）。\n输入新名字另存为我的曲线：`,
@@ -554,9 +566,9 @@ function PresetCrudButtons() {
         alert(`保存失败：${String(e)}`);
       }
     }
-  };
+  });
 
-  const handleCopy = async () => {
+  const handleCopy = guard(async () => {
     if (!c.preset) return;
     const name = window.prompt(
       '复制为新曲线；输入新名字：',
@@ -568,9 +580,9 @@ function PresetCrudButtons() {
     } catch (e) {
       alert(`复制失败：${String(e)}`);
     }
-  };
+  });
 
-  const handleRename = async () => {
+  const handleRename = guard(async () => {
     if (!c.preset || !isUser) return;
     const name = window.prompt(`重命名「${c.preset}」为：`, c.preset);
     if (!name?.trim() || name.trim() === c.preset) return;
@@ -579,9 +591,9 @@ function PresetCrudButtons() {
     } catch (e) {
       alert(`重命名失败：${String(e)}`);
     }
-  };
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = guard(async () => {
     if (!c.preset || !isUser) return;
     if (!window.confirm(`确定删除曲线「${c.preset}」？此操作不可撤销。`))
       return;
@@ -590,7 +602,7 @@ function PresetCrudButtons() {
     } catch (e) {
       alert(`删除失败：${String(e)}`);
     }
-  };
+  });
 
   return (
     <div className="flex items-center gap-1">
@@ -598,12 +610,13 @@ function PresetCrudButtons() {
         <button
           type="button"
           onClick={handleSave}
+          disabled={busy}
           title={
             c.currentSource === 'system'
               ? '内置曲线只读 — 将弹出"另存为"'
               : '保存修改到这条曲线'
           }
-          className="bg-vscode-button hover:bg-vscode-button-hover flex items-center gap-1 rounded-[2px] px-2 py-1 text-xs text-white"
+          className="bg-vscode-button hover:bg-vscode-button-hover flex items-center gap-1 rounded-[2px] px-2 py-1 text-xs text-white disabled:opacity-50"
         >
           <i className="codicon codicon-save !text-[12px]" />
           {c.currentSource === 'system' ? '另存为…' : '保存'}
@@ -613,19 +626,25 @@ function PresetCrudButtons() {
         icon="new-file"
         title="新建曲线（从零开始）"
         onClick={handleNewBlank}
+        disabled={busy}
       />
-      <IconBtn icon="copy" title="复制当前曲线为新曲线" onClick={handleCopy} />
+      <IconBtn
+        icon="copy"
+        title="复制当前曲线为新曲线"
+        onClick={handleCopy}
+        disabled={busy}
+      />
       <IconBtn
         icon="edit"
         title={isUser ? '重命名' : '内置曲线不可改名'}
         onClick={handleRename}
-        disabled={!isUser}
+        disabled={!isUser || busy}
       />
       <IconBtn
         icon="trash"
         title={isUser ? '删除' : '内置曲线不可删'}
         onClick={handleDelete}
-        disabled={!isUser}
+        disabled={!isUser || busy}
         danger
       />
     </div>

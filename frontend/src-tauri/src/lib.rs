@@ -7,9 +7,10 @@
 //! 注册 rpc_call command 给前端调用；SidecarRouter 按 method 前缀路由。
 
 mod sidecar;
+mod watcher;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use sidecar::{spawn_csharp_dev, spawn_python_dev, SidecarRouter};
@@ -29,6 +30,28 @@ fn find_repo_root() -> PathBuf {
             None => return start,
         }
     }
+}
+
+/// 启动对 `path` 的文件系统监控；新路径会自动替换旧监控。
+#[tauri::command]
+async fn watch_workspace(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, watcher::WatcherState>,
+    path: String,
+) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    *guard = None; // drop 旧 watcher（停止旧监控）
+    *guard = Some(watcher::start_watch(app, &path).map_err(|e| e.to_string())?);
+    Ok(())
+}
+
+/// 停止文件系统监控。
+#[tauri::command]
+async fn unwatch_workspace(
+    state: tauri::State<'_, watcher::WatcherState>,
+) -> Result<(), String> {
+    state.0.lock().map_err(|e| e.to_string())?.take();
+    Ok(())
 }
 
 /// 把 method+params 转发到对应 sidecar（按前缀路由），返回 RPC result 或错误字符串。
@@ -71,9 +94,14 @@ pub fn run() {
             .expect("启动 sidecar 失败");
 
             app.manage(Arc::new(router));
+            app.manage(watcher::WatcherState(Mutex::new(None)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc_call])
+        .invoke_handler(tauri::generate_handler![
+            rpc_call,
+            watch_workspace,
+            unwatch_workspace
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

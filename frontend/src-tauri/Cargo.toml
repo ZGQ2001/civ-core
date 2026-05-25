@@ -26,3 +26,4 @@ log = "0.4"
 anyhow = "1"
 # tokio: tauri 已经带 runtime；这里显式声明用到的子模块
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt", "macros", "time"] }
+notify = "6"

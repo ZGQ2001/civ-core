@@ -7,21 +7,21 @@ on:
   pull_request:
     branches: ["main"]
 
-jobs:
-  quality-gate:
-    name: 代码质检 / Windows
-    runs-on: windows-latest
+# PR 上新 push 取消上一次跑；main 推送不取消（让历史可见）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+jobs:
+  python:
+    name: Python / Windows
+    runs-on: windows-latest
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: "1"
       PYTHONIOENCODING: utf-8
-
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      # ── Python ──────────────────────────────────
+      - uses: actions/checkout@v4
 
       - name: 安装 uv
         uses: astral-sh/setup-uv@v5
@@ -48,12 +48,20 @@ jobs:
       - name: 项目健康检查
         run: uv run python scripts/healthcheck.py
 
-      # ── C# ──────────────────────────────────────
+  csharp:
+    name: C# / Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: 安装 .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+
+      - name: C# 格式检查
+        run: dotnet format style --verify-no-changes
+        working-directory: dotnet/civ-doc
 
       - name: C# 编译
         run: dotnet build
@@ -63,36 +71,50 @@ jobs:
         run: dotnet test
         working-directory: dotnet/civ-doc
 
-      - name: C# 格式检查
-        run: dotnet format style --verify-no-changes
-        working-directory: dotnet/civ-doc
+  frontend:
+    name: 前端 (TS) / Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      # ── 前端 (TypeScript) ───────────────────────
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - name: 安装前端依赖
         run: npm ci
-        working-directory: frontend
-
-      - name: TypeScript 类型检查
-        run: npx tsc -b --noEmit
-        working-directory: frontend
-
-      - name: ESLint 代码规范
-        run: npm run lint
         working-directory: frontend
 
       - name: Prettier 格式检查
         run: npm run format:check
         working-directory: frontend
 
-      # ── Rust (Tauri 主进程) ─────────────────────
+      - name: ESLint 代码规范
+        run: npm run lint
+        working-directory: frontend
+
+      - name: TypeScript 类型检查
+        run: npx tsc -b --noEmit
+        working-directory: frontend
+
+  rust:
+    name: Rust (Tauri) / Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Rust 编译检查
-        run: cargo check --lib
-        working-directory: frontend/src-tauri
+      - name: 缓存 cargo 构建产物
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
 
       - name: Rust 格式检查
         run: cargo fmt --check
@@ -100,4 +122,8 @@ jobs:
 
       - name: Rust Clippy 规范
         run: cargo clippy -- -D warnings
+        working-directory: frontend/src-tauri
+
+      - name: Rust 编译检查
+        run: cargo check --lib
         working-directory: frontend/src-tauri

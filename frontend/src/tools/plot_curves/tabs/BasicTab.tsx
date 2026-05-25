@@ -2,12 +2,15 @@
  * 基础 tab：图标题模板 + 标识列 + 网格 + 图例位置。
  * 不暴露 filename_template（一般跟 title_template 形态固定）。
  */
+import { cn } from '../../../lib/cn';
 import { usePlotCurves } from '../controller';
 import { Row, inputClass } from './_shared';
 
 export function BasicTab() {
   const c = usePlotCurves();
   const preset = c.effectivePreset!;
+  const headers = c.excelHeaders;
+  const idColInHeaders = !preset.id_column || headers.includes(preset.id_column);
   return (
     <>
       <Row label="图标题模板" hint="{id} 会被替换为标识列的值">
@@ -21,14 +24,36 @@ export function BasicTab() {
         />
       </Row>
       <Row label="标识列名" hint="决定一张图对应哪一行 + 用什么名">
-        <input
-          type="text"
+        <select
           value={preset.id_column}
           onChange={(e) =>
             c.patchPreset((p) => ({ ...p, id_column: e.target.value }))
           }
-          className={inputClass}
-        />
+          title={
+            c.headersError
+              ? `读表头失败: ${c.headersError}`
+              : c.headersLoading
+                ? '正在读表头…'
+                : !c.excelPath
+                  ? '先选 Excel 才能列出表头'
+                  : !c.sheet
+                    ? '先选 sheet 才能列出表头'
+                    : '从当前 sheet 的表头里选'
+          }
+          className={cn(inputClass)}
+        >
+          <option value="">（请选择）</option>
+          {headers.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+          {!idColInHeaders && (
+            <option value={preset.id_column}>
+              {preset.id_column}（不在当前表头）
+            </option>
+          )}
+        </select>
       </Row>
       <Row label="网格线">
         <label className="flex cursor-pointer items-center gap-2">

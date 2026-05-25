@@ -26,6 +26,7 @@ from civ_core.core.plot_curves import (
 __all__ = [
     "list_presets",
     "list_sheets",
+    "list_headers",
     "run",
     "preflight",
     "render_preview",
@@ -143,6 +144,26 @@ def list_sheets(excel_path: str) -> dict:
     from civ_core.infra_io.excel_reader import read_sheet_names
 
     return {"sheets": read_sheet_names(Path(excel_path))}
+
+
+def list_headers(
+    excel_path: str,
+    sheet: str | None = None,
+    header_row: int = 1,
+) -> dict:
+    """列举指定 sheet 在表头行的列名（不读数据），给前端列名 dropdown 用。
+
+    返回 {headers: [str]}；空表头 / 文件打不开等异常由 dispatcher 包 RPC error。
+    与 render_preview.row_data 不同：这里独立于预览渲染，
+    excel/sheet/header_row 一变就能拉到最新表头。
+    """
+    from civ_core.infra_io.excel_reader import get_column_headers
+
+    return {
+        "headers": get_column_headers(
+            Path(excel_path), sheet, header_row=header_row
+        )
+    }
 
 
 def preflight(

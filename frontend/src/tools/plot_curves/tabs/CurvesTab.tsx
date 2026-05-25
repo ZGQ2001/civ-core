@@ -135,7 +135,8 @@ function PointsEditor({
   onChange: (pts: PointDef[]) => void;
 }) {
   const c = usePlotCurves();
-  const columnSuggestions = Object.keys(c.previewRowData);
+  // 用 list_headers 拉到的真实表头，独立于预览渲染（预览失败/未渲染时也能选）
+  const columnSuggestions = c.excelHeaders;
 
   const updatePoint = (i: number, patch: Partial<PointDef>) => {
     onChange(points.map((p, j) => (j === i ? { ...p, ...patch } : p)));

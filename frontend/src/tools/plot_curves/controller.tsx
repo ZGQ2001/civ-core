@@ -44,6 +44,12 @@ interface State {
   sheetsLoading: boolean;
   sheetsError: string | null;
 
+  // 当前 sheet + headerRow 下的列名（excel/sheet/headerRow 任一变化都自动拉）
+  // 独立于 previewRowData：预览失败/未渲染时也能拿到表头给下拉用
+  excelHeaders: string[];
+  headersLoading: boolean;
+  headersError: string | null;
+
   // 用户选择
   preset: string;
   excelPath: string;
@@ -128,6 +134,10 @@ export function PlotCurvesProvider({
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetsLoading, setSheetsLoading] = useState(false);
   const [sheetsError, setSheetsError] = useState<string | null>(null);
+
+  const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
+  const [headersLoading, setHeadersLoading] = useState(false);
+  const [headersError, setHeadersError] = useState<string | null>(null);
 
   const [preset, setPreset] = useState<string>('');
   const [excelPath, setExcelPath] = useState<string>('');
@@ -226,6 +236,42 @@ export function PlotCurvesProvider({
       cancelled = true;
     };
   }, [excelPath]);
+
+  // 拉当前 sheet + headerRow 下的表头列名（独立于预览渲染）
+  // 没选 Excel / 没选 sheet → 清空；其它情况 race-guard 后异步拉
+  useEffect(() => {
+    if (!excelPath || !sheet) {
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setExcelHeaders([]);
+      setHeadersError(null);
+      setHeadersLoading(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
+      return;
+    }
+    let cancelled = false;
+    setHeadersLoading(true);
+    setHeadersError(null);
+    rpc<{ headers: string[] }>('plot_curves.list_headers', {
+      excel_path: excelPath,
+      sheet,
+      header_row: headerRow,
+    })
+      .then((r) => {
+        if (cancelled) return;
+        setExcelHeaders(r.headers);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setHeadersError(String(e));
+        setExcelHeaders([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHeadersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [excelPath, sheet, headerRow]);
 
   const effectivePreset: PlotPreset | null =
     workingPreset ?? presetDetails[preset] ?? null;
@@ -399,6 +445,9 @@ export function PlotCurvesProvider({
       sheets,
       sheetsLoading,
       sheetsError,
+      excelHeaders,
+      headersLoading,
+      headersError,
       preset,
       excelPath,
       sheet,
@@ -442,6 +491,9 @@ export function PlotCurvesProvider({
       sheets,
       sheetsLoading,
       sheetsError,
+      excelHeaders,
+      headersLoading,
+      headersError,
       preset,
       excelPath,
       sheet,

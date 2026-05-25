@@ -1,79 +1,35 @@
 /**
- * 模板编辑器主区 —— Phase 2 骨架。
+ * 模板编辑器主区 —— 组合：ToolBar + TableView + 已保存模板侧栏。
  *
- * 当前 UI：
- *  - 顶部：选 docx 按钮 + 解析状态摘要
- *  - 中间：已保存模板列表（待编辑入口；按钮交互留给下一轮）
- *
- * TableView 渲染 + 字段绑定交互 → 留给 Phase 2 后续 commit。
+ * 解耦：本文件只做布局；所有状态/交互都在 components/*。
  */
-import { useCallback } from 'react';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useMemo } from 'react';
 
 import { cn } from '../../lib/cn';
-import { useTemplateEditor } from './controller';
+import { cellKey, useTemplateEditor } from './controller';
+import { TableView } from './components/TableView';
+import { ToolBar } from './components/ToolBar';
+import type { FieldDef, ParsedTable } from './types';
 
 export function TemplateEditorPage() {
-  const c = useTemplateEditor();
-
-  const pickDocx = useCallback(async () => {
-    const sel = await openDialog({
-      title: '选择 Word 模板（含 [[数据绑定区]] 锚点 + 目标表格）',
-      multiple: false,
-      filters: [{ name: 'Word', extensions: ['docx'] }],
-    });
-    if (typeof sel === 'string') c.setSourceDocxPath(sel);
-  }, [c]);
-
   return (
     <div className="flex h-full flex-col">
-      <Header onPickDocx={pickDocx} />
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-6">
-        <ParsedSummary />
-        <SavedTemplatesList />
+      <ToolBar />
+      <div className="flex min-h-0 flex-1">
+        <main className="flex min-w-0 flex-1 flex-col overflow-auto bg-[#252525]">
+          <ParseBody />
+        </main>
+        <aside className="border-vscode-border w-60 shrink-0 overflow-auto border-l">
+          <SavedTemplatesList />
+        </aside>
       </div>
     </div>
   );
 }
 
-// ── 顶部条 ──────────────────────────────────────────────
+// ── 中间内容区 ──────────────────────────────────────────
 
-function Header({ onPickDocx }: { onPickDocx: () => void }) {
-  const c = useTemplateEditor();
-  return (
-    <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
-      <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-        <i className="codicon codicon-table !text-[16px]" />
-        模板编辑
-        <span className="text-vscode-text-faint ml-2 text-xs font-normal">
-          （Phase 2 骨架；表格渲染 + 绑定交互建设中）
-        </span>
-      </h1>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={onPickDocx}
-          className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
-        >
-          <i className="codicon codicon-folder-opened !text-[12px]" />选 Word
-          模板…
-        </button>
-        {c.sourceDocxPath && (
-          <span
-            className="text-vscode-text-dim max-w-[400px] truncate text-xs"
-            title={c.sourceDocxPath}
-          >
-            {c.sourceDocxPath.split(/[\\/]/).pop()}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── 解析摘要 ────────────────────────────────────────────
-
-function ParsedSummary() {
+function ParseBody() {
   const c = useTemplateEditor();
 
   if (!c.sourceDocxPath) {
@@ -85,46 +41,73 @@ function ParsedSummary() {
       />
     );
   }
-
   if (c.parseLoading) {
-    return (
-      <div className="text-vscode-text-dim flex items-center gap-2 text-xs">
-        <i className="codicon codicon-loading codicon-modifier-spin !text-[14px]" />
-        正在解析模板…
-      </div>
-    );
+    return <Spinner text="正在解析模板…" />;
   }
-
   if (c.parseError) {
     return (
-      <div className="border-vscode-border rounded border-l-2 border-l-red-400 bg-[#2d2d2d] p-3 text-xs whitespace-pre-wrap text-red-400">
+      <div className="m-6 rounded border border-l-2 border-l-red-400 bg-[#2d2d2d] p-3 text-xs whitespace-pre-wrap text-red-400">
         <i className="codicon codicon-error mr-1 !text-[14px]" />
         解析失败：{c.parseError}
       </div>
     );
   }
-
   if (!c.parsed) return null;
 
   return (
-    <div className="border-vscode-border space-y-2 rounded border bg-[#252525] p-3 text-xs">
-      <div className="text-vscode-text flex items-center gap-2">
-        <i className="codicon codicon-pass !text-[14px] text-green-400" />
-        解析成功
-      </div>
-      <div className="text-vscode-text-dim grid grid-cols-3 gap-x-6 gap-y-1">
-        <Stat label="行数" value={c.parsed.row_count} />
-        <Stat label="列数" value={c.parsed.col_count} />
-        <Stat label="主格数" value={c.parsed.cells.length} />
-        <Stat
-          label="签名"
-          value={c.parsed.table_signature}
-          className="col-span-3 font-mono"
-        />
-      </div>
-      <div className="text-vscode-text-faint pt-1 text-[11px]">
-        下一步：在右侧 RightPanel 查看可用字段；表格渲染 + 点击绑定建设中。
-      </div>
+    <div className="flex flex-col gap-3 p-4">
+      <ParsedSummary
+        parsed={c.parsed}
+        bindingCount={Object.keys(c.bindings).length}
+      />
+      <TableViewBridge />
+    </div>
+  );
+}
+
+/** 让 TableView 不直接耦合 hook：在这里把 controller state 拼成 props。 */
+function TableViewBridge() {
+  const c = useTemplateEditor();
+  const boundLabels = useBoundLabels(c.fields);
+  if (!c.parsed) return null;
+  return (
+    <TableView
+      table={c.parsed}
+      boundLabels={boundLabels}
+      selected={c.selectedCell}
+      onCellClick={c.selectCell}
+    />
+  );
+}
+
+/** bindings + fields → { "r-c": "字段中文名" } 给 TableView 用。 */
+function useBoundLabels(fields: FieldDef[]): Record<string, string> {
+  const c = useTemplateEditor();
+  return useMemo(() => {
+    const out: Record<string, string> = {};
+    const nameByKey = new Map(fields.map((f) => [f.key, f.name]));
+    for (const b of Object.values(c.bindings))
+      out[cellKey(b.row, b.col)] = nameByKey.get(b.field_key) ?? b.field_key;
+    return out;
+  }, [c.bindings, fields]);
+}
+
+// ── 解析摘要小条 ────────────────────────────────────────
+
+function ParsedSummary({
+  parsed,
+  bindingCount,
+}: {
+  parsed: ParsedTable;
+  bindingCount: number;
+}) {
+  return (
+    <div className="border-vscode-border bg-vscode-bg flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded border px-3 py-2 text-xs">
+      <Stat label="行" value={parsed.row_count} />
+      <Stat label="列" value={parsed.col_count} />
+      <Stat label="主格" value={parsed.cells.length} />
+      <Stat label="已绑" value={bindingCount} />
+      <Stat label="签名" value={parsed.table_signature} mono />
     </div>
   );
 }
@@ -132,66 +115,76 @@ function ParsedSummary() {
 function Stat({
   label,
   value,
-  className,
+  mono,
 }: {
   label: string;
   value: number | string;
-  className?: string;
+  mono?: boolean;
 }) {
   return (
-    <div className={cn('flex gap-2', className)}>
+    <div className="flex gap-1.5">
       <span className="text-vscode-text-faint">{label}:</span>
-      <span className="text-vscode-text">{value}</span>
+      <span className={cn('text-vscode-text', mono && 'font-mono')}>
+        {value}
+      </span>
     </div>
   );
 }
 
-// ── 已保存模板列表 ─────────────────────────────────────
+// ── 已保存模板侧栏 ─────────────────────────────────────
 
 function SavedTemplatesList() {
   const c = useTemplateEditor();
   return (
-    <div className="border-vscode-border space-y-2 rounded border bg-[#252525] p-3 text-xs">
-      <div className="text-vscode-text-dim flex items-center gap-2 text-[11px] tracking-wider uppercase">
+    <div className="space-y-2 p-3 text-xs">
+      <div className="text-vscode-text-dim flex items-center gap-2 text-[10px] tracking-wider uppercase">
         <i className="codicon codicon-library !text-[12px]" />
-        已保存模板
+        已保存
         {c.templatesLoading && (
           <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
         )}
       </div>
       {c.templatesError ? (
-        <div className="text-red-400">读列表失败：{c.templatesError}</div>
+        <div className="text-red-400">{c.templatesError}</div>
       ) : c.templates.length === 0 && !c.templatesLoading ? (
-        <div className="text-vscode-text-faint italic">
-          （还没有保存过模板）
-        </div>
+        <div className="text-vscode-text-faint italic">（暂无）</div>
       ) : (
         <ul className="space-y-1">
           {c.templates.map((t) => (
             <li
               key={t.name}
-              className="border-vscode-border flex items-center gap-2 rounded border px-2 py-1"
+              className={cn(
+                'border-vscode-border group flex items-center gap-1 rounded border px-2 py-1.5',
+                c.currentName === t.name && 'border-vscode-focus bg-[#1e3a5f]',
+              )}
             >
-              <i
-                className={cn(
-                  'codicon !text-[12px]',
-                  t.broken
-                    ? 'codicon-warning text-yellow-400'
-                    : 'codicon-table',
-                )}
-              />
-              <span className="text-vscode-text">{t.name}</span>
-              {t.display_name && (
-                <span className="text-vscode-text-dim">— {t.display_name}</span>
-              )}
-              {t.project_type && (
-                <span className="text-vscode-text-faint ml-auto text-[10px]">
-                  {t.project_type}
-                </span>
-              )}
-              {t.broken && (
-                <span className="ml-auto text-yellow-400">配置损坏</span>
-              )}
+              <button
+                type="button"
+                onClick={() => c.loadTemplate(t.name)}
+                className="text-vscode-text truncate text-left hover:text-white"
+                title={t.display_name || t.name}
+              >
+                <i
+                  className={cn(
+                    'codicon mr-1 !text-[12px]',
+                    t.broken
+                      ? 'codicon-warning text-yellow-400'
+                      : 'codicon-table',
+                  )}
+                />
+                {t.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`删除模板「${t.name}」？此操作不可撤销。`))
+                    c.deleteTemplate(t.name);
+                }}
+                title="删除"
+                className="text-vscode-text-dim ml-auto opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-400"
+              >
+                <i className="codicon codicon-trash !text-[12px]" />
+              </button>
             </li>
           ))}
         </ul>
@@ -199,6 +192,8 @@ function SavedTemplatesList() {
     </div>
   );
 }
+
+// ── 占位 ────────────────────────────────────────────────
 
 function EmptyHint({
   icon,
@@ -218,6 +213,15 @@ function EmptyHint({
       <div className="text-vscode-text-faint mt-1 max-w-md text-xs">
         {detail}
       </div>
+    </div>
+  );
+}
+
+function Spinner({ text }: { text: string }) {
+  return (
+    <div className="text-vscode-text-dim flex items-center gap-2 p-6 text-xs">
+      <i className="codicon codicon-loading codicon-modifier-spin !text-[14px]" />
+      {text}
     </div>
   );
 }

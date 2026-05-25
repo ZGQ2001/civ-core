@@ -435,7 +435,16 @@ export function PlotCurvesProvider({
     } finally {
       setRunning(false);
     }
-  }, [excelPath, preset, sheet, headerRow, outputDir, workingPreset, running, shell]);
+  }, [
+    excelPath,
+    preset,
+    sheet,
+    headerRow,
+    outputDir,
+    workingPreset,
+    running,
+    shell,
+  ]);
 
   const ctx: Ctx = useMemo(
     () => ({

@@ -16,6 +16,7 @@ using ClosedXML.Excel;
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
+using CivCore.Doc.Template;
 using static CivCore.Doc.Server.AtomicFile;
 
 namespace CivCore.Doc.Handlers;
@@ -103,6 +104,16 @@ public static class AnchorHandlers
 
         FileGuard.CheckExcelSize(inputXlsx);
 
+        // 可选 Word 模板路径（带占位符 + [[每根锚杆]] 锚点）。给了就出 Word 报告。
+        string? wordTemplatePath = p.TryGetProperty("word_template_path", out var wtEl)
+            && wtEl.ValueKind == JsonValueKind.String ? wtEl.GetString() : null;
+        string? wordOutputDir = p.TryGetProperty("word_output_dir", out var woEl)
+            && woEl.ValueKind == JsonValueKind.String ? woEl.GetString() : null;
+        // 项目级用户输入字段（可选）：{ client_name, project_name, test_date, ... }
+        var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
+            ? ParseUserInputs(uiEl)
+            : new Dictionary<string, string>();
+
         // params_by_batch: { "B1": {P,Lf,La,A,E}, "B2": {...}, ... }
         var paramsByBatch = ParseParamsByBatch(p.GetProperty("params_by_batch"));
 
@@ -131,31 +142,78 @@ public static class AnchorHandlers
         // 算
         var result = AnchorCalculator.Calc(workbook);
 
-        // 写输出：每批 2 sheet。如已存在同名 sheet 删后重写（覆盖语义跟 leeb 一致）
+        // 写 Excel 输出：每批 1 sheet（数据分析）。报告内插表语义已迁到 Word，不再 Excel 出。
         XLWorkbook wb = File.Exists(outPath) ? new XLWorkbook(outPath) : new XLWorkbook();
         using (wb)
         {
             foreach (var br in result.BatchResults)
             {
                 var analysisName = SafeSheetName($"{br.BatchId}-数据分析");
-                var reportName = SafeSheetName($"{br.BatchId}-报告内插表");
-
                 if (wb.Worksheets.TryGetWorksheet(analysisName, out var old1)) old1.Delete();
-                if (wb.Worksheets.TryGetWorksheet(reportName, out var old2)) old2.Delete();
-
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
-                AnchorReportTable.Write(wb.Worksheets.Add(reportName), br);
             }
             SaveWorkbook(wb, outPath);
         }
 
-        return new Dictionary<string, object?>
+        // 可选 Word 报告：每批一份 docx，按 [[每根锚杆]] 锚点克隆 N 张表
+        var wordOutputs = new List<string>();
+        if (!string.IsNullOrWhiteSpace(wordTemplatePath))
+        {
+            var wordDir = !string.IsNullOrWhiteSpace(wordOutputDir)
+                ? wordOutputDir
+                : Path.Combine(src.DirectoryName ?? "", $"{Path.GetFileNameWithoutExtension(src.Name)}_Word报告");
+            Directory.CreateDirectory(wordDir);
+            foreach (var br in result.BatchResults)
+            {
+                var batchUserInputs = MergeBatchInputs(userInputs, br.BatchId);
+                var projectResolver = new AnchorBatchResolver(br.Params, batchUserInputs);
+                var rowResolvers = br.RowsWithResults
+                    .Select(rw => (IFieldResolver)new AnchorRowResolver(rw.Input, rw.Result, br.Params, batchUserInputs))
+                    .ToList();
+
+                var wordOut = Path.Combine(wordDir, SafeFileName($"{br.BatchId}_锚杆抗拔报告.docx"));
+                ReportGenerator.Generate(
+                    wordTemplatePath, projectResolver, rowResolvers, wordOut,
+                    catalog: AnchorFieldCatalog.All);
+                wordOutputs.Add(wordOut);
+            }
+        }
+
+        var res = new Dictionary<string, object?>
         {
             ["batches"] = result.NBatches,
             ["anchors_total"] = result.NRowsTotal,
             ["anchors_qualified"] = result.NQualifiedTotal,
             ["output"] = outPath,
         };
+        if (wordOutputs.Count > 0) res["word_outputs"] = wordOutputs;
+        return res;
+    }
+
+    private static Dictionary<string, string> ParseUserInputs(JsonElement el)
+    {
+        var d = new Dictionary<string, string>();
+        foreach (var prop in el.EnumerateObject())
+        {
+            if (prop.Value.ValueKind == JsonValueKind.String)
+                d[prop.Name] = prop.Value.GetString() ?? "";
+        }
+        return d;
+    }
+
+    /// <summary>把"批次维度的用户输入"扁平化（暂未提供；预留接口）。</summary>
+    private static IReadOnlyDictionary<string, string> MergeBatchInputs(
+        IReadOnlyDictionary<string, string> projectInputs, string batchId)
+    {
+        // 当前实现：项目级直接用。未来若想"按批次定制 client_name 等"可在此扩展。
+        _ = batchId;
+        return projectInputs;
+    }
+
+    private static string SafeFileName(string s)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
+        return s;
     }
 
     private static Dictionary<string, AnchorParams> ParseParamsByBatch(JsonElement el)

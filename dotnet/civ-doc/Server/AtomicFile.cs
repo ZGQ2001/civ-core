@@ -38,8 +38,11 @@ public static class AtomicFile
         var dir = Path.GetDirectoryName(targetPath) ?? ".";
         if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-        var fileName = Path.GetFileName(targetPath);
-        var tmpPath = Path.Combine(dir, $".{fileName}.{Guid.NewGuid():N}.tmp");
+        // 保留原扩展名 —— ClosedXML.SaveAs / OpenXML 等会按扩展名校验，".tmp"
+        // 会被拒。原来的命名是 ".{name}.{Guid}.tmp" 直接卡死 SaveWorkbook。
+        var baseName = Path.GetFileNameWithoutExtension(targetPath);
+        var ext = Path.GetExtension(targetPath); // 含 "." 前缀，如 ".xlsx"
+        var tmpPath = Path.Combine(dir, $".{baseName}.{Guid.NewGuid():N}{ext}");
 
         try
         {

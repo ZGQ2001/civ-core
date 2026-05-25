@@ -42,10 +42,7 @@ import {
   PlotCurvesProvider,
   PlotCurvesSettingsForm,
 } from './tools/plot_curves';
-import {
-  TemplateEditorProvider,
-  TemplateEditorSettingsForm,
-} from './tools/template_editor';
+import { TemplateEditorProvider } from './tools/template_editor';
 import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
 
 const TOP_TOOLS: ActivityItem[] = [
@@ -325,16 +322,6 @@ export default function App() {
             label: '调参',
             icon: 'settings-gear',
             node: <Word2PdfSettingsForm />,
-          },
-        ]
-      : []),
-    ...(activeToolId === 'template_editor'
-      ? [
-          {
-            id: 'settings',
-            label: '字段',
-            icon: 'symbol-field',
-            node: <TemplateEditorSettingsForm />,
           },
         ]
       : []),

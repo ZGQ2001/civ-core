@@ -1,9 +1,10 @@
-// 占位符报告渲染器 —— 轻量主路径：用户在 Word 里直接写 {key} 或 {中文名}，
-// 引擎全文档扫一遍替换成实际值。
+// 占位符报告渲染器 —— 主路径：用户在 Word 里直接写 {key} 或 {中文名}，
+// 引擎扫指定范围所有段落替换成实际值。
 //
-// 跟 ReportGenerator 互补：
-//   - PlaceholderRenderer = 一份模板 → 一份报告（适合"单根"语义）
-//   - ReportGenerator     = 一份模板 + 表格签名校验 + 按 row clone 表 → 多份合一
+// 公开两条 API：
+//   - Render(sourcePath, outputPath, resolver, catalog): 拷文件 + 全文档替换
+//   - RenderInto(scope, resolver, catalog): 在已打开的 OpenXml 子树上替换
+//     （给 ReportGenerator 在 cloned Table 上做局部替换用）
 //
 // 设计取舍：
 //   - 段落级合并 Run 文本再替换 —— 解决 Word 把 {弹性位移量} 拆成多 Run 的麻烦。
@@ -31,10 +32,7 @@ public static class PlaceholderRenderer
     private static readonly Regex PlaceholderPattern =
         new(@"\{([^{}\r\n]+?)\}", RegexOptions.Compiled);
 
-    /// <summary>
-    /// 拷贝 sourcePath 到 outputPath，扫所有段落替换 {key}/{中文名} 占位符。
-    /// </summary>
-    /// <param name="catalog">用于反查中文名 → Key。null 时只识别 Key 形态。</param>
+    /// <summary>拷贝 sourcePath 到 outputPath，全文档替换占位符。</summary>
     public static PlaceholderRenderResult Render(
         string sourcePath,
         string outputPath,
@@ -49,24 +47,35 @@ public static class PlaceholderRenderer
             Directory.CreateDirectory(dir);
         File.Copy(sourcePath, outputPath, overwrite: true);
 
-        // 反查表：中文名（小写 trim）→ Key
-        var nameToKey = BuildNameIndex(catalog);
+        using var doc = WordprocessingDocument.Open(outputPath, true);
+        var body = doc.MainDocumentPart?.Document?.Body
+            ?? throw new PlaceholderRenderException("输出 docx 结构异常");
 
+        var result = RenderInto(body, resolver, catalog);
+        doc.MainDocumentPart!.Document.Save();
+        return result;
+    }
+
+    /// <summary>
+    /// 在已打开的 OpenXml 子树上替换占位符 —— 不碰文件 IO，可在 cloned Table 这类
+    /// 子树上调用。给 ReportGenerator 做"克隆表 + 局部替换"用。
+    /// </summary>
+    public static PlaceholderRenderResult RenderInto(
+        OpenXmlElement scope,
+        IFieldResolver resolver,
+        IReadOnlyList<FieldDef>? catalog = null)
+    {
+        var nameToKey = BuildNameIndex(catalog);
         var unknownKeys = new List<string>();
         int replaced = 0;
 
-        using (var doc = WordprocessingDocument.Open(outputPath, true))
-        {
-            var body = doc.MainDocumentPart?.Document?.Body
-                ?? throw new PlaceholderRenderException("输出 docx 结构异常");
+        // scope 自身是 Paragraph 时也要处理；Descendants<Paragraph> 不含 scope 自身
+        var paragraphs = scope is Paragraph selfPara
+            ? new[] { selfPara }.Concat(scope.Descendants<Paragraph>()).Distinct()
+            : scope.Descendants<Paragraph>();
 
-            foreach (var para in body.Descendants<Paragraph>().ToList())
-            {
-                ProcessParagraph(para, resolver, nameToKey, ref replaced, unknownKeys);
-            }
-
-            doc.MainDocumentPart!.Document.Save();
-        }
+        foreach (var para in paragraphs.ToList())
+            ProcessParagraph(para, resolver, nameToKey, ref replaced, unknownKeys);
 
         return new PlaceholderRenderResult(replaced, unknownKeys.Distinct().ToList());
     }
@@ -80,7 +89,6 @@ public static class PlaceholderRenderer
         ref int replaced,
         List<string> unknownKeys)
     {
-        // 跨 Run 合并文本
         var runs = para.Elements<Run>().ToList();
         if (runs.Count == 0) return;
 
@@ -96,7 +104,6 @@ public static class PlaceholderRenderer
             var val = resolver.GetValue(key);
             if (val == null && !nameToKey.ContainsKey(NormName(raw)))
             {
-                // 完全未知（既不是 Key 也不是 Name）—— 留原文不替换
                 unknownKeys.Add(raw);
                 return m.Value;
             }
@@ -124,23 +131,16 @@ public static class PlaceholderRenderer
     {
         if (catalog == null) return new Dictionary<string, string>();
         var d = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var f in catalog)
-        {
-            // 中文名直接匹配；同一 Name 多个 Key 时后定义覆盖前 —— catalog 应避免重名
-            d[NormName(f.Name)] = f.Key;
-        }
+        foreach (var f in catalog) d[NormName(f.Name)] = f.Key;
         return d;
     }
 
     private static string NormName(string s) => s.Trim();
 
-    /// <summary>raw 直接当 Key；不是的话查中文名反查。</summary>
     private static string ResolveKey(string raw, IReadOnlyDictionary<string, string> nameToKey)
     {
-        // 注意：char.IsLetterOrDigit 在 .NET 对中文字符也返回 true（中文也是 Letter）。
-        // Key 必须严格限定为 ASCII 字母/数字/下划线，否则中文名会被误判为 Key。
-        if (IsKeyLike(raw))
-            return raw;
+        // char.IsLetterOrDigit 在 .NET 对中文字符也返回 true —— Key 严格限定 ASCII
+        if (IsKeyLike(raw)) return raw;
         return nameToKey.TryGetValue(NormName(raw), out var k) ? k : raw;
     }
 

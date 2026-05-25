@@ -44,7 +44,7 @@ public class AnchorHandlersTests
     }
 
     [Fact]
-    public void Run_端到端_生成两个_sheet_含数据分析和报告内插表()
+    public void Run_端到端_只生成数据分析sheet_报告内插表已迁Word()
     {
         string input = TempXlsx();
         string output = TempXlsx();
@@ -67,11 +67,14 @@ public class AnchorHandlersTests
             // 样例首行 M=2.05 合格；后两行全 0 → M=0，Q<0 不成立，不合格
             Assert.Equal(1, (int)r["anchors_qualified"]!);
             Assert.True(File.Exists(output));
+            // 没传 word_template_path → 没 word_outputs 键
+            Assert.False(r.ContainsKey("word_outputs"));
 
             using var wb = new XLWorkbook(output);
             var names = wb.Worksheets.Select(w => w.Name).ToList();
             Assert.Contains("批次1-数据分析", names);
-            Assert.Contains("批次1-报告内插表", names);
+            // 报告内插表已迁 Word —— Excel 不再有这个 sheet
+            Assert.DoesNotContain("批次1-报告内插表", names);
         }
         finally
         {

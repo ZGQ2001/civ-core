@@ -19,6 +19,8 @@ import {
   Separator,
   type PanelImperativeHandle,
 } from 'react-resizable-panels';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
 import { ActivityBar, type ActivityItem } from './components/ActivityBar';
@@ -86,6 +88,31 @@ export default function App() {
     setOutputLog((prev) => (prev ? `${prev}\n${text}` : text));
     bottomRef.current?.expand();
     setBottomVisible(true);
+  }, []);
+
+  // 工作区路径变化时启动 OS 级文件系统监控；watch_workspace 内部自动替换旧监控。
+  useEffect(() => {
+    if (!workspacePath) return;
+    invoke('watch_workspace', { path: workspacePath }).catch(console.error);
+  }, [workspacePath]);
+
+  // 监听 Rust 侧发来的 workspace-files-changed 事件，触发目录树刷新。
+  // 只注册一次：unlisten 在组件卸载时清理。
+  useEffect(() => {
+    let cancelled = false;
+    let stopListen: (() => void) | null = null;
+    listen<null>('workspace-files-changed', () => {
+      setRefreshNonce((n) => n + 1);
+    })
+      .then((fn) => {
+        if (cancelled) fn();
+        else stopListen = fn;
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+      stopListen?.();
+    };
   }, []);
 
   useEffect(() => {

@@ -237,6 +237,7 @@ export function FileTree({
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<number[]>([]);
+  const [opBusy, setOpBusy] = useState(false);
 
   // refs：让 effect/callback 拿到最新值而不污染 deps
   const nodesRef = useRef(nodes);
@@ -552,6 +553,8 @@ export function FileTree({
   }, [deleteTarget, fetchDir]);
 
   const doUndoDelete = useCallback(async () => {
+    if (opBusy) return;
+    setOpBusy(true);
     try {
       const r = await rpc<{ restored_path: string; parent: string }>(
         'files.undo_delete',
@@ -562,8 +565,10 @@ export function FileTree({
       setSelectedPath(r.restored_path);
     } catch (e) {
       alert(`撤销删除失败：${String(e)}`);
+    } finally {
+      setOpBusy(false);
     }
-  }, [fetchDir]);
+  }, [fetchDir, opBusy]);
 
   const doCopyToClipboard = useCallback((path: string) => {
     setClipboard({ path, mode: 'copy' });
@@ -575,7 +580,8 @@ export function FileTree({
 
   const doPaste = useCallback(
     async (targetDirIn: string) => {
-      if (!clipboard) return;
+      if (!clipboard || opBusy) return;
+      setOpBusy(true);
       // 如果 target 是文件，粘贴到其父目录
       let target = targetDirIn;
       const t = nodesRef.current.get(target);
@@ -596,9 +602,11 @@ export function FileTree({
         setSelectedPath(r.path);
       } catch (e) {
         alert(`粘贴失败：${String(e)}`);
+      } finally {
+        setOpBusy(false);
       }
     },
-    [clipboard, fetchDir],
+    [clipboard, fetchDir, opBusy],
   );
 
   const doCopyPath = useCallback((path: string) => {

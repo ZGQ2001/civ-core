@@ -7,6 +7,7 @@
 //   sheet 名「锚杆抗拔数据」
 
 using ClosedXML.Excel;
+using CivCore.Doc.Server;
 
 namespace CivCore.Doc.Calc.Anchor;
 
@@ -75,6 +76,6 @@ public static class AnchorTemplateWriter
         help.Cell(9, 1).Value = $"判定：Q < 弹性位移量 < R 为合格（Q=0.9·P·Lf/(E·A)，R=(Lf+La/3)·P/(E·A)）";
         help.Column(1).Width = 90;
 
-        wb.SaveAs(path);
+        AtomicFile.SaveWorkbook(wb, path);
     }
 }

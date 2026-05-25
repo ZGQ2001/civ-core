@@ -155,7 +155,7 @@ public static class AnchorHandlers
             SaveWorkbook(wb, outPath);
         }
 
-        // 可选 Word 报告：每批一份 docx，按 [[每根锚杆]] 锚点克隆 N 张表
+        // 可选 Word 报告：所有批次合成一份 docx
         var wordOutputs = new List<string>();
         if (!string.IsNullOrWhiteSpace(wordTemplatePath))
         {
@@ -163,20 +163,23 @@ public static class AnchorHandlers
                 ? wordOutputDir
                 : Path.Combine(src.DirectoryName ?? "", $"{Path.GetFileNameWithoutExtension(src.Name)}_Word报告");
             Directory.CreateDirectory(wordDir);
-            foreach (var br in result.BatchResults)
+
+            var globalResolver = new DictionaryResolver(userInputs);
+            var batchSections = result.BatchResults.Select(br =>
             {
                 var batchUserInputs = MergeBatchInputs(userInputs, br.BatchId);
-                var projectResolver = new AnchorBatchResolver(br.Params, batchUserInputs);
+                var batchResolver = new AnchorBatchResolver(br.Params, batchUserInputs, br.BatchId);
                 var rowResolvers = br.RowsWithResults
                     .Select(rw => (IFieldResolver)new AnchorRowResolver(rw.Input, rw.Result, br.Params, batchUserInputs))
                     .ToList();
+                return new BatchSection(batchResolver, rowResolvers);
+            }).ToList();
 
-                var wordOut = Path.Combine(wordDir, SafeFileName($"{br.BatchId}_锚杆抗拔报告.docx"));
-                ReportGenerator.Generate(
-                    wordTemplatePath, projectResolver, rowResolvers, wordOut,
-                    catalog: AnchorFieldCatalog.All);
-                wordOutputs.Add(wordOut);
-            }
+            var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
+            ReportGenerator.GenerateMultiBatch(
+                wordTemplatePath, globalResolver, batchSections, wordOut,
+                catalog: AnchorFieldCatalog.All);
+            wordOutputs.Add(wordOut);
         }
 
         var res = new Dictionary<string, object?>
@@ -234,6 +237,13 @@ public static class AnchorHandlers
             result[prop.Name] = AnchorParams.Create(p, lf, la, a, e);
         }
         return result;
+    }
+
+    private class DictionaryResolver : IFieldResolver
+    {
+        private readonly IReadOnlyDictionary<string, string> _v;
+        public DictionaryResolver(IReadOnlyDictionary<string, string> v) => _v = v;
+        public object? GetValue(string key) => _v.TryGetValue(key, out var s) ? s : null;
     }
 
     private static string SafeSheetName(string name)

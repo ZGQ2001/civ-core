@@ -42,6 +42,7 @@ export interface RunRes {
   calcType: CalcType;
   output: string;
   summary: string;
+  wordOutputs?: string[];
 }
 
 // ── 锚杆专属 ────────────────────────────────────────────────
@@ -67,3 +68,18 @@ export const ANCHOR_STANDARDS = ['GB 50086-2015'] as const;
 export type AnchorStandard = (typeof ANCHOR_STANDARDS)[number];
 
 export const ANCHOR_DEFAULT_BATCH_COL = '批次';
+
+/** 锚杆报告项目级字段（用户在 SettingsForm 填，传给 anchor.run 的 user_inputs）。 */
+export interface AnchorUserInputs {
+  client_name: string;
+  project_name: string;
+  test_date: string;
+  test_engineer: string;
+}
+
+export const DEFAULT_ANCHOR_USER_INPUTS: AnchorUserInputs = {
+  client_name: '',
+  project_name: '',
+  test_date: '',
+  test_engineer: '',
+};

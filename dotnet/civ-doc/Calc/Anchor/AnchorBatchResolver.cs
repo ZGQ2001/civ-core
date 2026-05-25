@@ -10,17 +10,23 @@ namespace CivCore.Doc.Calc.Anchor;
 
 public class AnchorBatchResolver : IFieldResolver
 {
+    private readonly string? _batchId;
     private readonly AnchorParams _params;
     private readonly IReadOnlyDictionary<string, string> _userInputs;
 
-    public AnchorBatchResolver(AnchorParams @params, IReadOnlyDictionary<string, string>? userInputs = null)
+    public AnchorBatchResolver(
+        AnchorParams @params,
+        IReadOnlyDictionary<string, string>? userInputs = null,
+        string? batchId = null)
     {
         _params = @params;
         _userInputs = userInputs ?? new Dictionary<string, string>();
+        _batchId = batchId;
     }
 
     public object? GetValue(string fieldKey) => fieldKey switch
     {
+        "batch_id" => _batchId,
         "axial_design_load" => _params.AxialDesignLoad,
         "free_length" => _params.FreeLength,
         "anchor_length" => _params.AnchorLength,

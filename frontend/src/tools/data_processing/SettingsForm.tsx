@@ -4,9 +4,13 @@
  *   - anchor: 规范下拉 + 生成模板按钮 + batch_id 列名 + 按批次参数卡片
  */
 import { useCallback, useState } from 'react';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+import {
+  open as openDialog,
+  save as saveDialog,
+} from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
+import { rpc } from '../../lib/rpc';
 import { logLine, useShell } from '../../lib/shell';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useDataProcessing } from './controller';
@@ -15,6 +19,7 @@ import {
   DEFAULT_ANCHOR_PARAMS,
   type AnchorParams,
   type AnchorStandard,
+  type AnchorUserInputs,
 } from './types';
 
 export function DataProcessingSettingsForm() {
@@ -166,7 +171,213 @@ function AnchorSubForm() {
       </Field>
 
       <AnchorParamsSection />
+
+      <AnchorWordReportSection />
     </>
+  );
+}
+
+// ── anchor Word 报告配置 ──────────────────────────────────
+
+const USER_INPUT_FIELDS: Array<{
+  key: keyof AnchorUserInputs;
+  label: string;
+  placeholder: string;
+}> = [
+  { key: 'client_name', label: '委托单位', placeholder: '例：XX建设集团' },
+  {
+    key: 'project_name',
+    label: '工程名称',
+    placeholder: '例：XX项目桩基检测',
+  },
+  { key: 'test_date', label: '试验日期', placeholder: '例：2026-05-25' },
+  { key: 'test_engineer', label: '试验人员', placeholder: '例：张三' },
+];
+
+interface FieldInfo {
+  key: string;
+  name: string;
+  source: string;
+}
+
+function AnchorWordReportSection() {
+  const c = useDataProcessing();
+  const shell = useShell();
+  const [expanded, setExpanded] = useState(false);
+  const [fields, setFields] = useState<FieldInfo[] | null>(null);
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+  const [fieldsVisible, setFieldsVisible] = useState(false);
+
+  const pickWordTemplate = useCallback(async () => {
+    const sel = await openDialog({
+      title: '选择 Word 报告模板',
+      multiple: false,
+      filters: [{ name: 'Word', extensions: ['docx'] }],
+    });
+    if (typeof sel === 'string') c.setAnchorWordTemplate(sel);
+  }, [c]);
+
+  const pickOutputDir = useCallback(async () => {
+    const sel = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择 Word 报告输出目录',
+    });
+    if (typeof sel === 'string') c.setAnchorWordOutputDir(sel);
+  }, [c]);
+
+  const loadFields = useCallback(async () => {
+    if (fields) {
+      setFieldsVisible((v) => !v);
+      return;
+    }
+    setFieldsLoading(true);
+    try {
+      const res = await rpc<{ fields: FieldInfo[] }>('template.fields', {
+        project_type: 'anchor',
+      });
+      setFields(res.fields);
+      setFieldsVisible(true);
+    } catch (e) {
+      shell.appendOutput(logLine(`[锚杆] 加载字段清单失败: ${String(e)}`));
+    } finally {
+      setFieldsLoading(false);
+    }
+  }, [fields, shell]);
+
+  return (
+    <div className="border-vscode-border rounded-[3px] border bg-[#252525]">
+      <div
+        className="hover:bg-vscode-hover flex cursor-pointer items-center px-2 py-1.5 select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <i
+          className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} text-vscode-text-dim mr-1 !text-[12px]`}
+        />
+        <i className="codicon codicon-file-text text-vscode-text-dim mr-1.5 !text-[12px]" />
+        <span className="text-vscode-text text-[12px] font-medium">
+          Word 报告（可选）
+        </span>
+      </div>
+
+      {expanded && (
+        <div className="border-vscode-border space-y-3 border-t px-3 py-2">
+          <Field
+            label="Word 模板"
+            hint="带占位符的 .docx 文件；留空则只出 Excel"
+          >
+            <Picker
+              value={c.anchorWordTemplate}
+              onPick={pickWordTemplate}
+              placeholder="（不选则不生成 Word 报告）"
+              muted={!c.anchorWordTemplate}
+              extra={
+                c.anchorWordTemplate ? (
+                  <ResetBtn onClick={() => c.setAnchorWordTemplate('')} />
+                ) : undefined
+              }
+            />
+          </Field>
+
+          <div>
+            <button
+              type="button"
+              onClick={loadFields}
+              disabled={fieldsLoading}
+              className="text-vscode-focus flex items-center gap-1 text-[11px] hover:underline disabled:opacity-60"
+            >
+              {fieldsLoading ? (
+                <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+              ) : (
+                <i className="codicon codicon-list-unordered !text-[12px]" />
+              )}
+              {fieldsVisible ? '收起占位符清单' : '查看可用占位符'}
+            </button>
+            {fieldsVisible && fields && (
+              <div className="mt-1.5 max-h-[200px] overflow-auto rounded-[2px] bg-[#1e1e1e] px-2 py-1.5 text-[10px]">
+                <div className="text-vscode-text-faint mb-1">
+                  在 Word 模板里写 {'{key}'} 或 {'{中文名}'}
+                  ；行重复表前加一段 [[每根锚杆]]
+                </div>
+                {['parameter', 'rawinput', 'calculated', 'userinput'].map(
+                  (src) => {
+                    const group = fields.filter((f) => f.source === src);
+                    if (group.length === 0) return null;
+                    const groupLabel =
+                      src === 'parameter'
+                        ? '工程参数'
+                        : src === 'rawinput'
+                          ? '原始数据（每根锚杆）'
+                          : src === 'calculated'
+                            ? '计算结果（每根锚杆）'
+                            : '用户输入（项目级）';
+                    return (
+                      <div key={src} className="mt-1">
+                        <div className="text-vscode-text-dim font-medium">
+                          {groupLabel}
+                        </div>
+                        {group.map((f) => (
+                          <div
+                            key={f.key}
+                            className="text-vscode-text flex gap-2 pl-2"
+                          >
+                            <code className="text-vscode-focus shrink-0">
+                              {`{${f.key}}`}
+                            </code>
+                            <span className="text-vscode-text-dim truncate">
+                              {f.name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  },
+                )}
+              </div>
+            )}
+          </div>
+
+          {c.anchorWordTemplate && (
+            <>
+              <Field label="输出目录" hint="留空 = 自动在输入 Excel 同级创建">
+                <Picker
+                  value={c.anchorWordOutputDir}
+                  onPick={pickOutputDir}
+                  placeholder="（自动）"
+                  muted={!c.anchorWordOutputDir}
+                  extra={
+                    c.anchorWordOutputDir ? (
+                      <ResetBtn onClick={() => c.setAnchorWordOutputDir('')} />
+                    ) : undefined
+                  }
+                />
+              </Field>
+
+              <Field label="报告项目信息" hint="填入 Word 模板对应的占位符">
+                <div className="space-y-2">
+                  {USER_INPUT_FIELDS.map((f) => (
+                    <div key={f.key}>
+                      <div className="text-vscode-text-dim mb-0.5 text-[11px]">
+                        {f.label}
+                      </div>
+                      <input
+                        type="text"
+                        value={c.anchorUserInputs[f.key]}
+                        placeholder={f.placeholder}
+                        onChange={(e) =>
+                          c.setAnchorUserInput(f.key, e.target.value)
+                        }
+                        className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus w-full rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Field>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

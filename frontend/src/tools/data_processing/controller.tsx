@@ -311,6 +311,7 @@ export function DataProcessingProvider({
         );
         setAnchorTemplateStatus({ kind: 'ok', path: r.path });
         shell.appendOutput(logLine(`[锚杆] 模板已生成: ${r.path}`));
+        shell.notifyFilesChanged();
         return r.path;
       } catch (e) {
         const message = String(e);
@@ -370,6 +371,7 @@ export function DataProcessingProvider({
         shell.appendOutput(
           logLine(`[里氏] 完成: ${display.summary} → ${display.output}`),
         );
+        shell.notifyFilesChanged();
         return display;
       }
 
@@ -399,6 +401,7 @@ export function DataProcessingProvider({
       shell.appendOutput(
         logLine(`[锚杆] 完成: ${display.summary} → ${display.output}`),
       );
+      shell.notifyFilesChanged();
       return display;
     } catch (e) {
       const message = String(e);

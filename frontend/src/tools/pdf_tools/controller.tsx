@@ -267,6 +267,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
           output: mergeOutput.trim(),
         });
         setMergeResult(res);
+        shell.notifyFilesChanged();
         return { kind: 'merge', res };
       } else {
         if (!splitInput || !splitOutDir.trim()) {
@@ -283,6 +284,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
         if (mode === 'split_by_ranges') params.expr = splitExpr.trim();
         const res = await rpc<SplitRes>(`pdf_tools.${mode}`, params);
         setSplitResult(res);
+        shell.notifyFilesChanged();
         return { kind: 'split', res };
       }
     } catch (e) {
@@ -301,6 +303,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     splitOutDir,
     splitTemplate,
     splitExpr,
+    shell,
   ]);
 
   const defaultTemplate = mode === 'merge' ? '' : DEFAULT_TEMPLATE[mode];

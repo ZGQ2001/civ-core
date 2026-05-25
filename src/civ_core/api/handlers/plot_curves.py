@@ -159,11 +159,7 @@ def list_headers(
     """
     from civ_core.infra_io.excel_reader import get_column_headers
 
-    return {
-        "headers": get_column_headers(
-            Path(excel_path), sheet, header_row=header_row
-        )
-    }
+    return {"headers": get_column_headers(Path(excel_path), sheet, header_row=header_row)}
 
 
 def preflight(

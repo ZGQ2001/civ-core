@@ -38,7 +38,7 @@ export async function rpc<T = unknown>(
   try {
     return (await invoke('rpc_call', { method, params })) as T;
   } catch (e) {
-    throw new Error(translateError(e));
+    throw new Error(translateError(e), { cause: e });
   }
 }
 

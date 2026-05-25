@@ -25,17 +25,28 @@ public static class AtomicFile
     /// 原子保存 ClosedXML workbook。写到同目录临时文件后原子替换目标。
     /// </summary>
     public static void SaveWorkbook(ClosedXML.Excel.XLWorkbook wb, string targetPath)
+        => WriteAtomically(targetPath, tmp => wb.SaveAs(tmp));
+
+    /// <summary>
+    /// 原子写文本（UTF-8 无 BOM）。给 JSON 配置之类小文件用。
+    /// </summary>
+    public static void WriteAllText(string targetPath, string contents)
+        => WriteAtomically(targetPath, tmp => File.WriteAllText(tmp, contents, new System.Text.UTF8Encoding(false)));
+
+    private static void WriteAtomically(string targetPath, Action<string> writeToTmp)
     {
         var dir = Path.GetDirectoryName(targetPath) ?? ".";
-        if (!Directory.Exists(dir))
-            Directory.CreateDirectory(dir);
+        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-        var fileName = Path.GetFileName(targetPath);
-        var tmpPath = Path.Combine(dir, $".{fileName}.{Guid.NewGuid():N}.tmp");
+        // 保留原扩展名 —— ClosedXML.SaveAs / OpenXML 等会按扩展名校验，".tmp"
+        // 会被拒。原来的命名是 ".{name}.{Guid}.tmp" 直接卡死 SaveWorkbook。
+        var baseName = Path.GetFileNameWithoutExtension(targetPath);
+        var ext = Path.GetExtension(targetPath); // 含 "." 前缀，如 ".xlsx"
+        var tmpPath = Path.Combine(dir, $".{baseName}.{Guid.NewGuid():N}{ext}");
 
         try
         {
-            wb.SaveAs(tmpPath);
+            writeToTmp(tmpPath);
             File.Move(tmpPath, targetPath, overwrite: true);
         }
         catch

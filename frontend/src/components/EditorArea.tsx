@@ -6,6 +6,7 @@ import { DataProcessingPage } from '../tools/data_processing';
 import { PdfToolsPage } from '../tools/pdf_tools';
 import { Placeholder } from '../tools/Placeholder';
 import { PlotCurvesPage } from '../tools/plot_curves';
+import { TemplateEditorPage } from '../tools/template_editor';
 import { Word2PdfPage } from '../tools/word2pdf';
 
 interface Props {
@@ -36,6 +37,8 @@ function renderTool(
       return <PdfToolsPage appendOutput={appendOutput} />;
     case 'word2pdf':
       return <Word2PdfPage appendOutput={appendOutput} />;
+    case 'template_editor':
+      return <TemplateEditorPage />;
     case 'settings':
       return (
         <Placeholder

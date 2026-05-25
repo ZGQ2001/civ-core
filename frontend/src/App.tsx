@@ -300,10 +300,16 @@ export default function App() {
   ];
   const rightAvailable = rightTabs.length > 0;
 
+  const notifyFilesChanged = useCallback(
+    () => setRefreshNonce((n) => n + 1),
+    [],
+  );
+
   const shellValue = {
     appendOutput,
     activeToolId,
     activatedFile,
+    notifyFilesChanged,
   };
 
   return (

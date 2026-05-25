@@ -19,6 +19,8 @@ export interface ShellContextValue {
   appendOutput: (text: string) => void;
   activeToolId: string;
   activatedFile: ActivatedFile | null;
+  /** 工具生成文件后调用，触发目录树刷新。 */
+  notifyFilesChanged: () => void;
 }
 
 export const ShellContext = createContext<ShellContextValue | null>(null);

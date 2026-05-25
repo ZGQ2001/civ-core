@@ -158,6 +158,7 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
         output_dir: outDir.trim(),
       });
       setResult(res);
+      shell.notifyFilesChanged();
       return { kind: 'ok', res };
     } catch (e) {
       const message = String(e);
@@ -166,7 +167,7 @@ export function Word2PdfProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setRunning(false);
     }
-  }, [running, inputs, outDir]);
+  }, [running, inputs, outDir, shell]);
 
   const ctx: Ctx = useMemo(
     () => ({

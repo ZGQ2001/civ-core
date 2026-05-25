@@ -426,6 +426,7 @@ export function PlotCurvesProvider({
       if (workingPreset) params.preset_override = workingPreset;
       const res = await rpc<RunRes>('plot_curves.run', params);
       setResult(res);
+      shell.notifyFilesChanged();
       return { kind: 'ok', res, preset, excelPath };
     } catch (e) {
       const message = String(e);
@@ -434,7 +435,7 @@ export function PlotCurvesProvider({
     } finally {
       setRunning(false);
     }
-  }, [excelPath, preset, sheet, headerRow, outputDir, workingPreset, running]);
+  }, [excelPath, preset, sheet, headerRow, outputDir, workingPreset, running, shell]);
 
   const ctx: Ctx = useMemo(
     () => ({

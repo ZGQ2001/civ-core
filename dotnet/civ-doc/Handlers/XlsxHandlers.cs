@@ -13,6 +13,7 @@ using System.Text.Json;
 using ClosedXML.Excel;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
+using static CivCore.Doc.Server.AtomicFile;
 
 namespace CivCore.Doc.Handlers;
 
@@ -50,16 +51,16 @@ public static class XlsxHandlers
     public static object WriteLeebReportTable(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var outputPath = p.GetProperty("output_path").GetString()
-            ?? throw new ArgumentException("缺 output_path");
+            ?? throw new ArgumentException("未指定输出文件路径");
         var batchesEl = p.GetProperty("batches");
         if (batchesEl.ValueKind != JsonValueKind.Array)
-            throw new ArgumentException("batches 必须是 array");
+            throw new ArgumentException("检测批数据格式错误");
         if (batchesEl.GetArrayLength() == 0)
-            throw new ArgumentException("batches 为空 —— 没有可写的报告数据（上游 leeb.run 返回 0 个 batch）");
+            throw new ArgumentException("没有可写的报告数据（未检测到任何批次）");
 
         var batches = new List<LeebReportBatch>();
         foreach (var b in batchesEl.EnumerateArray())
@@ -90,7 +91,7 @@ public static class XlsxHandlers
                 LeebReportTable.Write(ws, batch);
                 sheetsWritten.Add(batch.SheetName);
             }
-            wb.SaveAs(outputPath);
+            SaveWorkbook(wb, outputPath);
         }
 
         return new Dictionary<string, object?>
@@ -103,14 +104,14 @@ public static class XlsxHandlers
     private static LeebReportBatch ParseBatch(JsonElement b)
     {
         var sheetName = b.GetProperty("sheet_name").GetString()
-            ?? throw new ArgumentException("batch.sheet_name 缺失");
+            ?? throw new ArgumentException("检测批名称缺失");
         var batchAvg = b.GetProperty("batch_fb_char_avg").GetDouble();
 
         var compsEl = b.GetProperty("components");
         if (compsEl.ValueKind != JsonValueKind.Array)
-            throw new ArgumentException("batch.components 必须是 array");
+            throw new ArgumentException($"检测批「{sheetName}」的构件数据格式错误");
         if (compsEl.GetArrayLength() == 0)
-            throw new ArgumentException($"batch「{sheetName}」.components 为空");
+            throw new ArgumentException($"检测批「{sheetName}」没有构件数据");
 
         var components = new List<LeebComponent>();
         foreach (var c in compsEl.EnumerateArray())
@@ -121,9 +122,9 @@ public static class XlsxHandlers
 
             var areasEl = c.GetProperty("test_areas_raw");
             if (areasEl.ValueKind != JsonValueKind.Array)
-                throw new ArgumentException("component.test_areas_raw 必须是 array");
+                throw new ArgumentException($"构件「{name}」的测区读数格式错误");
             if (areasEl.GetArrayLength() == 0)
-                throw new ArgumentException($"构件「{name}」test_areas_raw 为空 —— 无原始读数，无法写报告");
+                throw new ArgumentException($"构件「{name}」无测区原始读数，无法生成报告");
 
             var areas = new List<int[]>();
             foreach (var area in areasEl.EnumerateArray())

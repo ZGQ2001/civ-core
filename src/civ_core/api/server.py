@@ -92,11 +92,16 @@ class Dispatcher:
 
         try:
             result = self._invoke(handler, params)
-        except Exception as e:
-            log.exception("handler %s 抛异常", method)
+        except (ValueError, TypeError, KeyError) as e:
+            log.warning("handler %s 参数错误: %s", method, e)
             if req_id is None:
-                return ""  # notification 即便出错也不回响应
-            return self._error_response(req_id, ERR_INTERNAL, f"{type(e).__name__}: {e}")
+                return ""
+            return self._error_response(req_id, ERR_INVALID_PARAMS, str(e))
+        except Exception as e:
+            log.exception("handler %s 内部异常", method)
+            if req_id is None:
+                return ""
+            return self._error_response(req_id, ERR_INTERNAL, str(e))
 
         if req_id is None:
             return ""  # notification 不回响应

@@ -34,11 +34,11 @@ public static class LeebHandlers
     public static object Run(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var inputXlsx = p.GetProperty("input_xlsx").GetString()
-            ?? throw new ArgumentException("缺 input_xlsx");
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
         string? outputXlsx = p.TryGetProperty("output_xlsx", out var outEl)
             && outEl.ValueKind == JsonValueKind.String
             ? outEl.GetString() : null;
@@ -96,11 +96,13 @@ public static class LeebHandlers
     public static object PreviewExcel(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var path = p.GetProperty("path").GetString()
-            ?? throw new ArgumentException("缺 path");
+            ?? throw new ArgumentException("未指定 Excel 文件路径");
+        if (!File.Exists(path))
+            throw new ArgumentException($"文件不存在：{path}");
         string? sheetParam = p.TryGetProperty("sheet", out var sEl)
             && sEl.ValueKind == JsonValueKind.String ? sEl.GetString() : null;
         int headerRow = p.TryGetProperty("header_row", out var hEl) ? hEl.GetInt32() : 1;

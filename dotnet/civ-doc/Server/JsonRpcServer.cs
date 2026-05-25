@@ -21,6 +21,7 @@ public static class ErrorCodes
     public const int ParseError = -32700;
     public const int InvalidRequest = -32600;
     public const int MethodNotFound = -32601;
+    public const int InvalidParams = -32602;
     public const int Internal = -32603;
 }
 
@@ -80,11 +81,17 @@ public class Dispatcher
             {
                 result = handler(@params);
             }
+            catch (ArgumentException e)
+            {
+                Console.Error.WriteLine($"[civ-doc] handler {method} 参数错误: {e.Message}");
+                if (reqId is null) return null;
+                return ErrorResponse(reqId, ErrorCodes.InvalidParams, e.Message);
+            }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"[civ-doc] handler {method} 抛异常: {e}");
+                Console.Error.WriteLine($"[civ-doc] handler {method} 内部异常: {e}");
                 if (reqId is null) return null;
-                return ErrorResponse(reqId, ErrorCodes.Internal, $"{e.GetType().Name}: {e.Message}");
+                return ErrorResponse(reqId, ErrorCodes.Internal, e.Message);
             }
 
             if (reqId is null) return null;

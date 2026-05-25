@@ -16,6 +16,7 @@ using ClosedXML.Excel;
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
+using static CivCore.Doc.Server.AtomicFile;
 
 namespace CivCore.Doc.Handlers;
 
@@ -34,15 +35,19 @@ public static class AnchorHandlers
     public static object GenerateTemplate(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var outputXlsx = p.GetProperty("output_xlsx").GetString()
-            ?? throw new ArgumentException("缺 output_xlsx");
+            ?? throw new ArgumentException("未指定输出文件路径");
         string standard = p.TryGetProperty("standard", out var sEl)
             && sEl.ValueKind == JsonValueKind.String
             ? sEl.GetString() ?? AnchorStandards.GB_50086_2015
             : AnchorStandards.GB_50086_2015;
+
+        var outDir = Path.GetDirectoryName(outputXlsx);
+        if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
+            throw new ArgumentException($"输出目录不存在：{outDir}");
 
         AnchorTemplateWriter.Write(outputXlsx, standard);
 
@@ -57,11 +62,11 @@ public static class AnchorHandlers
     public static object ListBatches(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var inputXlsx = p.GetProperty("input_xlsx").GetString()
-            ?? throw new ArgumentException("缺 input_xlsx");
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
         string? sheet = p.TryGetProperty("sheet", out var sEl)
             && sEl.ValueKind == JsonValueKind.String ? sEl.GetString() : null;
         string batchCol = p.TryGetProperty("batch_id_column", out var bEl)
@@ -77,11 +82,11 @@ public static class AnchorHandlers
     public static object Run(JsonElement? @params)
     {
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params 必须是 object");
+            throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
 
         var inputXlsx = p.GetProperty("input_xlsx").GetString()
-            ?? throw new ArgumentException("缺 input_xlsx");
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
         string? outputXlsx = p.TryGetProperty("output_xlsx", out var outEl)
             && outEl.ValueKind == JsonValueKind.String ? outEl.GetString() : null;
         string standard = p.TryGetProperty("standard", out var sEl)
@@ -138,7 +143,7 @@ public static class AnchorHandlers
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
                 AnchorReportTable.Write(wb.Worksheets.Add(reportName), br);
             }
-            wb.SaveAs(outPath);
+            SaveWorkbook(wb, outPath);
         }
 
         return new Dictionary<string, object?>
@@ -153,13 +158,13 @@ public static class AnchorHandlers
     private static Dictionary<string, AnchorParams> ParseParamsByBatch(JsonElement el)
     {
         if (el.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("params_by_batch 必须是 object（key=batch_id）");
+            throw new ArgumentException("各批次工程参数格式错误");
         var result = new Dictionary<string, AnchorParams>();
         foreach (var prop in el.EnumerateObject())
         {
             var ap = prop.Value;
             if (ap.ValueKind != JsonValueKind.Object)
-                throw new ArgumentException($"params_by_batch[{prop.Name}] 必须是 object");
+                throw new ArgumentException($"批次「{prop.Name}」的工程参数格式错误");
             double p = ap.GetProperty("P").GetDouble();
             double lf = ap.GetProperty("Lf").GetDouble();
             double la = ap.GetProperty("La").GetDouble();

@@ -10,7 +10,8 @@ export function BasicTab() {
   const c = usePlotCurves();
   const preset = c.effectivePreset!;
   const headers = c.excelHeaders;
-  const idColInHeaders = !preset.id_column || headers.includes(preset.id_column);
+  const idColInHeaders =
+    !preset.id_column || headers.includes(preset.id_column);
   return (
     <>
       <Row label="图标题模板" hint="{id} 会被替换为标识列的值">

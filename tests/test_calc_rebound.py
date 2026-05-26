@@ -86,10 +86,14 @@ def test_normalize_carbonation_above_six_to_six() -> None:
     assert _normalize_carbonation_depth(99.0) == 6.0
 
 
-def test_normalize_carbonation_passthrough() -> None:
+def test_normalize_carbonation_rounding_and_passthrough() -> None:
     assert _normalize_carbonation_depth(2.5) == 2.5
     assert _normalize_carbonation_depth(6.0) == 6.0
     assert _normalize_carbonation_depth(0.5) == 0.5
+    assert _normalize_carbonation_depth(2.3) == 2.5
+    assert _normalize_carbonation_depth(2.2) == 2.0
+    assert _normalize_carbonation_depth(2.25) == 2.0
+
 
 
 def test_normalize_carbonation_negative_raises() -> None:

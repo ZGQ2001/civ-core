@@ -32,6 +32,8 @@ public enum FieldSource
 ///
 /// <para>Key 是唯一主键，模板 JSON 永远存这个；改名只换 Name 不动 Key。</para>
 /// <para>Format 是默认格式串（仅 Numeric 类型有意义），如 "0.00"；模板里也能 override。</para>
+/// <para>Aliases 是除 Name 之外用户也可能在 Word 模板里写的短名（如 "0.1Nt位移" → disp_01nt），
+/// 引擎反查时也命中。</para>
 /// </summary>
 /// <param name="Key">主键，绝不变。snake_case，如 "elastic_displacement"。</param>
 /// <param name="Name">中文显示名（给前端 BindingPanel 看的），如 "弹性位移量"。</param>
@@ -46,12 +48,20 @@ public record FieldDef(
     string? DefaultFormat = null
 )
 {
+    /// <summary>
+    /// 用户模板里可能出现的短名/别名 —— 引擎反查时除了 Name，也命中这些。
+    /// 例：disp_01nt 的别名 ["0.1Nt位移"]，让用户模板写 {{0.1Nt位移}} 能命中。
+    /// 默认空数组，调用方不必判空。
+    /// </summary>
+    public IReadOnlyList<string> Aliases { get; init; } = Array.Empty<string>();
+
     public static FieldDef Create(
         string key,
         string name,
         FieldSource source,
         string valueType,
-        string? defaultFormat = null)
+        string? defaultFormat = null,
+        IReadOnlyList<string>? aliases = null)
     {
         if (string.IsNullOrWhiteSpace(key))
             throw new ArgumentException("字段 Key 不可为空");
@@ -59,6 +69,9 @@ public record FieldDef(
             throw new ArgumentException($"字段 {key} 缺中文名");
         if (valueType is not ("string" or "double" or "int" or "bool"))
             throw new ArgumentException($"字段 {key} 的 ValueType 不合法：{valueType}");
-        return new FieldDef(key, name, source, valueType, defaultFormat);
+        return new FieldDef(key, name, source, valueType, defaultFormat)
+        {
+            Aliases = aliases ?? Array.Empty<string>(),
+        };
     }
 }

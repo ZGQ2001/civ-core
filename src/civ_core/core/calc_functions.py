@@ -287,7 +287,7 @@ def _trim_mean_rebound(values: Sequence[int]) -> float:
 
 
 def _normalize_carbonation_depth(d: float) -> float:
-    """INSP-003 §2：碳化深度归一化（< 0.5 → 0；≥ 6 → 6；其余原样）。"""
+    """INSP-003 §2：碳化深度归一化（< 0.5 → 0；≥ 6 → 6；其余按0.5mm步长舍入）。"""
     if d < 0:
         raise InputError(
             cause=f"碳化深度不能为负数，得到 {d}",
@@ -297,7 +297,9 @@ def _normalize_carbonation_depth(d: float) -> float:
         return 0.0
     if d >= _CARB_MAX:
         return _CARB_MAX
-    return d
+    # 四舍五入到最近的 0.5 mm
+    return round(d * 2.0) / 2.0
+
 
 
 def calc_rebound_concrete(

@@ -1,4 +1,4 @@
-// 占位符报告渲染器 —— 主路径：用户在 Word 里直接写 {key} 或 {中文名}，
+// 占位符报告渲染器 —— 主路径：用户在 Word 里直接写 {{key}} 或 {{中文名}}，
 // 引擎扫指定范围所有段落替换成实际值。
 //
 // 公开两条 API：
@@ -7,10 +7,13 @@
 //     （给 ReportGenerator 在 cloned Table 上做局部替换用）
 //
 // 设计取舍：
-//   - 段落级合并 Run 文本再替换 —— 解决 Word 把 {弹性位移量} 拆成多 Run 的麻烦。
+//   - 段落级合并 Run 文本再替换 —— 解决 Word 把 {{弹性位移量}} 拆成多 Run 的麻烦。
 //     代价：丢失同段落内多 Run 的字体差异（极少见，可接受）。
 //   - 缺失 key 留原文 + 加 unknownKeys 报告 —— 不阻断生成，让用户能见到没填上的占位符。
+//   - 数值字段按 catalog 的 DefaultFormat 格式化（如 "0.00" → 保留 2 位小数），
+//     避免 Word 里出现 1.23456789 这种裸 double。
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
@@ -28,9 +31,9 @@ public record PlaceholderRenderResult(int Replaced, IReadOnlyList<string> Unknow
 
 public static class PlaceholderRenderer
 {
-    /// <summary>匹配 {key} 形态；key 允许字母数字下划线 + 中文（不含 { } 本身）。</summary>
+    /// <summary>匹配 {{key}} 形态；key 允许字母数字下划线 + 中文（不含 { } 本身）。</summary>
     private static readonly Regex PlaceholderPattern =
-        new(@"\{([^{}\r\n]+?)\}", RegexOptions.Compiled);
+        new(@"\{\{([^{}\r\n]+?)\}\}", RegexOptions.Compiled);
 
     /// <summary>拷贝 sourcePath 到 outputPath，全文档替换占位符。</summary>
     public static PlaceholderRenderResult Render(
@@ -65,7 +68,7 @@ public static class PlaceholderRenderer
         IFieldResolver resolver,
         IReadOnlyList<FieldDef>? catalog = null)
     {
-        var nameToKey = BuildNameIndex(catalog);
+        var catalogIndex = BuildCatalogIndex(catalog);
         var unknownKeys = new List<string>();
         int replaced = 0;
 
@@ -75,7 +78,7 @@ public static class PlaceholderRenderer
             : scope.Descendants<Paragraph>();
 
         foreach (var para in paragraphs.ToList())
-            ProcessParagraph(para, resolver, nameToKey, ref replaced, unknownKeys);
+            ProcessParagraph(para, resolver, catalogIndex, ref replaced, unknownKeys);
 
         return new PlaceholderRenderResult(replaced, unknownKeys.Distinct().ToList());
     }
@@ -85,7 +88,7 @@ public static class PlaceholderRenderer
     private static void ProcessParagraph(
         Paragraph para,
         IFieldResolver resolver,
-        IReadOnlyDictionary<string, string> nameToKey,
+        CatalogIndex catalog,
         ref int replaced,
         List<string> unknownKeys)
     {
@@ -100,15 +103,15 @@ public static class PlaceholderRenderer
         var newText = PlaceholderPattern.Replace(combined, m =>
         {
             var raw = m.Groups[1].Value.Trim();
-            var key = ResolveKey(raw, nameToKey);
+            var (key, fieldDef) = catalog.Resolve(raw);
             var val = resolver.GetValue(key);
-            if (val == null && !nameToKey.ContainsKey(NormName(raw)))
+            if (val == null && fieldDef == null)
             {
                 unknownKeys.Add(raw);
                 return m.Value;
             }
             localReplaced++;
-            return val?.ToString() ?? "";
+            return FormatValue(val, fieldDef);
         });
         replaced += localReplaced;
 
@@ -126,23 +129,67 @@ public static class PlaceholderRenderer
 
     // ── helpers ────────────────────────────────────────────
 
-    private static IReadOnlyDictionary<string, string> BuildNameIndex(
-        IReadOnlyList<FieldDef>? catalog)
+    /// <summary>
+    /// 按 catalog 的 DefaultFormat 把 double/int 格式化成字符串，避免 Word 里出现
+    /// 1.234567 这类裸 double。catalog 没标 format 或类型不是数字时回退到 ToString。
+    /// </summary>
+    private static string FormatValue(object? val, FieldDef? fieldDef)
     {
-        if (catalog == null) return new Dictionary<string, string>();
-        var d = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var f in catalog) d[NormName(f.Name)] = f.Key;
-        return d;
+        if (val == null) return "";
+        if (fieldDef?.DefaultFormat is { Length: > 0 } fmt)
+        {
+            return val switch
+            {
+                double d => d.ToString(fmt, CultureInfo.InvariantCulture),
+                float f => f.ToString(fmt, CultureInfo.InvariantCulture),
+                decimal m => m.ToString(fmt, CultureInfo.InvariantCulture),
+                long l => l.ToString(fmt, CultureInfo.InvariantCulture),
+                int i => i.ToString(fmt, CultureInfo.InvariantCulture),
+                _ => val.ToString() ?? "",
+            };
+        }
+        return val.ToString() ?? "";
     }
+
+    /// <summary>
+    /// catalog 索引：把 raw 占位符内容（key / 中文名 / 别名）解析成「真实 key + FieldDef」。
+    /// FieldDef 用于后续格式化（DefaultFormat）。
+    /// </summary>
+    private sealed class CatalogIndex
+    {
+        private readonly Dictionary<string, FieldDef> _byKey;
+        private readonly Dictionary<string, FieldDef> _byName;
+
+        public CatalogIndex(IReadOnlyList<FieldDef>? catalog)
+        {
+            _byKey = new Dictionary<string, FieldDef>(StringComparer.Ordinal);
+            _byName = new Dictionary<string, FieldDef>(StringComparer.Ordinal);
+            if (catalog == null) return;
+            foreach (var f in catalog)
+            {
+                _byKey[f.Key] = f;
+                _byName[NormName(f.Name)] = f;
+                foreach (var alias in f.Aliases)
+                    _byName[NormName(alias)] = f;
+            }
+        }
+
+        /// <summary>raw 是 ASCII key → 直查；否则当中文名/别名 → 反查。</summary>
+        public (string Key, FieldDef? Def) Resolve(string raw)
+        {
+            var norm = NormName(raw);
+            if (IsKeyLike(norm))
+                return (norm, _byKey.TryGetValue(norm, out var fk) ? fk : null);
+            if (_byName.TryGetValue(norm, out var fn))
+                return (fn.Key, fn);
+            return (raw, null);
+        }
+    }
+
+    private static CatalogIndex BuildCatalogIndex(IReadOnlyList<FieldDef>? catalog)
+        => new(catalog);
 
     private static string NormName(string s) => s.Trim();
-
-    private static string ResolveKey(string raw, IReadOnlyDictionary<string, string> nameToKey)
-    {
-        // char.IsLetterOrDigit 在 .NET 对中文字符也返回 true —— Key 严格限定 ASCII
-        if (IsKeyLike(raw)) return raw;
-        return nameToKey.TryGetValue(NormName(raw), out var k) ? k : raw;
-    }
 
     private static bool IsKeyLike(string s)
     {

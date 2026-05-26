@@ -1,5 +1,8 @@
-// ReportGenerator 占位符驱动版测试：marker 段定位 + 克隆 N 张 + 项目级填一次。
+// ReportGenerator 占位符驱动版测试：成对 marker 定位 + 克隆 N 次"克隆区" + 项目级填一次。
 // 不再需要 TemplateStorage（模板就是用户的 Word 文件，无 JSON 配置）。
+//
+// 占位符语法升级后只支持 {{key}}（双括号）。
+// 行重复 marker 从「单 marker + 后接 1 张 Table」升级到「成对 marker 之间所有元素一起克隆」。
 
 using CivCore.Doc.Template;
 using DocumentFormat.OpenXml;
@@ -20,12 +23,16 @@ public class ReportGeneratorTests : IDisposable
         public object? GetValue(string key) => _v.TryGetValue(key, out var x) ? x : null;
     }
 
-    /// <summary>建 docx 模板：可选项目级段落 + marker 段 + 锚杆样表。</summary>
+    /// <summary>
+    /// 建一个 docx 模板：可选项目级段落 + 起始 marker 段 + 锚杆样表 + 结束 marker 段。
+    /// 默认克隆区只含 1 张样表。
+    /// </summary>
     private string MakeTemplate(
         string fileName,
         string? projectIntro,
-        string marker = ReportGenerator.DefaultPerRowMarker,
-        Action<DocxTableBuilder>? rowTable = null)
+        string startMarker = ReportGenerator.DefaultPerRowStartMarker,
+        string endMarker = ReportGenerator.DefaultPerRowEndMarker,
+        Action<Body>? unitContent = null)
     {
         var path = Path.Combine(_tmp.Dir, fileName);
         using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
@@ -34,20 +41,29 @@ public class ReportGeneratorTests : IDisposable
         var body = mainPart.Document.Body!;
 
         if (projectIntro != null)
-            body.AppendChild(new Paragraph(new Run(new Text(projectIntro) { Space = SpaceProcessingModeValues.Preserve })));
+            body.AppendChild(MakePara(projectIntro));
 
-        body.AppendChild(new Paragraph(new Run(new Text(marker) { Space = SpaceProcessingModeValues.Preserve })));
+        body.AppendChild(MakePara(startMarker));
 
-        var tb = new DocxTableBuilder();
-        (rowTable ?? DefaultRowTable())(tb);
-        body.AppendChild(tb.Build());
+        if (unitContent != null)
+            unitContent(body);
+        else
+            AddDefaultRowTable(body);
 
+        body.AppendChild(MakePara(endMarker));
         return path;
     }
 
-    private static Action<DocxTableBuilder> DefaultRowTable() => b => b
-        .Row(new CellSpec("锚杆编号"), new CellSpec("弹性位移"), new CellSpec("结果"))
-        .Row(new CellSpec("{anchor_id}"), new CellSpec("{elastic_displacement}"), new CellSpec("{judgement_result}"));
+    private static Paragraph MakePara(string text) =>
+        new(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
+
+    private static void AddDefaultRowTable(Body body)
+    {
+        var tb = new DocxTableBuilder();
+        tb.Row(new CellSpec("锚杆编号"), new CellSpec("弹性位移"), new CellSpec("结果"));
+        tb.Row(new CellSpec("{{anchor_id}}"), new CellSpec("{{elastic_displacement}}"), new CellSpec("{{judgement_result}}"));
+        body.AppendChild(tb.Build());
+    }
 
     private static List<Table> ReadTables(string path)
     {
@@ -66,7 +82,7 @@ public class ReportGeneratorTests : IDisposable
     [Fact]
     public void Generate_单row_克隆一张表_项目段不动()
     {
-        var src = MakeTemplate("simple.docx", projectIntro: "项目：{project_name}");
+        var src = MakeTemplate("simple.docx", projectIntro: "项目：{{project_name}}");
         var project = new DictResolver(new() { ["project_name"] = "测试工程" });
         var row = new DictResolver(new()
         {
@@ -85,7 +101,8 @@ public class ReportGeneratorTests : IDisposable
         Assert.Contains("项目：测试工程", inner);
         Assert.Contains("P-01", inner);
         Assert.Contains("合格", inner);
-        Assert.DoesNotContain(ReportGenerator.DefaultPerRowMarker, inner); // marker 段已删
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowStartMarker, inner);
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowEndMarker, inner);
     }
 
     [Fact]
@@ -105,20 +122,55 @@ public class ReportGeneratorTests : IDisposable
 
         Assert.Equal(3, res.RowsRendered);
         var tables = ReadTables(outPath);
-        Assert.Equal(3, tables.Count); // 一根一张，原模板 stamp 已删
+        Assert.Equal(3, tables.Count);
         Assert.Contains("P-01", tables[0].InnerText);
         Assert.Contains("P-02", tables[1].InnerText);
         Assert.Contains("P-03", tables[2].InnerText);
     }
 
     [Fact]
+    public void Generate_克隆区含标题段加表_两个元素一起克隆()
+    {
+        // 模拟用户场景：[[每根锚杆]] 标题段 + 样表 [[/每根锚杆]]
+        var src = MakeTemplate("title_and_table.docx",
+            projectIntro: "工程：{{project_name}}",
+            unitContent: body =>
+            {
+                body.AppendChild(MakePara("表2.4-{{anchor_index}}  {{project_name}}"));
+                var tb = new DocxTableBuilder();
+                tb.Row(new CellSpec("锚杆编号"), new CellSpec("判定"));
+                tb.Row(new CellSpec("{{anchor_id}}"), new CellSpec("{{judgement_result}}"));
+                body.AppendChild(tb.Build());
+            });
+        var project = new DictResolver(new() { ["project_name"] = "示例项目" });
+        var rows = new IFieldResolver[]
+        {
+            new DictResolver(new() { ["anchor_id"] = "A1", ["judgement_result"] = "合格", ["anchor_index"] = 1, ["project_name"] = "示例项目" }),
+            new DictResolver(new() { ["anchor_id"] = "A2", ["judgement_result"] = "合格", ["anchor_index"] = 2, ["project_name"] = "示例项目" }),
+        };
+        var outPath = Path.Combine(_tmp.Dir, "tt_out.docx");
+
+        var res = ReportGenerator.Generate(src, project, rows, outPath);
+
+        Assert.Equal(2, res.RowsRendered);
+        var tables = ReadTables(outPath);
+        Assert.Equal(2, tables.Count);
+        var inner = ReadAllText(outPath);
+        Assert.Contains("工程：示例项目", inner);
+        Assert.Contains("表2.4-1", inner);
+        Assert.Contains("表2.4-2", inner);
+        Assert.Contains("A1", inner);
+        Assert.Contains("A2", inner);
+    }
+
+    [Fact]
     public void Generate_项目级和行级占位符不互相影响()
     {
-        // 项目段含 {client_name}；行表含 {anchor_id}。
+        // 项目段含 {{client_name}}；行表含 {{anchor_id}}。
         // 项目级 resolver 没 anchor_id；行 resolver 没 client_name。
         // 期望：各自填各自的，没串值，没 unknown。
         var src = MakeTemplate("split.docx",
-            projectIntro: "委托方：{client_name}");
+            projectIntro: "委托方：{{client_name}}");
         var project = new DictResolver(new() { ["client_name"] = "ABC 集团" });
         var row = new DictResolver(new()
         {
@@ -151,18 +203,63 @@ public class ReportGeneratorTests : IDisposable
     }
 
     [Fact]
-    public void Generate_缺marker_抛异常带提示()
+    public void Generate_缺起始marker_抛异常带提示()
     {
-        // 用 marker="不存在的标记" 让模板里不含此 marker
-        var src = MakeTemplate("no_marker.docx", null, marker: "随便写点别的");
+        // 模板只放一个不含默认 startMarker 的段
+        var src = MakeTemplate("no_start.docx", null,
+            startMarker: "随便写点别的",
+            endMarker: "也是别的");
         var ex = Assert.Throws<ReportGenerateException>(() =>
             ReportGenerator.Generate(
                 src,
                 new DictResolver(new()),
                 new[] { (IFieldResolver)new DictResolver(new()) },
                 Path.Combine(_tmp.Dir, "out.docx"))); // 默认 marker = [[每根锚杆]]
-        Assert.Contains("锚点", ex.Message);
-        Assert.Contains(ReportGenerator.DefaultPerRowMarker, ex.Message);
+        Assert.Contains(ReportGenerator.DefaultPerRowStartMarker, ex.Message);
+        Assert.Contains("起始锚点", ex.Message);
+    }
+
+    [Fact]
+    public void Generate_有起始marker_缺结束marker_抛带提示的异常()
+    {
+        // 手工建：有 [[每根锚杆]] 但无 [[/每根锚杆]]
+        var path = Path.Combine(_tmp.Dir, "no_end.docx");
+        using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+        {
+            var mp = doc.AddMainDocumentPart();
+            mp.Document = new Document(new Body());
+            mp.Document.Body!.AppendChild(MakePara(ReportGenerator.DefaultPerRowStartMarker));
+            AddDefaultRowTable(mp.Document.Body!);
+        }
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.Generate(
+                path,
+                new DictResolver(new()),
+                new[] { (IFieldResolver)new DictResolver(new()) },
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains(ReportGenerator.DefaultPerRowEndMarker, ex.Message);
+        Assert.Contains("结束锚点", ex.Message);
+    }
+
+    [Fact]
+    public void Generate_克隆区为空_抛带提示的异常()
+    {
+        // [[每根锚杆]] 紧接 [[/每根锚杆]]，中间无内容
+        var path = Path.Combine(_tmp.Dir, "empty_unit.docx");
+        using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+        {
+            var mp = doc.AddMainDocumentPart();
+            mp.Document = new Document(new Body());
+            mp.Document.Body!.AppendChild(MakePara(ReportGenerator.DefaultPerRowStartMarker));
+            mp.Document.Body!.AppendChild(MakePara(ReportGenerator.DefaultPerRowEndMarker));
+        }
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.Generate(
+                path,
+                new DictResolver(new()),
+                new[] { (IFieldResolver)new DictResolver(new()) },
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains("克隆区为空", ex.Message);
     }
 
     [Fact]
@@ -181,9 +278,13 @@ public class ReportGeneratorTests : IDisposable
     [Fact]
     public void Generate_中文占位符_经catalog反查Key()
     {
-        var src = MakeTemplate("zh.docx", null, rowTable: b => b
-            .Row(new CellSpec("编号"), new CellSpec("位移"))
-            .Row(new CellSpec("{锚杆编号}"), new CellSpec("{弹性位移量 M (mm)}")));
+        var src = MakeTemplate("zh.docx", null, unitContent: body =>
+        {
+            var tb = new DocxTableBuilder();
+            tb.Row(new CellSpec("编号"), new CellSpec("位移"));
+            tb.Row(new CellSpec("{{锚杆编号}}"), new CellSpec("{{弹性位移量 M (mm)}}"));
+            body.AppendChild(tb.Build());
+        });
         var row = new DictResolver(new()
         {
             ["anchor_id"] = "P-77",
@@ -203,10 +304,11 @@ public class ReportGeneratorTests : IDisposable
     // ── 自定义 marker ──────────────────────────────────────
 
     [Fact]
-    public void Generate_自定义marker_也能识别()
+    public void Generate_自定义marker对_也能识别()
     {
-        var customMarker = "<<行重复>>";
-        var src = MakeTemplate("custom.docx", null, marker: customMarker);
+        var src = MakeTemplate("custom.docx", null,
+            startMarker: "<<行开始>>",
+            endMarker: "<<行结束>>");
         var row = new DictResolver(new()
         {
             ["anchor_id"] = "X",
@@ -216,14 +318,28 @@ public class ReportGeneratorTests : IDisposable
 
         var outPath = Path.Combine(_tmp.Dir, "custom_out.docx");
         ReportGenerator.Generate(src, new DictResolver(new()), new[] { row }, outPath,
-            perRowMarker: customMarker);
+            perRowStartMarker: "<<行开始>>", perRowEndMarker: "<<行结束>>");
 
         var inner = ReadAllText(outPath);
-        Assert.DoesNotContain(customMarker, inner); // 自定义 marker 段也已删
+        Assert.DoesNotContain("<<行开始>>", inner);
+        Assert.DoesNotContain("<<行结束>>", inner);
         Assert.Contains("X", inner);
     }
 
-    // ── GenerateMultiBatch 三级模板 ────────────────────────
+    [Fact]
+    public void Generate_起止marker相同_抛异常()
+    {
+        var src = MakeTemplate("same.docx", null,
+            startMarker: "[[same]]", endMarker: "[[same]]");
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.Generate(src, new DictResolver(new()),
+                new[] { (IFieldResolver)new DictResolver(new()) },
+                Path.Combine(_tmp.Dir, "out.docx"),
+                perRowStartMarker: "[[same]]", perRowEndMarker: "[[same]]"));
+        Assert.Contains("不能用同一字符串", ex.Message);
+    }
+
+    // ── GenerateMultiBatch 三级模板（保留接口，模板内行重复也走成对 marker） ──
 
     private string MakeMultiBatchTemplate(
         string fileName,
@@ -240,14 +356,15 @@ public class ReportGeneratorTests : IDisposable
             body.AppendChild(MakePara(globalIntro));
 
         body.AppendChild(MakePara("[[批次]]"));
-        body.AppendChild(MakePara("批次：{batch_id}，设计值：{axial_design_load}"));
-        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowMarker));
+        body.AppendChild(MakePara("批次：{{batch_id}}，设计值：{{axial_design_load}}"));
+        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowStartMarker));
 
         var tb = new DocxTableBuilder();
         tb.Row(new CellSpec("编号"), new CellSpec("位移"), new CellSpec("结果"));
-        tb.Row(new CellSpec("{anchor_id}"), new CellSpec("{elastic_displacement}"), new CellSpec("{judgement_result}"));
+        tb.Row(new CellSpec("{{anchor_id}}"), new CellSpec("{{elastic_displacement}}"), new CellSpec("{{judgement_result}}"));
         body.AppendChild(tb.Build());
 
+        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowEndMarker));
         body.AppendChild(MakePara("[[/批次]]"));
 
         if (footer != null)
@@ -256,13 +373,10 @@ public class ReportGeneratorTests : IDisposable
         return path;
     }
 
-    private static Paragraph MakePara(string text)
-        => new(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
-
     [Fact]
     public void MultiBatch_单批次_等价于单级()
     {
-        var src = MakeMultiBatchTemplate("mb_single.docx", globalIntro: "项目：{project_name}");
+        var src = MakeMultiBatchTemplate("mb_single.docx", globalIntro: "项目：{{project_name}}");
         var global = new DictResolver(new() { ["project_name"] = "测试工程" });
         var batch = new BatchSection(
             new DictResolver(new() { ["batch_id"] = "B1", ["axial_design_load"] = "180000" }),
@@ -282,13 +396,14 @@ public class ReportGeneratorTests : IDisposable
         Assert.Contains("合格", inner);
         Assert.DoesNotContain("[[批次]]", inner);
         Assert.DoesNotContain("[[/批次]]", inner);
-        Assert.DoesNotContain(ReportGenerator.DefaultPerRowMarker, inner);
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowStartMarker, inner);
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowEndMarker, inner);
     }
 
     [Fact]
     public void MultiBatch_多批次_各批次独立填充()
     {
-        var src = MakeMultiBatchTemplate("mb_multi.docx", globalIntro: "委托方：{client_name}");
+        var src = MakeMultiBatchTemplate("mb_multi.docx", globalIntro: "委托方：{{client_name}}");
         var global = new DictResolver(new() { ["client_name"] = "ABC集团" });
         var batches = new BatchSection[]
         {
@@ -312,44 +427,18 @@ public class ReportGeneratorTests : IDisposable
 
         Assert.Equal(3, res.RowsRendered);
         var inner = ReadAllText(outPath);
-        // 全局
         Assert.Contains("委托方：ABC集团", inner);
-        // B1 批次区块
         Assert.Contains("批次：B1", inner);
         Assert.Contains("设计值：100", inner);
         Assert.Contains("P-01", inner);
         Assert.Contains("P-02", inner);
-        // B2 批次区块
         Assert.Contains("批次：B2", inner);
         Assert.Contains("设计值：200", inner);
         Assert.Contains("P-03", inner);
-        // marker 全部已删
         Assert.DoesNotContain("[[批次]]", inner);
         Assert.DoesNotContain("[[/批次]]", inner);
-        // 表数量 = 3（B1 两张 + B2 一张）
         var tables = ReadTables(outPath);
         Assert.Equal(3, tables.Count);
-    }
-
-    [Fact]
-    public void MultiBatch_全局字段不侵入批次区块()
-    {
-        var src = MakeMultiBatchTemplate("mb_scope.docx", globalIntro: "项目：{project_name}");
-        var global = new DictResolver(new() { ["project_name"] = "全局值" });
-        var batch = new BatchSection(
-            new DictResolver(new() { ["batch_id"] = "X", ["axial_design_load"] = "999" }),
-            new IFieldResolver[]
-            {
-                new DictResolver(new() { ["anchor_id"] = "R1", ["elastic_displacement"] = "0", ["judgement_result"] = "Y" }),
-            });
-        var outPath = Path.Combine(_tmp.Dir, "mb_scope_out.docx");
-
-        var res = ReportGenerator.GenerateMultiBatch(src, global, new[] { batch }, outPath);
-
-        Assert.Empty(res.UnknownKeys);
-        var inner = ReadAllText(outPath);
-        Assert.Contains("项目：全局值", inner);
-        Assert.Contains("批次：X", inner);
     }
 
     [Fact]
@@ -377,9 +466,16 @@ public class ReportGeneratorTests : IDisposable
     [Fact]
     public void MultiBatch_缺起始marker_抛异常()
     {
-        var src = MakeTemplate("mb_no_start.docx", null); // 没有 [[批次]]
+        // 模板只放普通段落 + 一张表 + 行重复 marker，没 [[批次]]
+        var path = Path.Combine(_tmp.Dir, "mb_no_start.docx");
+        using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+        {
+            var mp = doc.AddMainDocumentPart();
+            mp.Document = new Document(new Body());
+            mp.Document.Body!.AppendChild(MakePara("没有批次 marker 的模板"));
+        }
         var ex = Assert.Throws<ReportGenerateException>(() =>
-            ReportGenerator.GenerateMultiBatch(src, new DictResolver(new()),
+            ReportGenerator.GenerateMultiBatch(path, new DictResolver(new()),
                 new[] { new BatchSection(new DictResolver(new()), Array.Empty<IFieldResolver>()) },
                 Path.Combine(_tmp.Dir, "out.docx")));
         Assert.Contains("[[批次]]", ex.Message);

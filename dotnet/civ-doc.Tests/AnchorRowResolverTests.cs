@@ -87,4 +87,20 @@ public class AnchorRowResolverTests
         var rv = new AnchorRowResolver(i, r, p);
         Assert.Null(rv.GetValue("totally_unknown_key"));
     }
+
+    [Fact]
+    public void GetValue_anchor_index_返回构造时传入的1based序号()
+    {
+        var (i, r, p) = Sample();
+        var rv = new AnchorRowResolver(i, r, p, anchorIndex: 42);
+        Assert.Equal(42, rv.GetValue("anchor_index"));
+    }
+
+    [Fact]
+    public void GetValue_anchor_index_默认值0()
+    {
+        var (i, r, p) = Sample();
+        var rv = new AnchorRowResolver(i, r, p);
+        Assert.Equal(0, rv.GetValue("anchor_index"));
+    }
 }

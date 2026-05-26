@@ -155,7 +155,9 @@ public static class AnchorHandlers
             SaveWorkbook(wb, outPath);
         }
 
-        // 可选 Word 报告：所有批次合成一份 docx
+        // 可选 Word 报告：所有批次的锚杆合成一份 docx（项目级 + 每根锚杆克隆）
+        // 当前模板默认是「项目级 + [[每根锚杆]]...[[/每根锚杆]] 行重复」结构，
+        // 不分批次维度（用户场景 209 根全在 1 个批次内，跨批次时 anchor_index 全局递增）。
         var wordOutputs = new List<string>();
         if (!string.IsNullOrWhiteSpace(wordTemplatePath))
         {
@@ -164,20 +166,22 @@ public static class AnchorHandlers
                 : Path.Combine(src.DirectoryName ?? "", $"{Path.GetFileNameWithoutExtension(src.Name)}_Word报告");
             Directory.CreateDirectory(wordDir);
 
-            var globalResolver = new DictionaryResolver(userInputs);
-            var batchSections = result.BatchResults.Select(br =>
+            var projectResolver = new DictionaryResolver(userInputs);
+            var rowResolvers = new List<IFieldResolver>();
+            int anchorIndex = 0;
+            foreach (var br in result.BatchResults)
             {
-                var batchUserInputs = MergeBatchInputs(userInputs, br.BatchId);
-                var batchResolver = new AnchorBatchResolver(br.Params, batchUserInputs, br.BatchId);
-                var rowResolvers = br.RowsWithResults
-                    .Select(rw => (IFieldResolver)new AnchorRowResolver(rw.Input, rw.Result, br.Params, batchUserInputs))
-                    .ToList();
-                return new BatchSection(batchResolver, rowResolvers);
-            }).ToList();
+                foreach (var rw in br.RowsWithResults)
+                {
+                    anchorIndex++;
+                    rowResolvers.Add(new AnchorRowResolver(
+                        rw.Input, rw.Result, br.Params, userInputs, anchorIndex));
+                }
+            }
 
             var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
-            ReportGenerator.GenerateMultiBatch(
-                wordTemplatePath, globalResolver, batchSections, wordOut,
+            ReportGenerator.Generate(
+                wordTemplatePath, projectResolver, rowResolvers, wordOut,
                 catalog: AnchorFieldCatalog.All);
             wordOutputs.Add(wordOut);
         }
@@ -202,15 +206,6 @@ public static class AnchorHandlers
                 d[prop.Name] = prop.Value.GetString() ?? "";
         }
         return d;
-    }
-
-    /// <summary>把"批次维度的用户输入"扁平化（暂未提供；预留接口）。</summary>
-    private static IReadOnlyDictionary<string, string> MergeBatchInputs(
-        IReadOnlyDictionary<string, string> projectInputs, string batchId)
-    {
-        // 当前实现：项目级直接用。未来若想"按批次定制 client_name 等"可在此扩展。
-        _ = batchId;
-        return projectInputs;
     }
 
     private static string SafeFileName(string s)

@@ -17,17 +17,24 @@ public class AnchorRowResolver : IFieldResolver
     private readonly AnchorRowResult _result;
     private readonly AnchorParams _params;
     private readonly IReadOnlyDictionary<string, string> _userInputs;
+    private readonly int _anchorIndex;
 
+    /// <param name="anchorIndex">
+    /// 1-based 全局序号 —— 模板里 {{锚杆序号}} 填这个值。0 表示未设置（旧调用方兼容）。
+    /// 报告级别全局递增（209 根全在一份报告里，从 1 数到 209）。
+    /// </param>
     public AnchorRowResolver(
         AnchorRowInput input,
         AnchorRowResult result,
         AnchorParams @params,
-        IReadOnlyDictionary<string, string>? userInputs = null)
+        IReadOnlyDictionary<string, string>? userInputs = null,
+        int anchorIndex = 0)
     {
         _input = input;
         _result = result;
         _params = @params;
         _userInputs = userInputs ?? new Dictionary<string, string>();
+        _anchorIndex = anchorIndex;
     }
 
     public object? GetValue(string fieldKey) => fieldKey switch
@@ -58,6 +65,9 @@ public class AnchorRowResolver : IFieldResolver
         "lower_limit" => _result.LowerLimit,
         "upper_limit" => _result.UpperLimit,
         "judgement_result" => _result.Qualified ? "合格" : "不合格",
+
+        // ── 引擎注入 ──
+        "anchor_index" => _anchorIndex,
 
         // ── 用户输入兜底 ──
         _ => _userInputs.TryGetValue(fieldKey, out var v) ? v : null,

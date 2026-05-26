@@ -826,56 +826,100 @@ export function FileTree({
         )}
       </div>
       {menu && <ContextMenuView menu={menu} onClose={() => setMenu(null)} />}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          targetName={nodes.get(deleteTarget)?.name ?? '此项'}
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      {deleteTarget && (() => {
+        const node = nodes.get(deleteTarget);
+        return (
+          <DeleteConfirmModal
+            targetName={node?.name ?? '此项'}
+            targetPath={deleteTarget}
+            isDir={node?.isDir ?? false}
+            onConfirm={confirmDelete}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        );
+      })()}
     </Ctx.Provider>
   );
 }
 
+/**
+ * VSCode 同款删除确认 modal。
+ * - 顶部：垃圾桶图标 + 标题「确定要删除 'name' 吗？」
+ * - 副文本：路径全名（断词显示）+ 文件夹时额外提示「连同子项一起」
+ * - 主按钮「移到回收站」蓝色 primary；次按钮「取消」灰色
+ * - Backdrop 不可关（防误点）；Esc 取消，Enter 确认
+ */
 function DeleteConfirmModal({
   targetName,
+  targetPath,
+  isDir,
   onConfirm,
   onCancel,
 }: {
   targetName: string;
+  targetPath: string;
+  isDir: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-      if (e.key === 'Enter') onConfirm();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onConfirm();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onConfirm, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-      <div className="border-vscode-border text-vscode-text w-full max-w-[400px] rounded-[4px] border bg-[#252526] p-5 shadow-2xl">
-        <h2 className="mb-3 text-[14px] font-medium">确认删除</h2>
-        <p className="text-vscode-text-dim mb-6 text-[13px]">
-          确定要将「<span className="text-white">{targetName}</span>
-          」移到回收站吗？
-        </p>
-        <div className="flex justify-end gap-2">
-          <button
-            autoFocus
-            className="bg-vscode-button hover:bg-vscode-button-hover rounded-[2px] px-4 py-1.5 text-[13px] text-white transition-colors outline-none"
-            onClick={onConfirm}
-          >
-            确定
-          </button>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+      // 点 backdrop 不关 —— VSCode 删除 modal 也不可点空白关闭，避免误操作丢失上下文
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div
+        className="border-vscode-border text-vscode-text w-full max-w-[440px] rounded-[4px] border bg-[#252526] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex gap-3 p-5 pb-3">
+          <i className="codicon codicon-trash text-vscode-focus mt-0.5 shrink-0 !text-[20px]" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] leading-tight font-medium">
+              确定要删除「<span className="break-all">{targetName}</span>」吗？
+            </h2>
+            <p className="text-vscode-text-dim mt-2 text-[12px] break-all">
+              {targetPath}
+            </p>
+            {isDir && (
+              <p className="mt-2 text-[12px] text-yellow-400">
+                <i className="codicon codicon-warning mr-1 !text-[12px]" />
+                这是一个文件夹，将连同其中的所有子项一起删除。
+              </p>
+            )}
+            <p className="text-vscode-text-dim mt-2 text-[12px]">
+              文件将移到系统回收站，可在回收站中还原；也可在文件树里按 Ctrl+Z 撤销最近 5 分钟内的删除。
+            </p>
+          </div>
+        </div>
+        <div className="bg-vscode-border/30 flex justify-end gap-2 rounded-b-[4px] px-5 py-3">
           <button
             className="text-vscode-text rounded-[2px] bg-[#3a3d41] px-4 py-1.5 text-[13px] transition-colors outline-none hover:bg-[#4a4d51]"
             onClick={onCancel}
           >
             取消
+          </button>
+          <button
+            autoFocus
+            className="bg-vscode-button hover:bg-vscode-button-hover rounded-[2px] px-4 py-1.5 text-[13px] text-white transition-colors outline-none"
+            onClick={onConfirm}
+          >
+            移到回收站
           </button>
         </div>
       </div>

@@ -48,9 +48,9 @@ public static class AnchorAnalysisSheet
             ws.Cell(row, 10).Value = d.U07Nt;
             ws.Cell(row, 11).Value = d.U04Nt;
             ws.Cell(row, 12).Value = d.U01Nt;
-            ws.Cell(row, 13).Value = Math.Round(result.ElasticDisplacement, 3);
-            ws.Cell(row, 14).Value = Math.Round(result.LowerLimit, 3);
-            ws.Cell(row, 15).Value = Math.Round(result.UpperLimit, 3);
+            ws.Cell(row, 13).Value = Math.Round(result.ElasticDisplacement, 2);
+            ws.Cell(row, 14).Value = Math.Round(result.LowerLimit, 2);
+            ws.Cell(row, 15).Value = Math.Round(result.UpperLimit, 2);
             var verdict = ws.Cell(row, 16);
             verdict.Value = result.Qualified ? "合格" : "不合格";
             if (!result.Qualified)

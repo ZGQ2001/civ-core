@@ -1,5 +1,7 @@
-// PlaceholderRenderer 测试：单段、跨 Run、中文名反查、缺失兜底、表格内、未知字段。
+// PlaceholderRenderer 测试：单段、跨 Run、中文名反查、别名、缺失兜底、表格内、未知字段、格式化。
 // 复用 DocxTestFixtures 的 TempDocx；这里加一个能放普通段落 + 占位符的 docx 构造工具。
+//
+// 占位符语法升级后只支持 {{key}}（双括号）；单括号 {key} 不再识别，留原文。
 
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.Template;
@@ -59,7 +61,7 @@ public class PlaceholderRendererTests : IDisposable
     public void Render_单段单Run_key替换()
     {
         var src = WriteSimpleDocx("simple.docx", body =>
-            body.AppendChild(SingleRunPara("锚杆 {anchor_id} 弹性位移 {elastic_displacement} mm")));
+            body.AppendChild(SingleRunPara("锚杆 {{anchor_id}} 弹性位移 {{elastic_displacement}} mm")));
         var resolver = new DictResolver(new()
         {
             ["anchor_id"] = "P-01",
@@ -76,9 +78,9 @@ public class PlaceholderRendererTests : IDisposable
     [Fact]
     public void Render_跨Run拆分的占位符_仍能替换()
     {
-        // Word 输入法常把 {anchor_id} 拆成 "{" / "anchor_id" / "}"
+        // Word 输入法常把 {{anchor_id}} 拆成多 Run，如 "{{" / "anchor_id" / "}}"
         var src = WriteSimpleDocx("split.docx", body =>
-            body.AppendChild(MultiRunPara("锚杆 ", "{", "anchor_id", "}", " 完成")));
+            body.AppendChild(MultiRunPara("锚杆 ", "{{", "anchor_id", "}}", " 完成")));
         var resolver = new DictResolver(new() { ["anchor_id"] = "P-99" });
 
         var res = PlaceholderRenderer.Render(src, OutPath("split_out.docx"), resolver);
@@ -87,13 +89,27 @@ public class PlaceholderRendererTests : IDisposable
         Assert.Equal("锚杆 P-99 完成", ReadAllText(OutPath("split_out.docx")));
     }
 
+    [Fact]
+    public void Render_单括号_不被识别_留原文()
+    {
+        // {anchor_id} 单括号在新语法下不再识别；留原文，不计入 unknownKeys
+        var src = WriteSimpleDocx("single.docx", body =>
+            body.AppendChild(SingleRunPara("单括号 {anchor_id} 双括号 {{anchor_id}}")));
+        var resolver = new DictResolver(new() { ["anchor_id"] = "P-01" });
+
+        var res = PlaceholderRenderer.Render(src, OutPath("single_out.docx"), resolver);
+
+        Assert.Equal(1, res.Replaced);
+        Assert.Equal("单括号 {anchor_id} 双括号 P-01", ReadAllText(OutPath("single_out.docx")));
+    }
+
     // ── 中文名反查 ──────────────────────────────────────────
 
     [Fact]
     public void Render_中文名占位符_通过catalog反查为Key()
     {
         var src = WriteSimpleDocx("zh.docx", body =>
-            body.AppendChild(SingleRunPara("结果：{判定结果}")));
+            body.AppendChild(SingleRunPara("结果：{{判定结果}}")));
         var resolver = new DictResolver(new() { ["judgement_result"] = "合格" });
 
         var res = PlaceholderRenderer.Render(
@@ -105,18 +121,74 @@ public class PlaceholderRendererTests : IDisposable
     }
 
     [Fact]
+    public void Render_短名别名占位符_命中Key()
+    {
+        // 用户模板里写 {{0.1Nt位移}} 是 disp_01nt 的别名（catalog 完整 Name 是 "0.1Nt 时位移 (mm)"）
+        var src = WriteSimpleDocx("alias.docx", body =>
+            body.AppendChild(SingleRunPara("0.1Nt 位移：{{0.1Nt位移}} mm; 杆体弹模：{{杆体弹模}}")));
+        var resolver = new DictResolver(new()
+        {
+            ["disp_01nt"] = 0.45,
+            ["elastic_modulus"] = 200000,
+        });
+
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("alias_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(2, res.Replaced);
+        Assert.Empty(res.UnknownKeys);
+        Assert.Equal("0.1Nt 位移：0.45 mm; 杆体弹模：200000", ReadAllText(OutPath("alias_out.docx")));
+    }
+
+    [Fact]
     public void Render_无catalog时_只识别snake_case_key()
     {
         var src = WriteSimpleDocx("nocat.docx", body =>
-            body.AppendChild(SingleRunPara("{judgement_result} / {判定结果}")));
+            body.AppendChild(SingleRunPara("{{judgement_result}} / {{判定结果}}")));
         var resolver = new DictResolver(new() { ["judgement_result"] = "合格" });
 
         var res = PlaceholderRenderer.Render(src, OutPath("nocat_out.docx"), resolver, catalog: null);
 
-        // {judgement_result} 替换；{判定结果} 没 catalog 反查 → 留原文
+        // {{judgement_result}} 替换；{{判定结果}} 没 catalog 反查 → 留原文 + 计入 unknownKeys
         Assert.Equal(1, res.Replaced);
         Assert.Single(res.UnknownKeys);
-        Assert.Equal("合格 / {判定结果}", ReadAllText(OutPath("nocat_out.docx")));
+        Assert.Equal("合格 / {{判定结果}}", ReadAllText(OutPath("nocat_out.docx")));
+    }
+
+    // ── 数值格式化（default_format 生效） ──────────────────────
+
+    [Fact]
+    public void Render_数值字段_按catalog的DefaultFormat格式化()
+    {
+        // elastic_displacement 在 catalog 标 "0.00" → 保留 2 位小数
+        // anchor_id 是 string → 原样输出
+        var src = WriteSimpleDocx("fmt.docx", body =>
+            body.AppendChild(SingleRunPara("锚杆 {{anchor_id}} 弹性位移 {{elastic_displacement}} mm")));
+        var resolver = new DictResolver(new()
+        {
+            ["anchor_id"] = "P-01",
+            ["elastic_displacement"] = 1.23456789,
+        });
+
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("fmt_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(2, res.Replaced);
+        Assert.Equal("锚杆 P-01 弹性位移 1.23 mm", ReadAllText(OutPath("fmt_out.docx")));
+    }
+
+    [Fact]
+    public void Render_数值字段_无catalog时_回退到ToString不格式化()
+    {
+        var src = WriteSimpleDocx("nofmt.docx", body =>
+            body.AppendChild(SingleRunPara("M = {{elastic_displacement}}")));
+        var resolver = new DictResolver(new() { ["elastic_displacement"] = 1.23456789 });
+
+        // 没传 catalog → 没法查 default_format → 原样 ToString
+        var res = PlaceholderRenderer.Render(src, OutPath("nofmt_out.docx"), resolver, catalog: null);
+
+        Assert.Equal(1, res.Replaced);
+        Assert.Contains("1.23456789", ReadAllText(OutPath("nofmt_out.docx")));
     }
 
     // ── 缺失字段兜底 ────────────────────────────────────────
@@ -125,7 +197,7 @@ public class PlaceholderRendererTests : IDisposable
     public void Render_未知key_留原文_unknownKeys列出()
     {
         var src = WriteSimpleDocx("missing.docx", body =>
-            body.AppendChild(SingleRunPara("已知 {anchor_id}；未知 {totally_unknown}；再未知 {bogus_field}")));
+            body.AppendChild(SingleRunPara("已知 {{anchor_id}}；未知 {{totally_unknown}}；再未知 {{bogus_field}}")));
         var resolver = new DictResolver(new() { ["anchor_id"] = "P-01" });
 
         var res = PlaceholderRenderer.Render(
@@ -136,7 +208,7 @@ public class PlaceholderRendererTests : IDisposable
         Assert.Contains("totally_unknown", res.UnknownKeys);
         Assert.Contains("bogus_field", res.UnknownKeys);
         Assert.Equal(
-            "已知 P-01；未知 {totally_unknown}；再未知 {bogus_field}",
+            "已知 P-01；未知 {{totally_unknown}}；再未知 {{bogus_field}}",
             ReadAllText(OutPath("missing_out.docx")));
     }
 
@@ -149,8 +221,8 @@ public class PlaceholderRendererTests : IDisposable
         {
             var table = new Table();
             var tr = new TableRow();
-            tr.AppendChild(new TableCell(SingleRunPara("锚杆 {anchor_id}")));
-            tr.AppendChild(new TableCell(SingleRunPara("M = {elastic_displacement}")));
+            tr.AppendChild(new TableCell(SingleRunPara("锚杆 {{anchor_id}}")));
+            tr.AppendChild(new TableCell(SingleRunPara("M = {{elastic_displacement}}")));
             table.AppendChild(tr);
             body.AppendChild(table);
         });

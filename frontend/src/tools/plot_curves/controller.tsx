@@ -32,6 +32,9 @@ const PREVIEW_DEBOUNCE_MS = 300;
 
 type PresetSource = 'system' | 'user';
 
+export type OutputFormat = 'svg' | 'png' | 'jpg';
+export const OUTPUT_FORMATS: OutputFormat[] = ['svg', 'png', 'jpg'];
+
 interface State {
   // 静态预设库
   presets: string[];
@@ -56,6 +59,8 @@ interface State {
   sheet: string;
   headerRow: number;
   outputDir: string;
+  /** 临时覆盖输出格式（svg / png / jpg）；不写回预设。null = 跟随预设 filename_template 后缀 */
+  outputFormat: OutputFormat | null;
   rowIndex: number;
 
   // 编辑后的预设：null=用原版
@@ -87,6 +92,7 @@ interface Actions {
   setSheet: (s: string) => void;
   setHeaderRow: (n: number) => void;
   setOutputDir: (s: string) => void;
+  setOutputFormat: (f: OutputFormat | null) => void;
   setRowIndex: (n: number) => void;
   /** form 编辑：传 updater 改 workingPreset（若 null 先初始化为当前预设的深拷贝） */
   patchPreset: (updater: (p: PlotPreset) => PlotPreset) => void;
@@ -144,6 +150,7 @@ export function PlotCurvesProvider({
   const [sheet, setSheet] = useState<string>('');
   const [headerRow, setHeaderRow] = useState<number>(1);
   const [outputDir, setOutputDir] = useState<string>('');
+  const [outputFormat, setOutputFormat] = useState<OutputFormat | null>(null);
   const [rowIndex, setRowIndex] = useState<number>(0);
 
   const [workingPreset, setWorkingPreset] = useState<PlotPreset | null>(null);
@@ -424,6 +431,7 @@ export function PlotCurvesProvider({
       if (sheet.trim()) params.sheet = sheet.trim();
       if (outputDir.trim()) params.output_dir = outputDir.trim();
       if (workingPreset) params.preset_override = workingPreset;
+      if (outputFormat) params.output_format = outputFormat;
       const res = await rpc<RunRes>('plot_curves.run', params);
       setResult(res);
       shell.notifyFilesChanged();
@@ -441,6 +449,7 @@ export function PlotCurvesProvider({
     sheet,
     headerRow,
     outputDir,
+    outputFormat,
     workingPreset,
     running,
     shell,
@@ -463,6 +472,7 @@ export function PlotCurvesProvider({
       sheet,
       headerRow,
       outputDir,
+      outputFormat,
       rowIndex,
       workingPreset,
       previewPng,
@@ -483,6 +493,7 @@ export function PlotCurvesProvider({
       setSheet,
       setHeaderRow,
       setOutputDir,
+      setOutputFormat,
       setRowIndex,
       patchPreset,
       resetPreset,
@@ -509,6 +520,7 @@ export function PlotCurvesProvider({
       sheet,
       headerRow,
       outputDir,
+      outputFormat,
       rowIndex,
       workingPreset,
       previewPng,

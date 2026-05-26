@@ -413,6 +413,28 @@ class RunResult:
     summary: BuildSummary
 
 
+_SUPPORTED_OUTPUT_FORMATS = frozenset({"svg", "png", "jpg", "jpeg"})
+
+
+def _override_output_format(preset: dict[str, Any], fmt: str) -> dict[str, Any]:
+    """临时把 preset['filename_template'] 的后缀换成 .fmt（不修改原 dict）。
+
+    用于"用户选了输出格式但没编辑预设"的快捷路径——避免把"我现在想出 PNG"
+    这种临时偏好持久化到预设文件里。
+    """
+    fmt_norm = fmt.strip().lower().lstrip(".")
+    if fmt_norm not in _SUPPORTED_OUTPUT_FORMATS:
+        raise PlotCurvesError(
+            f"不支持的输出格式 {fmt!r}",
+            hint=f"支持的格式：{sorted(_SUPPORTED_OUTPUT_FORMATS)}",
+        )
+    new_preset = dict(preset)
+    tpl = new_preset.get("filename_template", "{id}.svg")
+    # 用 Path 的 with_suffix 处理 —— 不依赖原 tpl 的后缀写法
+    new_preset["filename_template"] = str(Path(tpl).with_suffix(f".{fmt_norm}"))
+    return new_preset
+
+
 def run_plot_curves(
     excel_path: Path | str,
     sheet_name: str | None,
@@ -423,6 +445,7 @@ def run_plot_curves(
     header_row: int = 1,
     progress_cb: Callable[[int, int], None] | None = None,
     preset_override: dict[str, Any] | None = None,
+    output_format: str | None = None,
 ) -> RunResult:
     """工具入口：读 Excel → 套预设 → 批量出 PNG。
 
@@ -456,6 +479,7 @@ def run_plot_curves(
         "sheet": sheet_name,
         "preset": preset_name,
         "header_row": header_row,
+        "output_format_override": output_format,
     }
 
     try:
@@ -476,6 +500,10 @@ def run_plot_curves(
             log.info("   ↳ 选用预设: %s（UI 编辑覆盖）", preset_name)
         else:
             log.info("   ↳ 选用预设: %s", preset_name)
+        # output_format（如有）：临时换 filename_template 后缀，不写回预设库
+        if output_format:
+            preset = _override_output_format(preset, output_format)
+            log.info("   ↳ 输出格式覆盖为: %s", output_format)
 
         log.info("📊 读取 Excel: %s  Sheet: %s", excel, sheet_name or "<默认第一个>")
         rows = read_rows(excel, sheet_name, header_row=header_row)

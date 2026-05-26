@@ -7,7 +7,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
-import { usePlotCurves } from './controller';
+import { OUTPUT_FORMATS, usePlotCurves } from './controller';
 import type { PlotPreset } from './types';
 
 interface Props {
@@ -157,6 +157,24 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
           </select>
           <PresetCrudButtons />
           <div className="ml-auto flex items-center gap-2">
+            <label className="text-vscode-text-dim text-xs">格式:</label>
+            <select
+              value={c.outputFormat ?? ''}
+              onChange={(e) =>
+                c.setOutputFormat(
+                  (e.target.value as (typeof OUTPUT_FORMATS)[number]) || null,
+                )
+              }
+              title="临时覆盖输出格式；空 = 跟随当前曲线预设的 filename_template 后缀"
+              className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
+            >
+              <option value="">（跟随预设）</option>
+              {OUTPUT_FORMATS.map((fmt) => (
+                <option key={fmt} value={fmt}>
+                  {fmt.toUpperCase()}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               onClick={pickOutputDir}

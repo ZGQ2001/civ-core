@@ -387,7 +387,6 @@ export function ReportGeneratorProvider({
       setExcelPath(f.path);
       shell.appendOutput(logLine(`[报告] 已接收输入 Excel: ${f.path}`));
     } else if (DOCX_EXTS.has(ext)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWordTemplatePath(f.path);
       shell.appendOutput(logLine(`[报告] 已接收 Word 模板: ${f.path}`));
     }

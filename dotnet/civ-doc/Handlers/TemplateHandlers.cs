@@ -1,19 +1,18 @@
 // template.* RPC —— 字段清单查询 + 模板验证。
 //
 // 方法清单：
-//   template.fields(project_type)
-//     -> {fields: [{key, name, source, value_type, default_format}]}
+//   template.fields(catalog_id)
+//     -> {fields: [{key, name, group, level, source, value_type, default_format, aliases}]}
 //   template.validate(docx_path, catalog_id)
-//     -> {matched, unrecognized, unused, summary}
+//     -> {matched, unrecognized, unused, markers, hints, summary}
 //
+// 解耦：字段定义统一从 CatalogStore（JSON）读取，不再硬编码 switch。
 // 报告生成走 report.* RPC（见 ReportHandlers）。
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.Catalog;
 using CivCore.Doc.Server;
-using CivCore.Doc.Template;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -35,40 +34,66 @@ public static class TemplateHandlers
         if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("操作参数格式错误，请重试");
         var p = @params.Value;
-        if (!p.TryGetProperty("project_type", out var ptEl) || ptEl.ValueKind != JsonValueKind.String)
-            throw new ArgumentException("缺少或非法参数：project_type");
-        var projectType = ptEl.GetString();
-        if (string.IsNullOrWhiteSpace(projectType))
-            throw new ArgumentException("project_type 不可为空");
+
+        string catalogId;
+        if (p.TryGetProperty("catalog_id", out var ciEl) && ciEl.ValueKind == JsonValueKind.String)
+            catalogId = ciEl.GetString() ?? "";
+        else if (p.TryGetProperty("project_type", out var ptEl) && ptEl.ValueKind == JsonValueKind.String)
+            catalogId = ptEl.GetString() ?? "";
+        else
+            throw new ArgumentException("缺少参数：catalog_id 或 project_type");
+
+        if (string.IsNullOrWhiteSpace(catalogId))
+            throw new ArgumentException("catalog_id 不可为空");
+
+        var catalog = CatalogStore.Get(catalogId)
+            ?? throw new ArgumentException($"字段目录不存在：{catalogId}");
 
         return new Dictionary<string, object?>
         {
-            ["fields"] = GetCatalog(projectType).Select(ProjectField).ToList(),
+            ["fields"] = catalog.Fields.Select(f => new Dictionary<string, object?>
+            {
+                ["key"] = f.Key,
+                ["name"] = f.Name,
+                ["group"] = f.Group,
+                ["level"] = f.Level,
+                ["source"] = f.Source,
+                ["value_type"] = f.ValueType,
+                ["default_format"] = f.DefaultFormat,
+                ["aliases"] = f.Aliases,
+            }).ToList(),
         };
     }
-
-    private static Dictionary<string, object?> ProjectField(FieldDef f) => new()
-    {
-        ["key"] = f.Key,
-        ["name"] = f.Name,
-        ["source"] = f.Source.ToString().ToLowerInvariant(),
-        ["value_type"] = f.ValueType,
-        ["default_format"] = f.DefaultFormat,
-    };
-
-    private static IEnumerable<FieldDef> GetCatalog(string projectType) => projectType switch
-    {
-        "anchor" => AnchorFieldCatalog.All,
-        _ => throw new ArgumentException($"未知 project_type：{projectType}（当前支持：anchor）"),
-    };
 
     // ── template.validate ─────────────────────────────────────
 
     private static readonly Regex PlaceholderRx =
         new(@"\{\{([^{}\r\n]+?)\}\}", RegexOptions.Compiled);
 
-    private static readonly Regex MarkerRx =
-        new(@"\[\[(.+?)\]\]", RegexOptions.Compiled);
+    private static readonly Regex MarkerOpenRx =
+        new(@"^\[\[([^\[\]/]+)\]\]$", RegexOptions.Compiled);
+
+    private static readonly Regex MarkerCloseRx =
+        new(@"^\[\[/([^\[\]]+)\]\]$", RegexOptions.Compiled);
+
+    private static readonly Dictionary<string, string> MarkerToLevel = new(StringComparer.Ordinal)
+    {
+        ["检测项目"] = "detection_item",
+        ["检测批"] = "batch",
+        ["构件"] = "component",
+        ["每根锚杆"] = "component",
+        ["批次"] = "batch",
+    };
+
+    private static readonly Dictionary<string, string> LevelLabel = new()
+    {
+        ["report"] = "报告级",
+        ["detection_item"] = "检测项目级",
+        ["batch"] = "检测批级",
+        ["component"] = "构件级",
+    };
+
+    private static readonly string[] LevelOrder = ["report", "detection_item", "batch", "component"];
 
     public static object Validate(JsonElement? @params)
     {
@@ -86,59 +111,54 @@ public static class TemplateHandlers
             ?? throw new ArgumentException($"字段目录不存在：{catalogId}");
 
         var (keyByName, keyByAlias) = BuildLookup(catalog);
-        var found = ScanDocx(docxPath);
+        var scanResult = ScanDocx(docxPath);
 
         var matched = new List<Dictionary<string, object?>>();
         var unrecognized = new List<Dictionary<string, object?>>();
+        var hints = new List<Dictionary<string, object?>>();
         var matchedKeys = new HashSet<string>();
 
-        foreach (var (raw, location) in found)
+        foreach (var item in scanResult.Placeholders)
         {
-            var trimmed = raw.Trim();
+            var trimmed = item.Raw.Trim();
             var isImage = trimmed.StartsWith("img:", StringComparison.OrdinalIgnoreCase);
             var lookup = isImage ? trimmed.Substring(4).Trim() : trimmed;
 
-            string? resolvedKey = null;
-            string? resolvedName = null;
+            CatalogFieldDto? resolved = null;
 
             if (IsKeyLike(lookup))
-            {
-                var field = catalog.Fields.FirstOrDefault(f => f.Key == lookup);
-                if (field != null)
-                {
-                    resolvedKey = field.Key;
-                    resolvedName = field.Name;
-                }
-            }
-            if (resolvedKey == null && keyByName.TryGetValue(lookup, out var byName))
-            {
-                resolvedKey = byName.Key;
-                resolvedName = byName.Name;
-            }
-            if (resolvedKey == null && keyByAlias.TryGetValue(lookup, out var byAlias))
-            {
-                resolvedKey = byAlias.Key;
-                resolvedName = byAlias.Name;
-            }
+                resolved = catalog.Fields.FirstOrDefault(f => f.Key == lookup);
+            if (resolved == null)
+                keyByName.TryGetValue(lookup, out resolved);
+            if (resolved == null)
+                keyByAlias.TryGetValue(lookup, out resolved);
 
-            if (resolvedKey != null)
+            if (resolved != null)
             {
-                matchedKeys.Add(resolvedKey);
+                matchedKeys.Add(resolved.Key);
                 matched.Add(new Dictionary<string, object?>
                 {
-                    ["placeholder"] = $"{{{{{raw}}}}}",
-                    ["key"] = resolvedKey,
-                    ["name"] = resolvedName,
-                    ["location"] = location,
+                    ["placeholder"] = $"{{{{{item.Raw}}}}}",
+                    ["key"] = resolved.Key,
+                    ["name"] = resolved.Name,
+                    ["level"] = resolved.Level,
+                    ["location"] = item.Location,
+                    ["scope"] = item.Scope,
                     ["is_image"] = isImage,
                 });
+
+                var expectedLevel = resolved.Level;
+                var actualScope = item.Scope;
+                var hint = CheckLevelMatch(expectedLevel, actualScope, resolved.Name, item.Location);
+                if (hint != null) hints.Add(hint);
             }
             else
             {
                 unrecognized.Add(new Dictionary<string, object?>
                 {
-                    ["placeholder"] = $"{{{{{raw}}}}}",
-                    ["location"] = location,
+                    ["placeholder"] = $"{{{{{item.Raw}}}}}",
+                    ["location"] = item.Location,
+                    ["scope"] = item.Scope,
                 });
             }
         }
@@ -150,6 +170,7 @@ public static class TemplateHandlers
                 ["key"] = f.Key,
                 ["name"] = f.Name,
                 ["group"] = f.Group,
+                ["level"] = f.Level,
             })
             .ToList();
 
@@ -158,39 +179,105 @@ public static class TemplateHandlers
             ["matched"] = matched,
             ["unrecognized"] = unrecognized,
             ["unused"] = unused,
+            ["markers"] = scanResult.Markers.Select(m => new Dictionary<string, object?>
+            {
+                ["text"] = m.Text,
+                ["type"] = m.IsOpen ? "open" : "close",
+                ["level"] = m.Level,
+                ["location"] = m.Location,
+            }).ToList(),
+            ["hints"] = hints,
             ["summary"] = new Dictionary<string, object?>
             {
                 ["matched_count"] = matched.Count,
                 ["unrecognized_count"] = unrecognized.Count,
                 ["unused_count"] = unused.Count,
+                ["hint_count"] = hints.Count,
                 ["total_catalog_fields"] = catalog.Fields.Count,
             },
         };
     }
 
-    private static List<(string Raw, string Location)> ScanDocx(string docxPath)
+    private static Dictionary<string, object?>? CheckLevelMatch(
+        string expectedLevel, string actualScope, string fieldName, string location)
     {
-        var results = new List<(string, string)>();
+        var expectedIdx = Array.IndexOf(LevelOrder, expectedLevel);
+        var actualIdx = Array.IndexOf(LevelOrder, actualScope);
+        if (expectedIdx < 0 || actualIdx < 0) return null;
+        if (expectedIdx == actualIdx) return null;
+
+        var expectedLabel = LevelLabel.GetValueOrDefault(expectedLevel, expectedLevel);
+        var actualLabel = LevelLabel.GetValueOrDefault(actualScope, actualScope);
+
+        string severity;
+        string message;
+
+        if (expectedIdx > actualIdx)
+        {
+            severity = "warning";
+            message = $"「{fieldName}」是{expectedLabel}字段，但当前在{actualLabel}区域"
+                + $"——每个重复周期都会输出相同值。建议移入 [[{MarkerLabelFor(expectedLevel)}]] 标记内。";
+        }
+        else
+        {
+            severity = "error";
+            message = $"「{fieldName}」是{expectedLabel}字段，但当前在{actualLabel}区域"
+                + $"——重复区域内无法取到该值。建议移出到{expectedLabel}区域。";
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["severity"] = severity,
+            ["field_name"] = fieldName,
+            ["expected_level"] = expectedLevel,
+            ["actual_scope"] = actualScope,
+            ["location"] = location,
+            ["message"] = message,
+        };
+    }
+
+    private static string MarkerLabelFor(string level) => level switch
+    {
+        "detection_item" => "检测项目",
+        "batch" => "检测批",
+        "component" => "构件",
+        _ => level,
+    };
+
+    // ── 文档扫描（嵌套感知） ──
+
+    private record FoundPlaceholder(string Raw, string Location, string Scope);
+    private record FoundMarker(string Text, bool IsOpen, string Level, string Location);
+    private record ScanOutput(List<FoundPlaceholder> Placeholders, List<FoundMarker> Markers);
+
+    private static ScanOutput ScanDocx(string docxPath)
+    {
+        var placeholders = new List<FoundPlaceholder>();
+        var markers = new List<FoundMarker>();
+
         using var doc = WordprocessingDocument.Open(docxPath, false);
         var mainPart = doc.MainDocumentPart;
-        if (mainPart == null) return results;
+        if (mainPart == null) return new ScanOutput(placeholders, markers);
 
         if (mainPart.Document?.Body != null)
-            ScanElement(mainPart.Document.Body, "正文", results);
+        {
+            var scope = new Stack<string>();
+            ScanBody(mainPart.Document.Body, "正文", scope, placeholders, markers);
+        }
 
         foreach (var hp in mainPart.HeaderParts)
             if (hp.Header != null)
-                ScanElement(hp.Header, "页眉", results);
+                ScanStatic(hp.Header, "页眉", "report", placeholders);
 
         foreach (var fp in mainPart.FooterParts)
             if (fp.Footer != null)
-                ScanElement(fp.Footer, "页脚", results);
+                ScanStatic(fp.Footer, "页脚", "report", placeholders);
 
-        return results;
+        return new ScanOutput(placeholders, markers);
     }
 
-    private static void ScanElement(OpenXmlElement scope, string baseLocation,
-        List<(string Raw, string Location)> results)
+    private static void ScanBody(OpenXmlElement scope, string baseLocation,
+        Stack<string> scopeStack, List<FoundPlaceholder> placeholders, List<FoundMarker> markers)
     {
         int tableIndex = 0;
         foreach (var child in scope.ChildElements)
@@ -198,18 +285,50 @@ public static class TemplateHandlers
             if (child is Table table)
             {
                 tableIndex++;
-                ScanTable(table, baseLocation, tableIndex, results);
+                ScanTable(table, baseLocation, tableIndex, scopeStack, placeholders, markers);
             }
             else if (child is Paragraph para)
             {
-                ScanParagraph(para, baseLocation, results);
+                var text = GetParagraphText(para);
+                if (string.IsNullOrEmpty(text)) continue;
+
+                var textTrimmed = text.Trim();
+                var openMatch = MarkerOpenRx.Match(textTrimmed);
+                if (openMatch.Success)
+                {
+                    var markerName = openMatch.Groups[1].Value;
+                    if (MarkerToLevel.TryGetValue(markerName, out var level))
+                    {
+                        scopeStack.Push(level);
+                        markers.Add(new FoundMarker($"[[{markerName}]]", true, level, baseLocation));
+                    }
+                    continue;
+                }
+
+                var closeMatch = MarkerCloseRx.Match(textTrimmed);
+                if (closeMatch.Success)
+                {
+                    var markerName = closeMatch.Groups[1].Value;
+                    if (MarkerToLevel.TryGetValue(markerName, out var level))
+                    {
+                        if (scopeStack.Count > 0 && scopeStack.Peek() == level)
+                            scopeStack.Pop();
+                        markers.Add(new FoundMarker($"[[/{markerName}]]", false, level, baseLocation));
+                    }
+                    continue;
+                }
+
+                var currentScope = scopeStack.Count > 0 ? scopeStack.Peek() : "report";
+                foreach (Match m in PlaceholderRx.Matches(text))
+                    placeholders.Add(new FoundPlaceholder(m.Groups[1].Value, baseLocation, currentScope));
             }
         }
     }
 
     private static void ScanTable(Table table, string baseLocation, int tableIndex,
-        List<(string Raw, string Location)> results)
+        Stack<string> scopeStack, List<FoundPlaceholder> placeholders, List<FoundMarker> markers)
     {
+        var currentScope = scopeStack.Count > 0 ? scopeStack.Peek() : "report";
         int rowIndex = 0;
         foreach (var row in table.Elements<TableRow>())
         {
@@ -220,25 +339,32 @@ public static class TemplateHandlers
                 cellIndex++;
                 var loc = $"{baseLocation} > 表格{tableIndex} > 第{rowIndex}行第{cellIndex}列";
                 foreach (var para in cell.Elements<Paragraph>())
-                    ScanParagraph(para, loc, results);
+                {
+                    var text = GetParagraphText(para);
+                    if (string.IsNullOrEmpty(text)) continue;
+                    foreach (Match m in PlaceholderRx.Matches(text))
+                        placeholders.Add(new FoundPlaceholder(m.Groups[1].Value, loc, currentScope));
+                }
             }
         }
     }
 
-    private static void ScanParagraph(Paragraph para, string location,
-        List<(string Raw, string Location)> results)
+    private static void ScanStatic(OpenXmlElement scope, string baseLocation,
+        string fixedScope, List<FoundPlaceholder> placeholders)
     {
-        var text = string.Concat(para.Elements<Run>()
-            .SelectMany(r => r.Elements<Text>())
-            .Select(t => t.Text));
-        if (string.IsNullOrEmpty(text)) return;
-
-        foreach (Match m in PlaceholderRx.Matches(text))
-            results.Add((m.Groups[1].Value, location));
-
-        foreach (Match m in MarkerRx.Matches(text))
-            results.Add(($"marker:{m.Groups[1].Value}", location));
+        foreach (var para in scope.Descendants<Paragraph>())
+        {
+            var text = GetParagraphText(para);
+            if (string.IsNullOrEmpty(text)) continue;
+            foreach (Match m in PlaceholderRx.Matches(text))
+                placeholders.Add(new FoundPlaceholder(m.Groups[1].Value, baseLocation, fixedScope));
+        }
     }
+
+    private static string GetParagraphText(Paragraph para) =>
+        string.Concat(para.Elements<Run>().SelectMany(r => r.Elements<Text>()).Select(t => t.Text));
+
+    // ── helpers ──
 
     private static (Dictionary<string, CatalogFieldDto> ByName,
         Dictionary<string, CatalogFieldDto> ByAlias) BuildLookup(FieldCatalogDto catalog)

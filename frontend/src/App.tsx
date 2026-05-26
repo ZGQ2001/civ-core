@@ -46,10 +46,7 @@ import {
   ReportGeneratorProvider,
   ReportGeneratorSettingsForm,
 } from './tools/report_generator';
-import {
-  TemplateHelperProvider,
-  TemplateHelperSettingsForm,
-} from './tools/template_helper';
+import { TemplateHelperProvider } from './tools/template_helper';
 import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
 
 const TOP_TOOLS: ActivityItem[] = [
@@ -340,16 +337,6 @@ export default function App() {
             label: '调参',
             icon: 'settings-gear',
             node: <ReportGeneratorSettingsForm />,
-          },
-        ]
-      : []),
-    ...(activeToolId === 'template_helper'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <TemplateHelperSettingsForm />,
           },
         ]
       : []),

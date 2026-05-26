@@ -1,7 +1,10 @@
+export type FieldLevel = 'report' | 'detection_item' | 'batch' | 'component';
+
 export interface CatalogField {
   key: string;
   name: string;
   group: string;
+  level: FieldLevel;
   source: string;
   value_type: string;
   default_format: string | null;
@@ -24,25 +27,46 @@ export interface MatchedField {
   placeholder: string;
   key: string;
   name: string;
+  level: FieldLevel;
   location: string;
+  scope: string;
   is_image: boolean;
 }
 
 export interface UnrecognizedField {
   placeholder: string;
   location: string;
+  scope: string;
 }
 
 export interface UnusedField {
   key: string;
   name: string;
   group: string;
+  level: FieldLevel;
+}
+
+export interface ValidateHint {
+  severity: 'warning' | 'error';
+  field_name: string;
+  expected_level: string;
+  actual_scope: string;
+  location: string;
+  message: string;
+}
+
+export interface MarkerInfo {
+  text: string;
+  type: 'open' | 'close';
+  level: string;
+  location: string;
 }
 
 export interface ValidateSummary {
   matched_count: number;
   unrecognized_count: number;
   unused_count: number;
+  hint_count: number;
   total_catalog_fields: number;
 }
 
@@ -50,5 +74,21 @@ export interface ValidateResult {
   matched: MatchedField[];
   unrecognized: UnrecognizedField[];
   unused: UnusedField[];
+  markers: MarkerInfo[];
+  hints: ValidateHint[];
   summary: ValidateSummary;
 }
+
+export const LEVEL_LABEL: Record<FieldLevel, string> = {
+  report: '报告级',
+  detection_item: '检测项目级',
+  batch: '检测批级',
+  component: '构件级',
+};
+
+export const LEVEL_COLOR: Record<FieldLevel, string> = {
+  report: 'text-blue-400',
+  detection_item: 'text-cyan-400',
+  batch: 'text-yellow-400',
+  component: 'text-green-400',
+};

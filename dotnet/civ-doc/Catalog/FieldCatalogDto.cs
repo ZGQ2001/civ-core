@@ -13,6 +13,13 @@ public record CatalogFieldDto
     [JsonPropertyName("group")]
     public string Group { get; init; } = "";
 
+    /// <summary>
+    /// 字段层级：report（报告级）| detection_item（检测项目级）| batch（检测批级）| component（构件级）。
+    /// 模板验证器据此检查占位符是否放在正确的重复标记区域内。
+    /// </summary>
+    [JsonPropertyName("level")]
+    public string Level { get; init; } = "report";
+
     [JsonPropertyName("source")]
     public string Source { get; init; } = "user_input";
 

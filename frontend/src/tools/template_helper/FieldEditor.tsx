@@ -69,7 +69,12 @@ export function FieldEditor({
       .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean);
-    onSave({ ...field, key: field.key.trim(), name: field.name.trim(), aliases });
+    onSave({
+      ...field,
+      key: field.key.trim(),
+      name: field.name.trim(),
+      aliases,
+    });
   }, [field, aliasText, onSave]);
 
   const keyValid = /^[a-z][a-z0-9_]*$/.test(field.key);
@@ -129,7 +134,8 @@ export function FieldEditor({
           >
             {LEVEL_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
-                {LEVEL_LABEL[o.value]} — {o.label.split('（')[1]?.replace('）', '') ?? ''}
+                {LEVEL_LABEL[o.value]} —{' '}
+                {o.label.split('（')[1]?.replace('）', '') ?? ''}
               </option>
             ))}
           </select>
@@ -187,9 +193,7 @@ export function FieldEditor({
           <input
             type="text"
             value={field.default_format ?? ''}
-            onChange={(e) =>
-              set('default_format', e.target.value || null)
-            }
+            onChange={(e) => set('default_format', e.target.value || null)}
             placeholder="0.00"
             className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
           />
@@ -215,7 +219,9 @@ export function FieldEditor({
         <button
           type="button"
           onClick={handleSave}
-          disabled={!field.key.trim() || !field.name.trim() || (isNew && !keyValid)}
+          disabled={
+            !field.key.trim() || !field.name.trim() || (isNew && !keyValid)
+          }
           className="bg-vscode-button hover:bg-vscode-button-hover flex items-center gap-1 rounded-[2px] px-3 py-1 text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <i className="codicon codicon-check !text-[11px]" />

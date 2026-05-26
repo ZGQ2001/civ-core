@@ -86,8 +86,9 @@ export function TemplateHelperProvider({
   const [saving, setSaving] = useState(false);
 
   const [docxPath, setDocxPath] = useState('');
-  const [validateResult, setValidateResult] =
-    useState<ValidateResult | null>(null);
+  const [validateResult, setValidateResult] = useState<ValidateResult | null>(
+    null,
+  );
   const [validating, setValidating] = useState(false);
   const [validateError, setValidateError] = useState<string | null>(null);
 
@@ -192,48 +193,42 @@ export function TemplateHelperProvider({
   const copyPlaceholder = useCallback((text: string, key: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
     setCopiedKey(key);
-    setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1500);
+    setTimeout(
+      () => setCopiedKey((prev) => (prev === key ? null : prev)),
+      1500,
+    );
   }, []);
 
   // ── Field CRUD ──
 
-  const addField = useCallback(
-    (field: CatalogField) => {
-      setActiveCatalog((prev) => {
-        if (!prev) return prev;
-        if (prev.fields.some((f) => f.key === field.key)) return prev;
-        return { ...prev, fields: [...prev.fields, field] };
-      });
-      setDirty(true);
-    },
-    [],
-  );
+  const addField = useCallback((field: CatalogField) => {
+    setActiveCatalog((prev) => {
+      if (!prev) return prev;
+      if (prev.fields.some((f) => f.key === field.key)) return prev;
+      return { ...prev, fields: [...prev.fields, field] };
+    });
+    setDirty(true);
+  }, []);
 
-  const updateField = useCallback(
-    (oldKey: string, field: CatalogField) => {
-      setActiveCatalog((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          fields: prev.fields.map((f) => (f.key === oldKey ? field : f)),
-        };
-      });
-      setDirty(true);
-    },
-    [],
-  );
+  const updateField = useCallback((oldKey: string, field: CatalogField) => {
+    setActiveCatalog((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        fields: prev.fields.map((f) => (f.key === oldKey ? field : f)),
+      };
+    });
+    setDirty(true);
+  }, []);
 
-  const removeField = useCallback(
-    (key: string) => {
-      setActiveCatalog((prev) => {
-        if (!prev) return prev;
-        return { ...prev, fields: prev.fields.filter((f) => f.key !== key) };
-      });
-      setDirty(true);
-      setEditingFieldKey((prev) => (prev === key ? null : prev));
-    },
-    [],
-  );
+  const removeField = useCallback((key: string) => {
+    setActiveCatalog((prev) => {
+      if (!prev) return prev;
+      return { ...prev, fields: prev.fields.filter((f) => f.key !== key) };
+    });
+    setDirty(true);
+    setEditingFieldKey((prev) => (prev === key ? null : prev));
+  }, []);
 
   const renameCatalog = useCallback((label: string) => {
     setActiveCatalog((prev) => (prev ? { ...prev, label } : prev));
@@ -289,7 +284,9 @@ export function TemplateHelperProvider({
       try {
         await rpc('catalog.save', { catalog });
         shell.appendOutput(
-          logLine(`[模板助手] 已复制字段目录: ${activeCatalog.label} → ${newLabel}`),
+          logLine(
+            `[模板助手] 已复制字段目录: ${activeCatalog.label} → ${newLabel}`,
+          ),
         );
         await refreshCatalogs();
         setActiveCatalogId(newId);
@@ -306,7 +303,9 @@ export function TemplateHelperProvider({
     if (!activeCatalogId) return false;
     try {
       await rpc('catalog.delete', { id: activeCatalogId });
-      shell.appendOutput(logLine(`[模板助手] 已删除字段目录: ${activeCatalogId}`));
+      shell.appendOutput(
+        logLine(`[模板助手] 已删除字段目录: ${activeCatalogId}`),
+      );
       setActiveCatalog(null);
       setActiveCatalogId(null);
       setDirty(false);

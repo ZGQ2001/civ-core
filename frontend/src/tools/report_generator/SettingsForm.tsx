@@ -193,7 +193,6 @@ export function ReportGeneratorSettingsForm() {
           <GroupCard key={g.id} group={g} defaultExpanded={idx === 0} />
         ))}
       </div>
-
     </div>
   );
 }

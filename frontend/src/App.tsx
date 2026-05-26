@@ -352,128 +352,130 @@ export default function App() {
             <PdfToolsProvider>
               <TemplateHelperProvider>
                 <Word2PdfProvider>
-                <div className="flex h-screen w-screen flex-col">
-                  <TitleBar
-                    workspaceName={workspaceName}
-                    toolLabel={toolLabel}
-                  />
-
-                  <div className="flex min-h-0 flex-1">
-                    <ActivityBar
-                      topItems={TOP_TOOLS}
-                      bottomItems={BOTTOM_TOOLS}
-                      activeId={activeToolId}
-                      onChange={setActiveToolId}
-                      explorerActive={sidebarVisible}
-                      onExplorerToggle={handleExplorerToggle}
+                  <div className="flex h-screen w-screen flex-col">
+                    <TitleBar
+                      workspaceName={workspaceName}
+                      toolLabel={toolLabel}
                     />
 
-                    {/* 主 horizontal group：SideBar(全高) | 中间(Editor+底部 Panel 竖向) | RightPanel(全高) */}
-                    <Group
-                      orientation="horizontal"
-                      id="civ-core-main"
-                      className="flex min-w-0 flex-1"
-                    >
-                      <Panel
-                        panelRef={sidebarRef}
-                        defaultSize={200}
-                        minSize={200}
-                        maxSize={400}
-                        collapsible
-                        collapsedSize={0}
-                        id="sidebar"
-                        onResize={(s) =>
-                          setSidebarVisible(s.asPercentage > 0.5)
-                        }
-                      >
-                        <SideBar
-                          workspacePath={workspacePath}
-                          refreshNonce={refreshNonce}
-                          collapseNonce={collapseNonce}
-                          onOpenFolder={handleOpenFolder}
-                          onNewWorkspace={handleNewWorkspace}
-                          onRefresh={handleRefresh}
-                          onCollapseAll={handleCollapseAll}
-                          onFileActivate={handleFileActivate}
-                        />
-                      </Panel>
-                      <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
+                    <div className="flex min-h-0 flex-1">
+                      <ActivityBar
+                        topItems={TOP_TOOLS}
+                        bottomItems={BOTTOM_TOOLS}
+                        activeId={activeToolId}
+                        onChange={setActiveToolId}
+                        explorerActive={sidebarVisible}
+                        onExplorerToggle={handleExplorerToggle}
+                      />
 
-                      {/* 中间：Editor + 底部 Panel 竖向分栏 */}
-                      <Panel
-                        defaultSize={rightAvailable ? 58 : 84}
-                        minSize={30}
-                        id="middle"
+                      {/* 主 horizontal group：SideBar(全高) | 中间(Editor+底部 Panel 竖向) | RightPanel(全高) */}
+                      <Group
+                        orientation="horizontal"
+                        id="civ-core-main"
+                        className="flex min-w-0 flex-1"
                       >
-                        <Group
-                          orientation="vertical"
-                          id="civ-core-vsplit"
-                          className="flex h-full min-h-0 flex-col"
+                        <Panel
+                          panelRef={sidebarRef}
+                          defaultSize={200}
+                          minSize={200}
+                          maxSize={400}
+                          collapsible
+                          collapsedSize={0}
+                          id="sidebar"
+                          onResize={(s) =>
+                            setSidebarVisible(s.asPercentage > 0.5)
+                          }
                         >
-                          <Panel defaultSize={75} minSize={20} id="editor">
-                            <EditorArea
-                              activeToolId={activeToolId}
-                              toolLabel={toolLabel}
-                              appendOutput={appendOutput}
-                            />
-                          </Panel>
-                          <Separator className="bg-vscode-border hover:bg-vscode-focus h-px transition-colors" />
-                          <Panel
-                            panelRef={bottomRef}
-                            defaultSize={200}
-                            minSize={150}
-                            maxSize={400}
-                            collapsible
-                            collapsedSize={0}
-                            id="bottom-panel"
-                            onResize={(s) =>
-                              setBottomVisible(s.asPercentage > 0.5)
-                            }
-                          >
-                            <BottomPanel
-                              output={outputLog}
-                              onClose={toggleBottom}
-                            />
-                          </Panel>
-                        </Group>
-                      </Panel>
-
-                      {/* 右侧 Panel：tab 化（调参 + AI 助手） */}
-                      {rightAvailable && (
-                        <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
-                      )}
-                      <Panel
-                        panelRef={rightRef}
-                        defaultSize={rightAvailable ? 400 : 0}
-                        minSize={rightAvailable ? 300 : 500}
-                        maxSize={rightAvailable ? 600 : 800}
-                        collapsible
-                        collapsedSize={0}
-                        id="right-panel"
-                        onResize={(s) => setRightVisible(s.asPercentage > 0.5)}
-                      >
-                        {rightAvailable && (
-                          <RightPanel
-                            tabs={rightTabs}
-                            defaultActiveId="settings"
-                            onClose={toggleRight}
+                          <SideBar
+                            workspacePath={workspacePath}
+                            refreshNonce={refreshNonce}
+                            collapseNonce={collapseNonce}
+                            onOpenFolder={handleOpenFolder}
+                            onNewWorkspace={handleNewWorkspace}
+                            onRefresh={handleRefresh}
+                            onCollapseAll={handleCollapseAll}
+                            onFileActivate={handleFileActivate}
                           />
-                        )}
-                      </Panel>
-                    </Group>
-                  </div>
+                        </Panel>
+                        <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
 
-                  <StatusBar
-                    workspacePath={workspacePath}
-                    toolLabel={toolLabel}
-                    sidecarStatus={sidecarStatus}
-                    bottomPanelOpen={bottomVisible}
-                    onToggleBottomPanel={toggleBottom}
-                    rightPanelOpen={rightVisible}
-                    onToggleRightPanel={toggleRight}
-                    rightPanelAvailable={rightAvailable}
-                  />
-                </div>
+                        {/* 中间：Editor + 底部 Panel 竖向分栏 */}
+                        <Panel
+                          defaultSize={rightAvailable ? 58 : 84}
+                          minSize={30}
+                          id="middle"
+                        >
+                          <Group
+                            orientation="vertical"
+                            id="civ-core-vsplit"
+                            className="flex h-full min-h-0 flex-col"
+                          >
+                            <Panel defaultSize={75} minSize={20} id="editor">
+                              <EditorArea
+                                activeToolId={activeToolId}
+                                toolLabel={toolLabel}
+                                appendOutput={appendOutput}
+                              />
+                            </Panel>
+                            <Separator className="bg-vscode-border hover:bg-vscode-focus h-px transition-colors" />
+                            <Panel
+                              panelRef={bottomRef}
+                              defaultSize={200}
+                              minSize={150}
+                              maxSize={400}
+                              collapsible
+                              collapsedSize={0}
+                              id="bottom-panel"
+                              onResize={(s) =>
+                                setBottomVisible(s.asPercentage > 0.5)
+                              }
+                            >
+                              <BottomPanel
+                                output={outputLog}
+                                onClose={toggleBottom}
+                              />
+                            </Panel>
+                          </Group>
+                        </Panel>
+
+                        {/* 右侧 Panel：tab 化（调参 + AI 助手） */}
+                        {rightAvailable && (
+                          <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
+                        )}
+                        <Panel
+                          panelRef={rightRef}
+                          defaultSize={rightAvailable ? 400 : 0}
+                          minSize={rightAvailable ? 300 : 500}
+                          maxSize={rightAvailable ? 600 : 800}
+                          collapsible
+                          collapsedSize={0}
+                          id="right-panel"
+                          onResize={(s) =>
+                            setRightVisible(s.asPercentage > 0.5)
+                          }
+                        >
+                          {rightAvailable && (
+                            <RightPanel
+                              tabs={rightTabs}
+                              defaultActiveId="settings"
+                              onClose={toggleRight}
+                            />
+                          )}
+                        </Panel>
+                      </Group>
+                    </div>
+
+                    <StatusBar
+                      workspacePath={workspacePath}
+                      toolLabel={toolLabel}
+                      sidecarStatus={sidecarStatus}
+                      bottomPanelOpen={bottomVisible}
+                      onToggleBottomPanel={toggleBottom}
+                      rightPanelOpen={rightVisible}
+                      onToggleRightPanel={toggleRight}
+                      rightPanelAvailable={rightAvailable}
+                    />
+                  </div>
                 </Word2PdfProvider>
               </TemplateHelperProvider>
             </PdfToolsProvider>

@@ -27,7 +27,9 @@ export function TemplateHelperPage({
 
   const existingGroups = useMemo(() => {
     if (!c.activeCatalog) return [];
-    return [...new Set(c.activeCatalog.fields.map((f) => f.group).filter(Boolean))];
+    return [
+      ...new Set(c.activeCatalog.fields.map((f) => f.group).filter(Boolean)),
+    ];
   }, [c.activeCatalog]);
 
   const grouped = useMemo(() => {
@@ -36,8 +38,8 @@ export function TemplateHelperPage({
     for (const f of c.activeCatalog.fields) {
       const key =
         groupBy === 'level'
-          ? (LEVEL_LABEL[f.level as FieldLevel] || f.level)
-          : (f.group || '其他');
+          ? LEVEL_LABEL[f.level as FieldLevel] || f.level
+          : f.group || '其他';
       const arr = map.get(key);
       if (arr) arr.push(f);
       else map.set(key, [f]);
@@ -194,7 +196,10 @@ export function TemplateHelperPage({
             <i className="codicon codicon-warning mt-0.5 shrink-0 !text-[14px]" />
             <div className="space-y-1">
               {c.validateResult.hints.map((h, i) => (
-                <div key={i} className={h.severity === 'error' ? 'text-red-400' : ''}>
+                <div
+                  key={i}
+                  className={h.severity === 'error' ? 'text-red-400' : ''}
+                >
                   {h.message}
                   <span className="text-vscode-text-faint ml-2 text-[10px]">
                     {h.location}
@@ -397,7 +402,13 @@ export function TemplateHelperPage({
                         )}
                       />
                       <div>
-                        <div className={h.severity === 'error' ? 'text-red-400' : 'text-yellow-300'}>
+                        <div
+                          className={
+                            h.severity === 'error'
+                              ? 'text-red-400'
+                              : 'text-yellow-300'
+                          }
+                        >
                           {h.message}
                         </div>
                         <div className="text-vscode-text-faint text-[10px]">
@@ -408,7 +419,7 @@ export function TemplateHelperPage({
                   ))
                 ) : (
                   <div className="text-vscode-text-dim py-2 text-center">
-                    <i className="codicon codicon-pass mr-1 text-green-400 !text-[12px]" />
+                    <i className="codicon codicon-pass mr-1 !text-[12px] text-green-400" />
                     所有字段层级匹配正确
                   </div>
                 ))}
@@ -418,7 +429,7 @@ export function TemplateHelperPage({
                     key={i}
                     className="border-vscode-border flex items-center gap-2 border-b py-1 last:border-0"
                   >
-                    <i className="codicon codicon-check text-green-400 !text-[12px]" />
+                    <i className="codicon codicon-check !text-[12px] text-green-400" />
                     <code className="text-[#ce9178]">{m.placeholder}</code>
                     <LevelBadge level={m.level} />
                     <span className="text-vscode-text-dim">{m.name}</span>
@@ -434,7 +445,7 @@ export function TemplateHelperPage({
                       key={i}
                       className="border-vscode-border flex items-center gap-2 border-b py-1 last:border-0"
                     >
-                      <i className="codicon codicon-warning text-yellow-400 !text-[12px]" />
+                      <i className="codicon codicon-warning !text-[12px] text-yellow-400" />
                       <code className="text-[#ce9178]">{u.placeholder}</code>
                       <span className="text-vscode-text-faint ml-auto text-[10px]">
                         {u.location}
@@ -487,7 +498,9 @@ function LevelBadge({ level }: { level: string }) {
   const label = LEVEL_LABEL[level as FieldLevel] ?? level;
   const color = LEVEL_COLOR[level as FieldLevel] ?? 'text-vscode-text-dim';
   return (
-    <span className={cn('rounded bg-[#2d2d2d] px-1.5 py-0.5 text-[9px]', color)}>
+    <span
+      className={cn('rounded bg-[#2d2d2d] px-1.5 py-0.5 text-[9px]', color)}
+    >
       {label}
     </span>
   );
@@ -541,7 +554,7 @@ function FieldGroup({
         </span>
       </button>
       {expanded && (
-        <div className="ml-3 mt-0.5 space-y-0.5">
+        <div className="mt-0.5 ml-3 space-y-0.5">
           {fields.map((f) => (
             <div key={f.key}>
               {editingFieldKey === f.key ? (
@@ -601,7 +614,9 @@ function FieldItem({
           <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
             {field.name}
           </span>
-          <code className="text-vscode-text-faint text-[10px]">{field.key}</code>
+          <code className="text-vscode-text-faint text-[10px]">
+            {field.key}
+          </code>
           <button
             type="button"
             onClick={onEdit}
@@ -613,7 +628,7 @@ function FieldItem({
           <button
             type="button"
             onClick={onDelete}
-            className="shrink-0 p-0.5 text-red-400 opacity-0 hover:text-red-300 group-hover:opacity-100"
+            className="shrink-0 p-0.5 text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-300"
             title="删除"
           >
             <i className="codicon codicon-trash !text-[11px]" />
@@ -646,12 +661,13 @@ function FieldItem({
 }
 
 function LevelDot({ level }: { level: string }) {
-  const color = {
-    report: 'bg-blue-400',
-    detection_item: 'bg-cyan-400',
-    batch: 'bg-yellow-400',
-    component: 'bg-green-400',
-  }[level] ?? 'bg-gray-400';
+  const color =
+    {
+      report: 'bg-blue-400',
+      detection_item: 'bg-cyan-400',
+      batch: 'bg-yellow-400',
+      component: 'bg-green-400',
+    }[level] ?? 'bg-gray-400';
 
   return (
     <span
@@ -700,7 +716,9 @@ function TabBtn({
 
 function CatalogMenu({ onClose }: { onClose: () => void }) {
   const c = useTemplateHelper();
-  const [action, setAction] = useState<'none' | 'new' | 'copy' | 'rename'>('none');
+  const [action, setAction] = useState<'none' | 'new' | 'copy' | 'rename'>(
+    'none',
+  );
   const [inputId, setInputId] = useState('');
   const [inputLabel, setInputLabel] = useState('');
 
@@ -723,7 +741,11 @@ function CatalogMenu({ onClose }: { onClose: () => void }) {
   }, [inputLabel, c, onClose]);
 
   const handleDelete = useCallback(async () => {
-    if (!window.confirm(`确定删除字段目录「${c.activeCatalog?.label}」？此操作不可撤销。`))
+    if (
+      !window.confirm(
+        `确定删除字段目录「${c.activeCatalog?.label}」？此操作不可撤销。`,
+      )
+    )
       return;
     await c.deleteCatalog();
     onClose();
@@ -776,7 +798,9 @@ function CatalogMenu({ onClose }: { onClose: () => void }) {
   if (action === 'rename') {
     return (
       <div className="border-vscode-border absolute top-full right-0 z-50 mt-1 w-56 rounded border bg-[#252526] p-3 shadow-lg">
-        <div className="text-vscode-text mb-2 text-xs font-medium">重命名目录</div>
+        <div className="text-vscode-text mb-2 text-xs font-medium">
+          重命名目录
+        </div>
         <input
           type="text"
           value={inputLabel}
@@ -817,7 +841,9 @@ function CatalogMenu({ onClose }: { onClose: () => void }) {
         icon="codicon-copy"
         label="复制当前目录"
         onClick={() => {
-          setInputLabel(c.activeCatalog ? `${c.activeCatalog.label}（副本）` : '');
+          setInputLabel(
+            c.activeCatalog ? `${c.activeCatalog.label}（副本）` : '',
+          );
           setAction('copy');
         }}
         disabled={!c.activeCatalog}

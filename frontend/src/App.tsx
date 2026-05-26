@@ -385,9 +385,9 @@ export default function App() {
                     >
                       <Panel
                         panelRef={sidebarRef}
-                        defaultSize={16}
-                        minSize={8}
-                        maxSize={40}
+                        defaultSize={200}
+                        minSize={200}
+                        maxSize={400}
                         collapsible
                         collapsedSize={0}
                         id="sidebar"
@@ -429,9 +429,9 @@ export default function App() {
                           <Separator className="bg-vscode-border hover:bg-vscode-focus h-px transition-colors" />
                           <Panel
                             panelRef={bottomRef}
-                            defaultSize={25}
-                            minSize={10}
-                            maxSize={70}
+                            defaultSize={200}
+                            minSize={150}
+                            maxSize={400}
                             collapsible
                             collapsedSize={0}
                             id="bottom-panel"
@@ -453,9 +453,9 @@ export default function App() {
                       )}
                       <Panel
                         panelRef={rightRef}
-                        defaultSize={rightAvailable ? 26 : 0}
-                        minSize={rightAvailable ? 14 : 0}
-                        maxSize={rightAvailable ? 50 : 0}
+                        defaultSize={rightAvailable ? 400 : 0}
+                        minSize={rightAvailable ? 300 : 500}
+                        maxSize={rightAvailable ? 600 : 800}
                         collapsible
                         collapsedSize={0}
                         id="right-panel"

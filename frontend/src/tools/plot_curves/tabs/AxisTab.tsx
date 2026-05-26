@@ -27,9 +27,15 @@ export function AxisTab({
           className={inputClass}
         />
       </Row>
-      <Row label="范围">
+      <Row
+        label="范围"
+        hint={autoRange ? '让 matplotlib 根据数据决定' : undefined}
+      >
         <div className="space-y-2">
-          <label className="flex cursor-pointer items-center gap-2">
+          <label
+            className="flex cursor-pointer items-center gap-2"
+            title="勾选 = matplotlib 自动选范围；取消则手动指定最小/最大/刻度间隔"
+          >
             <input
               type="checkbox"
               checked={autoRange}
@@ -40,7 +46,7 @@ export function AxisTab({
                 })
               }
             />
-            <span>自动（让 matplotlib 根据数据决定）</span>
+            <span>自动</span>
           </label>
           {!autoRange && range && (
             <div className="grid grid-cols-3 gap-2">

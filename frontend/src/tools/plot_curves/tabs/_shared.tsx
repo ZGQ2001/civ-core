@@ -16,17 +16,19 @@ export function Row({
   hint?: string;
   children: React.ReactNode;
 }) {
+  // 标签列从 140px 收到 96px：右侧调参面板宽度有限，140 会把内容挤到换行；
+  // hint 字号从 10 → 11，与 VSCode dim text 视觉更协调。
   return (
-    <div className="grid grid-cols-[140px_1fr] items-start gap-3">
-      <div className="text-vscode-text-dim pt-1">
+    <div className="grid grid-cols-[96px_1fr] items-start gap-3">
+      <div className="text-vscode-text-dim pt-1 leading-tight">
         {label}
         {hint && (
-          <div className="text-vscode-text-faint mt-0.5 text-[10px]">
+          <div className="text-vscode-text-faint mt-1 text-[11px] leading-snug">
             {hint}
           </div>
         )}
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

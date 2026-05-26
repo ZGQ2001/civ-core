@@ -30,6 +30,13 @@
     'Segoe WPC', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
     sans-serif;
   --font-mono: Consolas, 'Courier New', 'Microsoft YaHei UI', monospace;
+
+  /* 字号尺度：整体上调一档（13 → 14 / 12 → 13），更易读。
+     hint 性质的极小字（text-[10px] / text-[11px]）保留原数值，不会被这里覆盖。*/
+  --text-xs: 13px;
+  --text-xs--line-height: 17px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
 }
 
 * {
@@ -51,9 +58,9 @@ body,
   width: 100vw;
   overflow: hidden;
   font-family: var(--font-ui);
-  /* VSCode workbench 基础字号 13px；状态栏/标题栏自身覆盖为 12px，编辑器 14px。 */
-  font-size: 13px;
-  line-height: 1.4;
+  /* 基础字号 14px（VSCode workbench 原值 13px，整体调大一档更友好）。 */
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--color-vscode-text);
   background: var(--color-vscode-bg);
   -webkit-font-smoothing: antialiased;

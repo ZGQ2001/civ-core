@@ -75,89 +75,101 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             </span>
           )}
         </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={pickExcel}
-            className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
-          >
-            <i className="codicon codicon-folder-opened !text-[12px]" />选
-            Excel…
-          </button>
-          {c.excelPath && (
-            <span
-              className="text-vscode-text-dim max-w-[400px] truncate text-xs"
-              title={c.excelPath}
+        {/*
+          顶部工具栏：按"语义组"组织，组内 gap-2，组间 gap-x-5（视觉分隔无需 · 符号）。
+          flex-wrap 兼容窄窗口；ml-auto 让输出/动作组始终右靠，wrap 时整组下挪。
+        */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {/* 组 1：输入源（Excel + sheet + 表头行） */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={pickExcel}
+              className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2.5 py-1 text-xs hover:bg-[#3a3a3a]"
             >
-              {c.excelPath.split(/[\\/]/).pop()}
-            </span>
-          )}
-          <span className="text-vscode-text-faint">·</span>
-          <label className="text-vscode-text-dim text-xs">Sheet:</label>
-          <select
-            value={c.sheet}
-            onChange={(e) => c.setSheet(e.target.value)}
-            disabled={!c.excelPath || c.sheetsLoading || c.sheets.length === 0}
-            title={
-              c.sheetsError
-                ? `读 sheet 失败: ${c.sheetsError}`
-                : c.sheetsLoading
-                  ? '正在读 sheet 列表…'
-                  : '下拉选择要绘图的 sheet'
-            }
-            className="bg-vscode-input border-vscode-border text-vscode-text max-w-[16rem] min-w-[8rem] rounded-[2px] border px-2 py-1 text-xs"
-          >
-            {!c.excelPath && <option value="">（先选 Excel）</option>}
-            {c.excelPath && c.sheetsLoading && (
-              <option value="">（加载中…）</option>
+              <i className="codicon codicon-folder-opened !text-[13px]" />
+              选 Excel…
+            </button>
+            {c.excelPath && (
+              <span
+                className="text-vscode-text-dim max-w-[400px] truncate text-xs"
+                title={c.excelPath}
+              >
+                {c.excelPath.split(/[\\/]/).pop()}
+              </span>
             )}
-            {c.excelPath && !c.sheetsLoading && c.sheets.length === 0 && (
-              <option value="">
-                {c.sheetsError ? '（读取失败）' : '（无 sheet）'}
-              </option>
-            )}
-            {c.sheets.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <span className="text-vscode-text-faint">·</span>
-          <label className="text-vscode-text-dim text-xs">表头行:</label>
-          <input
-            type="number"
-            min={1}
-            value={c.headerRow}
-            onChange={(e) =>
-              c.setHeaderRow(Math.max(1, parseInt(e.target.value || '1', 10)))
-            }
-            title="表头所在的 1-based 行号；数据从下一行开始读"
-            className="bg-vscode-input border-vscode-border text-vscode-text w-14 rounded-[2px] border px-2 py-1 text-xs"
-          />
-          <span className="text-vscode-text-faint">·</span>
-          <label className="text-vscode-text-dim text-xs">曲线:</label>
-          <select
-            value={c.preset}
-            onChange={(e) => c.setPreset(e.target.value)}
-            disabled={c.presets.length === 0}
-            title={
-              c.currentSource === 'system'
-                ? '内置曲线（只读，可"另存为"再改）'
-                : '我的曲线（可改可删）'
-            }
-            className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
-          >
-            {c.presets.length === 0 && <option value="">（无可用）</option>}
-            {c.presets.map((p) => (
-              <option key={p} value={p}>
-                {c.presetSources[p] === 'system' ? '[内置] ' : '[我的] '}
-                {p}
-              </option>
-            ))}
-          </select>
-          <PresetCrudButtons />
-          <div className="ml-auto flex items-center gap-2">
-            <label className="text-vscode-text-dim text-xs">格式:</label>
+            <label className="text-vscode-text-dim ml-2 text-xs">Sheet</label>
+            <select
+              value={c.sheet}
+              onChange={(e) => c.setSheet(e.target.value)}
+              disabled={
+                !c.excelPath || c.sheetsLoading || c.sheets.length === 0
+              }
+              title={
+                c.sheetsError
+                  ? `读 sheet 失败: ${c.sheetsError}`
+                  : c.sheetsLoading
+                    ? '正在读 sheet 列表…'
+                    : '下拉选择要绘图的 sheet'
+              }
+              className="bg-vscode-input border-vscode-border text-vscode-text max-w-[16rem] min-w-[8rem] rounded-[2px] border px-2 py-1 text-xs"
+            >
+              {!c.excelPath && <option value="">（先选 Excel）</option>}
+              {c.excelPath && c.sheetsLoading && (
+                <option value="">（加载中…）</option>
+              )}
+              {c.excelPath && !c.sheetsLoading && c.sheets.length === 0 && (
+                <option value="">
+                  {c.sheetsError ? '（读取失败）' : '（无 sheet）'}
+                </option>
+              )}
+              {c.sheets.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <label className="text-vscode-text-dim ml-2 text-xs">表头行</label>
+            <input
+              type="number"
+              min={1}
+              value={c.headerRow}
+              onChange={(e) =>
+                c.setHeaderRow(Math.max(1, parseInt(e.target.value || '1', 10)))
+              }
+              title="表头所在的 1-based 行号；数据从下一行开始读"
+              className="bg-vscode-input border-vscode-border text-vscode-text w-14 rounded-[2px] border px-2 py-1 text-xs"
+            />
+          </div>
+
+          {/* 组 2：曲线预设（选择 + CRUD） */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-vscode-text-dim text-xs">曲线</label>
+            <select
+              value={c.preset}
+              onChange={(e) => c.setPreset(e.target.value)}
+              disabled={c.presets.length === 0}
+              title={
+                c.currentSource === 'system'
+                  ? '内置曲线（只读，可"另存为"再改）'
+                  : '我的曲线（可改可删）'
+              }
+              className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
+            >
+              {c.presets.length === 0 && <option value="">（无可用）</option>}
+              {c.presets.map((p) => (
+                <option key={p} value={p}>
+                  {c.presetSources[p] === 'system' ? '[内置] ' : '[我的] '}
+                  {p}
+                </option>
+              ))}
+            </select>
+            <PresetCrudButtons />
+          </div>
+
+          {/* 组 3：输出 + 运行（始终右靠） */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <label className="text-vscode-text-dim text-xs">格式</label>
             <select
               value={c.outputFormat ?? ''}
               onChange={(e) =>
@@ -179,9 +191,9 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               type="button"
               onClick={pickOutputDir}
               title={c.outputDir || '默认: <Excel 同级>/曲线图/'}
-              className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
+              className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2.5 py-1 text-xs hover:bg-[#3a3a3a]"
             >
-              <i className="codicon codicon-folder !text-[12px]" />
+              <i className="codicon codicon-folder !text-[13px]" />
               输出
             </button>
             <button
@@ -189,14 +201,14 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               disabled={!canRun}
               onClick={handleRun}
               className={cn(
-                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
+                'flex items-center gap-1.5 rounded-[2px] px-3.5 py-1 text-xs font-medium',
                 canRun
                   ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
                   : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
               )}
             >
               {c.running && (
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+                <i className="codicon codicon-loading codicon-modifier-spin !text-[13px]" />
               )}
               {c.running ? '出图中…' : '开始批量出图'}
             </button>

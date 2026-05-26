@@ -387,6 +387,7 @@ export default function App() {
                         panelRef={sidebarRef}
                         defaultSize={16}
                         minSize={8}
+                        maxSize={40}
                         collapsible
                         collapsedSize={0}
                         id="sidebar"
@@ -430,6 +431,7 @@ export default function App() {
                             panelRef={bottomRef}
                             defaultSize={25}
                             minSize={10}
+                            maxSize={70}
                             collapsible
                             collapsedSize={0}
                             id="bottom-panel"
@@ -453,6 +455,7 @@ export default function App() {
                         panelRef={rightRef}
                         defaultSize={rightAvailable ? 26 : 0}
                         minSize={rightAvailable ? 14 : 0}
+                        maxSize={rightAvailable ? 50 : 0}
                         collapsible
                         collapsedSize={0}
                         id="right-panel"

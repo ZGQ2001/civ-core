@@ -7,6 +7,7 @@ import { PdfToolsPage } from '../tools/pdf_tools';
 import { Placeholder } from '../tools/Placeholder';
 import { PlotCurvesPage } from '../tools/plot_curves';
 import { ReportGeneratorPage } from '../tools/report_generator';
+import { TemplateHelperPage } from '../tools/template_helper';
 import { Word2PdfPage } from '../tools/word2pdf';
 
 interface Props {
@@ -39,6 +40,8 @@ function renderTool(
       return <Word2PdfPage appendOutput={appendOutput} />;
     case 'report_generator':
       return <ReportGeneratorPage appendOutput={appendOutput} />;
+    case 'template_helper':
+      return <TemplateHelperPage appendOutput={appendOutput} />;
     case 'settings':
       return (
         <Placeholder

@@ -157,6 +157,7 @@ public static class JsonRpcServer
         Handlers.AnchorHandlers.RegisterAll(dispatcher);
         Handlers.TemplateHandlers.RegisterAll(dispatcher);
         Handlers.ReportHandlers.RegisterAll(dispatcher);
+        Handlers.CatalogHandlers.RegisterAll(dispatcher);
 
         Console.Error.WriteLine(
             $"[civ-doc] 启动；已注册 {dispatcher.MethodCount} 个方法: {string.Join(", ", dispatcher.Methods)}");

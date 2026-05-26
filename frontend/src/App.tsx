@@ -42,16 +42,15 @@ import {
   PlotCurvesProvider,
   PlotCurvesSettingsForm,
 } from './tools/plot_curves';
-import {
-  ReportGeneratorProvider,
-  ReportGeneratorSettingsForm,
-} from './tools/report_generator';
+import { ReportGeneratorProvider } from './tools/report_generator';
+import { TemplateHelperProvider } from './tools/template_helper';
 import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: 'data_processing', icon: 'symbol-method', tooltip: '数据处理' },
   { id: 'plot_curves', icon: 'graph-line', tooltip: '绘曲线图' },
   { id: 'report_generator', icon: 'file-text', tooltip: '报告填充' },
+  { id: 'template_helper', icon: 'list-tree', tooltip: '模板助手' },
   { id: 'pdf_tools', icon: 'file-pdf', tooltip: 'PDF 工具' },
   { id: 'word2pdf', icon: 'file-binary', tooltip: 'Word → PDF' },
 ];
@@ -328,16 +327,7 @@ export default function App() {
           },
         ]
       : []),
-    ...(activeToolId === 'report_generator'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <ReportGeneratorSettingsForm />,
-          },
-        ]
-      : []),
+
     { id: 'agent', label: 'AI 助手', icon: 'hubot', node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
@@ -360,7 +350,8 @@ export default function App() {
         <DataProcessingProvider>
           <ReportGeneratorProvider>
             <PdfToolsProvider>
-              <Word2PdfProvider>
+              <TemplateHelperProvider>
+                <Word2PdfProvider>
                 <div className="flex h-screen w-screen flex-col">
                   <TitleBar
                     workspaceName={workspaceName}
@@ -483,7 +474,8 @@ export default function App() {
                     rightPanelAvailable={rightAvailable}
                   />
                 </div>
-              </Word2PdfProvider>
+                </Word2PdfProvider>
+              </TemplateHelperProvider>
             </PdfToolsProvider>
           </ReportGeneratorProvider>
         </DataProcessingProvider>

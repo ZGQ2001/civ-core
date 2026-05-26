@@ -1,15 +1,14 @@
 // report.* RPC —— 报告生成（占位符主路径）。
 //
 // 方法清单：
-//   report.render_placeholder(docx_path, project_type, values, output_path)
+//   report.render_placeholder(docx_path, catalog_id|project_type, values, output_path)
 //     -> {output_path, replaced, unknown_keys}
 //
-// 解耦：handler 只做 wire 解析 + IFieldResolver 适配；具体替换在 PlaceholderRenderer。
-// project_type → 字段 catalog 派发（跟 TemplateHandlers.Fields 同套）；未来加钻芯/回弹只
-// 在 GetCatalog 加一行。
+// 解耦：字段目录从 CatalogStore（JSON）读取，不再硬编码 switch。
+// handler 只做 wire 解析 + IFieldResolver 适配；具体替换在 PlaceholderRenderer。
 
 using System.Text.Json;
-using CivCore.Doc.Calc.Anchor;
+using CivCore.Doc.Catalog;
 using CivCore.Doc.Server;
 using CivCore.Doc.Template;
 
@@ -29,15 +28,28 @@ public static class ReportHandlers
         var p = @params.Value;
 
         var docxPath = RequireString(p, "docx_path");
-        var projectType = RequireString(p, "project_type");
         var outputPath = RequireString(p, "output_path");
+
+        // 兼容 catalog_id 和旧的 project_type 参数
+        string catalogId;
+        if (p.TryGetProperty("catalog_id", out var ciEl) && ciEl.ValueKind == JsonValueKind.String)
+            catalogId = ciEl.GetString() ?? "";
+        else if (p.TryGetProperty("project_type", out var ptEl) && ptEl.ValueKind == JsonValueKind.String)
+            catalogId = ptEl.GetString() ?? "";
+        else
+            throw new ArgumentException("缺少参数：catalog_id 或 project_type");
+
+        if (string.IsNullOrWhiteSpace(catalogId))
+            throw new ArgumentException("catalog_id 不可为空");
 
         if (!p.TryGetProperty("values", out var valuesEl)
             || valuesEl.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("缺少 values 字段值字典");
 
         var values = ParseValues(valuesEl);
-        var catalog = GetCatalog(projectType);
+        var catalogDto = CatalogStore.Get(catalogId)
+            ?? throw new ArgumentException($"字段目录不存在：{catalogId}");
+        var catalog = CatalogStore.ToFieldDefs(catalogDto);
         var resolver = new DictionaryResolver(values);
 
         try
@@ -53,7 +65,7 @@ public static class ReportHandlers
         catch (PlaceholderRenderException e) { throw new ArgumentException(e.Message); }
     }
 
-    // ── 内部：JSON values → Dict<string,object?> ──────────
+    // ── 内部 ──
 
     private static Dictionary<string, object?> ParseValues(JsonElement obj)
     {
@@ -73,7 +85,6 @@ public static class ReportHandlers
         return d;
     }
 
-    /// <summary>通用 IFieldResolver：字典查表。给 RPC 调用方传字段值用，不耦合具体 calc 类型。</summary>
     private class DictionaryResolver : IFieldResolver
     {
         private readonly IReadOnlyDictionary<string, object?> _values;
@@ -81,12 +92,6 @@ public static class ReportHandlers
         public object? GetValue(string fieldKey)
             => _values.TryGetValue(fieldKey, out var v) ? v : null;
     }
-
-    private static IReadOnlyList<FieldDef> GetCatalog(string projectType) => projectType switch
-    {
-        "anchor" => AnchorFieldCatalog.All,
-        _ => throw new ArgumentException($"未知 project_type：{projectType}（当前支持：anchor）"),
-    };
 
     private static string RequireString(JsonElement p, string key)
     {

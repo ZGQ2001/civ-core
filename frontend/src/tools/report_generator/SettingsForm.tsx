@@ -62,7 +62,7 @@ export function ReportGeneratorSettingsForm() {
   }, [c]);
 
   return (
-    <div className="flex h-full flex-col space-y-4 overflow-auto p-4 text-xs">
+    <div className="flex flex-col space-y-4 px-6 py-4 text-xs">
       <ImportFromDataProcessingBtn />
 
       <Field
@@ -194,9 +194,6 @@ export function ReportGeneratorSettingsForm() {
         ))}
       </div>
 
-      <div className="text-vscode-text-faint pt-2 text-[11px]">
-        改完到工具页中间点「生成 Word 报告」即可。
-      </div>
     </div>
   );
 }

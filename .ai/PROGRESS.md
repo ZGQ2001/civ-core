@@ -14,11 +14,12 @@ T3 ✅ Tauri 主进程 + Python sidecar 桥 + VSCode 风顶栏
 T4 ✅ 工作区 + 文件树端到端
 T5 ✅ 4 个工具页全部 controller/Page/SettingsForm 范式
 T5.5 ✅ C# sidecar + leeb 整套迁 C#（路由默认 C#）
+T5.6 ✅ 装配线 anchor 走通（数据处理 → 绘曲线图 → 报告填充 出 docx + 嵌图）
 T6 ⏳ 打包（PyInstaller + dotnet publish + Tauri externalBin）
 T7 ✅ 删旧 Qt UI
 ```
 
-**当前**：T5.5 完成 + 锚杆抗拔（GB 50086-2015）上线 + ShellContext 可观察性补齐 + FileTree VSCode 风重构。下一步候选见 CONTEXT.md。
+**当前**：装配线第 5 工序「报告填充」上线 —— 锚杆抗拔 数据处理 → 绘曲线图 → 报告填充 完整链路通；占位符引擎升级到 `{{}}` v2，新增 `{{img:xxx}}` 图片占位符。下一步候选见 CONTEXT.md。
 
 ---
 
@@ -26,6 +27,11 @@ T7 ✅ 删旧 Qt UI
 
 | commit | 日期 | 内容 |
 |--------|------|------|
+| `228b0cf` | 2026-05-26 | feat(template): 图片占位符 `{{img:xxx}}` 嵌入 OpenXML Drawing + ImageInjector helper + plot_curves 按 anchor_id 自动串接 |
+| `a1c74ee` | 2026-05-26 | feat(anchor): catalog 字段单位优化（kN 派生）+ 报告填充与数据处理解耦（独立 own + 一键导入）+ 抽共享 anchorParamsForm |
+| `a3e2eb9` | 2026-05-26 | feat: 删 template_editor，新建 report_generator 独立工具页（4 件套 + ActivityBar）+ FileTree 删除确认升级到 VSCode 同款 |
+| `2b83c41` | 2026-05-26 | feat: 占位符 `{}`→`{{}}` + DefaultFormat 真生效 + ReportGenerator 成对 marker + catalog 49 字段 + 别名网 + Excel Round 2 位（+38 xUnit）|
+| `401a625` | 2026-05-26 | feat(data_processing): 接通 anchor Word 报告生成前端（已被后续 commit 拆出独立工具）|
 | `5afe5af` | 2026-05-22 | fix: 锚杆生成模板「点了没反应」根因 — Tauri capability 缺 dialog:allow-save |
 | `b6433a9` | 2026-05-22 | fix: 4 个 UX bug — 参数表纵向卡片 / 文件树联动 / RightPanel 反馈 / 日志启动写入（新建 ShellContext） |
 | `9bc472a` | 2026-05-22 | fix: 锚杆生成模板按钮加 ok/error 状态反馈 |
@@ -82,3 +88,6 @@ T7 ✅ 删旧 Qt UI
 | 路由反转默认 C# | 用户方向「以后代码都用 C#」；新 calc 类型不加 Rust 代码 |
 | ShellContext 全局可观察性（appendOutput/activatedFile） | 旧 prop-drilling 让 RightPanel 拿不到 appendOutput；用户偏好「UI 任何操作可观察」要求每个 onClick 入口先打日志 |
 | 工具列名按 Nt 倍数（0.1Nt/1.2Nt-5min）不绑 kN | 输入列名与 P 解耦；同代码处理任意 P；跟报告内插表占位符语义一致 |
+| 占位符引擎 v2：`{{}}` + `{{img:xxx}}` 双语法；catalog DefaultFormat 控制数字格式；按段位置切 Run 支持文本+图片混排 | 用户模板都用 `{{}}`；裸 double 1.234567 必须按规范保留位数；图片占位符必须能跟文本同段共存（如 "曲线: {{img:曲线图}} 已记录"） |
+| 报告填充工具完全独立 own state，不耦合数据处理 | 装配线连贯但每个工序能独立工作（拿别人 Excel 出报告也得能用）；保留"一键导入"按钮兜手动连贯场景 |
+| 字段维度划分（项目/批次/锚杆级）让用户拍板，不让 AI 替代 | AI 不是业务人；现阶段先用"拆批次"绕过批次共享字段（如灌浆日期）问题 |

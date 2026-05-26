@@ -57,21 +57,26 @@
 
 ### C# sidecar（默认路由）
 
-| 方法                           | 文件                       | 用途                                         |
-| ------------------------------ | -------------------------- | -------------------------------------------- |
-| `leeb.run`                     | `Handlers/LeebHandlers.cs` | 里氏硬度全流程（读+算+返 report_table_data） |
-| `leeb.preview_excel`           | `Handlers/LeebHandlers.cs` | Excel 前 N 行预览                            |
-| `doc.ping`                     | `Handlers/DocHandlers.cs`  | C# 链路验证                                  |
-| `doc.version`                  | `Handlers/DocHandlers.cs`  | C# 版本信息                                  |
-| `xlsx.write_leeb_report_table` | `Handlers/XlsxHandlers.cs` | 写里氏报告插入表                             |
+| 方法                           | 文件                            | 用途                                                                              |
+| ------------------------------ | ------------------------------- | --------------------------------------------------------------------------------- |
+| `leeb.run`                     | `Handlers/LeebHandlers.cs`      | 里氏硬度全流程（读+算+返 report_table_data）                                      |
+| `leeb.preview_excel`           | `Handlers/LeebHandlers.cs`      | Excel 前 N 行预览                                                                 |
+| `anchor.run`                   | `Handlers/AnchorHandlers.cs`    | 锚杆抗拔全流程：读 Excel + 按批次套参数 + 算 + 写 Excel；可选 word_template_path → 出 docx（支持 curve_image_dir 嵌曲线图） |
+| `anchor.list_batches`          | `Handlers/AnchorHandlers.cs`    | 读输入 Excel 返回所有 batch_id（前端按批次填参数前用）                            |
+| `anchor.generate_template`     | `Handlers/AnchorHandlers.cs`    | 生成锚杆输入 Excel 空白模板                                                       |
+| `template.fields`              | `Handlers/TemplateHandlers.cs`  | 按 project_type 返回字段 catalog（{key, name, source, value_type, default_format}） |
+| `report.render_placeholder`    | `Handlers/ReportHandlers.cs`    | 通用占位符渲染（docx_path + values + output_path），跟特定 calc 解耦              |
+| `doc.ping`                     | `Handlers/DocHandlers.cs`       | C# 链路验证                                                                       |
+| `doc.version`                  | `Handlers/DocHandlers.cs`       | C# 版本信息                                                                       |
+| `xlsx.write_leeb_report_table` | `Handlers/XlsxHandlers.cs`      | 写里氏报告插入表                                                                  |
 
 ### 未实现（预留）
 
-| 方法                   | 计划                                              |
-| ---------------------- | ------------------------------------------------- |
-| `doc.compose_report`   | T5.5 Step 3：Word 变量替换 + xlsx 嵌入 + 图片嵌入 |
-| `calc.core_drilling.*` | 钻芯法切 C#                                       |
-| `calc.rebound.*`       | 回弹法切 C#                                       |
+| 方法                   | 计划                                                                       |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `calc.core_drilling.*` | 钻芯法切 C#                                                                |
+| `calc.rebound.*`       | 回弹法切 C#                                                                |
+| `anchor.run` 多批 user_inputs | 当前 user_inputs 是项目级 dict；多批共享字段（灌浆日期等）按批不同时需扩展为 `user_inputs_by_batch` + 切回 GenerateMultiBatch |
 
 ## 子域文档（避免重复，按目录加载）
 

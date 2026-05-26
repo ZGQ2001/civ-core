@@ -11,7 +11,7 @@ Vite + React 19 + TypeScript + Tailwind v4 + @vscode/codicons + react-resizable-
 
 ## 工具页范式
 
-4 个工具页统一结构：
+所有工具页统一结构（当前 5 个：data_processing / plot_curves / report_generator / pdf_tools / word2pdf）：
 
 ```
 tools/<tool>/
@@ -21,6 +21,11 @@ tools/<tool>/
 ├── Page.tsx           主界面（中间预览区）
 └── SettingsForm.tsx   右侧参数区（在 RightPanel 内渲染）
 ```
+
+**工具间耦合原则**：工具之间不通过 useXxxCtrl() 隐式继承上游 state（曾经 report_generator 直接 useDataProcessing 是反例）。如果工具 B 想消费工具 A 的输入，提供「一键导入 A」按钮 —— 显式拷贝快照到 B 自己的 state。这样：
+- 工具 B 能独立工作（用别人的输入 / 测试隔离）
+- 装配线连贯（用户一键就能继承上游已填的）
+- 状态变化追溯清晰（不会"上游一变下游莫名重渲染"）
 
 ### Controller 模板
 
@@ -130,7 +135,10 @@ StatusBar (22px)
 
 ## 公共组件
 
-`tools/_shared/forms.tsx`：`Field` / `Picker` / `ResetBtn` / `RunBtn`（4 个工具共用的 form 控件）
+| 文件 | 内容 |
+|------|------|
+| `tools/_shared/forms.tsx` | `Field` / `Picker` / `ResetBtn` / `RunBtn`（所有工具共用的 form 控件）|
+| `tools/_shared/anchorParamsForm.tsx` | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。|
 
 ## 快捷键
 

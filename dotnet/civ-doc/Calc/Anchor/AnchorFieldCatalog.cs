@@ -1,6 +1,8 @@
 // 锚杆抗拔报告可绑定字段清单（GB 50086-2015）。
 //
-// 这是模板编辑器的「字段菜单」—— 用户在 Word 表格里选一个格子，从这个清单挑字段绑定上去。
+// 这是「报告填充」工具的字段菜单 —— 前端工具页底部的「字段对照表」从此 catalog 拉，
+// 用户照着写 {{key}} 或 {{中文名}} 占位符进 Word 模板。
+// 引擎（PlaceholderRenderer）按 catalog 反查 raw → key + DefaultFormat 格式化。
 //
 // 解耦：本文件依赖 Template/FieldDef.cs（通用类型），但 Template 引擎不依赖本文件；
 //       未来加钻芯/回弹只需要新增 Calc/<Type>/<Type>FieldCatalog.cs，引擎零改动。

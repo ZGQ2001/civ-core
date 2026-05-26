@@ -1,5 +1,5 @@
 {
-    "_comment": "曲线模板库。每个模板描述一个 Excel→SVG 批量绘图任务。新项目要新模板时，复制一个并改字段即可。",
+    "_comment": "曲线模板库。每个模板描述一个 Excel→PNG 批量绘图任务。新项目要新模板时，复制一个并改字段即可。",
     "_field_doc": {
         "id_column": "用于命名输出文件的标识列表头（每行 = 一张图）",
         "filename_template": "输出文件名模板，{id} 会被替换为该行的标识列值",
@@ -12,7 +12,7 @@
     },
     "荷载-位移曲线": {
         "id_column": "构件编号",
-        "filename_template": "{id}_荷载位移曲线.svg",
+        "filename_template": "{id}.png",
         "title_template": "{id}：荷载-位移曲线",
         "x_axis": {
             "label": "位移 (mm)",

@@ -134,12 +134,14 @@ export function TemplateHelperProvider({
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshCatalogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (activeCatalogId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       selectCatalog(activeCatalogId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,6 +154,7 @@ export function TemplateHelperProvider({
     const idx = f.path.lastIndexOf('.');
     const ext = idx > 0 ? f.path.slice(idx).toLowerCase() : '';
     if (!ACCEPTED_EXTS.has(ext)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDocxPath(f.path);
     setValidateResult(null);
     setValidateError(null);

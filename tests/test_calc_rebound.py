@@ -95,7 +95,6 @@ def test_normalize_carbonation_rounding_and_passthrough() -> None:
     assert _normalize_carbonation_depth(2.25) == 2.0
 
 
-
 def test_normalize_carbonation_negative_raises() -> None:
     with pytest.raises(InputError, match="碳化深度"):
         _normalize_carbonation_depth(-1.0)

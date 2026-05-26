@@ -232,8 +232,7 @@ export function ReportGeneratorProvider({
     const batchIds = dp.anchorBatchIds;
     const filled = batchIds.filter((b) => !!dp.anchorParamsByBatch[b]).length;
     let reason: string | null = null;
-    if (dp.calcType !== 'anchor')
-      reason = '数据处理 calcType 不是 anchor';
+    if (dp.calcType !== 'anchor') reason = '数据处理 calcType 不是 anchor';
     else if (!dp.excelPath) reason = '数据处理还没选 Excel';
     else if (batchIds.length === 0) reason = '数据处理还没读到批次';
     return {
@@ -243,12 +242,7 @@ export function ReportGeneratorProvider({
       paramsFilledBatchCount: filled,
       reason,
     };
-  }, [
-    dp.calcType,
-    dp.excelPath,
-    dp.anchorBatchIds,
-    dp.anchorParamsByBatch,
-  ]);
+  }, [dp.calcType, dp.excelPath, dp.anchorBatchIds, dp.anchorParamsByBatch]);
 
   const importFromDataProcessing = useCallback(() => {
     if (!upstream.available) {
@@ -274,8 +268,7 @@ export function ReportGeneratorProvider({
   // ── 就绪态 ──
   const readiness: Readiness = useMemo(() => {
     if (!excelPath) return { ready: false, reason: '请选输入 Excel' };
-    if (anchorBatchesLoading)
-      return { ready: false, reason: '正在加载批次…' };
+    if (anchorBatchesLoading) return { ready: false, reason: '正在加载批次…' };
     if (anchorBatchesError)
       return { ready: false, reason: `读批次失败：${anchorBatchesError}` };
     if (anchorBatchIds.length === 0)

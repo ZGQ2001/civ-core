@@ -110,14 +110,42 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
     icon: 'briefcase',
     fields: [
       { key: 'client_name', label: '委托单位', placeholder: '例：XX建设集团' },
-      { key: 'project_name', label: '项目名称', placeholder: '例：XX环境整治提升项目' },
-      { key: 'report_no', label: '报告编号', placeholder: '例：J3—G字2026第XXX号' },
-      { key: 'inspection_category', label: '检测类别', placeholder: '例：一般委托' },
+      {
+        key: 'project_name',
+        label: '项目名称',
+        placeholder: '例：XX环境整治提升项目',
+      },
+      {
+        key: 'report_no',
+        label: '报告编号',
+        placeholder: '例：J3—G字2026第XXX号',
+      },
+      {
+        key: 'inspection_category',
+        label: '检测类别',
+        placeholder: '例：一般委托',
+      },
       { key: 'inspection_item', label: '检测项目' },
-      { key: 'inspection_site', label: '检测地点', placeholder: '例：北京市xx区' },
-      { key: 'inspection_time', label: '检测时间/试验日期', placeholder: '例：2026-05-25' },
-      { key: 'inspection_engineer', label: '检测人员/试验人员', placeholder: '例：张三、李四' },
-      { key: 'inspection_conclusion', label: '检测结论', placeholder: '例：全部合格' },
+      {
+        key: 'inspection_site',
+        label: '检测地点',
+        placeholder: '例：北京市xx区',
+      },
+      {
+        key: 'inspection_time',
+        label: '检测时间/试验日期',
+        placeholder: '例：2026-05-25',
+      },
+      {
+        key: 'inspection_engineer',
+        label: '检测人员/试验人员',
+        placeholder: '例：张三、李四',
+      },
+      {
+        key: 'inspection_conclusion',
+        label: '检测结论',
+        placeholder: '例：全部合格',
+      },
     ],
   },
   {
@@ -134,16 +162,18 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
     id: 'basis',
     label: '检测依据',
     icon: 'book',
-    fields: [
-      { key: 'inspection_basis', label: '检测及判定依据' },
-    ],
+    fields: [{ key: 'inspection_basis', label: '检测及判定依据' }],
   },
   {
     id: 'instr1',
     label: '检测仪器 1',
     icon: 'tools',
     fields: [
-      { key: 'instrument1_name', label: '仪器名称', placeholder: '例：锚杆拉力计' },
+      {
+        key: 'instrument1_name',
+        label: '仪器名称',
+        placeholder: '例：锚杆拉力计',
+      },
       { key: 'instrument1_no', label: '仪器编号' },
       { key: 'instrument1_cert_no', label: '检定证书编号' },
       { key: 'instrument1_valid_until', label: '使用有效期' },
@@ -167,13 +197,29 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
     label: '锚杆 / 钻孔 / 注浆描述',
     icon: 'symbol-misc',
     fields: [
-      { key: 'rock_soil_property', label: '岩土性状', placeholder: '例：山石杂土' },
-      { key: 'bar_material_spec', label: '杆体材料规格', placeholder: '例：C32（HRB400）钢筋' },
+      {
+        key: 'rock_soil_property',
+        label: '岩土性状',
+        placeholder: '例：山石杂土',
+      },
+      {
+        key: 'bar_material_spec',
+        label: '杆体材料规格',
+        placeholder: '例：C32（HRB400）钢筋',
+      },
       { key: 'drill_angle', label: '钻孔倾角', placeholder: '例：60°' },
       { key: 'drill_diameter', label: '钻孔直径', placeholder: '例：90mm' },
       { key: 'grouting_date', label: '灌浆日期' },
-      { key: 'grout_ratio', label: '注浆材料配合比', placeholder: '例：1:0.5（重量比）' },
-      { key: 'grout_strength', label: '注浆材料强度等级', placeholder: '例：M7.5' },
+      {
+        key: 'grout_ratio',
+        label: '注浆材料配合比',
+        placeholder: '例：1:0.5（重量比）',
+      },
+      {
+        key: 'grout_strength',
+        label: '注浆材料强度等级',
+        placeholder: '例：M7.5',
+      },
     ],
   },
 ];

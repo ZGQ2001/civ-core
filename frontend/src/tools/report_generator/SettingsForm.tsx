@@ -13,7 +13,10 @@
 import { useCallback, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
-import { ANCHOR_STANDARDS, type AnchorStandard } from '../data_processing/types';
+import {
+  ANCHOR_STANDARDS,
+  type AnchorStandard,
+} from '../data_processing/types';
 import { AnchorParamsSection } from '../_shared/anchorParamsForm';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useReportGenerator } from './controller';
@@ -62,7 +65,10 @@ export function ReportGeneratorSettingsForm() {
     <div className="flex h-full flex-col space-y-4 overflow-auto p-4 text-xs">
       <ImportFromDataProcessingBtn />
 
-      <Field label="输入 Excel" hint="锚杆抗拔的原始数据或数据处理输出的结果 xlsx 都行">
+      <Field
+        label="输入 Excel"
+        hint="锚杆抗拔的原始数据或数据处理输出的结果 xlsx 都行"
+      >
         <Picker
           value={c.excelPath}
           onPick={pickExcel}
@@ -92,7 +98,10 @@ export function ReportGeneratorSettingsForm() {
         </select>
       </Field>
 
-      <Field label="批次列名" hint="输入 Excel 里用于区分批次的列名（一般是「批次」）">
+      <Field
+        label="批次列名"
+        hint="输入 Excel 里用于区分批次的列名（一般是「批次」）"
+      >
         <input
           type="text"
           value={c.anchorBatchIdColumn}
@@ -131,7 +140,10 @@ export function ReportGeneratorSettingsForm() {
         />
       </Field>
 
-      <Field label="输出目录" hint="留空 = 在输入 Excel 同级建「_Word报告」子目录">
+      <Field
+        label="输出目录"
+        hint="留空 = 在输入 Excel 同级建「_Word报告」子目录"
+      >
         <Picker
           value={c.outputDir}
           onPick={pickOutputDir}
@@ -164,7 +176,8 @@ export function ReportGeneratorSettingsForm() {
 
       <div className="border-vscode-border flex items-center justify-between border-t pt-3">
         <div className="text-vscode-text text-[12px] font-medium">
-          项目元信息（{USER_INPUT_GROUPS.reduce((s, g) => s + g.fields.length, 0)} 项）
+          项目元信息（
+          {USER_INPUT_GROUPS.reduce((s, g) => s + g.fields.length, 0)} 项）
         </div>
         <button
           type="button"
@@ -201,10 +214,12 @@ function ImportFromDataProcessingBtn() {
         type="button"
         onClick={c.importFromDataProcessing}
         disabled={!u.available}
-        className="flex w-full items-center justify-center gap-2 rounded-[2px] bg-vscode-button px-3 py-1.5 text-[12px] text-white transition-colors hover:bg-vscode-button-hover disabled:cursor-not-allowed disabled:opacity-50"
-        title={u.available
-          ? `导入: ${u.excelPath}（${u.batchCount} 批）`
-          : (u.reason ?? '上游无可导入数据')}
+        className="bg-vscode-button hover:bg-vscode-button-hover flex w-full items-center justify-center gap-2 rounded-[2px] px-3 py-1.5 text-[12px] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        title={
+          u.available
+            ? `导入: ${u.excelPath}（${u.batchCount} 批）`
+            : (u.reason ?? '上游无可导入数据')
+        }
       >
         <i className="codicon codicon-arrow-down !text-[13px]" />
         从「数据处理」一键导入
@@ -212,7 +227,8 @@ function ImportFromDataProcessingBtn() {
       <div className="text-vscode-text-faint mt-1 text-[10px] leading-tight">
         {u.available ? (
           <>
-            上游已就绪：{u.batchCount} 批，参数已填 {u.paramsFilledBatchCount}/{u.batchCount}
+            上游已就绪：{u.batchCount} 批，参数已填 {u.paramsFilledBatchCount}/
+            {u.batchCount}
           </>
         ) : (
           <>未就绪：{u.reason ?? '—'}</>
@@ -245,7 +261,9 @@ function GroupCard({
         <i
           className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} text-vscode-text-dim mr-1 !text-[12px]`}
         />
-        <i className={`codicon codicon-${group.icon} text-vscode-text-dim mr-1.5 !text-[12px]`} />
+        <i
+          className={`codicon codicon-${group.icon} text-vscode-text-dim mr-1.5 !text-[12px]`}
+        />
         <span className="text-vscode-text text-[12px] font-medium">
           {group.label}
         </span>

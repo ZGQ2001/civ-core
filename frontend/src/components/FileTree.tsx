@@ -826,18 +826,19 @@ export function FileTree({
         )}
       </div>
       {menu && <ContextMenuView menu={menu} onClose={() => setMenu(null)} />}
-      {deleteTarget && (() => {
-        const node = nodes.get(deleteTarget);
-        return (
-          <DeleteConfirmModal
-            targetName={node?.name ?? '此项'}
-            targetPath={deleteTarget}
-            isDir={node?.isDir ?? false}
-            onConfirm={confirmDelete}
-            onCancel={() => setDeleteTarget(null)}
-          />
-        );
-      })()}
+      {deleteTarget &&
+        (() => {
+          const node = nodes.get(deleteTarget);
+          return (
+            <DeleteConfirmModal
+              targetName={node?.name ?? '此项'}
+              targetPath={deleteTarget}
+              isDir={node?.isDir ?? false}
+              onConfirm={confirmDelete}
+              onCancel={() => setDeleteTarget(null)}
+            />
+          );
+        })()}
     </Ctx.Provider>
   );
 }
@@ -903,7 +904,8 @@ function DeleteConfirmModal({
               </p>
             )}
             <p className="text-vscode-text-dim mt-2 text-[12px]">
-              文件将移到系统回收站，可在回收站中还原；也可在文件树里按 Ctrl+Z 撤销最近 5 分钟内的删除。
+              文件将移到系统回收站，可在回收站中还原；也可在文件树里按 Ctrl+Z
+              撤销最近 5 分钟内的删除。
             </p>
           </div>
         </div>

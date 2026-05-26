@@ -57,7 +57,9 @@ export function ReportGeneratorPage({
     try {
       await revealItemInDir(c.lastResult.output);
     } catch (e) {
-      shell.appendOutput(logLine(`[报告] 在资源管理器中显示失败: ${String(e)}`));
+      shell.appendOutput(
+        logLine(`[报告] 在资源管理器中显示失败: ${String(e)}`),
+      );
     }
   }, [c.lastResult, shell]);
 
@@ -102,7 +104,11 @@ function InputSummary() {
         <span className="text-vscode-text font-medium">输入摘要</span>
       </div>
 
-      <Row label="输入 Excel" value={c.excelPath || '（未选）'} muted={!c.excelPath} />
+      <Row
+        label="输入 Excel"
+        value={c.excelPath || '（未选）'}
+        muted={!c.excelPath}
+      />
       <Row label="Sheet" value={c.sheet || '（默认）'} muted={!c.sheet} />
       <Row label="规范" value={c.anchorStandard} />
       <Row label="批次列" value={c.anchorBatchIdColumn} />
@@ -119,8 +125,16 @@ function InputSummary() {
         }
         muted={c.anchorBatchIds.length === 0}
       />
-      <Row label="Word 模板" value={c.wordTemplatePath || '（未选）'} muted={!c.wordTemplatePath} />
-      <Row label="输出目录" value={c.outputDir || '（自动，输入 Excel 同级）'} muted={!c.outputDir} />
+      <Row
+        label="Word 模板"
+        value={c.wordTemplatePath || '（未选）'}
+        muted={!c.wordTemplatePath}
+      />
+      <Row
+        label="输出目录"
+        value={c.outputDir || '（自动，输入 Excel 同级）'}
+        muted={!c.outputDir}
+      />
       <Row
         label="曲线图目录"
         value={c.curveImageDir || '（未选 — {{img:曲线图}} 留原文）'}
@@ -130,7 +144,9 @@ function InputSummary() {
   );
 }
 
-function anchorParamsFilledCount(c: ReturnType<typeof useReportGenerator>): number {
+function anchorParamsFilledCount(
+  c: ReturnType<typeof useReportGenerator>,
+): number {
   return c.anchorBatchIds.filter((b) => !!c.anchorParamsByBatch[b]).length;
 }
 
@@ -147,7 +163,9 @@ function Row({
     <div className="flex gap-3 py-0.5">
       <span className="text-vscode-text-dim w-[88px] shrink-0">{label}</span>
       <span
-        className={muted ? 'text-vscode-text-faint italic' : 'text-vscode-text break-all'}
+        className={
+          muted ? 'text-vscode-text-faint italic' : 'text-vscode-text break-all'
+        }
       >
         {value}
       </span>
@@ -173,7 +191,7 @@ function RunBar({ onRun }: { onRun: () => void }) {
         type="button"
         onClick={onRun}
         disabled={!r.ready || c.running}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-[3px] bg-vscode-button px-4 py-2 text-[13px] text-white transition-colors hover:bg-vscode-button-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className="bg-vscode-button hover:bg-vscode-button-hover mt-2 flex w-full items-center justify-center gap-2 rounded-[3px] px-4 py-2 text-[13px] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         {c.running ? (
           <i className="codicon codicon-loading codicon-modifier-spin !text-[14px]" />
@@ -221,7 +239,7 @@ function ResultBlock({
         <button
           type="button"
           onClick={onOpen}
-          className="flex items-center gap-1 rounded-[2px] bg-vscode-button px-3 py-1 text-[11px] text-white hover:bg-vscode-button-hover"
+          className="bg-vscode-button hover:bg-vscode-button-hover flex items-center gap-1 rounded-[2px] px-3 py-1 text-[11px] text-white"
         >
           <i className="codicon codicon-go-to-file !text-[11px]" />
           打开 docx
@@ -245,7 +263,8 @@ function ResultBlock({
       {c.lastResult.missingImages.length > 0 && (
         <div className="mt-2 text-[11px] text-yellow-400">
           <i className="codicon codicon-warning mr-1 !text-[11px]" />
-          {c.lastResult.missingImages.length} 个图片占位符未嵌入（路径不存在 / 未配置曲线图目录）：
+          {c.lastResult.missingImages.length} 个图片占位符未嵌入（路径不存在 /
+          未配置曲线图目录）：
           {c.lastResult.missingImages.join('、')}
         </div>
       )}
@@ -343,17 +362,20 @@ function TemplateHelpBlock() {
   return (
     <details className="border-vscode-border mx-6 my-3 rounded border bg-[#252525] text-xs">
       <summary className="text-vscode-text-dim cursor-pointer px-3 py-2 hover:text-white">
-        <i className="codicon codicon-question !text-[12px]" /> Word 模板格式约定
+        <i className="codicon codicon-question !text-[12px]" /> Word
+        模板格式约定
       </summary>
       <div className="text-vscode-text-dim space-y-1.5 px-3 pb-3">
         <p>
           <span className="text-vscode-text">1. 占位符</span>：模板里写{' '}
           <code className="bg-[#1e1e1e] px-1">{'{{key}}'}</code> 或{' '}
           <code className="bg-[#1e1e1e] px-1">{'{{中文名}}'}</code>{' '}
-          （都识别）。例：{'{{委托单位}}'} / {'{{锚杆编号}}'} / {'{{0.1Nt位移}}'}。
+          （都识别）。例：{'{{委托单位}}'} / {'{{锚杆编号}}'} /{' '}
+          {'{{0.1Nt位移}}'}。
         </p>
         <p>
-          <span className="text-vscode-text">2. 锚杆数据表克隆</span>：要按每根锚杆重复的部分用一对锚点包起来：
+          <span className="text-vscode-text">2. 锚杆数据表克隆</span>
+          ：要按每根锚杆重复的部分用一对锚点包起来：
         </p>
         <pre className="bg-[#1e1e1e] px-2 py-1 text-[10px]">{`[[每根锚杆]]
 表2.4-{{锚杆序号}}  {{检测项目}}结果表
@@ -365,12 +387,13 @@ function TemplateHelpBlock() {
         </p>
         <p>
           <span className="text-vscode-text">4. 数值格式</span>：弹性位移量 /
-          上下限默认 2 位小数；{'{{轴向拉力设计值}}'} 默认输出 kN（内部计算用 N，引擎自动换算）。
+          上下限默认 2 位小数；{'{{轴向拉力设计值}}'} 默认输出 kN（内部计算用
+          N，引擎自动换算）。
         </p>
         <p>
           <span className="text-vscode-text">5. 图片占位符</span>：写{' '}
-          <code className="bg-[#1e1e1e] px-1">{'{{img:曲线图}}'}</code>{' '}
-          （img: 前缀必须）。配合右栏「曲线图目录」选 plot_curves 出图文件夹
+          <code className="bg-[#1e1e1e] px-1">{'{{img:曲线图}}'}</code> （img:
+          前缀必须）。配合右栏「曲线图目录」选 plot_curves 出图文件夹
           （按锚杆编号命名 1.png / 2.png /...），引擎按 anchor_id 自动匹配嵌入。
           留空目录则占位符留原文 + 报 missingImages。
         </p>

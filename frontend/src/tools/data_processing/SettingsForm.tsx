@@ -161,7 +161,8 @@ function AnchorSubForm() {
       <div className="border-vscode-border bg-vscode-input/30 rounded-[3px] border px-3 py-2 text-[11px] leading-relaxed">
         <i className="codicon codicon-info text-vscode-focus mr-1 !text-[12px]" />
         Word 报告生成已迁到独立的「报告填充」工具（左侧 Activity Bar）。
-        数据处理只算 + 出 Excel；算完后切到「报告填充」选 Word 模板 + 填项目信息出 docx。
+        数据处理只算 + 出 Excel；算完后切到「报告填充」选 Word 模板 +
+        填项目信息出 docx。
       </div>
     </>
   );
@@ -170,7 +171,8 @@ function AnchorSubForm() {
 function BatchIdColumnSelect() {
   const c = useDataProcessing();
   const headers = c.previewHeaders;
-  const valueInHeaders = !c.anchorBatchIdColumn || headers.includes(c.anchorBatchIdColumn);
+  const valueInHeaders =
+    !c.anchorBatchIdColumn || headers.includes(c.anchorBatchIdColumn);
   const title = c.previewError
     ? `读表头失败: ${c.previewError}`
     : c.previewLoading

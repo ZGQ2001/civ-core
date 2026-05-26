@@ -87,8 +87,8 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               onClick={pickExcel}
               className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2.5 py-1 text-xs hover:bg-[#3a3a3a]"
             >
-              <i className="codicon codicon-folder-opened !text-[13px]" />
-              选 Excel…
+              <i className="codicon codicon-folder-opened !text-[13px]" />选
+              Excel…
             </button>
             {c.excelPath && (
               <span

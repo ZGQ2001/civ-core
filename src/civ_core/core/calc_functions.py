@@ -301,7 +301,6 @@ def _normalize_carbonation_depth(d: float) -> float:
     return round(d * 2.0) / 2.0
 
 
-
 def calc_rebound_concrete(
     test_areas_raw: Sequence[Sequence[int]],
     *,

@@ -103,4 +103,102 @@ public class AnchorRowResolverTests
         var rv = new AnchorRowResolver(i, r, p);
         Assert.Equal(0, rv.GetValue("anchor_index"));
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // curve_image 智能查找
+    // ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetValue_curve_image_未传目录_返null()
+    {
+        var (i, r, p) = Sample();
+        var rv = new AnchorRowResolver(i, r, p);
+        Assert.Null(rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_目录不存在_返null()
+    {
+        var (i, r, p) = Sample();
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: Path.Combine(Path.GetTempPath(), "definitely_not_a_dir_" + Guid.NewGuid()));
+        Assert.Null(rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_精确PNG命中()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        var target = Path.Combine(tmp.Path, "P-01.png");
+        File.WriteAllBytes(target, new byte[] { 0x89 });
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
+        Assert.Equal(target, rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_SVG优先于PNG()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        var pngPath = Path.Combine(tmp.Path, "P-01.png");
+        var svgPath = Path.Combine(tmp.Path, "P-01.svg");
+        File.WriteAllBytes(pngPath, new byte[] { 0x89 });
+        File.WriteAllText(svgPath, "<svg/>");
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
+        Assert.Equal(svgPath, rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_前缀匹配命中_默认filename模板()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        // 模拟 plot_curves 用 {id}_荷载位移曲线.svg 模板出的文件
+        var target = Path.Combine(tmp.Path, "P-01_荷载位移曲线.svg");
+        File.WriteAllText(target, "<svg/>");
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
+        Assert.Equal(target, rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_前缀匹配不会误中相邻id()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        // anchor_id = "P-01"，目录里只有 "P-011_xxx.svg"——不带下划线分隔，应被拒
+        File.WriteAllText(Path.Combine(tmp.Path, "P-011_曲线.svg"), "<svg/>");
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
+        Assert.Null(rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_JPG也支持()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        var target = Path.Combine(tmp.Path, "P-01.jpg");
+        File.WriteAllBytes(target, new byte[] { 0xFF });
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
+        Assert.Equal(target, rv.GetValue("curve_image"));
+    }
+}
+
+/// <summary>测试用临时目录，using 块结束时自动删。</summary>
+internal sealed class TempDir : IDisposable
+{
+    public string Path { get; }
+    public TempDir()
+    {
+        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "civ-doc-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path);
+    }
+    public void Dispose()
+    {
+        try { Directory.Delete(Path, recursive: true); } catch { }
+    }
 }

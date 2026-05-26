@@ -25,9 +25,10 @@ public class AnchorRowResolver : IFieldResolver
     /// 报告级别全局递增（209 根全在一份报告里，从 1 数到 209）。
     /// </param>
     /// <param name="curveImageDir">
-    /// 曲线图目录（来自 plot_curves 输出）。{{img:曲线图}} 占位符会按 anchor_id 拼路径
-    /// （{curveImageDir}/{anchorId}.png）；null 时 curve_image 字段返 null，引擎报
-    /// missingImages。这里不验文件存在，由 ImageInjector 在嵌入时判断。
+    /// 曲线图目录（来自 plot_curves 输出）。{{img:曲线图}} 占位符会按 anchor_id 智能查找：
+    ///   1) 优先 svg > png > jpg > jpeg
+    ///   2) 精确匹配 {anchor_id}.{ext}，否则前缀匹配 {anchor_id}_*.{ext}（避免误中 {id}1.svg）
+    /// 见 <see cref="FindCurveImage"/>。null 时 curve_image 字段返 null，引擎报 missingImages。
     /// </param>
     public AnchorRowResolver(
         AnchorRowInput input,
@@ -80,9 +81,44 @@ public class AnchorRowResolver : IFieldResolver
         "anchor_index" => _anchorIndex,
         "curve_image" => _curveImageDir is null
             ? null
-            : Path.Combine(_curveImageDir, $"{_input.AnchorId}.png"),
+            : FindCurveImage(_curveImageDir, _input.AnchorId),
 
         // ── 用户输入兜底 ──
         _ => _userInputs.TryGetValue(fieldKey, out var v) ? v : null,
     };
+
+    /// <summary>支持的曲线图扩展名，按优先级排序（svg 矢量保真度最高）。</summary>
+    private static readonly string[] _curveImageExtensions = { ".svg", ".png", ".jpg", ".jpeg" };
+
+    /// <summary>
+    /// 在 <paramref name="dir"/> 下按 <paramref name="anchorId"/> 智能查找曲线图。
+    /// 匹配顺序：每个扩展名先试精确（{id}.ext），再试前缀（{id}_*.ext）。
+    /// 前缀匹配只接 "{id}_" 开头，避免 "1" 误中 "11_xxx.svg"。
+    /// </summary>
+    private static string? FindCurveImage(string dir, string anchorId)
+    {
+        if (!Directory.Exists(dir)) return null;
+
+        foreach (var ext in _curveImageExtensions)
+        {
+            var exact = Path.Combine(dir, anchorId + ext);
+            if (File.Exists(exact)) return exact;
+
+            string[] prefixMatches;
+            try
+            {
+                prefixMatches = Directory.GetFiles(dir, $"{anchorId}_*{ext}");
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return null;
+            }
+            if (prefixMatches.Length > 0)
+            {
+                Array.Sort(prefixMatches, StringComparer.Ordinal);
+                return prefixMatches[0];
+            }
+        }
+        return null;
+    }
 }

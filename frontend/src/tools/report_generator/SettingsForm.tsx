@@ -147,7 +147,7 @@ export function ReportGeneratorSettingsForm() {
 
       <Field
         label="曲线图目录"
-        hint="plot_curves 出图文件夹（按锚杆编号命名 1.png/2.png/...）；留空 = 不嵌图，{{img:曲线图}} 留原文"
+        hint="plot_curves 出图文件夹（按锚杆编号智能查找 svg/png/jpg）；留空 = 不嵌图，{{img:曲线图}} 留原文"
       >
         <Picker
           value={c.curveImageDir}

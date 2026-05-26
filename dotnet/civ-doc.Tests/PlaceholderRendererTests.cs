@@ -278,6 +278,20 @@ public class PlaceholderRendererTests : IDisposable
         return path;
     }
 
+    /// <summary>写一个 minimal valid SVG（带 width/height + viewBox）。</summary>
+    private string WriteSvg(string fileName)
+    {
+        var path = Path.Combine(_tmp.Dir, fileName);
+        File.WriteAllText(path,
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <svg xmlns="http://www.w3.org/2000/svg" width="100pt" height="50pt" viewBox="0 0 100 50">
+              <rect width="100" height="50" fill="#1f4fe0"/>
+            </svg>
+            """);
+        return path;
+    }
+
     private static int CountImageParts(string docxPath)
     {
         using var doc = WordprocessingDocument.Open(docxPath, false);
@@ -356,6 +370,29 @@ public class PlaceholderRendererTests : IDisposable
             body, resolver, AnchorFieldCatalog.All, mainPart: null);
 
         Assert.Single(res.MissingImages);
+    }
+
+    [Fact]
+    public void Render_图片占位符_嵌入SVG_产出含SVG与PNG兜底双ImagePart()
+    {
+        var svgPath = WriteSvg("curve_a.svg");
+        var src = WriteSimpleDocx("img_svg.docx", body =>
+            body.AppendChild(SingleRunPara("曲线 {{img:曲线图}} 完成")));
+        var resolver = new DictResolver(new() { ["curve_image"] = svgPath });
+        var outPath = OutPath("img_svg_out.docx");
+        var res = PlaceholderRenderer.Render(
+            src, outPath, resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(1, res.Replaced);
+        Assert.Empty(res.MissingImages);
+        // SVG 嵌入会同时产生 SVG ImagePart + 1x1 PNG 兜底 = 共 2 个
+        Assert.Equal(2, CountImageParts(outPath));
+        Assert.Equal(1, CountDrawings(outPath));
+
+        // 验产物 XML 含 asvg:svgBlip 扩展元素（OpenXML SDK 序列化为带命名空间的标签）
+        using var doc = WordprocessingDocument.Open(outPath, false);
+        var bodyXml = doc.MainDocumentPart!.Document.Body!.OuterXml;
+        Assert.Contains("svgBlip", bodyXml);
     }
 
     [Fact]

@@ -128,9 +128,10 @@ public static class AnchorFieldCatalog
         FieldDef.Create("drill_diameter", "钻孔直径", FieldSource.UserInput, "string"),
 
         // ── 图片占位符 ──
-        // 模板里写 {{img:曲线图}} 触发图片嵌入（img: 前缀必须）；resolver 返 PNG 绝对路径。
-        // 引擎按 anchor_id 拼路径：{curve_image_dir}/{anchor_id}.png
-        // plot_curves 工具按"标识列=锚杆编号"出图后产物正好对得上。
+        // 模板里写 {{img:曲线图}} 触发图片嵌入（img: 前缀必须）；resolver 返图片绝对路径。
+        // 引擎在 curve_image_dir 下按 anchor_id 智能查找（svg > png > jpg > jpeg，
+        // 精确 {id}.ext 或前缀 {id}_*.ext），见 AnchorRowResolver.FindCurveImage。
+        // plot_curves 默认出 {id}_荷载位移曲线.svg，按 anchor_id 前缀匹配即可命中。
         FieldDef.Create("curve_image", "曲线图（图片）", FieldSource.Calculated, "string",
             aliases: ["曲线图"]),
     ];

@@ -51,8 +51,6 @@ export interface ReportUserInputs {
   grouting_date: string;
   grout_ratio: string;
   grout_strength: string;
-  // 图片占位符
-  curve_image: string;
 }
 
 export const DEFAULT_REPORT_USER_INPUTS: ReportUserInputs = {
@@ -86,7 +84,6 @@ export const DEFAULT_REPORT_USER_INPUTS: ReportUserInputs = {
   grouting_date: '',
   grout_ratio: '',
   grout_strength: '',
-  curve_image: '',
 };
 
 export interface UserInputFieldDef {
@@ -177,14 +174,6 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
       { key: 'grouting_date', label: '灌浆日期' },
       { key: 'grout_ratio', label: '注浆材料配合比', placeholder: '例：1:0.5（重量比）' },
       { key: 'grout_strength', label: '注浆材料强度等级', placeholder: '例：M7.5' },
-    ],
-  },
-  {
-    id: 'images',
-    label: '图片占位符',
-    icon: 'graph-line',
-    fields: [
-      { key: 'curve_image', label: '曲线图', placeholder: '例如：曲线图' },
     ],
   },
 ];

@@ -2,7 +2,7 @@
     "_comment": "DEV_MODE 测试用户预设。dev.enabled=true 时会与 presets/plot_curves/curve_presets.json 合并。",
     "锚杆荷载-位移曲线": {
         "id_column": "测试-锚杆编号（用户覆盖版）",
-        "filename_template": "TEST_锚杆{id}_荷载位移曲线.svg",
+        "filename_template": "TEST_锚杆{id}_荷载位移曲线.png",
         "title_template": "TEST 锚杆{id}：荷载-位移曲线",
         "x_axis": {"label": "位移 (mm)", "range": null},
         "y_axis": {"label": "荷载 (KN)", "range": [0, 200, 20]},
@@ -10,7 +10,7 @@
     },
     "我的自定义预设示例": {
         "id_column": "构件编号",
-        "filename_template": "{id}_自定义曲线.svg",
+        "filename_template": "{id}_自定义曲线.png",
         "title_template": "{id} 自定义示例",
         "x_axis": {"label": "X", "range": null},
         "y_axis": {"label": "Y", "range": null},

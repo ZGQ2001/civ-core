@@ -51,7 +51,7 @@ export interface ReportUserInputs {
   grouting_date: string;
   grout_ratio: string;
   grout_strength: string;
-  // 图片占位符（Commit 3 才接 plot_curves 自动生图；当前先作字符串占位）
+  // 图片占位符
   curve_image: string;
 }
 
@@ -115,9 +115,9 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
       { key: 'client_name', label: '委托单位', placeholder: '例：XX建设集团' },
       { key: 'project_name', label: '项目名称', placeholder: '例：XX环境整治提升项目' },
       { key: 'report_no', label: '报告编号', placeholder: '例：J3—G字2026第XXX号' },
-      { key: 'inspection_category', label: '检测类别', placeholder: '例：委托检测' },
+      { key: 'inspection_category', label: '检测类别', placeholder: '例：一般委托' },
       { key: 'inspection_item', label: '检测项目' },
-      { key: 'inspection_site', label: '检测地点', placeholder: '例：边坡' },
+      { key: 'inspection_site', label: '检测地点', placeholder: '例：北京市xx区' },
       { key: 'inspection_time', label: '检测时间/试验日期', placeholder: '例：2026-05-25' },
       { key: 'inspection_engineer', label: '检测人员/试验人员', placeholder: '例：张三、李四' },
       { key: 'inspection_conclusion', label: '检测结论', placeholder: '例：全部合格' },
@@ -181,10 +181,10 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
   },
   {
     id: 'images',
-    label: '图片占位符（Commit 3 接 plot_curves 自动出图）',
+    label: '图片占位符',
     icon: 'graph-line',
     fields: [
-      { key: 'curve_image', label: '曲线图', placeholder: '当前留空即可；Commit 3 会接 plot_curves 自动嵌入' },
+      { key: 'curve_image', label: '曲线图', placeholder: '例如：曲线图' },
     ],
   },
 ];

@@ -26,8 +26,9 @@ public static class AnchorFieldCatalog
         FieldDef.Create("batch_id", "批次编号", FieldSource.Parameter, "string"),
 
         // ── 委托方/工程参数（同批次共享，从 AnchorParams 取） ──
-        FieldDef.Create("axial_design_load", "轴向拉力设计值 P (N)", FieldSource.Parameter, "double", "0.00",
-            aliases: ["轴向拉力设计值"]),
+        // axial_design_load 内部单位 N（计算 M = N·L/(A·E) 要 N）；
+        // 报告里展示用 kN，见下面的 axial_design_load_kn 派生字段。
+        FieldDef.Create("axial_design_load", "轴向拉力设计值 P (N)", FieldSource.Parameter, "double", "0.00"),
         FieldDef.Create("free_length", "自由段长度 Lf (mm)", FieldSource.Parameter, "double", "0.0",
             aliases: ["自由段长度"]),
         FieldDef.Create("anchor_length", "锚固段长度 La (mm)", FieldSource.Parameter, "double", "0.0",
@@ -64,8 +65,10 @@ public static class AnchorFieldCatalog
             aliases: ["卸载0.1Nt位移", "卸载0.1Nt"]),
 
         // ── 计算结果（AnchorRowResult） ──
+        // M 是在最大试验荷载（1.2Nt）下的弹性位移量；用户模板里常写 "最大试验荷载下弹性位移量"
+        // 作短名，这里加 alias 命中。
         FieldDef.Create("elastic_displacement", "弹性位移量 M (mm)", FieldSource.Calculated, "double", "0.00",
-            aliases: ["弹性位移量"]),
+            aliases: ["弹性位移量", "最大试验荷载下弹性位移量"]),
         FieldDef.Create("lower_limit", "判定下限 Q (mm)", FieldSource.Calculated, "double", "0.00",
             aliases: ["允许值下限", "判定下限"]),
         FieldDef.Create("upper_limit", "判定上限 R (mm)", FieldSource.Calculated, "double", "0.00",
@@ -73,6 +76,10 @@ public static class AnchorFieldCatalog
         FieldDef.Create("judgement_result", "判定结果", FieldSource.Calculated, "string"),
         // 锚杆序号：引擎按克隆次序自动注入 1/2/3...，模板写 {{锚杆序号}} 即可
         FieldDef.Create("anchor_index", "锚杆序号", FieldSource.Calculated, "int"),
+        // 派生字段：轴向拉力设计值的 kN 表示 —— 报告版面常用 kN，引擎自动 / 1000。
+        // alias "轴向拉力设计值" 默认命中此字段，模板里写 {{轴向拉力设计值}} 输出 kN。
+        FieldDef.Create("axial_design_load_kn", "轴向拉力设计值 (kN)", FieldSource.Calculated, "double", "0",
+            aliases: ["轴向拉力设计值"]),
 
         // ── 用户输入：项目信息（前端表单收集） ──
         FieldDef.Create("client_name", "委托单位", FieldSource.UserInput, "string"),
@@ -87,10 +94,11 @@ public static class AnchorFieldCatalog
         FieldDef.Create("inspection_site", "检测地点", FieldSource.UserInput, "string"),
         FieldDef.Create("inspection_basis", "检测及判定依据", FieldSource.UserInput, "string"),
         FieldDef.Create("inspection_conclusion", "检测结论", FieldSource.UserInput, "string"),
-        FieldDef.Create("inspection_time", "检测时间", FieldSource.UserInput, "string"),
-        FieldDef.Create("inspection_engineer", "检测人员", FieldSource.UserInput, "string"),
-        FieldDef.Create("test_date", "试验日期", FieldSource.UserInput, "string"),
-        FieldDef.Create("test_engineer", "试验人员", FieldSource.UserInput, "string"),
+        // 检测时间 / 检测人员同时覆盖原"试验日期 / 试验人员"语义（实际报告里一般是同一组人/日期）
+        FieldDef.Create("inspection_time", "检测时间", FieldSource.UserInput, "string",
+            aliases: ["试验日期"]),
+        FieldDef.Create("inspection_engineer", "检测人员", FieldSource.UserInput, "string",
+            aliases: ["试验人员"]),
 
         // ── 用户输入：检测仪器 ──
         FieldDef.Create("instrument1_name", "检测仪器1", FieldSource.UserInput, "string"),

@@ -42,13 +42,16 @@ import {
   PlotCurvesProvider,
   PlotCurvesSettingsForm,
 } from './tools/plot_curves';
-import { TemplateEditorProvider } from './tools/template_editor';
+import {
+  ReportGeneratorProvider,
+  ReportGeneratorSettingsForm,
+} from './tools/report_generator';
 import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
 
 const TOP_TOOLS: ActivityItem[] = [
   { id: 'data_processing', icon: 'symbol-method', tooltip: '数据处理' },
   { id: 'plot_curves', icon: 'graph-line', tooltip: '绘曲线图' },
-  { id: 'template_editor', icon: 'table', tooltip: '模板编辑' },
+  { id: 'report_generator', icon: 'file-text', tooltip: '报告填充' },
   { id: 'pdf_tools', icon: 'file-pdf', tooltip: 'PDF 工具' },
   { id: 'word2pdf', icon: 'file-binary', tooltip: 'Word → PDF' },
 ];
@@ -325,6 +328,16 @@ export default function App() {
           },
         ]
       : []),
+    ...(activeToolId === 'report_generator'
+      ? [
+          {
+            id: 'settings',
+            label: '调参',
+            icon: 'settings-gear',
+            node: <ReportGeneratorSettingsForm />,
+          },
+        ]
+      : []),
     { id: 'agent', label: 'AI 助手', icon: 'hubot', node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
@@ -345,9 +358,9 @@ export default function App() {
     <ShellContext.Provider value={shellValue}>
       <PlotCurvesProvider>
         <DataProcessingProvider>
-          <PdfToolsProvider>
-            <Word2PdfProvider>
-              <TemplateEditorProvider>
+          <ReportGeneratorProvider>
+            <PdfToolsProvider>
+              <Word2PdfProvider>
                 <div className="flex h-screen w-screen flex-col">
                   <TitleBar
                     workspaceName={workspaceName}
@@ -467,9 +480,9 @@ export default function App() {
                     rightPanelAvailable={rightAvailable}
                   />
                 </div>
-              </TemplateEditorProvider>
-            </Word2PdfProvider>
-          </PdfToolsProvider>
+              </Word2PdfProvider>
+            </PdfToolsProvider>
+          </ReportGeneratorProvider>
         </DataProcessingProvider>
       </PlotCurvesProvider>
     </ShellContext.Provider>

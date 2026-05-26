@@ -177,25 +177,6 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
                   打开输出 Excel
                 </button>
               </div>
-              {c.result.wordOutputs && c.result.wordOutputs.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5">
-                  <i className="codicon codicon-file-text text-vscode-text-dim !text-[13px]" />
-                  <span className="text-vscode-text-dim text-[11px]">
-                    Word 报告 ({c.result.wordOutputs.length} 份):
-                  </span>
-                  {c.result.wordOutputs.map((wp) => (
-                    <button
-                      key={wp}
-                      type="button"
-                      onClick={() => openPath(wp).catch(console.error)}
-                      className="text-vscode-focus truncate text-[11px] hover:underline"
-                      title={wp}
-                    >
-                      {wp.split(/[\\/]/).pop()}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>

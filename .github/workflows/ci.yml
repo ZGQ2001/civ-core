@@ -139,8 +139,6 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, '[ci auto-fix]') }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
 
       - name: 安装 ruff
         uses: astral-sh/setup-uv@v5

@@ -4,6 +4,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { cn } from '../../lib/cn';
 import { RunBtn } from '../_shared/forms';
 import { useTemplateHelper } from './controller';
+import { FieldEditor } from './FieldEditor';
 import type { CatalogField, FieldLevel } from './types';
 import { LEVEL_COLOR, LEVEL_LABEL } from './types';
 
@@ -20,6 +21,14 @@ export function TemplateHelperPage({
     'matched' | 'unrecognized' | 'unused' | 'hints'
   >('hints');
   const [groupBy, setGroupBy] = useState<'group' | 'level'>('level');
+  const [editMode, setEditMode] = useState(false);
+  const [addingField, setAddingField] = useState(false);
+  const [showCatalogMenu, setShowCatalogMenu] = useState(false);
+
+  const existingGroups = useMemo(() => {
+    if (!c.activeCatalog) return [];
+    return [...new Set(c.activeCatalog.fields.map((f) => f.group).filter(Boolean))];
+  }, [c.activeCatalog]);
 
   const grouped = useMemo(() => {
     if (!c.activeCatalog) return new Map<string, CatalogField[]>();
@@ -130,6 +139,19 @@ export function TemplateHelperPage({
           >
             <i className="codicon codicon-refresh !text-[12px]" />
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowCatalogMenu((v) => !v)}
+              className="border-vscode-border rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
+              title="目录管理"
+            >
+              <i className="codicon codicon-kebab-vertical !text-[12px]" />
+            </button>
+            {showCatalogMenu && (
+              <CatalogMenu onClose={() => setShowCatalogMenu(false)} />
+            )}
+          </div>
         </div>
 
         {/* Template picker + validate */}
@@ -184,7 +206,7 @@ export function TemplateHelperPage({
         </div>
       )}
 
-      {/* Toolbar: group toggle + expand/collapse */}
+      {/* Toolbar: group toggle + edit mode + expand/collapse */}
       <div className="border-vscode-border flex items-center gap-2 border-b px-5 py-1.5">
         <span className="text-vscode-text-dim text-[11px]">分组</span>
         <button
@@ -212,9 +234,58 @@ export function TemplateHelperPage({
           按用途
         </button>
         <div className="flex-1" />
-        <span className="text-vscode-text-faint text-[10px]">
-          点击字段复制占位符
-        </span>
+        {c.dirty && (
+          <button
+            type="button"
+            onClick={() => c.saveCatalog()}
+            disabled={c.saving}
+            className="flex items-center gap-1 rounded bg-green-700 px-2 py-0.5 text-[11px] text-white hover:bg-green-600"
+          >
+            {c.saving ? (
+              <i className="codicon codicon-loading codicon-modifier-spin !text-[10px]" />
+            ) : (
+              <i className="codicon codicon-check !text-[10px]" />
+            )}
+            保存
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setEditMode((v) => !v);
+            setAddingField(false);
+            c.setEditingFieldKey(null);
+          }}
+          className={cn(
+            'flex items-center gap-1 rounded px-2 py-0.5 text-[11px]',
+            editMode
+              ? 'bg-vscode-focus text-white'
+              : 'text-vscode-text-dim hover:text-vscode-text',
+          )}
+          title={editMode ? '退出编辑' : '编辑字段'}
+        >
+          <i className="codicon codicon-edit !text-[11px]" />
+          {editMode ? '退出编辑' : '编辑'}
+        </button>
+        {editMode && (
+          <button
+            type="button"
+            onClick={() => {
+              setAddingField(true);
+              c.setEditingFieldKey(null);
+            }}
+            className="flex items-center gap-1 rounded bg-[#2d2d2d] px-2 py-0.5 text-[11px] hover:bg-[#3a3a3a]"
+            title="添加字段"
+          >
+            <i className="codicon codicon-add !text-[11px]" />
+            添加
+          </button>
+        )}
+        {!editMode && (
+          <span className="text-vscode-text-faint text-[10px]">
+            点击字段复制占位符
+          </span>
+        )}
         <button
           type="button"
           onClick={expandAll}
@@ -235,6 +306,19 @@ export function TemplateHelperPage({
 
       {/* Field palette */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
+        {addingField && (
+          <div className="mb-2">
+            <FieldEditor
+              isNew
+              existingGroups={existingGroups}
+              onSave={(f) => {
+                c.addField(f);
+                setAddingField(false);
+              }}
+              onCancel={() => setAddingField(false)}
+            />
+          </div>
+        )}
         {Array.from(grouped.entries()).map(([group, fields]) => (
           <FieldGroup
             key={group}
@@ -244,6 +328,16 @@ export function TemplateHelperPage({
             onToggle={() => toggleGroup(group)}
             copiedKey={c.copiedKey}
             onCopy={c.copyPlaceholder}
+            editMode={editMode}
+            editingFieldKey={c.editingFieldKey}
+            existingGroups={existingGroups}
+            onEdit={(key) => c.setEditingFieldKey(key)}
+            onUpdate={(oldKey, field) => {
+              c.updateField(oldKey, field);
+              c.setEditingFieldKey(null);
+            }}
+            onDelete={(key) => c.removeField(key)}
+            onCancelEdit={() => c.setEditingFieldKey(null)}
           />
         ))}
       </div>
@@ -406,6 +500,13 @@ function FieldGroup({
   onToggle,
   copiedKey,
   onCopy,
+  editMode,
+  editingFieldKey,
+  existingGroups,
+  onEdit,
+  onUpdate,
+  onDelete,
+  onCancelEdit,
 }: {
   group: string;
   fields: CatalogField[];
@@ -413,6 +514,13 @@ function FieldGroup({
   onToggle: () => void;
   copiedKey: string | null;
   onCopy: (text: string, key: string) => void;
+  editMode?: boolean;
+  editingFieldKey?: string | null;
+  existingGroups?: string[];
+  onEdit?: (key: string) => void;
+  onUpdate?: (oldKey: string, field: CatalogField) => void;
+  onDelete?: (key: string) => void;
+  onCancelEdit?: () => void;
 }) {
   return (
     <div className="mb-1">
@@ -435,12 +543,26 @@ function FieldGroup({
       {expanded && (
         <div className="ml-3 mt-0.5 space-y-0.5">
           {fields.map((f) => (
-            <FieldItem
-              key={f.key}
-              field={f}
-              copied={copiedKey === f.key}
-              onCopy={onCopy}
-            />
+            <div key={f.key}>
+              {editingFieldKey === f.key ? (
+                <FieldEditor
+                  initial={f}
+                  isNew={false}
+                  existingGroups={existingGroups ?? []}
+                  onSave={(updated) => onUpdate?.(f.key, updated)}
+                  onCancel={() => onCancelEdit?.()}
+                />
+              ) : (
+                <FieldItem
+                  field={f}
+                  copied={copiedKey === f.key}
+                  onCopy={onCopy}
+                  editMode={editMode}
+                  onEdit={() => onEdit?.(f.key)}
+                  onDelete={() => onDelete?.(f.key)}
+                />
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -452,38 +574,74 @@ function FieldItem({
   field,
   copied,
   onCopy,
+  editMode,
+  onEdit,
+  onDelete,
 }: {
   field: CatalogField;
   copied: boolean;
   onCopy: (text: string, key: string) => void;
+  editMode?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const isImage = field.key === 'curve_image' || field.group === '图片';
   const placeholder = isImage ? `{{img:${field.name}}}` : `{{${field.name}}}`;
 
   return (
-    <button
-      type="button"
-      onClick={() => onCopy(placeholder, field.key)}
+    <div
       className={cn(
-        'hover:bg-vscode-list-hover group flex w-full items-center gap-2 rounded px-2 py-1 text-left',
+        'hover:bg-vscode-list-hover group flex w-full items-center gap-2 rounded px-2 py-1',
         copied && 'bg-green-900/20',
       )}
-      title={`点击复制: ${placeholder}\nKey: ${field.key}\n层级: ${LEVEL_LABEL[field.level] ?? field.level}${field.aliases.length > 0 ? `\n别名: ${field.aliases.join(', ')}` : ''}`}
     >
-      <LevelDot level={field.level} />
-      <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
-        {field.name}
-      </span>
-      {copied ? (
-        <span className="shrink-0 text-[10px] text-green-400">
-          <i className="codicon codicon-check !text-[10px]" /> 已复制
-        </span>
+      {editMode ? (
+        <>
+          <LevelDot level={field.level} />
+          <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
+            {field.name}
+          </span>
+          <code className="text-vscode-text-faint text-[10px]">{field.key}</code>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-vscode-text-dim hover:text-vscode-text shrink-0 p-0.5 opacity-0 group-hover:opacity-100"
+            title="编辑"
+          >
+            <i className="codicon codicon-edit !text-[11px]" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="shrink-0 p-0.5 text-red-400 opacity-0 hover:text-red-300 group-hover:opacity-100"
+            title="删除"
+          >
+            <i className="codicon codicon-trash !text-[11px]" />
+          </button>
+        </>
       ) : (
-        <code className="text-vscode-text-faint shrink-0 text-[10px] opacity-0 group-hover:opacity-100">
-          {placeholder}
-        </code>
+        <button
+          type="button"
+          onClick={() => onCopy(placeholder, field.key)}
+          className="flex w-full items-center gap-2 text-left"
+          title={`点击复制: ${placeholder}\nKey: ${field.key}\n层级: ${LEVEL_LABEL[field.level] ?? field.level}${field.aliases.length > 0 ? `\n别名: ${field.aliases.join(', ')}` : ''}`}
+        >
+          <LevelDot level={field.level} />
+          <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
+            {field.name}
+          </span>
+          {copied ? (
+            <span className="shrink-0 text-[10px] text-green-400">
+              <i className="codicon codicon-check !text-[10px]" /> 已复制
+            </span>
+          ) : (
+            <code className="text-vscode-text-faint shrink-0 text-[10px] opacity-0 group-hover:opacity-100">
+              {placeholder}
+            </code>
+          )}
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -535,6 +693,184 @@ function TabBtn({
       )}
     >
       <span className={cn(count > 0 && color)}>{count}</span>
+      {label}
+    </button>
+  );
+}
+
+function CatalogMenu({ onClose }: { onClose: () => void }) {
+  const c = useTemplateHelper();
+  const [action, setAction] = useState<'none' | 'new' | 'copy' | 'rename'>('none');
+  const [inputId, setInputId] = useState('');
+  const [inputLabel, setInputLabel] = useState('');
+
+  const handleCreate = useCallback(async () => {
+    if (!inputId.trim() || !inputLabel.trim()) return;
+    await c.createCatalog(inputId.trim(), inputLabel.trim());
+    onClose();
+  }, [inputId, inputLabel, c, onClose]);
+
+  const handleCopy = useCallback(async () => {
+    if (!inputId.trim() || !inputLabel.trim()) return;
+    await c.copyCatalog(inputId.trim(), inputLabel.trim());
+    onClose();
+  }, [inputId, inputLabel, c, onClose]);
+
+  const handleRename = useCallback(() => {
+    if (!inputLabel.trim()) return;
+    c.renameCatalog(inputLabel.trim());
+    onClose();
+  }, [inputLabel, c, onClose]);
+
+  const handleDelete = useCallback(async () => {
+    if (!window.confirm(`确定删除字段目录「${c.activeCatalog?.label}」？此操作不可撤销。`))
+      return;
+    await c.deleteCatalog();
+    onClose();
+  }, [c, onClose]);
+
+  if (action === 'new' || action === 'copy') {
+    return (
+      <div className="border-vscode-border absolute top-full right-0 z-50 mt-1 w-64 rounded border bg-[#252526] p-3 shadow-lg">
+        <div className="text-vscode-text mb-2 text-xs font-medium">
+          {action === 'new' ? '新建字段目录' : '复制当前目录'}
+        </div>
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={inputId}
+            onChange={(e) => setInputId(e.target.value)}
+            placeholder="目录 ID（英文，如 core_drill）"
+            className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+            autoFocus
+          />
+          <input
+            type="text"
+            value={inputLabel}
+            onChange={(e) => setInputLabel(e.target.value)}
+            placeholder="显示名称（如 钻芯取样）"
+            className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={action === 'new' ? handleCreate : handleCopy}
+              disabled={!inputId.trim() || !inputLabel.trim()}
+              className="bg-vscode-button hover:bg-vscode-button-hover rounded-[2px] px-3 py-1 text-xs text-white disabled:opacity-50"
+            >
+              确定
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-vscode-text-dim text-xs hover:underline"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (action === 'rename') {
+    return (
+      <div className="border-vscode-border absolute top-full right-0 z-50 mt-1 w-56 rounded border bg-[#252526] p-3 shadow-lg">
+        <div className="text-vscode-text mb-2 text-xs font-medium">重命名目录</div>
+        <input
+          type="text"
+          value={inputLabel}
+          onChange={(e) => setInputLabel(e.target.value)}
+          placeholder="新名称"
+          className="bg-vscode-input border-vscode-border text-vscode-text mb-2 w-full rounded-[2px] border px-2 py-1 text-xs"
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleRename}
+            disabled={!inputLabel.trim()}
+            className="bg-vscode-button hover:bg-vscode-button-hover rounded-[2px] px-3 py-1 text-xs text-white disabled:opacity-50"
+          >
+            确定
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-vscode-text-dim text-xs hover:underline"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-vscode-border absolute top-full right-0 z-50 mt-1 w-44 rounded border bg-[#252526] py-1 shadow-lg">
+      <MenuBtn
+        icon="codicon-new-file"
+        label="新建目录"
+        onClick={() => setAction('new')}
+      />
+      <MenuBtn
+        icon="codicon-copy"
+        label="复制当前目录"
+        onClick={() => {
+          setInputLabel(c.activeCatalog ? `${c.activeCatalog.label}（副本）` : '');
+          setAction('copy');
+        }}
+        disabled={!c.activeCatalog}
+      />
+      <MenuBtn
+        icon="codicon-edit"
+        label="重命名"
+        onClick={() => {
+          setInputLabel(c.activeCatalog?.label ?? '');
+          setAction('rename');
+        }}
+        disabled={!c.activeCatalog}
+      />
+      <div className="bg-vscode-border my-1 h-px" />
+      <MenuBtn
+        icon="codicon-trash"
+        label="删除目录"
+        onClick={handleDelete}
+        disabled={!c.activeCatalog}
+        danger
+      />
+    </div>
+  );
+}
+
+function MenuBtn({
+  icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs',
+        disabled
+          ? 'text-vscode-text-faint cursor-not-allowed'
+          : danger
+            ? 'text-red-400 hover:bg-red-900/20'
+            : 'text-vscode-text hover:bg-vscode-list-hover',
+      )}
+    >
+      <i className={cn('codicon', icon, '!text-[12px]')} />
       {label}
     </button>
   );

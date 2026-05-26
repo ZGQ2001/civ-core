@@ -11,6 +11,7 @@ import {
 import { rpc } from '../../lib/rpc';
 import { logLine, useShell } from '../../lib/shell';
 import type {
+  CatalogField,
   CatalogSummary,
   FieldCatalog,
   ValidateResult,
@@ -25,6 +26,8 @@ interface State {
   activeCatalogId: string | null;
   activeCatalog: FieldCatalog | null;
   catalogLoading: boolean;
+  dirty: boolean;
+  saving: boolean;
 
   docxPath: string;
   validateResult: ValidateResult | null;
@@ -32,6 +35,7 @@ interface State {
   validateError: string | null;
 
   copiedKey: string | null;
+  editingFieldKey: string | null;
 }
 
 interface Actions {
@@ -40,6 +44,17 @@ interface Actions {
   setDocxPath: (p: string) => void;
   validate: () => Promise<ValidateResult | null>;
   copyPlaceholder: (text: string, key: string) => void;
+
+  addField: (field: CatalogField) => void;
+  updateField: (oldKey: string, field: CatalogField) => void;
+  removeField: (key: string) => void;
+  saveCatalog: () => Promise<boolean>;
+  setEditingFieldKey: (key: string | null) => void;
+
+  createCatalog: (id: string, label: string) => Promise<boolean>;
+  copyCatalog: (newId: string, newLabel: string) => Promise<boolean>;
+  deleteCatalog: () => Promise<boolean>;
+  renameCatalog: (label: string) => void;
 }
 
 type Ctx = State & Actions;
@@ -49,7 +64,9 @@ const TemplateHelperContext = createContext<Ctx | null>(null);
 export function useTemplateHelper(): Ctx {
   const v = useContext(TemplateHelperContext);
   if (!v)
-    throw new Error('useTemplateHelper must be used within <TemplateHelperProvider>');
+    throw new Error(
+      'useTemplateHelper must be used within <TemplateHelperProvider>',
+    );
   return v;
 }
 
@@ -65,13 +82,17 @@ export function TemplateHelperProvider({
   const [activeCatalogId, setActiveCatalogId] = useState<string | null>(null);
   const [activeCatalog, setActiveCatalog] = useState<FieldCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [docxPath, setDocxPath] = useState('');
-  const [validateResult, setValidateResult] = useState<ValidateResult | null>(null);
+  const [validateResult, setValidateResult] =
+    useState<ValidateResult | null>(null);
   const [validating, setValidating] = useState(false);
   const [validateError, setValidateError] = useState<string | null>(null);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
 
   const refreshCatalogs = useCallback(async () => {
     setCatalogsLoading(true);
@@ -88,20 +109,29 @@ export function TemplateHelperProvider({
     }
   }, [activeCatalogId, shell]);
 
-  const selectCatalog = useCallback(async (id: string) => {
-    setActiveCatalogId(id);
-    setCatalogLoading(true);
-    setValidateResult(null);
-    try {
-      const res = await rpc<{ catalog: FieldCatalog }>('catalog.get', { id });
-      setActiveCatalog(res.catalog);
-    } catch (e) {
-      shell.appendOutput(logLine(`[模板助手] 加载字段目录失败: ${String(e)}`));
-      setActiveCatalog(null);
-    } finally {
-      setCatalogLoading(false);
-    }
-  }, [shell]);
+  const selectCatalog = useCallback(
+    async (id: string) => {
+      setActiveCatalogId(id);
+      setCatalogLoading(true);
+      setValidateResult(null);
+      setDirty(false);
+      setEditingFieldKey(null);
+      try {
+        const res = await rpc<{ catalog: FieldCatalog }>('catalog.get', {
+          id,
+        });
+        setActiveCatalog(res.catalog);
+      } catch (e) {
+        shell.appendOutput(
+          logLine(`[模板助手] 加载字段目录失败: ${String(e)}`),
+        );
+        setActiveCatalog(null);
+      } finally {
+        setCatalogLoading(false);
+      }
+    },
+    [shell],
+  );
 
   useEffect(() => {
     refreshCatalogs();
@@ -162,6 +192,129 @@ export function TemplateHelperProvider({
     setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1500);
   }, []);
 
+  // ── Field CRUD ──
+
+  const addField = useCallback(
+    (field: CatalogField) => {
+      setActiveCatalog((prev) => {
+        if (!prev) return prev;
+        if (prev.fields.some((f) => f.key === field.key)) return prev;
+        return { ...prev, fields: [...prev.fields, field] };
+      });
+      setDirty(true);
+    },
+    [],
+  );
+
+  const updateField = useCallback(
+    (oldKey: string, field: CatalogField) => {
+      setActiveCatalog((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          fields: prev.fields.map((f) => (f.key === oldKey ? field : f)),
+        };
+      });
+      setDirty(true);
+    },
+    [],
+  );
+
+  const removeField = useCallback(
+    (key: string) => {
+      setActiveCatalog((prev) => {
+        if (!prev) return prev;
+        return { ...prev, fields: prev.fields.filter((f) => f.key !== key) };
+      });
+      setDirty(true);
+      setEditingFieldKey((prev) => (prev === key ? null : prev));
+    },
+    [],
+  );
+
+  const renameCatalog = useCallback((label: string) => {
+    setActiveCatalog((prev) => (prev ? { ...prev, label } : prev));
+    setDirty(true);
+  }, []);
+
+  const saveCatalog = useCallback(async (): Promise<boolean> => {
+    if (!activeCatalog) return false;
+    setSaving(true);
+    try {
+      await rpc('catalog.save', { catalog: activeCatalog });
+      setDirty(false);
+      shell.appendOutput(
+        logLine(`[模板助手] 已保存字段目录: ${activeCatalog.label}`),
+      );
+      refreshCatalogs();
+      return true;
+    } catch (e) {
+      shell.appendOutput(logLine(`[模板助手] 保存失败: ${String(e)}`));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [activeCatalog, shell, refreshCatalogs]);
+
+  // ── Catalog management ──
+
+  const createCatalog = useCallback(
+    async (id: string, label: string): Promise<boolean> => {
+      const catalog: FieldCatalog = { id, label, fields: [] };
+      try {
+        await rpc('catalog.save', { catalog });
+        shell.appendOutput(logLine(`[模板助手] 已创建字段目录: ${label}`));
+        await refreshCatalogs();
+        setActiveCatalogId(id);
+        return true;
+      } catch (e) {
+        shell.appendOutput(logLine(`[模板助手] 创建失败: ${String(e)}`));
+        return false;
+      }
+    },
+    [shell, refreshCatalogs],
+  );
+
+  const copyCatalog = useCallback(
+    async (newId: string, newLabel: string): Promise<boolean> => {
+      if (!activeCatalog) return false;
+      const catalog: FieldCatalog = {
+        ...activeCatalog,
+        id: newId,
+        label: newLabel,
+      };
+      try {
+        await rpc('catalog.save', { catalog });
+        shell.appendOutput(
+          logLine(`[模板助手] 已复制字段目录: ${activeCatalog.label} → ${newLabel}`),
+        );
+        await refreshCatalogs();
+        setActiveCatalogId(newId);
+        return true;
+      } catch (e) {
+        shell.appendOutput(logLine(`[模板助手] 复制失败: ${String(e)}`));
+        return false;
+      }
+    },
+    [activeCatalog, shell, refreshCatalogs],
+  );
+
+  const deleteCatalog = useCallback(async (): Promise<boolean> => {
+    if (!activeCatalogId) return false;
+    try {
+      await rpc('catalog.delete', { id: activeCatalogId });
+      shell.appendOutput(logLine(`[模板助手] 已删除字段目录: ${activeCatalogId}`));
+      setActiveCatalog(null);
+      setActiveCatalogId(null);
+      setDirty(false);
+      await refreshCatalogs();
+      return true;
+    } catch (e) {
+      shell.appendOutput(logLine(`[模板助手] 删除失败: ${String(e)}`));
+      return false;
+    }
+  }, [activeCatalogId, shell, refreshCatalogs]);
+
   const ctx: Ctx = useMemo(
     () => ({
       catalogs,
@@ -169,16 +322,28 @@ export function TemplateHelperProvider({
       activeCatalogId,
       activeCatalog,
       catalogLoading,
+      dirty,
+      saving,
       docxPath,
       validateResult,
       validating,
       validateError,
       copiedKey,
+      editingFieldKey,
       refreshCatalogs,
       selectCatalog,
       setDocxPath,
       validate,
       copyPlaceholder,
+      addField,
+      updateField,
+      removeField,
+      saveCatalog,
+      setEditingFieldKey,
+      createCatalog,
+      copyCatalog,
+      deleteCatalog,
+      renameCatalog,
     }),
     [
       catalogs,
@@ -186,15 +351,26 @@ export function TemplateHelperProvider({
       activeCatalogId,
       activeCatalog,
       catalogLoading,
+      dirty,
+      saving,
       docxPath,
       validateResult,
       validating,
       validateError,
       copiedKey,
+      editingFieldKey,
       refreshCatalogs,
       selectCatalog,
       validate,
       copyPlaceholder,
+      addField,
+      updateField,
+      removeField,
+      saveCatalog,
+      createCatalog,
+      copyCatalog,
+      deleteCatalog,
+      renameCatalog,
     ],
   );
 

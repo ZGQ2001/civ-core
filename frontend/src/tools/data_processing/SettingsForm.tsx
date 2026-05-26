@@ -3,19 +3,15 @@
  *   - leeb: 输出路径 + 默认测量角度
  *   - anchor: 规范下拉 + 生成模板按钮 + batch_id 列名 + 按批次参数卡片
  */
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { logLine, useShell } from '../../lib/shell';
+import { AnchorParamsSection } from '../_shared/anchorParamsForm';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useDataProcessing } from './controller';
-import {
-  ANCHOR_STANDARDS,
-  DEFAULT_ANCHOR_PARAMS,
-  type AnchorParams,
-  type AnchorStandard,
-} from './types';
+import { ANCHOR_STANDARDS, type AnchorStandard } from './types';
 
 export function DataProcessingSettingsForm() {
   const c = useDataProcessing();
@@ -160,7 +156,7 @@ function AnchorSubForm() {
         <BatchIdColumnSelect />
       </Field>
 
-      <AnchorParamsSection />
+      <DataProcessingAnchorParams />
 
       <div className="border-vscode-border bg-vscode-input/30 rounded-[3px] border px-3 py-2 text-[11px] leading-relaxed">
         <i className="codicon codicon-info text-vscode-focus mr-1 !text-[12px]" />
@@ -204,204 +200,19 @@ function BatchIdColumnSelect() {
   );
 }
 
-/** 锚杆 5 个工程参数的字段定义 —— 中文名 + 变量符号 + 单位 + 解释。 */
-const ANCHOR_PARAM_FIELDS: Array<{
-  key: keyof AnchorParams;
-  symbol: string;
-  name: string;
-  unit: string;
-  hint: string;
-}> = [
-  {
-    key: 'P',
-    symbol: 'P',
-    name: '轴向拉力设计值',
-    unit: 'N',
-    hint: '锚杆设计承受的最大轴向拉力（即 Nt）；用于算各级荷载 0.1Nt/0.4Nt/.../1.2Nt',
-  },
-  {
-    key: 'Lf',
-    symbol: 'Lf',
-    name: '自由段长度',
-    unit: 'mm',
-    hint: '锚杆从锚头到锚固段起点的长度；与 La 共同决定位移上下限',
-  },
-  {
-    key: 'La',
-    symbol: 'La',
-    name: '锚固段长度',
-    unit: 'mm',
-    hint: '锚杆嵌入岩土的有效锚固长度（与水泥浆体接触段）',
-  },
-  {
-    key: 'A',
-    symbol: 'A',
-    name: '钢筋截面面积',
-    unit: 'mm²',
-    hint: '锚杆杆体钢筋截面积；E·A 决定弹性变形量',
-  },
-  {
-    key: 'E',
-    symbol: 'E',
-    name: '弹性模量',
-    unit: 'N/mm²',
-    hint: '锚杆杆体材料弹性模量（钢筋取 2.0×10⁵）',
-  },
-];
-
-function AnchorParamsSection() {
+/** AnchorSubForm 里渲染的"按批次工程参数"区——绑定到 controller 的 props 适配。 */
+function DataProcessingAnchorParams() {
   const c = useDataProcessing();
-
-  if (!c.excelPath) {
-    return (
-      <div className="text-vscode-text-faint text-[11px] italic">
-        先在主界面选输入 Excel，这里会按批次展开参数表
-      </div>
-    );
-  }
-  if (c.anchorBatchesLoading) {
-    return (
-      <div className="text-vscode-text-dim flex items-center gap-1 text-[11px]">
-        <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
-        加载批次清单…
-      </div>
-    );
-  }
-  if (c.anchorBatchesError) {
-    return (
-      <div className="text-[11px] whitespace-pre-wrap text-red-400">
-        读批次失败：{c.anchorBatchesError}
-      </div>
-    );
-  }
-  if (c.anchorBatchIds.length === 0) {
-    return (
-      <div className="text-vscode-text-faint text-[11px] italic">
-        Excel 里没读到任何批次（检查批次列名是否对得上）
-      </div>
-    );
-  }
-
   return (
-    <Field
-      label={`锚杆工程参数（共 ${c.anchorBatchIds.length} 批）`}
-      hint="同批次所有锚杆共用一组参数；点卡片标题展开/收起"
-    >
-      <div className="space-y-2">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() =>
-              c.setAnchorParamsForAllBatches(DEFAULT_ANCHOR_PARAMS)
-            }
-            className="text-vscode-focus text-[11px] hover:underline"
-            title={ANCHOR_PARAM_FIELDS.map(
-              (f) => `${f.symbol}=${DEFAULT_ANCHOR_PARAMS[f.key]}${f.unit}`,
-            ).join(' / ')}
-          >
-            全部批次填默认值
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {c.anchorBatchIds.map((batchId, idx) => (
-            <BatchParamsCard
-              key={batchId}
-              batchId={batchId}
-              params={c.anchorParamsByBatch[batchId] ?? DEFAULT_ANCHOR_PARAMS}
-              defaultExpanded={c.anchorBatchIds.length <= 3 || idx === 0}
-              onChange={(p) => c.setAnchorParamsForBatch(batchId, p)}
-              onFillDefault={() =>
-                c.setAnchorParamsForBatch(batchId, { ...DEFAULT_ANCHOR_PARAMS })
-              }
-            />
-          ))}
-        </div>
-      </div>
-    </Field>
-  );
-}
-
-function BatchParamsCard({
-  batchId,
-  params,
-  defaultExpanded,
-  onChange,
-  onFillDefault,
-}: {
-  batchId: string;
-  params: AnchorParams;
-  defaultExpanded: boolean;
-  onChange: (p: AnchorParams) => void;
-  onFillDefault: () => void;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  return (
-    <div className="border-vscode-border rounded-[3px] border bg-[#252525]">
-      <div
-        className="hover:bg-vscode-hover flex cursor-pointer items-center px-2 py-1.5 select-none"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <i
-          className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} text-vscode-text-dim mr-1 !text-[12px]`}
-        />
-        <i className="codicon codicon-symbol-misc text-vscode-text-dim mr-1.5 !text-[12px]" />
-        <span
-          className="text-vscode-text truncate text-[12px] font-medium"
-          title={batchId}
-        >
-          {batchId}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onFillDefault();
-          }}
-          className="text-vscode-focus ml-auto text-[10px] hover:underline"
-          title="给本批次填默认值"
-        >
-          填默认
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="border-vscode-border space-y-2.5 border-t px-3 py-2">
-          {ANCHOR_PARAM_FIELDS.map((f) => (
-            <div key={f.key}>
-              <div className="mb-0.5 flex items-baseline gap-1.5">
-                <span className="text-vscode-text text-[11px] font-medium">
-                  {f.name}
-                </span>
-                <span className="text-vscode-text-dim font-mono text-[11px]">
-                  {f.symbol}
-                </span>
-              </div>
-              <div className="flex">
-                <input
-                  type="number"
-                  value={params[f.key]}
-                  step="any"
-                  onChange={(e) =>
-                    onChange({
-                      ...params,
-                      [f.key]: parseFloat(e.target.value || '0'),
-                    })
-                  }
-                  className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus min-w-0 flex-1 rounded-l-[2px] border px-2 py-1 text-[11px] focus:outline-none"
-                />
-                <span className="border-vscode-border text-vscode-text-dim inline-flex min-w-[40px] items-center justify-center rounded-r-[2px] border border-l-0 bg-[#1f1f1f] px-2 text-[11px]">
-                  {f.unit}
-                </span>
-              </div>
-              <div className="text-vscode-text-faint mt-0.5 text-[10px] leading-tight">
-                {f.hint}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <AnchorParamsSection
+      excelReady={!!c.excelPath}
+      batchIds={c.anchorBatchIds}
+      paramsByBatch={c.anchorParamsByBatch}
+      loading={c.anchorBatchesLoading}
+      error={c.anchorBatchesError}
+      onSetBatch={c.setAnchorParamsForBatch}
+      onSetAll={c.setAnchorParamsForAllBatches}
+      emptyHint="先在主界面选输入 Excel，这里会按批次展开参数表"
+    />
   );
 }

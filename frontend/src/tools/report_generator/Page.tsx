@@ -1,8 +1,8 @@
 /**
  * report_generator 主区 —— 装配线「报告填充」环节。
  *
- * 中间显示「能不能生成 + 上游摘要 + 生成按钮 + 结果 + 字段对照表」。
- * 真正的 Word 模板路径 / 项目元信息 / 输出目录 全在右侧 SettingsForm 填。
+ * 中间显示「输入摘要 + 生成按钮 + 结果 + 字段对照表 + 模板格式 cheat sheet」。
+ * 真正的输入路径 / 模板路径 / 项目元信息 全在右侧 SettingsForm 填。
  */
 import { useCallback, useState } from 'react';
 import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -64,7 +64,7 @@ export function ReportGeneratorPage({
   return (
     <div className="flex h-full flex-col overflow-auto bg-[#1e1e1e]">
       <Header />
-      <UpstreamSummary />
+      <InputSummary />
       <RunBar onRun={handleRun} />
       <ResultBlock onOpen={openOutput} onReveal={revealOutput} />
       <FieldCatalogBlock />
@@ -83,41 +83,50 @@ function Header() {
         报告填充
       </h1>
       <p className="text-vscode-text-dim mt-1 text-xs">
-        把数据处理算好的结果 + 项目元信息填入 Word 模板。
-        Excel 输入和工程参数从「数据处理」工具页继承——不用重新填。
+        把锚杆抗拔数据 + 项目元信息填入 Word 模板出 docx。
+        本工具独立可用——也可以一键从「数据处理」复用输入和工程参数（右侧调参栏顶部按钮）。
       </p>
     </div>
   );
 }
 
-// ── 上游 (data_processing) 状态摘要 ──────────────────────
+// ── 输入摘要（本工具自身 state） ──────────────────────────
 
-function UpstreamSummary() {
+function InputSummary() {
   const c = useReportGenerator();
-  const u = c.upstream;
 
   return (
     <div className="border-vscode-border mx-6 mt-4 rounded-[3px] border bg-[#252525] p-3 text-xs">
       <div className="mb-2 flex items-center gap-2">
-        <i className="codicon codicon-symbol-method text-vscode-focus !text-[14px]" />
-        <span className="text-vscode-text font-medium">来自数据处理</span>
+        <i className="codicon codicon-list-tree text-vscode-focus !text-[14px]" />
+        <span className="text-vscode-text font-medium">输入摘要</span>
       </div>
 
-      <Row label="输入 Excel" value={u.excelPath || '（未选）'} muted={!u.excelPath} />
-      <Row label="Sheet" value={u.sheet || '（默认）'} muted={!u.sheet} />
-      <Row label="规范" value={u.standard} />
-      <Row label="批次列" value={u.batchCol} />
+      <Row label="输入 Excel" value={c.excelPath || '（未选）'} muted={!c.excelPath} />
+      <Row label="Sheet" value={c.sheet || '（默认）'} muted={!c.sheet} />
+      <Row label="规范" value={c.anchorStandard} />
+      <Row label="批次列" value={c.anchorBatchIdColumn} />
       <Row
         label="批次清单"
         value={
-          u.batchCount > 0
-            ? `${u.batchCount} 批，已填参数 ${u.paramsFilledBatchCount} / ${u.batchCount}`
-            : '（无）'
+          c.anchorBatchesLoading
+            ? '加载中…'
+            : c.anchorBatchesError
+              ? `读取失败`
+              : c.anchorBatchIds.length > 0
+                ? `${c.anchorBatchIds.length} 批，参数已填 ${anchorParamsFilledCount(c)} / ${c.anchorBatchIds.length}`
+                : '（无）'
         }
-        muted={u.batchCount === 0}
+        muted={c.anchorBatchIds.length === 0}
       />
+      <Row label="Word 模板" value={c.wordTemplatePath || '（未选）'} muted={!c.wordTemplatePath} />
+      <Row label="输出目录" value={c.outputDir || '（自动，输入 Excel 同级）'} muted={!c.outputDir} />
     </div>
   );
+}
+
+function anchorParamsFilledCount(c: ReturnType<typeof useReportGenerator>): number {
+  return c.anchorBatchIds.filter((b) => !!c.anchorParamsByBatch[b]).length;
 }
 
 function Row({
@@ -145,20 +154,20 @@ function Row({
 
 function RunBar({ onRun }: { onRun: () => void }) {
   const c = useReportGenerator();
-  const u = c.upstream;
+  const r = c.readiness;
 
   return (
     <div className="mx-6 mt-3">
-      {!u.ready && u.blockReason && (
+      {!r.ready && r.reason && (
         <div className="border-l-2 border-l-yellow-500 bg-[#2d2d2d] px-3 py-2 text-[11px] text-yellow-300">
           <i className="codicon codicon-warning mr-1 !text-[12px]" />
-          {u.blockReason}
+          {r.reason}
         </div>
       )}
       <button
         type="button"
         onClick={onRun}
-        disabled={!u.ready || c.running}
+        disabled={!r.ready || c.running}
         className="mt-2 flex w-full items-center justify-center gap-2 rounded-[3px] bg-vscode-button px-4 py-2 text-[13px] text-white transition-colors hover:bg-vscode-button-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {c.running ? (
@@ -344,7 +353,7 @@ function TemplateHelpBlock() {
         </p>
         <p>
           <span className="text-vscode-text">4. 数值格式</span>：弹性位移量 /
-          上下限默认 2 位小数（catalog 里的 default_format 控制）。
+          上下限默认 2 位小数；{'{{轴向拉力设计值}}'} 默认输出 kN（内部计算用 N，引擎自动换算）。
         </p>
         <p>
           <span className="text-vscode-text">5. {'{{曲线图}}'}</span>{' '}

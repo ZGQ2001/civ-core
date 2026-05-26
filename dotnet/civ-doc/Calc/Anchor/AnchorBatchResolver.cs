@@ -28,6 +28,8 @@ public class AnchorBatchResolver : IFieldResolver
     {
         "batch_id" => _batchId,
         "axial_design_load" => _params.AxialDesignLoad,
+        // 报告版面用 kN（catalog alias "轴向拉力设计值" 默认命中此 key）
+        "axial_design_load_kn" => _params.AxialDesignLoad / 1000.0,
         "free_length" => _params.FreeLength,
         "anchor_length" => _params.AnchorLength,
         "steel_area" => _params.SteelArea,

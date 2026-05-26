@@ -19,8 +19,6 @@ export interface ReportUserInputs {
   inspection_site: string;
   inspection_time: string;
   inspection_engineer: string;
-  test_date: string;
-  test_engineer: string;
   inspection_conclusion: string;
   // 参建单位
   supervisor_unit: string;
@@ -28,6 +26,11 @@ export interface ReportUserInputs {
   constructor_unit: string;
   // 检测依据
   inspection_basis: string;
+  /*
+   * 备注：之前 catalog 里还有 test_engineer / test_date 两个字段，
+   * 已合并到 inspection_engineer / inspection_time（实际报告里基本是同一组人/同一天）。
+   * 模板里写 {{试验人员}} / {{试验日期}} 会通过别名命中合并后的字段，向后兼容。
+   */
   // 仪器 1
   instrument1_name: string;
   instrument1_no: string;
@@ -61,8 +64,6 @@ export const DEFAULT_REPORT_USER_INPUTS: ReportUserInputs = {
   inspection_site: '',
   inspection_time: '',
   inspection_engineer: '',
-  test_date: '',
-  test_engineer: '',
   inspection_conclusion: '',
   supervisor_unit: '',
   designer_unit: '',
@@ -117,10 +118,8 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
       { key: 'inspection_category', label: '检测类别', placeholder: '例：委托检测' },
       { key: 'inspection_item', label: '检测项目' },
       { key: 'inspection_site', label: '检测地点', placeholder: '例：边坡' },
-      { key: 'inspection_time', label: '检测时间', placeholder: '例：2026-05-25' },
-      { key: 'inspection_engineer', label: '检测人员', placeholder: '例：张三、李四' },
-      { key: 'test_date', label: '试验日期', placeholder: '例：2026-05-25' },
-      { key: 'test_engineer', label: '试验人员', placeholder: '例：张三' },
+      { key: 'inspection_time', label: '检测时间/试验日期', placeholder: '例：2026-05-25' },
+      { key: 'inspection_engineer', label: '检测人员/试验人员', placeholder: '例：张三、李四' },
       { key: 'inspection_conclusion', label: '检测结论', placeholder: '例：全部合格' },
     ],
   },

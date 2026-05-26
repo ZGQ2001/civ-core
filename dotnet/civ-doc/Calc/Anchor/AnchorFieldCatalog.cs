@@ -112,8 +112,11 @@ public static class AnchorFieldCatalog
         FieldDef.Create("instrument2_valid_until", "检测仪器2使用有效期", FieldSource.UserInput, "string"),
         FieldDef.Create("instrument2_precision", "检测仪器2检测精度", FieldSource.UserInput, "string"),
 
-        // ── 用户输入：锚杆/工程参数描述（每根锚杆可能不同，但当前先按项目级填一次） ──
-        // 这些字段未来若需要按锚杆变化，可以从 user_input 改成 RawInput + 加输入 Excel 列
+        // ── 用户输入：锚杆/工程参数描述 ──
+        // 这些字段当前按项目级（一份报告填一次）；如果同一份报告里这些值会变化
+        // （例如锚杆灌浆日期不同），约定的做法是把数据拆成多批输入——
+        // 一批 = 一组共享元信息，多批合成一份报告（走 GenerateMultiBatch 模式）。
+        // 若未来真要按"每根锚杆"变化，应从 user_input 改成 RawInput + 加输入 Excel 列。
         FieldDef.Create("rock_soil_property", "岩土性状", FieldSource.UserInput, "string"),
         FieldDef.Create("bar_material_spec", "杆体材料规格", FieldSource.UserInput, "string"),
         FieldDef.Create("grouting_date", "灌浆日期", FieldSource.UserInput, "string"),

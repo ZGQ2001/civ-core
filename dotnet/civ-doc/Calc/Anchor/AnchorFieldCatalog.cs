@@ -125,9 +125,11 @@ public static class AnchorFieldCatalog
         FieldDef.Create("drill_angle", "钻孔倾角", FieldSource.UserInput, "string"),
         FieldDef.Create("drill_diameter", "钻孔直径", FieldSource.UserInput, "string"),
 
-        // ── 图片占位符（Commit 3 才真正注入图片，当前先作 string 占位） ──
-        // 用户模板里写 {{曲线图}}，目前作 user_input 让用户填路径或描述；
-        // Commit 3 会改成 {{img:曲线图}} 自动嵌入 plot_curves 生成的 PNG。
-        FieldDef.Create("curve_image", "曲线图", FieldSource.UserInput, "string"),
+        // ── 图片占位符 ──
+        // 模板里写 {{img:曲线图}} 触发图片嵌入（img: 前缀必须）；resolver 返 PNG 绝对路径。
+        // 引擎按 anchor_id 拼路径：{curve_image_dir}/{anchor_id}.png
+        // plot_curves 工具按"标识列=锚杆编号"出图后产物正好对得上。
+        FieldDef.Create("curve_image", "曲线图（图片）", FieldSource.Calculated, "string",
+            aliases: ["曲线图"]),
     ];
 }

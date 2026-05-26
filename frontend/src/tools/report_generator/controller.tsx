@@ -51,6 +51,7 @@ interface State {
   // 本工具自己 own
   wordTemplatePath: string;
   outputDir: string;
+  curveImageDir: string;
   userInputs: ReportUserInputs;
 
   // 运行
@@ -71,6 +72,7 @@ interface Actions {
   // Word
   setWordTemplatePath: (p: string) => void;
   setOutputDir: (p: string) => void;
+  setCurveImageDir: (p: string) => void;
   setUserInput: (key: keyof ReportUserInputs, value: string) => void;
   resetUserInputs: () => void;
 
@@ -141,6 +143,8 @@ export function ReportGeneratorProvider({
   // ── Word state ──
   const [wordTemplatePath, setWordTemplatePath] = useState('');
   const [outputDir, setOutputDir] = useState('');
+  // plot_curves 出图目录 —— 留空 = 不嵌图（模板里 {{img:曲线图}} 留原文 + 报 missingImages）
+  const [curveImageDir, setCurveImageDir] = useState('');
   const [userInputs, setUserInputs] = useState<ReportUserInputs>({
     ...DEFAULT_REPORT_USER_INPUTS,
   });
@@ -327,6 +331,7 @@ export function ReportGeneratorProvider({
       };
       if (sheet) params.sheet = sheet;
       if (outputDir.trim()) params.word_output_dir = outputDir.trim();
+      if (curveImageDir.trim()) params.curve_image_dir = curveImageDir.trim();
 
       const res = await rpc<{
         batches: number;
@@ -334,6 +339,8 @@ export function ReportGeneratorProvider({
         anchors_qualified: number;
         output: string;
         word_outputs?: string[];
+        word_unknown_keys?: string[];
+        word_missing_images?: string[];
       }>('anchor.run', params);
 
       if (!res.word_outputs || res.word_outputs.length === 0) {
@@ -343,7 +350,8 @@ export function ReportGeneratorProvider({
       const display: ReportRunRes = {
         output: wordOut,
         rowsRendered: res.anchors_total,
-        unknownKeys: [],
+        unknownKeys: res.word_unknown_keys ?? [],
+        missingImages: res.word_missing_images ?? [],
       };
       setLastResult(display);
       shell.appendOutput(
@@ -369,6 +377,7 @@ export function ReportGeneratorProvider({
     anchorParamsByBatch,
     wordTemplatePath,
     outputDir,
+    curveImageDir,
     userInputs,
     shell,
   ]);
@@ -404,6 +413,7 @@ export function ReportGeneratorProvider({
       anchorParamsByBatch,
       wordTemplatePath,
       outputDir,
+      curveImageDir,
       userInputs,
       running,
       lastResult,
@@ -418,6 +428,7 @@ export function ReportGeneratorProvider({
       setAnchorParamsForAllBatches,
       setWordTemplatePath,
       setOutputDir,
+      setCurveImageDir,
       setUserInput,
       resetUserInputs,
       importFromDataProcessing,
@@ -434,6 +445,7 @@ export function ReportGeneratorProvider({
       anchorParamsByBatch,
       wordTemplatePath,
       outputDir,
+      curveImageDir,
       userInputs,
       running,
       lastResult,

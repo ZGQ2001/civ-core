@@ -31,11 +31,15 @@ public class ReportGenerateException : Exception
     public ReportGenerateException(string msg) : base(msg) { }
 }
 
-/// <summary>生成结果：每行的占位符替换统计 + 项目级替换统计 + 未知 key 合集。</summary>
+/// <summary>生成结果：每行的占位符替换统计 + 项目级替换统计 + 未知 key 合集 + 缺图片合集。</summary>
 public record ReportGenerateResult(
     int RowsRendered,
     int TotalReplaced,
-    IReadOnlyList<string> UnknownKeys);
+    IReadOnlyList<string> UnknownKeys)
+{
+    /// <summary>{{img:xxx}} 图片占位符解析失败的 raw 串汇总（去重后）。前端可警告用户。</summary>
+    public IReadOnlyList<string> MissingImages { get; init; } = Array.Empty<string>();
+}
 
 /// <summary>一个批次的数据：批次级 resolver + 每行 resolver。</summary>
 public record BatchSection(
@@ -82,11 +86,14 @@ public static class ReportGenerator
 
         int totalReplaced = 0;
         var unknownKeys = new List<string>();
+        var missingImages = new List<string>();
 
         using (var doc = WordprocessingDocument.Open(outputPath, true))
         {
-            var body = doc.MainDocumentPart?.Document?.Body
-                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 MainDocumentPart 或 Body）");
+            var mainPart = doc.MainDocumentPart
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 MainDocumentPart）");
+            var body = mainPart.Document?.Body
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 Body）");
 
             // 1. 找成对 marker + 收集克隆单元
             var (startPara, endPara, unitElements) =
@@ -102,9 +109,10 @@ public static class ReportGenerator
                     insertAfter.InsertAfterSelf(clone);
                     insertAfter = clone;
 
-                    var res = PlaceholderRenderer.RenderInto(clone, rowResolver, catalog);
+                    var res = PlaceholderRenderer.RenderInto(clone, rowResolver, catalog, mainPart);
                     totalReplaced += res.Replaced;
                     unknownKeys.AddRange(res.UnknownKeys);
+                    missingImages.AddRange(res.MissingImages);
                 }
             }
 
@@ -114,17 +122,21 @@ public static class ReportGenerator
             endPara.Remove();
 
             // 4. 项目级替换（剩余的所有段落/表）
-            var projectRes = PlaceholderRenderer.RenderInto(body, projectResolver, catalog);
+            var projectRes = PlaceholderRenderer.RenderInto(body, projectResolver, catalog, mainPart);
             totalReplaced += projectRes.Replaced;
             unknownKeys.AddRange(projectRes.UnknownKeys);
+            missingImages.AddRange(projectRes.MissingImages);
 
-            doc.MainDocumentPart!.Document.Save();
+            mainPart.Document.Save();
         }
 
         return new ReportGenerateResult(
             RowsRendered: perRowResolvers.Count,
             TotalReplaced: totalReplaced,
-            UnknownKeys: unknownKeys.Distinct().ToList());
+            UnknownKeys: unknownKeys.Distinct().ToList())
+        {
+            MissingImages = missingImages.Distinct().ToList(),
+        };
     }
 
     /// <summary>
@@ -153,12 +165,15 @@ public static class ReportGenerator
 
         int totalReplaced = 0;
         var unknownKeys = new List<string>();
+        var missingImages = new List<string>();
         int totalRows = 0;
 
         using (var doc = WordprocessingDocument.Open(outputPath, true))
         {
-            var body = doc.MainDocumentPart?.Document?.Body
-                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 MainDocumentPart 或 Body）");
+            var mainPart = doc.MainDocumentPart
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 MainDocumentPart）");
+            var body = mainPart.Document?.Body
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 Body）");
 
             // 1. 找 [[批次]]...[[/批次]] 范围 + 中间元素
             var (batchStart, batchEnd, batchTemplateElements) =
@@ -198,9 +213,10 @@ public static class ReportGenerator
                         foreach (var unit in rowUnit)
                         {
                             var rowClone = (OpenXmlElement)unit.CloneNode(true);
-                            var rowRes = PlaceholderRenderer.RenderInto(rowClone, rowResolver, catalog);
+                            var rowRes = PlaceholderRenderer.RenderInto(rowClone, rowResolver, catalog, mainPart);
                             totalReplaced += rowRes.Replaced;
                             unknownKeys.AddRange(rowRes.UnknownKeys);
+                            missingImages.AddRange(rowRes.MissingImages);
                             rowClones.Add(rowClone);
                         }
                         totalRows++;
@@ -211,9 +227,10 @@ public static class ReportGenerator
                 // 填批次级占位符
                 foreach (var el in clones)
                 {
-                    var batchRes = PlaceholderRenderer.RenderInto(el, batch.BatchResolver, catalog);
+                    var batchRes = PlaceholderRenderer.RenderInto(el, batch.BatchResolver, catalog, mainPart);
                     totalReplaced += batchRes.Replaced;
                     unknownKeys.AddRange(batchRes.UnknownKeys);
+                    missingImages.AddRange(batchRes.MissingImages);
                 }
 
                 // 插入处理后的元素到 body
@@ -230,17 +247,21 @@ public static class ReportGenerator
             }
 
             // 4. 全局替换
-            var globalRes = PlaceholderRenderer.RenderInto(body, globalResolver, catalog);
+            var globalRes = PlaceholderRenderer.RenderInto(body, globalResolver, catalog, mainPart);
             totalReplaced += globalRes.Replaced;
             unknownKeys.AddRange(globalRes.UnknownKeys);
+            missingImages.AddRange(globalRes.MissingImages);
 
-            doc.MainDocumentPart!.Document.Save();
+            mainPart.Document.Save();
         }
 
         return new ReportGenerateResult(
             RowsRendered: totalRows,
             TotalReplaced: totalReplaced,
-            UnknownKeys: unknownKeys.Distinct().ToList());
+            UnknownKeys: unknownKeys.Distinct().ToList())
+        {
+            MissingImages = missingImages.Distinct().ToList(),
+        };
     }
 
     // ── marker 定位 ─────────────────────────────────────────

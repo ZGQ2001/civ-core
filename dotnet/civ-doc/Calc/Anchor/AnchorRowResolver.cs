@@ -18,23 +18,31 @@ public class AnchorRowResolver : IFieldResolver
     private readonly AnchorParams _params;
     private readonly IReadOnlyDictionary<string, string> _userInputs;
     private readonly int _anchorIndex;
+    private readonly string? _curveImageDir;
 
     /// <param name="anchorIndex">
     /// 1-based 全局序号 —— 模板里 {{锚杆序号}} 填这个值。0 表示未设置（旧调用方兼容）。
     /// 报告级别全局递增（209 根全在一份报告里，从 1 数到 209）。
+    /// </param>
+    /// <param name="curveImageDir">
+    /// 曲线图目录（来自 plot_curves 输出）。{{img:曲线图}} 占位符会按 anchor_id 拼路径
+    /// （{curveImageDir}/{anchorId}.png）；null 时 curve_image 字段返 null，引擎报
+    /// missingImages。这里不验文件存在，由 ImageInjector 在嵌入时判断。
     /// </param>
     public AnchorRowResolver(
         AnchorRowInput input,
         AnchorRowResult result,
         AnchorParams @params,
         IReadOnlyDictionary<string, string>? userInputs = null,
-        int anchorIndex = 0)
+        int anchorIndex = 0,
+        string? curveImageDir = null)
     {
         _input = input;
         _result = result;
         _params = @params;
         _userInputs = userInputs ?? new Dictionary<string, string>();
         _anchorIndex = anchorIndex;
+        _curveImageDir = curveImageDir;
     }
 
     public object? GetValue(string fieldKey) => fieldKey switch
@@ -70,6 +78,9 @@ public class AnchorRowResolver : IFieldResolver
 
         // ── 引擎注入 ──
         "anchor_index" => _anchorIndex,
+        "curve_image" => _curveImageDir is null
+            ? null
+            : Path.Combine(_curveImageDir, $"{_input.AnchorId}.png"),
 
         // ── 用户输入兜底 ──
         _ => _userInputs.TryGetValue(fieldKey, out var v) ? v : null,

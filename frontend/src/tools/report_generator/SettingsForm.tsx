@@ -49,6 +49,15 @@ export function ReportGeneratorSettingsForm() {
     if (typeof sel === 'string') c.setOutputDir(sel);
   }, [c]);
 
+  const pickCurveImageDir = useCallback(async () => {
+    const sel = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择曲线图目录（plot_curves 出图的文件夹）',
+    });
+    if (typeof sel === 'string') c.setCurveImageDir(sel);
+  }, [c]);
+
   return (
     <div className="flex h-full flex-col space-y-4 overflow-auto p-4 text-xs">
       <ImportFromDataProcessingBtn />
@@ -131,6 +140,23 @@ export function ReportGeneratorSettingsForm() {
           extra={
             c.outputDir ? (
               <ResetBtn onClick={() => c.setOutputDir('')} />
+            ) : undefined
+          }
+        />
+      </Field>
+
+      <Field
+        label="曲线图目录"
+        hint="plot_curves 出图文件夹（按锚杆编号命名 1.png/2.png/...）；留空 = 不嵌图，{{img:曲线图}} 留原文"
+      >
+        <Picker
+          value={c.curveImageDir}
+          onPick={pickCurveImageDir}
+          placeholder="（可选 — 不嵌图）"
+          muted={!c.curveImageDir}
+          extra={
+            c.curveImageDir ? (
+              <ResetBtn onClick={() => c.setCurveImageDir('')} />
             ) : undefined
           }
         />

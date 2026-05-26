@@ -109,6 +109,9 @@ public static class AnchorHandlers
             && wtEl.ValueKind == JsonValueKind.String ? wtEl.GetString() : null;
         string? wordOutputDir = p.TryGetProperty("word_output_dir", out var woEl)
             && woEl.ValueKind == JsonValueKind.String ? woEl.GetString() : null;
+        // 曲线图目录（可选）：传给 AnchorRowResolver，{{img:曲线图}} 自动按 anchor_id 拼路径
+        string? curveImageDir = p.TryGetProperty("curve_image_dir", out var ciEl)
+            && ciEl.ValueKind == JsonValueKind.String ? ciEl.GetString() : null;
         // 项目级用户输入字段（可选）：{ client_name, project_name, test_date, ... }
         var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
             ? ParseUserInputs(uiEl)
@@ -159,6 +162,8 @@ public static class AnchorHandlers
         // 当前模板默认是「项目级 + [[每根锚杆]]...[[/每根锚杆]] 行重复」结构，
         // 不分批次维度（用户场景 209 根全在 1 个批次内，跨批次时 anchor_index 全局递增）。
         var wordOutputs = new List<string>();
+        var wordUnknownKeys = new List<string>();
+        var wordMissingImages = new List<string>();
         if (!string.IsNullOrWhiteSpace(wordTemplatePath))
         {
             var wordDir = !string.IsNullOrWhiteSpace(wordOutputDir)
@@ -175,15 +180,26 @@ public static class AnchorHandlers
                 {
                     anchorIndex++;
                     rowResolvers.Add(new AnchorRowResolver(
-                        rw.Input, rw.Result, br.Params, userInputs, anchorIndex));
+                        rw.Input, rw.Result, br.Params, userInputs,
+                        anchorIndex: anchorIndex,
+                        curveImageDir: curveImageDir));
                 }
             }
 
             var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
-            ReportGenerator.Generate(
+            var genResult = ReportGenerator.Generate(
                 wordTemplatePath, projectResolver, rowResolvers, wordOut,
                 catalog: AnchorFieldCatalog.All);
             wordOutputs.Add(wordOut);
+            wordUnknownKeys.AddRange(genResult.UnknownKeys);
+            wordMissingImages.AddRange(genResult.MissingImages);
+            // stderr 日志一份（方便用户在 BottomPanel 看具体哪些字段/图片缺）
+            if (genResult.UnknownKeys.Count > 0)
+                Console.Error.WriteLine(
+                    $"[anchor.run] Word 报告 unknown keys: {string.Join(", ", genResult.UnknownKeys)}");
+            if (genResult.MissingImages.Count > 0)
+                Console.Error.WriteLine(
+                    $"[anchor.run] Word 报告 missing images: {string.Join(", ", genResult.MissingImages)}");
         }
 
         var res = new Dictionary<string, object?>
@@ -193,7 +209,12 @@ public static class AnchorHandlers
             ["anchors_qualified"] = result.NQualifiedTotal,
             ["output"] = outPath,
         };
-        if (wordOutputs.Count > 0) res["word_outputs"] = wordOutputs;
+        if (wordOutputs.Count > 0)
+        {
+            res["word_outputs"] = wordOutputs;
+            res["word_unknown_keys"] = wordUnknownKeys;
+            res["word_missing_images"] = wordMissingImages;
+        }
         return res;
     }
 

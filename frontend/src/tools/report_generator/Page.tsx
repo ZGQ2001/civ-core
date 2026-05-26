@@ -121,6 +121,11 @@ function InputSummary() {
       />
       <Row label="Word 模板" value={c.wordTemplatePath || '（未选）'} muted={!c.wordTemplatePath} />
       <Row label="输出目录" value={c.outputDir || '（自动，输入 Excel 同级）'} muted={!c.outputDir} />
+      <Row
+        label="曲线图目录"
+        value={c.curveImageDir || '（未选 — {{img:曲线图}} 留原文）'}
+        muted={!c.curveImageDir}
+      />
     </div>
   );
 }
@@ -235,6 +240,13 @@ function ResultBlock({
           <i className="codicon codicon-warning mr-1 !text-[11px]" />
           模板里有 {c.lastResult.unknownKeys.length} 个未识别占位符：
           {c.lastResult.unknownKeys.join('、')}
+        </div>
+      )}
+      {c.lastResult.missingImages.length > 0 && (
+        <div className="mt-2 text-[11px] text-yellow-400">
+          <i className="codicon codicon-warning mr-1 !text-[11px]" />
+          {c.lastResult.missingImages.length} 个图片占位符未嵌入（路径不存在 / 未配置曲线图目录）：
+          {c.lastResult.missingImages.join('、')}
         </div>
       )}
     </div>
@@ -356,8 +368,11 @@ function TemplateHelpBlock() {
           上下限默认 2 位小数；{'{{轴向拉力设计值}}'} 默认输出 kN（内部计算用 N，引擎自动换算）。
         </p>
         <p>
-          <span className="text-vscode-text">5. {'{{曲线图}}'}</span>{' '}
-          当前是文本占位符；Commit 3 接入 plot_curves 后会自动嵌入 PNG。
+          <span className="text-vscode-text">5. 图片占位符</span>：写{' '}
+          <code className="bg-[#1e1e1e] px-1">{'{{img:曲线图}}'}</code>{' '}
+          （img: 前缀必须）。配合右栏「曲线图目录」选 plot_curves 出图文件夹
+          （按锚杆编号命名 1.png / 2.png /...），引擎按 anchor_id 自动匹配嵌入。
+          留空目录则占位符留原文 + 报 missingImages。
         </p>
       </div>
     </details>

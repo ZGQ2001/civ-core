@@ -264,4 +264,120 @@ public class PlaceholderRendererTests : IDisposable
         Assert.Empty(res.UnknownKeys);
         Assert.True(File.Exists(OutPath("plain_out.docx")));
     }
+
+    // ── 图片占位符 {{img:xxx}} ─────────────────────────────
+
+    /// <summary>1x1 红色 PNG（70 字节，base64 编码）—— 测试 fixture，valid PNG。</summary>
+    private const string OnePxRedPngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+
+    private string WritePng(string fileName)
+    {
+        var path = Path.Combine(_tmp.Dir, fileName);
+        File.WriteAllBytes(path, Convert.FromBase64String(OnePxRedPngBase64));
+        return path;
+    }
+
+    private static int CountImageParts(string docxPath)
+    {
+        using var doc = WordprocessingDocument.Open(docxPath, false);
+        return doc.MainDocumentPart!.ImageParts.Count();
+    }
+
+    private static int CountDrawings(string docxPath)
+    {
+        using var doc = WordprocessingDocument.Open(docxPath, false);
+        return doc.MainDocumentPart!.Document.Body!.Descendants<Drawing>().Count();
+    }
+
+    [Fact]
+    public void Render_图片占位符_嵌入PNG_产出含ImagePart与Drawing()
+    {
+        var pngPath = WritePng("curve_a.png");
+        var src = WriteSimpleDocx("img.docx", body =>
+            body.AppendChild(SingleRunPara("曲线 {{img:曲线图}} 完成")));
+        var resolver = new DictResolver(new() { ["curve_image"] = pngPath });
+        // catalog 给 curve_image 加 alias "曲线图"，所以 {{img:曲线图}} 应能命中
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("img_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(1, res.Replaced);
+        Assert.Empty(res.UnknownKeys);
+        Assert.Empty(res.MissingImages);
+        Assert.Equal(1, CountImageParts(OutPath("img_out.docx")));
+        Assert.Equal(1, CountDrawings(OutPath("img_out.docx")));
+    }
+
+    [Fact]
+    public void Render_图片占位符_文件不存在_留原文且报missing()
+    {
+        var src = WriteSimpleDocx("img_miss.docx", body =>
+            body.AppendChild(SingleRunPara("缺图 {{img:曲线图}}")));
+        var resolver = new DictResolver(new()
+        {
+            ["curve_image"] = Path.Combine(_tmp.Dir, "nope.png"),
+        });
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("img_miss_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(0, res.Replaced);
+        Assert.Single(res.MissingImages);
+        Assert.Contains("img:曲线图", res.MissingImages);
+        Assert.Contains("{{img:曲线图}}", ReadAllText(OutPath("img_miss_out.docx")));
+        Assert.Equal(0, CountImageParts(OutPath("img_miss_out.docx")));
+    }
+
+    [Fact]
+    public void Render_图片占位符_resolver返null_报missing()
+    {
+        var src = WriteSimpleDocx("img_null.docx", body =>
+            body.AppendChild(SingleRunPara("{{img:curve_image}}")));
+        var resolver = new DictResolver(new()); // 不提供 curve_image
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("img_null_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(0, res.Replaced);
+        Assert.Single(res.MissingImages);
+        Assert.Equal(0, CountImageParts(OutPath("img_null_out.docx")));
+    }
+
+    [Fact]
+    public void RenderInto_mainPart传null_图片占位符报missing不抛()
+    {
+        var pngPath = WritePng("curve_x.png");
+        var src = WriteSimpleDocx("img_no_main.docx", body =>
+            body.AppendChild(SingleRunPara("{{img:曲线图}}")));
+        var resolver = new DictResolver(new() { ["curve_image"] = pngPath });
+
+        // 直接调 RenderInto 不传 mainPart —— 即使图片真实存在也算 missing
+        using var doc = WordprocessingDocument.Open(src, false);
+        var body = doc.MainDocumentPart!.Document.Body!;
+        var res = PlaceholderRenderer.RenderInto(
+            body, resolver, AnchorFieldCatalog.All, mainPart: null);
+
+        Assert.Single(res.MissingImages);
+    }
+
+    [Fact]
+    public void Render_文本与图片混排_段落切多Run并嵌图()
+    {
+        var pngPath = WritePng("curve_mix.png");
+        var src = WriteSimpleDocx("img_mix.docx", body =>
+            body.AppendChild(SingleRunPara("锚杆 {{anchor_id}}：{{img:曲线图}} 已记录")));
+        var resolver = new DictResolver(new()
+        {
+            ["anchor_id"] = "P-7",
+            ["curve_image"] = pngPath,
+        });
+
+        var res = PlaceholderRenderer.Render(
+            src, OutPath("img_mix_out.docx"), resolver, AnchorFieldCatalog.All);
+
+        Assert.Equal(2, res.Replaced); // 文本 + 图片各 1
+        Assert.Equal(1, CountImageParts(OutPath("img_mix_out.docx")));
+        Assert.Equal(1, CountDrawings(OutPath("img_mix_out.docx")));
+        var inner = ReadAllText(OutPath("img_mix_out.docx"));
+        Assert.Contains("锚杆 P-7", inner);
+        Assert.Contains("已记录", inner);
+    }
 }

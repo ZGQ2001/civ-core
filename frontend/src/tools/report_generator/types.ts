@@ -194,4 +194,6 @@ export interface ReportRunRes {
   output: string;
   rowsRendered: number;
   unknownKeys: string[];
+  /** {{img:xxx}} 图片占位符解析失败的列表（缺路径 / 文件不存在）—— 前端警告用。 */
+  missingImages: string[];
 }

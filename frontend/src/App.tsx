@@ -42,10 +42,7 @@ import {
   PlotCurvesProvider,
   PlotCurvesSettingsForm,
 } from './tools/plot_curves';
-import {
-  ReportGeneratorProvider,
-  ReportGeneratorSettingsForm,
-} from './tools/report_generator';
+import { ReportGeneratorProvider } from './tools/report_generator';
 import { TemplateHelperProvider } from './tools/template_helper';
 import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
 
@@ -330,16 +327,7 @@ export default function App() {
           },
         ]
       : []),
-    ...(activeToolId === 'report_generator'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <ReportGeneratorSettingsForm />,
-          },
-        ]
-      : []),
+
     { id: 'agent', label: 'AI 助手', icon: 'hubot', node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;

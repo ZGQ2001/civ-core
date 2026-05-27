@@ -33,8 +33,6 @@
 | ---------------------------- | ------------------------- | -------------------------------- |
 | `ping`                       | `__main__.py`             | 桥联自测                         |
 | `version`                    | `__main__.py`             | 版本信息                         |
-| `files.list_dir`             | `handlers/files.py`       | 列目录（隐藏 .开头 + .civ-core） |
-| `files.exists`               | `handlers/files.py`       | 文件存在检查                     |
 | `plot_curves.list_presets`   | `handlers/plot_curves.py` | 预设列表（含系统/用户来源）      |
 | `plot_curves.list_sheets`    | `handlers/plot_curves.py` | Excel sheet 列表                 |
 | `plot_curves.render_preview` | `handlers/plot_curves.py` | 实时 PNG base64 预览             |
@@ -69,6 +67,16 @@
 | `workspace.set`                | `Handlers/WorkspaceHandlers.cs` | 设置当前工作区路径                                                                |
 | `workspace.clear`              | `Handlers/WorkspaceHandlers.cs` | 清除工作区记忆                                                                    |
 | `workspace.create_standard`    | `Handlers/WorkspaceHandlers.cs` | 新建标准项目骨架（4 业务子目录 + .civ-core/）                                     |
+| `files.list_dir`               | `Handlers/FilesHandlers.cs`     | 列目录（隐藏 .开头 + .civ-core；目录排前 + 自然排序）                             |
+| `files.exists`                 | `Handlers/FilesHandlers.cs`     | 文件存在检查                                                                      |
+| `files.create_file`            | `Handlers/FilesHandlers.cs`     | 创建空文件（Windows 名校验）                                                      |
+| `files.create_folder`          | `Handlers/FilesHandlers.cs`     | 创建文件夹                                                                        |
+| `files.rename`                 | `Handlers/FilesHandlers.cs`     | 同目录改名                                                                        |
+| `files.delete`                 | `Handlers/FilesHandlers.cs`     | 发送到回收站（仅 Windows）                                                        |
+| `files.undo_delete`            | `Handlers/FilesHandlers.cs`     | 从回收站还原（5 分钟内，Shell COM）                                               |
+| `files.copy`                   | `Handlers/FilesHandlers.cs`     | 复制（同名追加 (2)/(3)；目录递归）                                                |
+| `files.move`                   | `Handlers/FilesHandlers.cs`     | 移动（同名追加 (2)/(3)）                                                          |
+| `files.reveal`                 | `Handlers/FilesHandlers.cs`     | explorer /select 定位选中                                                         |
 
 ### 未实现（预留）
 

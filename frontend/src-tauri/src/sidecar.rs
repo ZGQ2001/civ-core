@@ -231,7 +231,6 @@ impl SidecarRouter {
     fn is_python_method(method: &str) -> bool {
         method == "ping"
             || method == "version"
-            || method.starts_with("files.")
             || method.starts_with("plot_curves.")
             || method.starts_with("pdf_tools.")
             || method.starts_with("word2pdf.")
@@ -244,10 +243,9 @@ mod tests {
 
     #[test]
     fn python_whitelist_routes_to_python() {
-        // 文件系统 + 顶层探活
+        // 顶层探活
         assert!(SidecarRouter::is_python_method("ping"));
         assert!(SidecarRouter::is_python_method("version"));
-        assert!(SidecarRouter::is_python_method("files.list_dir"));
         // 已交付 Python 工具
         assert!(SidecarRouter::is_python_method("plot_curves.run"));
         assert!(SidecarRouter::is_python_method("pdf_tools.merge"));
@@ -264,11 +262,13 @@ mod tests {
         // 本轮切 C#（Step 4）
         assert!(!SidecarRouter::is_python_method("leeb.run"));
         assert!(!SidecarRouter::is_python_method("leeb.preview_excel"));
-        // workspace 切 C#
+        // workspace + files 切 C#
         assert!(!SidecarRouter::is_python_method("workspace.last"));
         assert!(!SidecarRouter::is_python_method(
             "workspace.create_standard"
         ));
+        assert!(!SidecarRouter::is_python_method("files.list_dir"));
+        assert!(!SidecarRouter::is_python_method("files.delete"));
         // 未来加的（不用改路由）
         assert!(!SidecarRouter::is_python_method("calc.core_drilling.run"));
         assert!(!SidecarRouter::is_python_method("rebound.run"));

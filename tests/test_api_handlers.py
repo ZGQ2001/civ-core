@@ -1,7 +1,7 @@
-"""api handlers (files / plot_curves / pdf_tools / word2pdf) + 端到端 dispatch 测试。
+"""api handlers (plot_curves / pdf_tools / word2pdf) + 端到端 dispatch 测试。
 
-workspace.* / leeb.* 已迁 C# sidecar (civ-doc) —— 它们的用例在
-dotnet/civ-doc.Tests/ 下（WorkspaceHandlersTests / Leeb*Tests）。
+workspace.* / files.* / leeb.* 已迁 C# sidecar (civ-doc) —— 它们的用例在
+dotnet/civ-doc.Tests/ 下（WorkspaceHandlersTests / FilesHandlersTests / Leeb*Tests）。
 """
 
 from __future__ import annotations
@@ -12,64 +12,14 @@ from pathlib import Path
 import pytest
 
 from civ_core.api import handlers
-from civ_core.api.handlers import files as files_handler
 from civ_core.api.handlers import pdf_tools as pdf_handler
 from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import word2pdf as word2pdf_handler
 
 
-# ── files handler ─────────────────────────────────────
-def test_list_dir_basic(tmp_path) -> None:
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b.txt").write_text("hi")
-    res = files_handler.list_dir(str(tmp_path))
-    names = [e["name"] for e in res["entries"]]
-    assert names == ["a", "b.txt"]  # 目录排前 + 字母序
-    assert res["entries"][0]["is_dir"] is True
-    assert res["entries"][1]["is_dir"] is False
-    assert res["entries"][1]["size"] == 2
-
-
-def test_list_dir_hides_civ_core_always(tmp_path) -> None:
-    (tmp_path / ".civ-core").mkdir()
-    (tmp_path / "visible").mkdir()
-    res = files_handler.list_dir(str(tmp_path), show_hidden=True)
-    names = [e["name"] for e in res["entries"]]
-    assert "visible" in names
-    assert ".civ-core" not in names, ".civ-core 即使 show_hidden=True 也必须隐藏"
-
-
-def test_list_dir_hides_dotfiles_by_default(tmp_path) -> None:
-    (tmp_path / ".gitignore").write_text("x")
-    (tmp_path / "README.md").write_text("y")
-    default = [e["name"] for e in files_handler.list_dir(str(tmp_path))["entries"]]
-    assert ".gitignore" not in default
-    shown = [e["name"] for e in files_handler.list_dir(str(tmp_path), show_hidden=True)["entries"]]
-    assert ".gitignore" in shown
-
-
-def test_list_dir_rejects_non_dir(tmp_path) -> None:
-    f = tmp_path / "file.txt"
-    f.write_text("x")
-    with pytest.raises(ValueError):
-        files_handler.list_dir(str(f))
-
-
-def test_exists(tmp_path) -> None:
-    f = tmp_path / "f.txt"
-    f.write_text("x")
-    assert files_handler.exists(str(f)) == {"exists": True, "is_dir": False, "is_file": True}
-    assert files_handler.exists(str(tmp_path)) == {"exists": True, "is_dir": True, "is_file": False}
-    assert files_handler.exists(str(tmp_path / "nope")) == {
-        "exists": False,
-        "is_dir": False,
-        "is_file": False,
-    }
-
-
 # ── 端到端 dispatch + handler 注册 ───────────────────────
 def test_full_dispatcher_methods() -> None:
-    """build_dispatcher 注册了 files/plot_curves/pdf_tools/word2pdf 全部方法 + ping/version。"""
+    """build_dispatcher 注册了 plot_curves/pdf_tools/word2pdf 全部方法 + ping/version。"""
     from civ_core.api.__main__ import build_dispatcher
 
     d = build_dispatcher()
@@ -78,7 +28,6 @@ def test_full_dispatcher_methods() -> None:
     for m in (
         "ping",
         "version",
-        "files.list_dir",
         "plot_curves.list_presets",
         "plot_curves.run",
         "pdf_tools.merge",
@@ -96,7 +45,6 @@ def test_dispatcher_only_exposes_whitelisted_methods() -> None:
     methods = set(d.methods())
     # 这些是模块顶部 import 进来的，绝不能被注册成 RPC
     forbidden = {
-        "files.Path",
         "plot_curves.Path",
         "plot_curves.PlotCurvesError",
         "plot_curves.get_preset_names",
@@ -117,8 +65,9 @@ def test_ping_roundtrip_via_dispatcher() -> None:
 
 
 def test_handlers_module_exposes_submodules() -> None:
-    assert hasattr(handlers, "files")
     assert hasattr(handlers, "plot_curves")
+    assert hasattr(handlers, "pdf_tools")
+    assert hasattr(handlers, "word2pdf")
 
 
 # ── plot_curves handler ───────────────────────────────────

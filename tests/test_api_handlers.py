@@ -1,24 +1,22 @@
-"""api handlers (plot_curves / word2pdf) + 端到端 dispatch 测试。
+"""api handlers (plot_curves) + 端到端 dispatch 测试。
 
-workspace.* / files.* / leeb.* / pdf_tools.* 已迁 C# sidecar (civ-doc) ——
-它们的用例在 dotnet/civ-doc.Tests/ 下。
+workspace.* / files.* / leeb.* / pdf_tools.* / word2pdf.* 已迁 C# sidecar (civ-doc)
+—— 它们的用例在 dotnet/civ-doc.Tests/ 下。Python 端只剩 plot_curves（matplotlib 无可替代）。
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
 from civ_core.api import handlers
 from civ_core.api.handlers import plot_curves as plot_handler
-from civ_core.api.handlers import word2pdf as word2pdf_handler
 
 
 # ── 端到端 dispatch + handler 注册 ───────────────────────
 def test_full_dispatcher_methods() -> None:
-    """build_dispatcher 注册了 plot_curves/word2pdf 全部方法 + ping/version。"""
+    """build_dispatcher 注册了 plot_curves 全部方法 + ping/version。"""
     from civ_core.api.__main__ import build_dispatcher
 
     d = build_dispatcher()
@@ -29,7 +27,6 @@ def test_full_dispatcher_methods() -> None:
         "version",
         "plot_curves.list_presets",
         "plot_curves.run",
-        "word2pdf.convert",
     ):
         assert m in methods
 
@@ -64,7 +61,6 @@ def test_ping_roundtrip_via_dispatcher() -> None:
 
 def test_handlers_module_exposes_submodules() -> None:
     assert hasattr(handlers, "plot_curves")
-    assert hasattr(handlers, "word2pdf")
 
 
 # ── plot_curves handler ───────────────────────────────────
@@ -230,38 +226,5 @@ def test_plot_curves_run_default_output_dir(tmp_path, monkeypatch) -> None:
 # dotnet/civ-doc.Tests/PdfToolsHandlersTests.cs。
 
 
-# ── word2pdf handler ──────────────────────────────────────
-def _make_simple_docx(out_path: Path, n_paragraphs: int) -> Path:
-    """造一个有 n 段的简单 docx 供测试。python-docx 生成的不含 Pages 缓存。"""
-    from docx import Document
-
-    doc = Document()
-    for i in range(n_paragraphs):
-        doc.add_paragraph(f"段落 {i + 1}")
-    doc.save(str(out_path))
-    return out_path
-
-
-def test_word2pdf_inspect_basic(tmp_path) -> None:
-    """inspect 返每个 docx 的 size_kb + paragraphs；纯 python-docx 生成不含 pages。"""
-    a = _make_simple_docx(tmp_path / "a.docx", n_paragraphs=5)
-    b = _make_simple_docx(tmp_path / "b.docx", n_paragraphs=12)
-    res = word2pdf_handler.inspect([str(a), str(b)])
-    assert len(res["files"]) == 2
-    assert res["files"][0]["paragraphs"] == 5
-    assert res["files"][1]["paragraphs"] == 12
-    assert res["files"][0]["size_kb"] > 0
-    assert "error" not in res["files"][0]
-
-
-def test_word2pdf_inspect_missing_file(tmp_path) -> None:
-    """单文件不存在 → 带 error 字段，不影响其他统计。"""
-    a = _make_simple_docx(tmp_path / "a.docx", n_paragraphs=3)
-    res = word2pdf_handler.inspect([str(a), str(tmp_path / "ghost.docx")])
-    assert res["files"][0]["paragraphs"] == 3
-    assert "error" in res["files"][1]
-    assert "不存在" in res["files"][1]["error"]
-
-
-def test_word2pdf_inspect_exposes_in_all() -> None:
-    assert "inspect" in word2pdf_handler.__all__
+# word2pdf.* 已迁 C# sidecar (civ-doc) —— 用例在
+# dotnet/civ-doc.Tests/Word2PdfHandlersTests.cs。

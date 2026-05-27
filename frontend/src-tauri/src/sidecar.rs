@@ -203,9 +203,8 @@ pub async fn spawn_csharp_dev(repo_root: &std::path::Path) -> Result<JsonRpcSide
 
 /// 按 method 路由到对应 sidecar。
 ///
-/// **策略：默认 C#，白名单 Python**（按用户「以后代码都用 C#」方向）。
-/// Python 白名单：工作区/文件系统 + 已交付的 Python 工具（plot_curves / pdf_tools / word2pdf）+ 顶层探活方法。
-/// 其他全 → C#（新加 calcType 不用改这里）。
+/// **策略：默认 C#，白名单 Python**。Python 白名单只剩 plot_curves（matplotlib 无可替代）
+/// + 顶层探活方法（ping/version）。其他全 → C#，新方法不用改这里。
 ///
 /// 两个 sidecar 各自一个 Arc 持有，互不阻塞（Mutex 在各自 struct 里）。
 pub struct SidecarRouter {
@@ -229,10 +228,7 @@ impl SidecarRouter {
     /// Python 白名单：仅这些前缀走 Python，其他全 C#。
     /// 顶层 `ping` / `version` 算 Python 探活方法（C# 端也有 doc.ping 单独探活）。
     fn is_python_method(method: &str) -> bool {
-        method == "ping"
-            || method == "version"
-            || method.starts_with("plot_curves.")
-            || method.starts_with("word2pdf.")
+        method == "ping" || method == "version" || method.starts_with("plot_curves.")
     }
 }
 
@@ -245,9 +241,8 @@ mod tests {
         // 顶层探活
         assert!(SidecarRouter::is_python_method("ping"));
         assert!(SidecarRouter::is_python_method("version"));
-        // 已交付 Python 工具
+        // 唯一保留 Python 工具：matplotlib 无可替代
         assert!(SidecarRouter::is_python_method("plot_curves.run"));
-        assert!(SidecarRouter::is_python_method("word2pdf.convert"));
     }
 
     #[test]
@@ -269,6 +264,8 @@ mod tests {
         assert!(!SidecarRouter::is_python_method("files.delete"));
         assert!(!SidecarRouter::is_python_method("pdf_tools.merge"));
         assert!(!SidecarRouter::is_python_method("pdf_tools.inspect"));
+        assert!(!SidecarRouter::is_python_method("word2pdf.convert"));
+        assert!(!SidecarRouter::is_python_method("word2pdf.inspect"));
         // 未来加的（不用改路由）
         assert!(!SidecarRouter::is_python_method("calc.core_drilling.run"));
         assert!(!SidecarRouter::is_python_method("rebound.run"));

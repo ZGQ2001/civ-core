@@ -18,7 +18,7 @@
 - **删 template_editor**：原模板编辑工具完全删除（功能整合进报告填充的字段对照表 collapsible）。
 - **FileTree 删除二次确认升级**：VSCode 同款 modal —— 标题 + 完整路径 + 文件夹时警示 + 主按钮「移到回收站」+ Backdrop 不可关 + Enter/Esc 快捷键。
 
-**Python 剩余职责**：plot_curves/word2pdf + seeds standards.db（workspace/files/pdf_tools 已迁 C#；剩 word2pdf 待迁）
+**Python 剩余职责**：plot_curves（matplotlib 无可替代）+ seeds standards.db。其他全切 C#。
 
 ---
 

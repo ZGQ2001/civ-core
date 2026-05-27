@@ -103,7 +103,7 @@ graph TB
 
 | sidecar | 方法前缀 |
 |---------|---------|
-| **C#（默认）** | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*`（待迁）— 及所有新方法 |
+| **C#（默认）** | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*` — 及所有新方法 |
 | **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代） |
 
 ## 不可变规则

@@ -42,8 +42,6 @@
 | `plot_curves.delete_preset`  | `handlers/plot_curves.py` | 删除预设                         |
 | `plot_curves.rename_preset`  | `handlers/plot_curves.py` | 重命名预设                       |
 | `plot_curves.copy_preset`    | `handlers/plot_curves.py` | 复制预设                         |
-| `word2pdf.convert`           | `handlers/word2pdf.py`    | Word→PDF 批量                    |
-| `word2pdf.inspect`           | `handlers/word2pdf.py`    | 预览（段落数+页数+大小）         |
 
 ### C# sidecar（默认路由）
 
@@ -77,6 +75,8 @@
 | `pdf_tools.split_per_page`     | `Handlers/PdfToolsHandlers.cs`  | 按页拆分（{stem}_p{n}.pdf 零填充）                                                |
 | `pdf_tools.split_by_ranges`    | `Handlers/PdfToolsHandlers.cs`  | 按范围拆分（"1-3,5,7-9" 表达式）                                                  |
 | `pdf_tools.inspect`            | `Handlers/PdfToolsHandlers.cs`  | 预览（页数 + 大小；单文件失败不影响整体）                                         |
+| `word2pdf.convert`             | `Handlers/Word2PdfHandlers.cs`  | Word→PDF 批量（仅 Windows，COM dynamic；非 Windows 抛 PlatformNotSupported）      |
+| `word2pdf.inspect`             | `Handlers/Word2PdfHandlers.cs`  | 预览（段落数+页数+大小；OpenXML SDK，跨平台）                                     |
 
 ### 未实现（预留）
 

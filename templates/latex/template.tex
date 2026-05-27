@@ -1,0 +1,356 @@
+\documentclass[11pt, a4paper, UTF8]{ctexart}
+
+% ==================== 宏包 ====================
+\usepackage{geometry}
+\usepackage{fontspec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{tabularray}
+\usepackage{fontawesome5}
+\usepackage{setspace}
+\usepackage{ulem}
+\usepackage{xcolor}     % tabularray 的 bg= 颜色需要此包
+\usepackage{lastpage}   % 自动获取总页数，替代手动 \label{ReportEnd}
+
+% 页面边距
+\geometry{top=42mm, bottom=30mm, left=25mm, right=25mm, headheight=60pt}
+
+% 字体
+\setCJKmainfont{SimSun}[AutoFakeBold=true]
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+
+% ==================== 【变量配置区 — 每次出报告只改这里】====================
+
+% —— 报告基本信息 ——
+\newcommand{\ReportYear}{20xx}          % 年份
+\newcommand{\ReportMonth}{xx}           % 月份
+\newcommand{\ReportDay}{xx}             % 日
+\newcommand{\ReportNo}{xxxx}            % 流水号
+
+% —— 封面三行 ——
+\newcommand{\ProjectName}{%             % 工程名称（过长时在此手动换行，见封面说明）
+    小米智能制造产业基地二期项目（6号生产厂房等2项）-6号生产厂房%
+}
+\newcommand{\ClientName}{小米景曦科技有限公司}
+\newcommand{\InspType}{一般委托}
+
+% —— 主表字段 ——
+\newcommand{\InspLocation}{北京市亦庄经济开发区}
+\newcommand{\InspItem}{防火涂层厚度检测}
+\newcommand{\ConstructUnit}{中建二局集团有限公司}
+\newcommand{\DesignUnit}{中国汽车工业工程有限公司}
+\newcommand{\SupervUnit}{北京中联环建设监理有限责任公司}
+\newcommand{\SampleBasis}{委托方指定数量}
+\newcommand{\MethodBasis}{《建筑防火涂料（板）工程设计、施工与验收规程》（DB11/1245-2015）}
+\newcommand{\JudgeBasis}{《钢结构工程施工质量验收标准》（GB 50205-2020）}
+% 检测仪器：多行用 \\ 分隔
+\newcommand{\InstrumentList}{%
+    GLM50+612445282 \quad 激光测距仪 \\
+    MC-2000+BC200134 \quad 涂层测厚仪 \\
+    （0$\sim$200）mm+87756 \quad 数显游标卡尺%
+}
+\newcommand{\InspStartDate}{2026年05月19日}
+\newcommand{\InspEndDate}{2026年05月19日}
+\newcommand{\InspEnv}{晴、32℃}
+\newcommand{\InspPersonnel}{李瑾、李红月、孟林}
+% 检测结论（首行自动缩进两字）
+\newcommand{\Conclusion}{%
+    \hspace*{2\ccwd}本次对\ProjectName{}的钢柱、钢梁进行了防火涂层厚度检测，检测结果合格。%
+}
+\newcommand{\Approver}{}
+\newcommand{\Reviewer}{}
+\newcommand{\MainInsp}{}
+\newcommand{\Remarks}{/}
+
+% —— 第1章概况正文 ——
+\newcommand{\ProjectOverview}{%
+\hspace*{2\ccwd}工程概况第一段描述，包括建筑基本参数。
+
+\hspace*{2\ccwd}工程概况第二段描述，防火涂料设计要求等。
+
+\hspace*{2\ccwd}受\ClientName{}委托，北京市建设工程质量第三检测所有限责任公司对\ProjectName{}进行了\InspItem{}。%
+}
+
+% —— 第2章检测方法正文 ——
+\newcommand{\MethodDesc}{%
+\hspace*{2\ccwd}按照\MethodBasis{}要求，采用测针法对防火涂层厚度进行检测。每个构件测量不少于5个点，取平均值作为该构件的厚度代表值。%
+}
+
+% ==================== 样式配置 ====================
+\ctexset{
+    section = {
+        format     = \zihao{-3}\heiti\bfseries\centering,
+        number     = \arabic{section},
+        name       = {, },
+        beforeskip = 0.5\baselineskip,
+        afterskip  = 0.2\baselineskip
+    },
+    subsection = {
+        format     = \zihao{4}\heiti\bfseries,
+        number     = \arabic{section}.\arabic{subsection},
+        name       = {, },
+        beforeskip = 0.3\baselineskip,
+        afterskip  = 0.1\baselineskip
+    }
+}
+\renewcommand{\normalsize}{\zihao{-4}}
+
+% ==================== 文档开始 ====================
+\begin{document}
+
+% ==================== 第一页：封面 ====================
+\begin{titlepage}
+    \pagestyle{empty}
+    \heiti\sffamily\bfseries\zihao{3}
+
+    \vspace*{15mm}
+
+    \begin{center}
+        % 字间距只用 \CJKglue，不再叠加 \hspace，避免双重间距
+        {\zihao{0}\renewcommand{\CJKglue}{\hskip 0.5em}检测报告}
+    \end{center}
+
+    \vspace{5mm}
+
+    \begin{center}
+        {\kaishu\rmfamily\mdseries
+        京建质检 J\textsubscript{3}—G 字 \ReportYear{}第（\ReportNo{}）号}
+    \end{center}
+
+    \vspace{55mm}
+
+    \renewcommand{\arraystretch}{1.6}
+    \begin{center}
+        \kaishu\rmfamily
+        % 说明：工程名称过长（>16字）时，在 \ProjectName 内部用 \\ 手动换行
+        \begin{tabular}{p{3.2cm} @{\hspace{0.5em}} l}
+            工\hfill 程\hfill 名\hfill 称: &
+                \qquad\uline{\makebox[10.5cm][c]{\ProjectName{}}} \\
+            委\hfill 托\hfill 单\hfill 位: &
+                \qquad\uline{\makebox[10.5cm][c]{\ClientName{}}} \\
+            检\hfill 测\hfill 类\hfill 别: &
+                \qquad\uline{\makebox[10.5cm][c]{\InspType{}}} \\
+        \end{tabular}
+    \end{center}
+
+    \vfill
+
+    \begin{center}
+        北京市建设工程质量第三检测所有限责任公司 \\
+        \vspace{8mm}
+        \ReportYear{}年\ReportMonth{}月\ReportDay{}日
+    \end{center}
+\end{titlepage}
+
+% ==================== 第二页：注意事项 ====================
+\clearpage
+\pagestyle{empty}
+
+\begin{center}
+    \vspace*{0mm}
+    {\zihao{2}\bfseries 注\quad 意\quad 事\quad 项}
+    \vspace{15mm}
+\end{center}
+
+\begin{enumerate}[label=\arabic*., itemsep=1.8ex, leftmargin=2.0em]
+    \zihao{-3}
+    \item 本报告无"北京市建设工程质量第三检测所有限责任公司"检测专用章无效。
+    \item 复制本报告无重新加盖"北京市建设工程质量第三检测所有限责任公司"检测专用章无效。
+    \item 报告无主检人、审核人、批准人签字无效。
+    \item 本报告涂改增删无效。
+    \item 委托检验仅对来样负责。
+    \item 未经本所书面批准，不得将本报告作为广告宣传使用。
+    \item 若对本报告有异议，应于本报告发出之日起 15 日内向检测单位提出，逾期不受理。
+\end{enumerate}
+
+\vfill
+
+\begin{flushleft}
+    \zihao{-3}
+    检测单位：北京市建设工程质量第三检测所有限责任公司 \\
+    地\qquad 址：北京市西城区百万庄大街3号 \\
+    邮\qquad 编：100037 \\
+    电\qquad 话：010-88385491\qquad 010-88378878（管理室）\\
+    传\qquad 真：010-88378878
+\end{flushleft}
+
+% ==================== 第三页：工程质量检测报告主表 ====================
+\clearpage
+\pagenumbering{arabic}
+\pagestyle{fancy}
+\fancyhf{}
+
+% 页眉：用 \makebox 控制宽度，避免 parbox 溢出
+\fancyhead[C]{%
+    \zihao{-3}\mdseries\songti
+    北京市建设工程质量第三检测所有限责任公司\\
+    工程质量检测报告\\[0.6ex]
+    \makebox[0.9\textwidth][s]{%
+        京建质检 J$_3$-G 字 \ReportYear{}第（\ReportNo{}）号%
+        \hfill
+        第 \thepage\ 页\enspace 共 \pageref{LastPage}\ 页%
+    }%
+}
+\cfoot{\zihao{-3}\mdseries\songti 北京市建设工程质量第三检测所有限责任公司}
+\renewcommand{\headrulewidth}{1.5pt}
+\renewcommand{\footrulewidth}{0pt}
+\renewcommand{\footrule}{\hbox to\headwidth{\vspace{1mm}\dotfill}\vspace{0.2mm}}
+
+\vspace*{0mm}
+
+\noindent
+{\zihao{-4}
+\begin{tblr}{
+  width   = \textwidth,
+  colspec = {X[22,c,m] X[32,l,m] X[21,c,m] X[32,l,m] X[21,c,m] X[32,l,m]},
+  hspan   = minimal,
+  hlines,
+  vlines,
+  vline{1,Z} = {0pt},       % 去掉左右外边框，视觉上与页面融合
+  row{1}     = {ht=1.5cm},
+  row{2-9}   = {ht=1.0cm},
+  row{10}    = {ht=1.0cm},  % 检测仪器，可多行
+  row{11-12} = {ht=1.0cm},
+  row{13}    = {ht=3.2cm},  % 检测结论
+  row{14-15} = {ht=1.5cm},
+}
+工程名称 & \SetCell[c=5]{l} \ProjectName{}     & & & & \\
+检测地点 & \SetCell[c=5]{l} \InspLocation{}    & & & & \\
+检测项目 & \SetCell[c=5]{l} \InspItem{}        & & & & \\
+施工单位 & \SetCell[c=5]{l} \ConstructUnit{}   & & & & \\
+设计单位 & \SetCell[c=5]{l} \DesignUnit{}      & & & & \\
+监理单位 & \SetCell[c=5]{l} \SupervUnit{}      & & & & \\
+抽样依据 & \SetCell[c=5]{l} \SampleBasis{}     & & & & \\
+方法依据 & \SetCell[c=5]{l} \MethodBasis{}     & & & & \\
+判定依据 & \SetCell[c=5]{l} \JudgeBasis{}      & & & & \\
+检测仪器 & \SetCell[c=5]{l} {\InstrumentList{}}& & & & \\
+检测时间 & \SetCell[c=3]{l} \InspStartDate{}$\sim$\InspEndDate{} & & & 检测环境 & \InspEnv{} \\
+检测人员 & \SetCell[c=5]{l} \InspPersonnel{}   & & & & \\
+检测结论 & \SetCell[c=5]{l,t} \Conclusion{}    & & & & \\
+批准人   & \Approver{}  & 审核人 & \Reviewer{} & 主检人 & \MainInsp{} \\
+备注     & \SetCell[c=5]{l} \Remarks{}         & & & & \\
+\end{tblr}}
+ 
+\clearpage
+
+% ==================== 第四页起：正文 ====================
+
+\section{概况}
+
+\subsection{工程概况}
+
+\begin{spacing}{1.5}
+\ProjectOverview{}
+\end{spacing}
+
+
+\subsection{检测及判定依据}
+
+\begin{itemize}[label={\small\faBookOpen}, leftmargin=3em, itemsep=0.5ex]
+    \item \MethodBasis{}
+    \item \JudgeBasis{}
+\end{itemize}
+
+
+\subsection{检测人员}
+
+\hspace*{2\ccwd}\InspPersonnel{}
+
+
+\subsection{检测仪器}
+\begin{center}
+\vspace{0.5ex}
+\noindent 表~1.4\quad 检测仪器
+
+\vspace{0.5ex}
+{\zihao{-4}
+\begin{tblr}{
+  width   = \textwidth,
+  % 第1列为属性名，后续列为各仪器——增/减仪器时同步增/减列
+  colspec = {X[2,c,m] X[3,c,m] X[3,c,m] X[3,c,m]},
+  hlines, vlines,
+  row{1}  = { font=\bfseries},
+}
+检测仪器名称   & 激光测距仪              & 涂层测厚仪               & 数显游标卡尺 \\
+检测仪器编号   & GLM50+612445282         & MC-2000+BC200134         & （0$\sim$200）mm+87756 \\
+检定证书编号   & JZ001号                 & JZ002号                  & JZ003号 \\
+仪器使用有效期 & 2025.06$\sim$2026.06   & 2025.06$\sim$2026.06    & 2025.06$\sim$2026.06 \\
+检测精度       & 1mm                     & $\pm$3\%                 & 0.01mm \\
+\end{tblr}}
+\end{center}
+
+
+\subsection{检测环境}
+
+\hspace*{2\ccwd}\InspEnv{}
+
+
+% ==================== 第2章（根据报告类型修改章节名） ====================
+\section{防火涂层厚度检测}
+
+
+\subsection{检测方法}
+
+\begin{spacing}{1.5}
+\MethodDesc{}
+\end{spacing}
+
+
+\subsection{抽样依据}
+
+\begin{spacing}{1.5}
+\hspace*{2\ccwd}按照委托方要求，本次对\ProjectName{}的钢柱、钢梁、系杆及水平支撑进行检测。
+\end{spacing}
+
+
+\subsection{判定依据}
+
+\begin{spacing}{1.5}
+\hspace*{2\ccwd}依据\JudgeBasis{}及\MethodBasis{}进行判定。
+\end{spacing}
+
+
+\subsection{检测结果}
+
+\noindent 表~2.4\quad 检测结果汇总
+
+\vspace{0.5ex}
+% ——————————————————————————————————————————
+% 此表由 excel_to_tex.py 自动生成，运行：
+%   python excel_to_tex.py 你的数据.xlsx
+% 生成 data_table.tex 后放在本文件同目录即可
+% ——————————————————————————————————————————
+\input{data_table.tex}
+
+
+% ==================== 第3章：附图 ====================
+\section{附图}
+
+% 使用方法：
+%   1. 将图片文件放在 template.tex 同目录
+%   2. 修改 \includegraphics 中的文件名
+%   3. 复制下方图块添加更多附图
+
+\begin{center}
+    % 图片不存在时显示占位框，不影响编译
+    \IfFileExists{fig_placeholder.png}{%
+        \includegraphics[width=0.85\textwidth]{fig_placeholder.png}%
+    }{%
+        \fbox{\parbox{0.85\textwidth}{%
+            \centering\vspace{2.5cm}
+            【图片占位符 — 请将图片放入同目录并修改文件名】
+            \vspace{2.5cm}%
+        }}%
+    }
+
+    \vspace{1ex}
+    图~3-1\quad 示意图（单位：cm）
+\end{center}
+
+\vfill
+
+    \zihao{-4}（以下空白）
+
+\end{document}

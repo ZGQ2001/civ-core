@@ -58,10 +58,7 @@ function PdfPreviewInner({ path, emptyHint }: Props) {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [path]);
 
-  const fileUrl = useMemo(
-    () => (path ? convertFileSrc(path) : null),
-    [path],
-  );
+  const fileUrl = useMemo(() => (path ? convertFileSrc(path) : null), [path]);
 
   if (!fileUrl) {
     return (

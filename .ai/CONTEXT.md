@@ -34,14 +34,17 @@
 
 ---
 
-## 下一步候选（按价值排）
+## 下一步候选（按价值排，agent-first）
 
-1. **真正"一键流水线"按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— Agent 模式前奏
-2. **钻芯/回弹切 C#** —— data_processing calcType 下拉再加项
-3. **多检测内容混排**（一份报告含锚杆 + 钻芯 + 回弹等多个 section）—— 上次批次维度时谈到的「报告 / 检测内容 / 批次」三层，现在只做了报告 + 批次两层，留待钻芯/回弹切 C# 之后再补检测内容层
-4. **LaTeX 报告路线**（templates/latex/template.tex 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
-5. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin
-6. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
+> **方向定调（2026-05-27）**：系统主要操作者是 AI agent，不是人。GUI 退到「人 review agent 输出」位置。所有新功能优先评估 agent 体验，GUI 按钮做兜底。
+
+1. **MCP server：把 sidecar RPC 暴露成 MCP tools** —— agent 原生入口。30+ RPC（`anchor.*` / `doc.*` / `pdf_tools.*` / `word2pdf.*` / `xlsx.*` / `workspace.*` / `files.*` / `plot_curves.*`）包成 MCP tools，含 `inputSchema` JSON 描述；进度通知走 JSON-RPC notification → MCP progress；错误对齐「问题在哪 + 怎么修」原则。复用全部现有 sidecar 业务逻辑，只加协议层。预计 2-3 天。
+2. **钻芯/回弹切 C#** —— agent 调用 `data_processing.run` 时除 anchor 外还要能跑 leeb / 钻芯 / 回弹；data_processing calcType 下拉再加项。
+3. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 钻芯 + 回弹等多个 section；catalog 已有 `detection_item` level 概念，等钻芯/回弹切 C# 后再 wire。agent 出综合报告时刚需。
+4. **真正"一键流水线" GUI 按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— 给「人 review 长 agent 任务」用的便利路径，次优先级（agent 可直接调 MCP 串起来，不需要 GUI 按钮）。
+5. **LaTeX 报告路线**（`templates/latex/template.tex` 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
+6. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin（MCP server 独立打包还是合入 sidecar 待定）
+7. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
 
 ---
 
@@ -60,6 +63,7 @@
 | 工具间不要过度耦合 —— 装配线连贯但每个工序能独立工作（提供"一键导入"代替隐式继承） | 2026-05-26 |
 | 程序不能是黑盒 —— 错误信息告诉用户"问题在哪 + 怎么修"，不只是抛异常 | 2026-05-26 |
 | 业务判断不让 AI 替用户拍板（如字段维度划分）—— 留 TODO 让用户后续 PR 决定 | 2026-05-26 |
+| 系统主要操作者是 AI agent，不是人 —— 新功能先评估 agent 体验，GUI 做兜底 | 2026-05-27 |
 
 ---
 
@@ -92,6 +96,18 @@
 ---
 
 ## 会话历史
+
+### [2026-05-27] 批次维度模板上线：灌浆日期按批次填 + 模板助手指引
+
+2 个 commit，6 个文件，+503/−30 行。**层级模型重塑**：「报告级 + 批次级」两层（多检测内容混排留待钻芯/回弹切 C# 后再补「检测项目级」第三层）。
+
+- **Commit `57cf1fb` (pdf_tools UX 微调)**：拆分模式选了源 PDF 后输出目录自动 derive 同目录（不覆盖用户已选）；调参面板 `p-4/space-y-4` → `p-3/space-y-3` 与 plot_curves 对齐；"文件名说明框"去 border/bg 防误读成输入框。
+- **Commit `380540c` (批次维度模板)**：
+  - 模型重塑前用户先纠了我一轮——「仪器证书是报告级的、人员也是、检测时间也是」（我之前误划为批次级），最终批次级只剩 `grouting_date` 一个字段。
+  - 前端 types.ts 抽 `ReportBatchUserInputs` + 白名单 `BATCH_DIM_KEYS`；controller.tsx state 拆两半 + batchIds 同步 effect + 广播 setter；SettingsForm.tsx 新增 `GroutingDateByBatchSection`（复用 `AnchorParamsSection` 状态机：excelReady/loading/error/空批次/有批次），含「全部批次填同一日期」广播框 + N 行 date input + 黄条提示 `[[批次]]` 段必要性。
+  - 后端 AnchorHandlers.Run 模板 detect 分发：`TemplateHasBatchMarker` 扫 `[[批次]]` → 选 `GenerateMultiBatch`（每批 BatchResolver 注入本批 grouting_date + batch_id + 项目级）/ `Generate`（旧模板兼容 fallback：从第一批 batch_user_inputs 注入项目级 grouting_date，旧模板里 `{{灌浆日期}}` 仍可用）。
+  - 模板教学路径：Word 模板 picker hint 指向 ActivityBar「模板助手」；catalog 早就把 `grouting_date` 标为 `batch` 级（[CatalogStore.cs:130](dotnet/civ-doc/Catalog/CatalogStore.cs:130)）+ `template.validate` 已有 marker scope 嵌套感知 + level mismatch hint，本次只补**指引**让用户走过去。
+  - 测试 AnchorHandlersTests +2（多批不同日期端到端 + 旧模板 fallback）；全套 182/183 通过。
 
 ### [2026-05-27] T5.7 Python sidecar 收口：4 个域全迁 C#
 

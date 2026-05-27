@@ -65,9 +65,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
         `[${ts}] ${modeLabel}完成：${r.res.count} 个 → ${r.res.output}`,
       );
     } else if (r.kind === 'split') {
-      appendOutput?.(
-        `[${ts}] ${modeLabel}完成：拆出 ${r.res.count} 个文件`,
-      );
+      appendOutput?.(`[${ts}] ${modeLabel}完成：拆出 ${r.res.count} 个文件`);
     } else if (r.kind === 'error') {
       appendOutput?.(`[${ts}] ${modeLabel}失败：${r.message}`);
     }
@@ -302,8 +300,10 @@ function PreviewPane() {
     );
   }
 
-  const selectedInfo = c.previewInfos[Math.min(selectedIdx, c.previewInfos.length - 1)];
-  const previewPath = selectedInfo && !selectedInfo.error ? selectedInfo.path : undefined;
+  const selectedInfo =
+    c.previewInfos[Math.min(selectedIdx, c.previewInfos.length - 1)];
+  const previewPath =
+    selectedInfo && !selectedInfo.error ? selectedInfo.path : undefined;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -318,7 +318,7 @@ function PreviewPane() {
           </span>
         )}
         {c.previewInfos.length > 1 && (
-          <span className="ml-auto text-vscode-text-faint">
+          <span className="text-vscode-text-faint ml-auto">
             点击下方文件条目切换预览
           </span>
         )}

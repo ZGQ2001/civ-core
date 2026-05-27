@@ -6,7 +6,11 @@
 
 ---
 
-## 当前焦点（2026-05-26）
+## 当前焦点（2026-05-27）
+
+**T5.7 完成：Python sidecar 收口** —— workspace/files/pdf_tools/word2pdf 4 个域全切 C#，Python sidecar 只剩 plot_curves（matplotlib 无可替代）。C# 测试 +53，Python 残留 232 全过。架构上 Python sidecar 从「业务计算+IO+工具」收窄到「图表渲染单点」，跨语言 hop 减少。
+
+## 前一焦点（2026-05-26）
 
 **装配线第 5 个工序「报告填充」上线** —— 锚杆抗拔走通 数据处理 → (可选)绘曲线图 → 报告填充 完整链路。
 
@@ -79,6 +83,17 @@
 ---
 
 ## 会话历史
+
+### [2026-05-27] T5.7 Python sidecar 收口：4 个域全迁 C#
+
+4 个 commit 把 Python sidecar 残留 RPC 全迁 C#，符合"路由默认 C#"方向。Python sidecar 最终只承载 plot_curves（matplotlib 无可替代）。
+
+- **Commit 1 `3c21a1e` (workspace)**：4 RPC（last/set/clear/create_standard）；HomeDir 走 USERPROFILE env var 与 Python expanduser 对齐方便测试；8 xUnit。顺手修 pre-existing `TemplateHandlers.Fields_未知project_type` 用例失败：错误信息加可选目录提示（符合"程序不能是黑盒"）。
+- **Commit 2 `c354f30` (files)**：10 RPC（list_dir/exists/create_file/folder/rename/copy/move/reveal/delete/undo_delete）；delete 走 Microsoft.VisualBasic.FileSystem 发回收站，undo_delete 用 Shell.Application COM dynamic 调 "undelete" verb；自然排序对齐 Python；26 xUnit（含实测回收站往返）。
+- **Commit 3 `50b4684` (pdf_tools)**：4 RPC（merge/split_per_page/split_by_ranges/inspect）；PDFsharp 6.2 原子写；范围表达式 "1-3,5,7-9" 解析对齐 Python；20 xUnit；卸 pypdf Python 依赖。
+- **Commit 4 `0cefda1` (word2pdf)**：2 RPC（convert/inspect）；convert 用 dynamic 调 Word.Application + 回退 KWPS（Windows 限定，对齐 Python pywin32 DispatchEx 语义）；inspect 跨平台走 OpenXML + ZipArchive 读 docProps/app.xml<Pages>；macOS/Linux 抛 PlatformNotSupported + 注释指引未来怎么补 Mac AppleScript 路径；6 xUnit。
+
+期间确立原则[[feedback-avoid-com]]："能不调 COM 就不调"——大多数场景有非 COM 替代（OpenXML / PDFsharp / .NET BCL）就用；word2pdf 找不到不损失排版精度的非 COM 方案才保留 COM。最终 C# 测试 181 / Python 残留 232 / Rust 路由 2 全过。
 
 ### [2026-05-26] 装配线第 5 工序「报告填充」上线 + 占位符引擎 v2 + 图片占位符
 

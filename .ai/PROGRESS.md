@@ -15,11 +15,12 @@ T4 ✅ 工作区 + 文件树端到端
 T5 ✅ 4 个工具页全部 controller/Page/SettingsForm 范式
 T5.5 ✅ C# sidecar + leeb 整套迁 C#（路由默认 C#）
 T5.6 ✅ 装配线 anchor 走通（数据处理 → 绘曲线图 → 报告填充 出 docx + 嵌图）
+T5.7 ✅ Python sidecar 收口：workspace/files/pdf_tools/word2pdf 全切 C#；Python 仅留 plot_curves
 T6 ⏳ 打包（PyInstaller + dotnet publish + Tauri externalBin）
 T7 ✅ 删旧 Qt UI
 ```
 
-**当前**：装配线第 5 工序「报告填充」上线 —— 锚杆抗拔 数据处理 → 绘曲线图 → 报告填充 完整链路通；占位符引擎升级到 `{{}}` v2，新增 `{{img:xxx}}` 图片占位符。下一步候选见 CONTEXT.md。
+**当前**：T5.7 完成 —— 4 个 commit 把 Python sidecar 残留 RPC 全部迁到 C#。Python sidecar 现在只承载 plot_curves（matplotlib 无可替代）。C# 测试套从 128 涨到 181（+53），Python 残留 232 全过。下一步候选见 CONTEXT.md。
 
 ---
 
@@ -27,6 +28,10 @@ T7 ✅ 删旧 Qt UI
 
 | commit | 日期 | 内容 |
 |--------|------|------|
+| `0cefda1` | 2026-05-27 | refactor(word2pdf): 迁 C#（Windows COM dynamic + macOS/Linux stub；inspect 跨平台走 OpenXML） |
+| `50b4684` | 2026-05-27 | refactor(pdf_tools): 迁 C#（PDFsharp 6.2，原子写）+ 20 xUnit；卸 pypdf Python 依赖 |
+| `c354f30` | 2026-05-27 | refactor(files): 迁 C#（10 RPC，回收站 + 5min undo Shell COM）+ 26 xUnit |
+| `3c21a1e` | 2026-05-27 | refactor(workspace): 迁 C#（4 RPC，~/.civ-core/workspace.json + 标准骨架）+ 8 xUnit；顺修 TemplateHandlers pre-existing 用例 |
 | `228b0cf` | 2026-05-26 | feat(template): 图片占位符 `{{img:xxx}}` 嵌入 OpenXML Drawing + ImageInjector helper + plot_curves 按 anchor_id 自动串接 |
 | `a1c74ee` | 2026-05-26 | feat(anchor): catalog 字段单位优化（kN 派生）+ 报告填充与数据处理解耦（独立 own + 一键导入）+ 抽共享 anchorParamsForm |
 | `a3e2eb9` | 2026-05-26 | feat: 删 template_editor，新建 report_generator 独立工具页（4 件套 + ActivityBar）+ FileTree 删除确认升级到 VSCode 同款 |
@@ -91,3 +96,5 @@ T7 ✅ 删旧 Qt UI
 | 占位符引擎 v2：`{{}}` + `{{img:xxx}}` 双语法；catalog DefaultFormat 控制数字格式；按段位置切 Run 支持文本+图片混排 | 用户模板都用 `{{}}`；裸 double 1.234567 必须按规范保留位数；图片占位符必须能跟文本同段共存（如 "曲线: {{img:曲线图}} 已记录"） |
 | 报告填充工具完全独立 own state，不耦合数据处理 | 装配线连贯但每个工序能独立工作（拿别人 Excel 出报告也得能用）；保留"一键导入"按钮兜手动连贯场景 |
 | 字段维度划分（项目/批次/锚杆级）让用户拍板，不让 AI 替代 | AI 不是业务人；现阶段先用"拆批次"绕过批次共享字段（如灌浆日期）问题 |
+| word2pdf 渲染：Windows COM + Mac stub，不用 LibreOffice/Pages 降级 | 检测报告对甲方 Word 模板还原度要求高，~5% 排版差异不可接受；Mac 路径以后补 AppleScript 驱动 Word for Mac，精度跟 Windows 对齐 |
+| 「能不调 COM 就不调」但精度优先 | 大多数场景（文件回收站除外）有非 COM 替代（OpenXML / PDFsharp / .NET BCL）就用；word2pdf 这种纯渲染场景找不到等价无 COM 方案，才保留 COM |

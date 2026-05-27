@@ -42,10 +42,6 @@
 | `plot_curves.delete_preset`  | `handlers/plot_curves.py` | 删除预设                         |
 | `plot_curves.rename_preset`  | `handlers/plot_curves.py` | 重命名预设                       |
 | `plot_curves.copy_preset`    | `handlers/plot_curves.py` | 复制预设                         |
-| `pdf_tools.merge`            | `handlers/pdf_tools.py`   | PDF 合并                         |
-| `pdf_tools.split_per_page`   | `handlers/pdf_tools.py`   | 按页拆分                         |
-| `pdf_tools.split_by_ranges`  | `handlers/pdf_tools.py`   | 按范围拆分                       |
-| `pdf_tools.inspect`          | `handlers/pdf_tools.py`   | 预览（页数+大小）                |
 | `word2pdf.convert`           | `handlers/word2pdf.py`    | Word→PDF 批量                    |
 | `word2pdf.inspect`           | `handlers/word2pdf.py`    | 预览（段落数+页数+大小）         |
 
@@ -77,6 +73,10 @@
 | `files.copy`                   | `Handlers/FilesHandlers.cs`     | 复制（同名追加 (2)/(3)；目录递归）                                                |
 | `files.move`                   | `Handlers/FilesHandlers.cs`     | 移动（同名追加 (2)/(3)）                                                          |
 | `files.reveal`                 | `Handlers/FilesHandlers.cs`     | explorer /select 定位选中                                                         |
+| `pdf_tools.merge`              | `Handlers/PdfToolsHandlers.cs`  | PDF 合并（PDFsharp，原子写）                                                      |
+| `pdf_tools.split_per_page`     | `Handlers/PdfToolsHandlers.cs`  | 按页拆分（{stem}_p{n}.pdf 零填充）                                                |
+| `pdf_tools.split_by_ranges`    | `Handlers/PdfToolsHandlers.cs`  | 按范围拆分（"1-3,5,7-9" 表达式）                                                  |
+| `pdf_tools.inspect`            | `Handlers/PdfToolsHandlers.cs`  | 预览（页数 + 大小；单文件失败不影响整体）                                         |
 
 ### 未实现（预留）
 

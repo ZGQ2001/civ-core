@@ -25,8 +25,7 @@ dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
     "matplotlib>=3.9",
-    # PDF / image
-    "pypdf>=4.0",
+    # PDF / image（pdf_tools 已迁 C# PDFsharp；pypdf 仅 reportgen 备用图片处理走 pillow）
     "pillow>=10.4",
     # Utils
     "python-dateutil>=2.9",

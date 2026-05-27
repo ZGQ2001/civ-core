@@ -232,7 +232,6 @@ impl SidecarRouter {
         method == "ping"
             || method == "version"
             || method.starts_with("plot_curves.")
-            || method.starts_with("pdf_tools.")
             || method.starts_with("word2pdf.")
     }
 }
@@ -248,7 +247,6 @@ mod tests {
         assert!(SidecarRouter::is_python_method("version"));
         // 已交付 Python 工具
         assert!(SidecarRouter::is_python_method("plot_curves.run"));
-        assert!(SidecarRouter::is_python_method("pdf_tools.merge"));
         assert!(SidecarRouter::is_python_method("word2pdf.convert"));
     }
 
@@ -269,6 +267,8 @@ mod tests {
         ));
         assert!(!SidecarRouter::is_python_method("files.list_dir"));
         assert!(!SidecarRouter::is_python_method("files.delete"));
+        assert!(!SidecarRouter::is_python_method("pdf_tools.merge"));
+        assert!(!SidecarRouter::is_python_method("pdf_tools.inspect"));
         // 未来加的（不用改路由）
         assert!(!SidecarRouter::is_python_method("calc.core_drilling.run"));
         assert!(!SidecarRouter::is_python_method("rebound.run"));

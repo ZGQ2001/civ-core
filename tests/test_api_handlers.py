@@ -1,7 +1,7 @@
-"""api handlers (plot_curves / pdf_tools / word2pdf) + 端到端 dispatch 测试。
+"""api handlers (plot_curves / word2pdf) + 端到端 dispatch 测试。
 
-workspace.* / files.* / leeb.* 已迁 C# sidecar (civ-doc) —— 它们的用例在
-dotnet/civ-doc.Tests/ 下（WorkspaceHandlersTests / FilesHandlersTests / Leeb*Tests）。
+workspace.* / files.* / leeb.* / pdf_tools.* 已迁 C# sidecar (civ-doc) ——
+它们的用例在 dotnet/civ-doc.Tests/ 下。
 """
 
 from __future__ import annotations
@@ -12,14 +12,13 @@ from pathlib import Path
 import pytest
 
 from civ_core.api import handlers
-from civ_core.api.handlers import pdf_tools as pdf_handler
 from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import word2pdf as word2pdf_handler
 
 
 # ── 端到端 dispatch + handler 注册 ───────────────────────
 def test_full_dispatcher_methods() -> None:
-    """build_dispatcher 注册了 plot_curves/pdf_tools/word2pdf 全部方法 + ping/version。"""
+    """build_dispatcher 注册了 plot_curves/word2pdf 全部方法 + ping/version。"""
     from civ_core.api.__main__ import build_dispatcher
 
     d = build_dispatcher()
@@ -30,7 +29,6 @@ def test_full_dispatcher_methods() -> None:
         "version",
         "plot_curves.list_presets",
         "plot_curves.run",
-        "pdf_tools.merge",
         "word2pdf.convert",
     ):
         assert m in methods
@@ -66,7 +64,6 @@ def test_ping_roundtrip_via_dispatcher() -> None:
 
 def test_handlers_module_exposes_submodules() -> None:
     assert hasattr(handlers, "plot_curves")
-    assert hasattr(handlers, "pdf_tools")
     assert hasattr(handlers, "word2pdf")
 
 
@@ -229,45 +226,8 @@ def test_plot_curves_run_default_output_dir(tmp_path, monkeypatch) -> None:
 # dotnet/civ-doc.Tests/Leeb*Tests.cs（41 个用例对照 Python 黄金值）。
 
 
-# ── pdf_tools handler ─────────────────────────────────────
-def _make_blank_pdf(out_path: Path, n_pages: int) -> Path:
-    """造一个 n 页空白 PDF 供测试用。"""
-    from pypdf import PdfWriter
-
-    writer = PdfWriter()
-    for _ in range(n_pages):
-        writer.add_blank_page(width=595, height=842)
-    with out_path.open("wb") as fh:
-        writer.write(fh)
-    writer.close()
-    return out_path
-
-
-def test_pdf_inspect_basic(tmp_path) -> None:
-    """inspect 返每个 PDF 的页数 + 大小 + 合计 total_pages。"""
-    a = _make_blank_pdf(tmp_path / "a.pdf", n_pages=3)
-    b = _make_blank_pdf(tmp_path / "b.pdf", n_pages=7)
-    res = pdf_handler.inspect([str(a), str(b)])
-    assert res["total_pages"] == 10
-    assert len(res["files"]) == 2
-    assert res["files"][0]["pages"] == 3
-    assert res["files"][1]["pages"] == 7
-    assert res["files"][0]["size_kb"] > 0
-    assert "error" not in res["files"][0]
-
-
-def test_pdf_inspect_missing_file(tmp_path) -> None:
-    """单个文件不存在 → 带 error 字段返回，不影响其他文件统计。"""
-    a = _make_blank_pdf(tmp_path / "a.pdf", n_pages=2)
-    res = pdf_handler.inspect([str(a), str(tmp_path / "ghost.pdf")])
-    assert res["total_pages"] == 2  # 只算成功的
-    assert "error" in res["files"][1]
-    assert "不存在" in res["files"][1]["error"]
-    assert "pages" not in res["files"][1]
-
-
-def test_pdf_inspect_exposes_in_all() -> None:
-    assert "inspect" in pdf_handler.__all__
+# pdf_tools.* 已迁 C# sidecar (civ-doc) —— 用例在
+# dotnet/civ-doc.Tests/PdfToolsHandlersTests.cs。
 
 
 # ── word2pdf handler ──────────────────────────────────────

@@ -3,12 +3,12 @@
  *
  * 设计：
  *  - 只渲染当前页，翻页按钮在底部
- *  - 自适应容器宽度（ResizeObserver 监容器）
+ *  - 自适应容器宽度（ResizeObserver 监容器）+ 用户缩放（按钮 / Ctrl+滚轮）
  *  - 不渲染 text / annotation layer：纯预览，省 CPU
  *
  * worker 通过 Vite ?url 拿到 hashed 资源 URL，运行时设到 pdfjs.GlobalWorkerOptions。
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { Document, Page, pdfjs } from 'react-pdf';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -28,12 +28,23 @@ interface Props {
  * Document 的 file prop 我们传字符串 URL，避免每次渲染 new 对象触发 react-pdf 重新加载。
  * memo + 同 path 引用稳定 → 不重复拉 PDF。
  */
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.2;
+
+function clampZoom(z: number): number {
+  return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+}
+
 function PdfPreviewInner({ path, emptyHint }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** 1 = 适配容器宽度；>1 放大；<1 缩小 */
+  const [zoom, setZoom] = useState(1);
 
   // 监容器宽度
   useEffect(() => {
@@ -48,15 +59,39 @@ function PdfPreviewInner({ path, emptyHint }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // 切换文件 → 重置页号 / 错误
+  // 切换文件 → 重置页号 / 缩放 / 错误
   useEffect(() => {
-    // 切换 path 必然要把页号回归首页、清掉旧错误。这是与 path 派生的状态重置
     /* eslint-disable react-hooks/set-state-in-effect */
     setPageNum(1);
     setNumPages(0);
     setLoadError(null);
+    setZoom(1);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [path]);
+
+  const zoomIn = useCallback(
+    () => setZoom((z) => clampZoom(Math.round((z + ZOOM_STEP) * 100) / 100)),
+    [],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => clampZoom(Math.round((z - ZOOM_STEP) * 100) / 100)),
+    [],
+  );
+  const zoomReset = useCallback(() => setZoom(1), []);
+
+  // Ctrl + 滚轮缩放（在滚动容器上）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? -1 : 1;
+      setZoom((z) => clampZoom(Math.round((z + dir * ZOOM_STEP) * 100) / 100));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const fileUrl = useMemo(() => (path ? convertFileSrc(path) : null), [path]);
 
@@ -75,7 +110,7 @@ function PdfPreviewInner({ path, emptyHint }: Props) {
       ref={containerRef}
       className="flex h-full flex-col overflow-hidden bg-[#1e1e1e]"
     >
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-3">
         <div className="flex justify-center">
           <Document
             file={fileUrl}
@@ -104,7 +139,7 @@ function PdfPreviewInner({ path, emptyHint }: Props) {
             {numPages > 0 && containerWidth > 0 && (
               <Page
                 pageNumber={pageNum}
-                width={containerWidth}
+                width={containerWidth * zoom}
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
                 loading={
@@ -133,6 +168,27 @@ function PdfPreviewInner({ path, emptyHint }: Props) {
             title="下一页"
             disabled={pageNum >= numPages}
             onClick={() => setPageNum((n) => Math.min(numPages, n + 1))}
+          />
+          <span className="text-vscode-text-faint mx-2">·</span>
+          <PageNavBtn
+            icon="zoom-out"
+            title="缩小"
+            disabled={zoom <= ZOOM_MIN + 1e-6}
+            onClick={zoomOut}
+          />
+          <button
+            type="button"
+            onClick={zoomReset}
+            title="恢复 100%（适配宽度）"
+            className="hover:bg-vscode-hover min-w-[48px] rounded px-1 text-center hover:text-white"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <PageNavBtn
+            icon="zoom-in"
+            title="放大"
+            disabled={zoom >= ZOOM_MAX - 1e-6}
+            onClick={zoomIn}
           />
         </div>
       )}

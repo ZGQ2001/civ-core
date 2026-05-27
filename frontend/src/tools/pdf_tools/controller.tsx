@@ -42,10 +42,9 @@ interface State {
   mergeOutput: string;
   mergeResult: MergeRes | null;
 
-  // split_per_page / split_by_ranges 共用
+  // split_by_ranges
   splitInput: string;
   splitOutDir: string;
-  splitTemplate: string;
   splitExpr: string;
   splitResult: SplitRes | null;
 
@@ -71,7 +70,6 @@ interface Actions {
 
   setSplitInput: (p: string) => void;
   setSplitOutDir: (p: string) => void;
-  setSplitTemplate: (s: string) => void;
   setSplitExpr: (s: string) => void;
 
   run: () => Promise<RunOutcome>;
@@ -85,13 +83,10 @@ export type RunOutcome =
   | { kind: 'error'; message: string }
   | null;
 
-type Ctx = State & Actions & { defaultTemplate: string };
+type Ctx = State & Actions;
 
-const DEFAULT_TEMPLATE: Record<Mode, string> = {
-  merge: '', // merge 不用 template
-  split_per_page: '{stem}_p{n}.pdf',
-  split_by_ranges: '{stem}_{start}-{end}.pdf',
-};
+// 拆后文件名固定模板，不暴露给用户（占位符对非程序员不友好）
+const SPLIT_NAME_TEMPLATE = '{stem}_{start}-{end}.pdf';
 
 const PdfToolsContext = createContext<Ctx | null>(null);
 
@@ -116,9 +111,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
 
   const [splitInput, setSplitInputRaw] = useState('');
   const [splitOutDir, setSplitOutDir] = useState('');
-  const [splitTemplate, setSplitTemplate] = useState<string>(
-    DEFAULT_TEMPLATE.split_per_page,
-  );
   const [splitExpr, setSplitExpr] = useState('');
   const [splitResult, setSplitResult] = useState<SplitRes | null>(null);
 
@@ -130,15 +122,11 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
-  // 切 mode 时清结果 + 切默认模板（如果用户没改过的话简单逻辑：直接覆盖）
   const setMode = useCallback((m: Mode) => {
     setModeRaw(m);
     setMergeResult(null);
     setSplitResult(null);
     setRunError(null);
-    if (m !== 'merge') {
-      setSplitTemplate(DEFAULT_TEMPLATE[m]);
-    }
   }, []);
 
   const addMergeInputs = useCallback((paths: string[]) => {
@@ -273,15 +261,15 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
         if (!splitInput || !splitOutDir.trim()) {
           throw new Error('缺少输入文件或输出目录');
         }
-        if (mode === 'split_by_ranges' && !splitExpr.trim()) {
+        if (!splitExpr.trim()) {
           throw new Error('缺少页号范围表达式（例如 "1-3,5,7-9"）');
         }
         const params: Record<string, unknown> = {
           input: splitInput,
           output_dir: splitOutDir.trim(),
-          name_template: splitTemplate.trim() || DEFAULT_TEMPLATE[mode],
+          name_template: SPLIT_NAME_TEMPLATE,
+          expr: splitExpr.trim(),
         };
-        if (mode === 'split_by_ranges') params.expr = splitExpr.trim();
         const res = await rpc<SplitRes>(`pdf_tools.${mode}`, params);
         setSplitResult(res);
         shell.notifyFilesChanged();
@@ -301,12 +289,9 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
     mergeOutput,
     splitInput,
     splitOutDir,
-    splitTemplate,
     splitExpr,
     shell,
   ]);
-
-  const defaultTemplate = mode === 'merge' ? '' : DEFAULT_TEMPLATE[mode];
 
   const ctx: Ctx = useMemo(
     () => ({
@@ -316,7 +301,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       mergeResult,
       splitInput,
       splitOutDir,
-      splitTemplate,
       splitExpr,
       splitResult,
       previewInfos,
@@ -325,7 +309,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       previewError,
       running,
       runError,
-      defaultTemplate,
       setMode,
       addMergeInputs,
       removeMergeAt,
@@ -334,7 +317,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       setMergeOutput,
       setSplitInput,
       setSplitOutDir,
-      setSplitTemplate,
       setSplitExpr,
       run,
     }),
@@ -345,7 +327,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       mergeResult,
       splitInput,
       splitOutDir,
-      splitTemplate,
       splitExpr,
       splitResult,
       previewInfos,
@@ -354,7 +335,6 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       previewError,
       running,
       runError,
-      defaultTemplate,
       setMode,
       addMergeInputs,
       removeMergeAt,

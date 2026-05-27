@@ -76,9 +76,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
     !c.running &&
     (c.mode === 'merge'
       ? c.mergeInputs.length >= 1 && !!c.mergeOutput
-      : !!c.splitInput &&
-        !!c.splitOutDir &&
-        (c.mode !== 'split_by_ranges' || !!c.splitExpr.trim()));
+      : !!c.splitInput && !!c.splitOutDir && !!c.splitExpr.trim());
 
   return (
     <div className="flex h-full flex-col">

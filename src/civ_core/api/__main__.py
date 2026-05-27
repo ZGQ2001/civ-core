@@ -60,7 +60,6 @@ def build_dispatcher() -> Dispatcher:
     按方法名「默认 C#，白名单 Python」路由（详见 frontend/src-tauri/src/sidecar.rs）。
     """
     d = Dispatcher()
-    d.register_module("workspace", handlers.workspace)
     d.register_module("files", handlers.files)
     d.register_module("plot_curves", handlers.plot_curves)
     d.register_module("pdf_tools", handlers.pdf_tools)

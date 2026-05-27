@@ -47,7 +47,7 @@ public static class TemplateHandlers
             throw new ArgumentException("catalog_id 不可为空");
 
         var catalog = CatalogStore.Get(catalogId)
-            ?? throw new ArgumentException($"字段目录不存在：{catalogId}");
+            ?? throw new ArgumentException(BuildCatalogNotFoundMessage(catalogId));
 
         return new Dictionary<string, object?>
         {
@@ -108,7 +108,7 @@ public static class TemplateHandlers
             throw new ArgumentException($"模板文件不存在：{docxPath}");
 
         var catalog = CatalogStore.Get(catalogId)
-            ?? throw new ArgumentException($"字段目录不存在：{catalogId}");
+            ?? throw new ArgumentException(BuildCatalogNotFoundMessage(catalogId));
 
         var (keyByName, keyByAlias) = BuildLookup(catalog);
         var scanResult = ScanDocx(docxPath);
@@ -389,6 +389,15 @@ public static class TemplateHandlers
             if (!ok) return false;
         }
         return s.Length > 0;
+    }
+
+    private static string BuildCatalogNotFoundMessage(string requested)
+    {
+        var available = CatalogStore.List().Select(c => c.Id).ToList();
+        var hint = available.Count == 0
+            ? "（当前没有任何字段目录）"
+            : $"可选：{string.Join(", ", available)}";
+        return $"字段目录不存在：{requested}。{hint}";
     }
 
     private static string RequireString(JsonElement p, string key)

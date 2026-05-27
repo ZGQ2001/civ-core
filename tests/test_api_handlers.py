@@ -1,4 +1,8 @@
-"""api handlers (workspace / files) + 端到端 dispatch 测试。"""
+"""api handlers (files / plot_curves / pdf_tools / word2pdf) + 端到端 dispatch 测试。
+
+workspace.* / leeb.* 已迁 C# sidecar (civ-doc) —— 它们的用例在
+dotnet/civ-doc.Tests/ 下（WorkspaceHandlersTests / Leeb*Tests）。
+"""
 
 from __future__ import annotations
 
@@ -12,68 +16,6 @@ from civ_core.api.handlers import files as files_handler
 from civ_core.api.handlers import pdf_tools as pdf_handler
 from civ_core.api.handlers import plot_curves as plot_handler
 from civ_core.api.handlers import word2pdf as word2pdf_handler
-from civ_core.api.handlers import workspace as ws_handler
-
-
-# ── workspace handler ─────────────────────────────────────
-@pytest.fixture
-def isolated_ws_store(tmp_path, monkeypatch):
-    """把 workspace store 重定向到 tmp_path，避免污染用户 ~/.civ-core。"""
-    monkeypatch.setattr(ws_handler, "_STORE", tmp_path / "workspace.json")
-
-
-def test_workspace_last_empty(isolated_ws_store) -> None:
-    assert ws_handler.last() == {"path": None}
-
-
-def test_workspace_set_then_last(isolated_ws_store, tmp_path) -> None:
-    p = tmp_path / "ws"
-    p.mkdir()
-    res = ws_handler.set(str(p))
-    assert res["ok"] is True
-    assert Path(res["path"]) == p
-    assert Path(ws_handler.last()["path"]) == p
-
-
-def test_workspace_set_rejects_non_dir(isolated_ws_store, tmp_path) -> None:
-    f = tmp_path / "file.txt"
-    f.write_text("x")
-    with pytest.raises(ValueError):
-        ws_handler.set(str(f))
-
-
-def test_workspace_last_returns_none_if_path_gone(isolated_ws_store, tmp_path) -> None:
-    p = tmp_path / "gone"
-    p.mkdir()
-    ws_handler.set(str(p))
-    p.rmdir()
-    assert ws_handler.last() == {"path": None}
-
-
-def test_workspace_clear(isolated_ws_store, tmp_path) -> None:
-    p = tmp_path / "ws"
-    p.mkdir()
-    ws_handler.set(str(p))
-    ws_handler.clear()
-    assert ws_handler.last() == {"path": None}
-
-
-def test_workspace_create_standard(isolated_ws_store, tmp_path) -> None:
-    res = ws_handler.create_standard(str(tmp_path), "新项目")
-    root = Path(res["path"])
-    assert root.is_dir()
-    # 标准骨架就位
-    for sub in ("委托方提供资料", "数据", "报告", "模板", ".civ-core"):
-        assert (root / sub).is_dir()
-
-
-def test_workspace_create_standard_rejects_bad_name(isolated_ws_store, tmp_path) -> None:
-    with pytest.raises(ValueError):
-        ws_handler.create_standard(str(tmp_path), "")
-    with pytest.raises(ValueError):
-        ws_handler.create_standard(str(tmp_path), "bad/name")
-    with pytest.raises(ValueError):
-        ws_handler.create_standard(str(tmp_path), "bad\\name")
 
 
 # ── files handler ─────────────────────────────────────
@@ -126,8 +68,8 @@ def test_exists(tmp_path) -> None:
 
 
 # ── 端到端 dispatch + handler 注册 ───────────────────────
-def test_full_dispatcher_methods(isolated_ws_store) -> None:
-    """build_dispatcher 注册了 workspace/files/plot_curves 全部方法 + ping/version。"""
+def test_full_dispatcher_methods() -> None:
+    """build_dispatcher 注册了 files/plot_curves/pdf_tools/word2pdf 全部方法 + ping/version。"""
     from civ_core.api.__main__ import build_dispatcher
 
     d = build_dispatcher()
@@ -136,11 +78,11 @@ def test_full_dispatcher_methods(isolated_ws_store) -> None:
     for m in (
         "ping",
         "version",
-        "workspace.last",
-        "workspace.set",
         "files.list_dir",
         "plot_curves.list_presets",
         "plot_curves.run",
+        "pdf_tools.merge",
+        "word2pdf.convert",
     ):
         assert m in methods
 
@@ -154,8 +96,6 @@ def test_dispatcher_only_exposes_whitelisted_methods() -> None:
     methods = set(d.methods())
     # 这些是模块顶部 import 进来的，绝不能被注册成 RPC
     forbidden = {
-        "workspace.Path",
-        "workspace.create_standard_structure",
         "files.Path",
         "plot_curves.Path",
         "plot_curves.PlotCurvesError",
@@ -176,27 +116,7 @@ def test_ping_roundtrip_via_dispatcher() -> None:
     assert resp["result"] == "pong"
 
 
-def test_workspace_set_via_dispatcher(isolated_ws_store, tmp_path) -> None:
-    from civ_core.api.__main__ import build_dispatcher
-
-    d = build_dispatcher()
-    p = tmp_path / "rpc_ws"
-    p.mkdir()
-    req = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "workspace.set",
-            "params": {"path": str(p)},
-        }
-    )
-    resp = json.loads(d.handle_raw(req))
-    assert resp["result"]["ok"] is True
-    assert Path(resp["result"]["path"]) == p
-
-
 def test_handlers_module_exposes_submodules() -> None:
-    assert hasattr(handlers, "workspace")
     assert hasattr(handlers, "files")
     assert hasattr(handlers, "plot_curves")
 

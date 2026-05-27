@@ -33,10 +33,6 @@
 | ---------------------------- | ------------------------- | -------------------------------- |
 | `ping`                       | `__main__.py`             | 桥联自测                         |
 | `version`                    | `__main__.py`             | 版本信息                         |
-| `workspace.last`             | `handlers/workspace.py`   | 读取上次工作区                   |
-| `workspace.set`              | `handlers/workspace.py`   | 设置当前工作区                   |
-| `workspace.clear`            | `handlers/workspace.py`   | 清除工作区                       |
-| `workspace.create_standard`  | `handlers/workspace.py`   | 新建标准骨架                     |
 | `files.list_dir`             | `handlers/files.py`       | 列目录（隐藏 .开头 + .civ-core） |
 | `files.exists`               | `handlers/files.py`       | 文件存在检查                     |
 | `plot_curves.list_presets`   | `handlers/plot_curves.py` | 预设列表（含系统/用户来源）      |
@@ -69,6 +65,10 @@
 | `doc.ping`                     | `Handlers/DocHandlers.cs`       | C# 链路验证                                                                       |
 | `doc.version`                  | `Handlers/DocHandlers.cs`       | C# 版本信息                                                                       |
 | `xlsx.write_leeb_report_table` | `Handlers/XlsxHandlers.cs`      | 写里氏报告插入表                                                                  |
+| `workspace.last`               | `Handlers/WorkspaceHandlers.cs` | 读取上次工作区路径                                                                |
+| `workspace.set`                | `Handlers/WorkspaceHandlers.cs` | 设置当前工作区路径                                                                |
+| `workspace.clear`              | `Handlers/WorkspaceHandlers.cs` | 清除工作区记忆                                                                    |
+| `workspace.create_standard`    | `Handlers/WorkspaceHandlers.cs` | 新建标准项目骨架（4 业务子目录 + .civ-core/）                                     |
 
 ### 未实现（预留）
 

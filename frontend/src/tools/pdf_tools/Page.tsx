@@ -2,11 +2,16 @@
  * pdf_tools 工具页主区：顶部 mode 切换 + 文件操作 + 跑；中间 PDF 信息列表；底部结果。
  * 右侧参数（输出路径 / 模板 / 表达式）在 SettingsForm。
  */
-import { useCallback } from 'react';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  open as openDialog,
+  save as saveDialog,
+} from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
+import { PdfPreview } from '../../components/PdfPreview';
+import { Picker } from '../_shared/forms';
 import { usePdfTools } from './controller';
 import { MODE_LABELS, type Mode, type PdfFileInfo } from './types';
 
@@ -35,16 +40,36 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
     if (typeof sel === 'string') c.setSplitInput(sel);
   }, [c]);
 
+  // 输出选择器：合并→单 PDF 文件；拆分→目录
+  const pickMergeOutput = useCallback(async () => {
+    const sel = await saveDialog({
+      title: '保存合并 PDF 为',
+      defaultPath: '合并.pdf',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (typeof sel === 'string') c.setMergeOutput(sel);
+  }, [c]);
+
+  const pickSplitOutDir = useCallback(async () => {
+    const sel = await openDialog({ title: '选择输出目录', directory: true });
+    if (typeof sel === 'string') c.setSplitOutDir(sel);
+  }, [c]);
+
   const handleRun = useCallback(async () => {
     const r = await c.run();
     if (!r) return;
     const ts = new Date().toLocaleTimeString();
+    const modeLabel = MODE_LABELS[c.mode];
     if (r.kind === 'merge') {
-      appendOutput?.(`[${ts}] pdf merge: ${r.res.count} 个 → ${r.res.output}`);
+      appendOutput?.(
+        `[${ts}] ${modeLabel}完成：${r.res.count} 个 → ${r.res.output}`,
+      );
     } else if (r.kind === 'split') {
-      appendOutput?.(`[${ts}] pdf ${c.mode}: 拆出 ${r.res.count} 个文件`);
+      appendOutput?.(
+        `[${ts}] ${modeLabel}完成：拆出 ${r.res.count} 个文件`,
+      );
     } else if (r.kind === 'error') {
-      appendOutput?.(`[${ts}] pdf ${c.mode} 失败: ${r.message}`);
+      appendOutput?.(`[${ts}] ${modeLabel}失败：${r.message}`);
     }
   }, [c, appendOutput]);
 
@@ -119,6 +144,27 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
                   ? '开始合并'
                   : '开始拆分'}
             </button>
+          </div>
+        </div>
+        {/* 输出位置：必填、最容易被忽略，搬到顶部明确摆出来 */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-vscode-text-dim w-14 shrink-0">
+            {c.mode === 'merge' ? '输出到' : '保存到'}
+          </span>
+          <div className="min-w-0 flex-1">
+            {c.mode === 'merge' ? (
+              <Picker
+                value={c.mergeOutput}
+                onPick={pickMergeOutput}
+                placeholder="点右侧「选择…」指定合并后的 PDF 文件"
+              />
+            ) : (
+              <Picker
+                value={c.splitOutDir}
+                onPick={pickSplitOutDir}
+                placeholder="点右侧「选择…」指定拆出文件存放的文件夹"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -216,6 +262,15 @@ function ModeTab({
 
 function PreviewPane() {
   const c = usePdfTools();
+  // 列表中被预览的那个文件 idx；点击列表条目可切换
+  const [selectedIdx, setSelectedIdx] = useState(0);
+
+  // 文件列表改变或 mode 切换 → 重置选中到第一个
+  useEffect(() => {
+    // 外部输入变化引起的派生重置；放 effect 内最内聚
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIdx(0);
+  }, [c.mode, c.previewInfos.length]);
 
   // 空状态：按 mode 给不同提示
   if (c.previewInfos.length === 0) {
@@ -229,7 +284,7 @@ function PreviewPane() {
               : '请选要拆分的 PDF'}
           </div>
           <div className="text-vscode-text-faint mt-1 text-xs">
-            选好后会显示每个文件的页数和大小
+            选好后这里会显示文件和 PDF 预览
           </div>
         </div>
       </div>
@@ -241,11 +296,14 @@ function PreviewPane() {
       <div className="flex h-full items-center justify-center px-8 text-center">
         <div className="max-w-2xl text-xs whitespace-pre-wrap text-red-400">
           <i className="codicon codicon-error mb-2 block !text-[20px]" />
-          预览失败：{c.previewError}
+          读取 PDF 信息失败：{c.previewError}
         </div>
       </div>
     );
   }
+
+  const selectedInfo = c.previewInfos[Math.min(selectedIdx, c.previewInfos.length - 1)];
+  const previewPath = selectedInfo && !selectedInfo.error ? selectedInfo.path : undefined;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -259,28 +317,71 @@ function PreviewPane() {
             更新中…
           </span>
         )}
+        {c.previewInfos.length > 1 && (
+          <span className="ml-auto text-vscode-text-faint">
+            点击下方文件条目切换预览
+          </span>
+        )}
       </div>
-      <div className="min-h-0 flex-1 space-y-1 overflow-auto px-4 py-2">
+      {/* 上：列表（max 1/3 高度，可滚）；下：PDF 预览（撑满剩余）*/}
+      <div className="border-vscode-border max-h-[33%] min-h-[80px] shrink-0 space-y-1 overflow-auto border-b px-4 py-2">
         {c.previewInfos.map((info, i) => (
-          <PdfInfoRow key={`${info.path}_${i}`} info={info} index={i} />
+          <PdfInfoRow
+            key={`${info.path}_${i}`}
+            info={info}
+            index={i}
+            selected={i === selectedIdx}
+            onSelect={() => setSelectedIdx(i)}
+          />
         ))}
+      </div>
+      <div className="min-h-0 flex-1">
+        <PdfPreview
+          path={previewPath}
+          emptyHint={
+            selectedInfo?.error
+              ? '该文件读取失败，无法预览'
+              : '正在加载文件信息…'
+          }
+        />
       </div>
     </div>
   );
 }
 
-function PdfInfoRow({ info, index }: { info: PdfFileInfo; index: number }) {
+function PdfInfoRow({
+  info,
+  index,
+  selected,
+  onSelect,
+}: {
+  info: PdfFileInfo;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const c = usePdfTools();
   const isMerge = c.mode === 'merge';
   const filename = info.path.split(/[\\/]/).pop() ?? info.path;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        'flex items-center gap-2 rounded-[2px] border px-2 py-1.5 text-xs',
+        'flex cursor-pointer items-center gap-2 rounded-[2px] border px-2 py-1.5 text-xs',
         info.error
           ? 'border-red-900 bg-[#3a1f1f]'
-          : 'hover:border-vscode-border border-[#3a3a3a] bg-[#2a2a2a]',
+          : selected
+            ? 'border-vscode-focus bg-vscode-selected'
+            : 'hover:border-vscode-border border-[#3a3a3a] bg-[#2a2a2a]',
       )}
     >
       <span className="text-vscode-text-faint w-6 text-right">
@@ -302,7 +403,11 @@ function PdfInfoRow({ info, index }: { info: PdfFileInfo; index: number }) {
         )}
       </div>
       {isMerge && (
-        <div className="flex shrink-0 items-center gap-0.5">
+        // 阻止冒泡：点子按钮不应同时触发外层 row 的选中
+        <div
+          className="flex shrink-0 items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           <IconBtn
             icon="chevron-up"
             title="上移"

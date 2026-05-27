@@ -35,6 +35,8 @@ data/training_materials/
 *.jsonl
 .vscode/
 .claude/
+!.claude/skills/
+!.claude/skills/**
 .deepseek/
 *.egg-info/
 .eggs/

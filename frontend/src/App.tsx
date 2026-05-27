@@ -17,6 +17,7 @@ import {
   Group,
   Panel,
   Separator,
+  useDefaultLayout,
   type PanelImperativeHandle,
 } from 'react-resizable-panels';
 import { invoke } from '@tauri-apps/api/core';
@@ -78,6 +79,17 @@ export default function App() {
   const sidebarRef = useRef<PanelImperativeHandle>(null);
   const bottomRef = useRef<PanelImperativeHandle>(null);
   const rightRef = useRef<PanelImperativeHandle>(null);
+
+  // Panel 布局持久化（拖宽 / 折叠状态记到 localStorage）。
+  // id 带 v1 后缀，未来 panel 结构改了就 bump 一下避免还原到陈旧布局。
+  const mainLayout = useDefaultLayout({
+    id: 'civ-core-main-v1',
+    storage: window.localStorage,
+  });
+  const vsplitLayout = useDefaultLayout({
+    id: 'civ-core-vsplit-v1',
+    storage: window.localStorage,
+  });
 
   /** 文件树双击 .xlsx/.docx/.pdf 时上抛；工具 Provider 自己用 useShell 监听 + 决定是否接收。 */
   const handleFileActivate = useCallback((path: string) => {
@@ -372,6 +384,8 @@ export default function App() {
                       <Group
                         orientation="horizontal"
                         id="civ-core-main"
+                        defaultLayout={mainLayout.defaultLayout}
+                        onLayoutChanged={mainLayout.onLayoutChanged}
                         className="flex min-w-0 flex-1"
                       >
                         <Panel
@@ -408,6 +422,8 @@ export default function App() {
                           <Group
                             orientation="vertical"
                             id="civ-core-vsplit"
+                            defaultLayout={vsplitLayout.defaultLayout}
+                            onLayoutChanged={vsplitLayout.onLayoutChanged}
                             className="flex h-full min-h-0 flex-col"
                           >
                             <Panel defaultSize={75} minSize={20} id="editor">
@@ -444,9 +460,9 @@ export default function App() {
                         )}
                         <Panel
                           panelRef={rightRef}
-                          defaultSize={rightAvailable ? 400 : 0}
-                          minSize={rightAvailable ? 300 : 500}
-                          maxSize={rightAvailable ? 600 : 800}
+                          defaultSize={rightAvailable ? 320 : 0}
+                          minSize={rightAvailable ? 240 : 0}
+                          maxSize={rightAvailable ? 600 : 0}
                           collapsible
                           collapsedSize={0}
                           id="right-panel"

@@ -12,6 +12,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-is-maximized",
+    "window-state:default",
     "dialog:allow-open",
     "dialog:allow-save",
     {

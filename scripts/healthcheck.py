@@ -202,7 +202,12 @@ def _check_standards_db_calc_pipeline() -> str:
 
 
 def _check_api_dispatcher() -> str:
-    """api JSON-RPC dispatcher：ping + workspace.last + files.list_dir round-trip。"""
+    """api JSON-RPC dispatcher：ping + plot_curves 注册存在性。
+
+    T5.7 后 workspace/files/pdf_tools/word2pdf 全迁 C# sidecar；Python dispatcher
+    只剩 plot_curves + ping/version。C# 侧的 round-trip 由 dotnet test 覆盖
+    （dotnet/civ-doc.Tests/ 下 ~180 个 xUnit），healthcheck 只验 Python 还活着。
+    """
     try:
         import json
 
@@ -210,36 +215,20 @@ def _check_api_dispatcher() -> str:
 
         d = build_dispatcher()
 
-        # ping
+        # ping round-trip 确认 dispatcher 工作
         req = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"})
         resp = json.loads(d.handle_raw(req))
         if resp.get("result") != "pong":
             return _fail("api ping 异常", f"得到 {resp}")
 
-        # workspace.last 必须不报错
-        req = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "workspace.last"})
-        resp = json.loads(d.handle_raw(req))
-        if "error" in resp:
-            return _fail("workspace.last 报错", resp["error"]["message"])
+        # plot_curves 关键方法必须注册（Python 端唯一保留的业务域）
+        methods = set(d.methods())
+        required = {"plot_curves.list_presets", "plot_curves.run"}
+        missing = required - methods
+        if missing:
+            return _fail("plot_curves 方法注册缺失", f"缺：{missing}")
 
-        # files.list_dir 用 tmp_path 验证 entries 是 list
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "a.txt").write_text("x")
-            req = json.dumps(
-                {
-                    "jsonrpc": "2.0",
-                    "id": 3,
-                    "method": "files.list_dir",
-                    "params": {"path": td},
-                }
-            )
-            resp = json.loads(d.handle_raw(req))
-            if "error" in resp:
-                return _fail("files.list_dir 报错", resp["error"]["message"])
-            if not isinstance(resp["result"].get("entries"), list):
-                return _fail("files.list_dir 返回结构异常")
-
-        return _ok("api dispatcher 正常（ping + workspace + files 三方法 round-trip）")
+        return _ok("api dispatcher 正常（ping round-trip + plot_curves 注册齐全）")
     except Exception as e:
         return _fail("api dispatcher 异常", f"原因：{e}")
 

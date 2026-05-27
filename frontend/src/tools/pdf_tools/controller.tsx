@@ -88,6 +88,13 @@ type Ctx = State & Actions;
 // 拆后文件名固定模板，不暴露给用户（占位符对非程序员不友好）
 const SPLIT_NAME_TEMPLATE = '{stem}_{start}-{end}.pdf';
 
+// 取路径所在目录（兼容 Windows \ 和 POSIX /）。
+// 用途：选了拆分源 PDF 后，输出目录默认填成同一个文件夹（省一次手动选）。
+function dirOf(p: string): string {
+  const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  return idx > 0 ? p.slice(0, idx) : '';
+}
+
 const PdfToolsContext = createContext<Ctx | null>(null);
 
 export function usePdfTools(): Ctx {
@@ -159,6 +166,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
 
   const setSplitInput = useCallback((p: string) => {
     setSplitInputRaw(p);
+    setSplitOutDir((prev) => prev || dirOf(p));
     setSplitResult(null);
     setRunError(null);
   }, []);
@@ -231,6 +239,7 @@ export function PdfToolsProvider({ children }: { children: React.ReactNode }) {
       shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));
     } else {
       setSplitInputRaw(f.path);
+      setSplitOutDir((prev) => prev || dirOf(f.path));
       setSplitResult(null);
       setRunError(null);
       shell.appendOutput(logLine(`[PDF 工具] 已接收文件: ${f.path}`));

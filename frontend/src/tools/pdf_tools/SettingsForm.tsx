@@ -14,7 +14,7 @@ export function PdfToolsSettingsForm() {
 
   if (c.mode === 'merge') {
     return (
-      <div className="text-vscode-text-faint p-4 text-xs leading-relaxed">
+      <div className="text-vscode-text-faint p-3 text-xs leading-relaxed">
         合并 PDF 没有高级参数。
         <br />
         在工具页顶部选好「输出到」和要合并的 PDF，再点「开始合并」即可。
@@ -23,7 +23,7 @@ export function PdfToolsSettingsForm() {
   }
 
   return (
-    <div className="flex h-full flex-col space-y-4 overflow-auto p-4 text-xs">
+    <div className="flex h-full flex-col space-y-3 overflow-auto p-3 text-xs">
       <Field
         label="要拆哪几页"
         hint="按页号分段写，逗号分隔。例如填 1-3,5,7-9 会拆成 3 个 PDF：第 1~3 页一个、第 5 页一个、第 7~9 页一个。要按页全拆，写 1,2,3,4… 即可。"
@@ -37,20 +37,13 @@ export function PdfToolsSettingsForm() {
         />
       </Field>
 
-      <div className="text-vscode-text-faint border-vscode-border space-y-1 rounded-[2px] border bg-[#252525] px-3 py-2 text-[11px] leading-relaxed">
-        <div>
-          <i className="codicon codicon-info mr-1 !text-[12px]" />
-          拆出的文件命名：
-        </div>
-        <div className="text-vscode-text-dim">
-          源文件名 + 下划线 + 起止页号。
-          <br />
-          例：<span className="text-vscode-text">报告.pdf</span> 拆 1-3 →{' '}
-          <span className="text-vscode-text">报告_1-3.pdf</span>
-        </div>
+      <div className="text-vscode-text-faint border-l-2 border-[#3a3a3a] pl-3 text-[11px] leading-relaxed">
+        拆出的文件名自动生成：
+        <span className="text-vscode-text-dim">报告.pdf</span> 拆 1-3 →{' '}
+        <span className="text-vscode-text-dim">报告_1-3.pdf</span>
       </div>
 
-      <div className="text-vscode-text-faint pt-2 text-[11px]">
+      <div className="text-vscode-text-faint text-[11px]">
         填完后回到工具页点顶部「开始拆分」按钮。
       </div>
     </div>

@@ -8,9 +8,17 @@
 
 ## 当前焦点（2026-05-27）
 
-**T5.7 完成：Python sidecar 收口** —— workspace/files/pdf_tools/word2pdf 4 个域全切 C#，Python sidecar 只剩 plot_curves（matplotlib 无可替代）。C# 测试 +53，Python 残留 232 全过。架构上 Python sidecar 从「业务计算+IO+工具」收窄到「图表渲染单点」，跨语言 hop 减少。
+**批次维度模板（灌浆日期按批次）上线** —— 装配线「报告填充」工序从「报告级单值」升级到「报告级 + 批次级」两层。模型重塑：报告级（仪器/人员/检测时间/参建单位/委托方等 31 字段，扁平 `ReportUserInputs`）+ 批次级（目前唯一字段 `grouting_date`，`Record<batchId, string>`）。
+
+- **前端**：`types.ts` 抽出 `ReportBatchUserInputs` + 白名单 `BATCH_DIM_KEYS = ['grouting_date']`；`controller.tsx` state 拆两半 + batchIds effect 同步 + setter（单批 / 广播）+ RPC 入参增 `batch_user_inputs`；`SettingsForm.tsx` 新增 `GroutingDateByBatchSection`，状态机对齐 `AnchorParamsSection`（excelReady/loading/error/空批次/有批次），UI 含「全部批次填同一日期」广播框 + N 行 date input。
+- **后端 C#**：`AnchorHandlers.Run` 自动 detect 模板里有没有 `[[批次]]` 字符串 → 分发 `ReportGenerator.Generate`（旧模板单批，含 grouting_date fallback：从第一批 batch_user_inputs 注入项目级，旧模板里的 `{{灌浆日期}}` 仍可用）或 `GenerateMultiBatch`（新模板多批，每批 `BatchResolver` 注入本批 grouting_date + batch_id + 项目级）。`ReportGenerator.GenerateMultiBatch` 早就实现，本次只 wire。
+- **测试**：AnchorHandlersTests +2（多批不同灌浆日期端到端 + 旧模板 fallback），全套 182/183（1 skip 是真实数据测试）。
+
+**前一焦点（2026-05-27）**：T5.7 Python sidecar 收口——workspace/files/pdf_tools/word2pdf 4 个域全切 C#，Python sidecar 只剩 plot_curves（matplotlib 无可替代）。
 
 ## 前一焦点（2026-05-26）
+
+（说明：今天先做完 T5.7 Python 收口，又做完批次维度模板。两次焦点参见上方两段。）
 
 **装配线第 5 个工序「报告填充」上线** —— 锚杆抗拔走通 数据处理 → (可选)绘曲线图 → 报告填充 完整链路。
 
@@ -28,11 +36,12 @@
 
 ## 下一步候选（按价值排）
 
-1. **批次维度模板**（按批次填 user_inputs，灌浆日期等支持每批不同）—— 用户已用"拆批次"绕过，但 UI 还要前端按批次的 user_inputs 表单 + 后端切回 GenerateMultiBatch
-2. **真正"一键流水线"按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— Agent 模式前奏
-3. **钻芯/回弹切 C#** —— data_processing calcType 下拉再加项
-4. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin
-5. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
+1. **真正"一键流水线"按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— Agent 模式前奏
+2. **钻芯/回弹切 C#** —— data_processing calcType 下拉再加项
+3. **多检测内容混排**（一份报告含锚杆 + 钻芯 + 回弹等多个 section）—— 上次批次维度时谈到的「报告 / 检测内容 / 批次」三层，现在只做了报告 + 批次两层，留待钻芯/回弹切 C# 之后再补检测内容层
+4. **LaTeX 报告路线**（templates/latex/template.tex 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
+5. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin
+6. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
 
 ---
 
@@ -78,7 +87,7 @@
 - 「新建标准结构」用 `window.prompt`——后续换自定义 modal+toast
 - plot_curves 数据对照表格 cell 暂不能跳到曲线上对应点
 - 报告填充与绘曲线图无显式串接——用户得手动配置 plot_curves "标识列=锚杆编号" + 记住输出目录粘贴到报告填充。未来可加"自动按 anchor_id 出图"快捷路径
-- 批次共享字段（grouting_date 等）目前只支持项目级 user_input；多批不同值时需手动拆批输入
+- ~~批次共享字段（grouting_date 等）目前只支持项目级 user_input；多批不同值时需手动拆批输入~~ → 灌浆日期已升级为按批次维度（前端 `groutingDateByBatch` + 后端 `[[批次]]` marker dispatch）。其他批次级字段（如有需要）按相同范式扩展
 
 ---
 

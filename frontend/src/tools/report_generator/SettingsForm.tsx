@@ -121,11 +121,13 @@ export function ReportGeneratorSettingsForm() {
         emptyHint="先选输入 Excel，这里会按批次展开参数表"
       />
 
+      <GroutingDateByBatchSection />
+
       <div className="border-vscode-border border-t pt-3" />
 
       <Field
         label="Word 模板"
-        hint="带 {{占位符}} 的 .docx；要按锚杆克隆的部分用 [[每根锚杆]] / [[/每根锚杆]] 包住"
+        hint="带 {{占位符}} 的 .docx。按锚杆克隆：用 [[每根锚杆]] / [[/每根锚杆]] 包住；按批次输出（灌浆日期等批次级字段）：外层再包 [[批次]] / [[/批次]]。不会做？打开 ActivityBar 的「模板助手」可按层级列字段并自动验证你的模板。"
       >
         <Picker
           value={c.wordTemplatePath}
@@ -231,6 +233,135 @@ function ImportFromDataProcessingBtn() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 灌浆日期 按批次 渲染 ——
+ *
+ * 跟 AnchorParamsSection 共用状态机（excelReady / loading / error / 空批次 / 有批次）。
+ * 不复用 BatchParamsCard：这里只有一个字段（grouting_date），折叠卡片反而臃肿。
+ *
+ * 模板要写 [[批次]]...[[/批次]] 才会按批次输出；旧模板（只有 [[每根锚杆]]）后端会
+ * 走单批路径，此处填的日期会用其中一批的值（或忽略，由 AnchorHandlers.Run 决定）。
+ */
+function GroutingDateByBatchSection() {
+  const c = useReportGenerator();
+  const [broadcastDate, setBroadcastDate] = useState('');
+
+  if (!c.excelPath) {
+    return (
+      <Field
+        label="灌浆日期（按批次）"
+        hint="选完输入 Excel 后这里会按批次展开"
+      >
+        <div className="text-vscode-text-faint text-[11px] italic">
+          先选输入 Excel
+        </div>
+      </Field>
+    );
+  }
+  if (c.anchorBatchesLoading) {
+    return (
+      <Field label="灌浆日期（按批次）">
+        <div className="text-vscode-text-dim flex items-center gap-1 text-[11px]">
+          <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+          加载批次清单…
+        </div>
+      </Field>
+    );
+  }
+  if (c.anchorBatchesError) {
+    return (
+      <Field label="灌浆日期（按批次）">
+        <div className="text-[11px] whitespace-pre-wrap text-red-400">
+          读批次失败：{c.anchorBatchesError}
+        </div>
+      </Field>
+    );
+  }
+  if (c.anchorBatchIds.length === 0) {
+    return (
+      <Field label="灌浆日期（按批次）">
+        <div className="text-vscode-text-faint text-[11px] italic">
+          Excel 里没读到任何批次
+        </div>
+      </Field>
+    );
+  }
+
+  const filled = c.anchorBatchIds.filter((b) =>
+    c.groutingDateByBatch[b]?.trim(),
+  ).length;
+
+  return (
+    <Field
+      label={`灌浆日期（按批次，共 ${c.anchorBatchIds.length} 批）`}
+      hint="不同批次灌浆日期可能不同；模板里写 [[批次]]...[[/批次]] 后端才按批输出"
+    >
+      <div className="space-y-2">
+        {/* 醒目提示：批次段是按批输出的必要条件 */}
+        <div className="border-l-2 border-l-yellow-500 bg-[#2d2620] px-2 py-1.5 text-[10px] leading-relaxed text-yellow-300/90">
+          <i className="codicon codicon-info mr-1 !text-[11px]" />
+          模板里必须含{' '}
+          <code className="rounded bg-black/30 px-1 text-yellow-200">
+            [[批次]]...[[/批次]]
+          </code>{' '}
+          段，才能按批次输出不同灌浆日期；否则只取第一批的值灌入项目级。
+        </div>
+
+        <div className="text-vscode-text-faint flex items-center justify-between text-[10px]">
+          <span>
+            已填 {filled} / {c.anchorBatchIds.length}
+          </span>
+        </div>
+
+        {/* 广播：填一次同步所有批次 */}
+        <div className="border-vscode-border flex items-center gap-2 rounded-[2px] border bg-[#1f1f1f] px-2 py-1.5">
+          <span className="text-vscode-text-dim shrink-0 text-[10px]">
+            全部批次填同一日期：
+          </span>
+          <input
+            type="date"
+            value={broadcastDate}
+            onChange={(e) => setBroadcastDate(e.target.value)}
+            className="bg-vscode-input border-vscode-border text-vscode-text min-w-0 flex-1 rounded-[2px] border px-1.5 py-0.5 text-[10px]"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (broadcastDate) c.setGroutingDateForAllBatches(broadcastDate);
+            }}
+            disabled={!broadcastDate}
+            className="text-vscode-focus disabled:text-vscode-text-faint shrink-0 text-[10px] hover:underline disabled:cursor-not-allowed disabled:no-underline"
+          >
+            应用
+          </button>
+        </div>
+
+        {/* 每批一行 date input */}
+        <div className="space-y-1.5">
+          {c.anchorBatchIds.map((batchId) => (
+            <div key={batchId} className="flex items-center gap-2">
+              <span
+                className="text-vscode-text-dim w-20 shrink-0 truncate text-[11px]"
+                title={batchId}
+              >
+                {batchId}
+              </span>
+              <input
+                type="date"
+                value={c.groutingDateByBatch[batchId] ?? ''}
+                onChange={(e) =>
+                  c.setGroutingDateForBatch(batchId, e.target.value)
+                }
+                className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus min-w-0 flex-1 rounded-[2px] border px-2 py-1 text-[11px] focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Field>
   );
 }
 

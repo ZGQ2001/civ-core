@@ -33,6 +33,10 @@ import {
 import type { ReportRunRes, ReportUserInputs } from './types';
 import { DEFAULT_REPORT_USER_INPUTS } from './types';
 
+/// 批次级 user_input map 的 RPC wire 类型：{ [batchId]: { [key]: value } }
+/// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
+type BatchUserInputsWire = Record<string, Record<string, string>>;
+
 const TOOL_ID = 'report_generator';
 const XLSX_EXTS = new Set(['.xlsx', '.xls']);
 const DOCX_EXTS = new Set(['.docx']);
@@ -53,6 +57,9 @@ interface State {
   outputDir: string;
   curveImageDir: string;
   userInputs: ReportUserInputs;
+  /// 批次级 user_input：按 batchId 存。当前仅 grouting_date。
+  /// 跟着 anchorBatchIds 同步：新批次进来补空 string，旧批次离开就清掉。
+  groutingDateByBatch: Record<string, string>;
 
   // 运行
   running: boolean;
@@ -75,6 +82,8 @@ interface Actions {
   setCurveImageDir: (p: string) => void;
   setUserInput: (key: keyof ReportUserInputs, value: string) => void;
   resetUserInputs: () => void;
+  setGroutingDateForBatch: (batchId: string, value: string) => void;
+  setGroutingDateForAllBatches: (value: string) => void;
 
   // 一键导入数据处理当前 state（excelPath / sheet / 规范 / 批次列 / 各批次参数）
   importFromDataProcessing: () => void;
@@ -148,6 +157,9 @@ export function ReportGeneratorProvider({
   const [userInputs, setUserInputs] = useState<ReportUserInputs>({
     ...DEFAULT_REPORT_USER_INPUTS,
   });
+  const [groutingDateByBatch, setGroutingDateByBatch] = useState<
+    Record<string, string>
+  >({});
 
   // ── 运行 state ──
   const [running, setRunning] = useState(false);
@@ -161,6 +173,7 @@ export function ReportGeneratorProvider({
     setAnchorBatchIds([]);
     setAnchorBatchesError(null);
     setAnchorParamsByBatch({});
+    setGroutingDateByBatch({});
     setLastResult(null);
     setRunError(null);
   }, []);
@@ -191,6 +204,22 @@ export function ReportGeneratorProvider({
     setUserInputs({ ...DEFAULT_REPORT_USER_INPUTS });
   }, []);
 
+  const setGroutingDateForBatch = useCallback(
+    (batchId: string, value: string) => {
+      setGroutingDateByBatch((prev) => ({ ...prev, [batchId]: value }));
+    },
+    [],
+  );
+
+  // 「填默认」按钮：把同一日期写给所有当前已知批次（仅覆盖已存在 key）
+  const setGroutingDateForAllBatches = useCallback((value: string) => {
+    setGroutingDateByBatch((prev) => {
+      const next: Record<string, string> = {};
+      for (const b of Object.keys(prev)) next[b] = value;
+      return next;
+    });
+  }, []);
+
   // ── 自动拉批次清单（excelPath/sheet/batchCol 变化时）──
   const batchReqIdRef = useRef(0);
   useEffect(() => {
@@ -214,6 +243,13 @@ export function ReportGeneratorProvider({
           for (const b of r.batches) {
             next[b] = prev[b] ?? { ...DEFAULT_ANCHOR_PARAMS };
           }
+          return next;
+        });
+        // 灌浆日期：新批次进来补空 string；旧批次（同 batchId）保留已填值。
+        // 旧批次（这次 Excel 没出现的）直接被丢弃（构造 next 时不带过来），符合预期。
+        setGroutingDateByBatch((prev) => {
+          const next: Record<string, string> = {};
+          for (const b of r.batches) next[b] = prev[b] ?? '';
           return next;
         });
       })
@@ -314,6 +350,13 @@ export function ReportGeneratorProvider({
         if (v && v.trim()) userInputsTrimmed[k] = v;
       }
 
+      // 批次级 user_inputs：只把有填的批次打包发过去（空值跳过，后端按缺省处理）
+      const batchUserInputs: BatchUserInputsWire = {};
+      for (const b of anchorBatchIds) {
+        const v = (groutingDateByBatch[b] ?? '').trim();
+        if (v) batchUserInputs[b] = { grouting_date: v };
+      }
+
       const params: Record<string, unknown> = {
         input_xlsx: excelPath,
         standard: anchorStandard,
@@ -325,6 +368,8 @@ export function ReportGeneratorProvider({
       if (sheet) params.sheet = sheet;
       if (outputDir.trim()) params.word_output_dir = outputDir.trim();
       if (curveImageDir.trim()) params.curve_image_dir = curveImageDir.trim();
+      if (Object.keys(batchUserInputs).length > 0)
+        params.batch_user_inputs = batchUserInputs;
 
       const res = await rpc<{
         batches: number;
@@ -367,7 +412,9 @@ export function ReportGeneratorProvider({
     sheet,
     anchorStandard,
     anchorBatchIdColumn,
+    anchorBatchIds,
     anchorParamsByBatch,
+    groutingDateByBatch,
     wordTemplatePath,
     outputDir,
     curveImageDir,
@@ -407,6 +454,7 @@ export function ReportGeneratorProvider({
       outputDir,
       curveImageDir,
       userInputs,
+      groutingDateByBatch,
       running,
       lastResult,
       runError,
@@ -423,6 +471,8 @@ export function ReportGeneratorProvider({
       setCurveImageDir,
       setUserInput,
       resetUserInputs,
+      setGroutingDateForBatch,
+      setGroutingDateForAllBatches,
       importFromDataProcessing,
       run,
     }),
@@ -439,6 +489,7 @@ export function ReportGeneratorProvider({
       outputDir,
       curveImageDir,
       userInputs,
+      groutingDateByBatch,
       running,
       lastResult,
       runError,
@@ -449,6 +500,8 @@ export function ReportGeneratorProvider({
       setAnchorParamsForAllBatches,
       setUserInput,
       resetUserInputs,
+      setGroutingDateForBatch,
+      setGroutingDateForAllBatches,
       importFromDataProcessing,
       run,
     ],

@@ -8,7 +8,13 @@
  * 避免用户重复填）；本工具自己 own 的只有 Word 模板路径 + 项目元信息 + 输出目录。
  */
 
-/** 报告 user_inputs 字段定义 —— 跟 dotnet/civ-doc AnchorFieldCatalog 的 UserInput 字段对齐。 */
+/**
+ * 报告级 user_inputs —— 一份报告共享（甲方/施工/仪器/人员等），跟 dotnet/civ-doc
+ * AnchorFieldCatalog 的 UserInput 字段对齐。
+ *
+ * 批次级字段（同一项目不同批次值不同的，目前只有「灌浆日期」）走 ReportBatchUserInputs。
+ * 哪些 key 是批次级见 BATCH_DIM_KEYS。
+ */
 export interface ReportUserInputs {
   // 工程基础信息
   client_name: string;
@@ -43,12 +49,11 @@ export interface ReportUserInputs {
   instrument2_cert_no: string;
   instrument2_valid_until: string;
   instrument2_precision: string;
-  // 杆体 / 钻孔 / 注浆
+  // 杆体 / 钻孔 / 注浆（注意：grouting_date 是批次级，见 ReportBatchUserInputs）
   rock_soil_property: string;
   bar_material_spec: string;
   drill_angle: string;
   drill_diameter: string;
-  grouting_date: string;
   grout_ratio: string;
   grout_strength: string;
 }
@@ -81,10 +86,33 @@ export const DEFAULT_REPORT_USER_INPUTS: ReportUserInputs = {
   bar_material_spec: '',
   drill_angle: '',
   drill_diameter: '',
-  grouting_date: '',
   grout_ratio: '',
   grout_strength: '',
 };
+
+/**
+ * 批次级 user_inputs —— 同一项目不同批次值不同的字段。
+ *
+ * 现在只有「灌浆日期」一个：A 批 5 月初做、B 批 6 月中做属于常见情形。
+ * 仪器/人员/检测时间是报告级（一份报告一套），不在此结构。
+ */
+export interface ReportBatchUserInputs {
+  grouting_date: string;
+}
+
+export const DEFAULT_REPORT_BATCH_USER_INPUTS: ReportBatchUserInputs = {
+  grouting_date: '',
+};
+
+/**
+ * 哪些 catalog key 是「批次维度」字段 —— 前端白名单，无需 catalog 修改。
+ *
+ * 在 controller / SettingsForm 决定字段渲染位置（按批次卡片 vs 项目级 input）时用。
+ * 后续要把字段从项目级挪到批次级，只需：types.ts 里把字段从 ReportUserInputs 挪到
+ * ReportBatchUserInputs + 在这里加 key。
+ */
+export const BATCH_DIM_KEYS = ['grouting_date'] as const;
+export type BatchDimKey = (typeof BATCH_DIM_KEYS)[number];
 
 export interface UserInputFieldDef {
   key: keyof ReportUserInputs;
@@ -209,7 +237,7 @@ export const USER_INPUT_GROUPS: UserInputGroup[] = [
       },
       { key: 'drill_angle', label: '钻孔倾角', placeholder: '例：60°' },
       { key: 'drill_diameter', label: '钻孔直径', placeholder: '例：90mm' },
-      { key: 'grouting_date', label: '灌浆日期' },
+      // 注：grouting_date 已挪到批次级（ReportBatchUserInputs），在 SettingsForm 里单独按批次渲染
       {
         key: 'grout_ratio',
         label: '注浆材料配合比',

@@ -13,6 +13,7 @@
 
 using System.Text.Json;
 using ClosedXML.Excel;
+using DocumentFormat.OpenXml.Packaging;
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
@@ -116,6 +117,13 @@ public static class AnchorHandlers
         var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
             ? ParseUserInputs(uiEl)
             : new Dictionary<string, string>();
+        // 批次级用户输入（可选）：{ "B1": { "grouting_date": "2026-05-01" }, "B2": {...} }
+        // 模板有 [[批次]]...[[/批次]] 时按批次注入；没有时退化为单批模式（取第一个有值的批
+        // 的 grouting_date 灌到项目级，兼容旧模板）。
+        var batchUserInputs = p.TryGetProperty("batch_user_inputs", out var buiEl)
+            && buiEl.ValueKind == JsonValueKind.Object
+            ? ParseBatchUserInputs(buiEl)
+            : new Dictionary<string, Dictionary<string, string>>();
 
         // params_by_batch: { "B1": {P,Lf,La,A,E}, "B2": {...}, ... }
         var paramsByBatch = ParseParamsByBatch(p.GetProperty("params_by_batch"));
@@ -158,9 +166,14 @@ public static class AnchorHandlers
             SaveWorkbook(wb, outPath);
         }
 
-        // 可选 Word 报告：所有批次的锚杆合成一份 docx（项目级 + 每根锚杆克隆）
-        // 当前模板默认是「项目级 + [[每根锚杆]]...[[/每根锚杆]] 行重复」结构，
-        // 不分批次维度（用户场景 209 根全在 1 个批次内，跨批次时 anchor_index 全局递增）。
+        // 可选 Word 报告：根据模板有没有 [[批次]]...[[/批次]] 段决定走单批 / 多批路径。
+        //
+        //   旧模板（只有 [[每根锚杆]]）        → ReportGenerator.Generate
+        //   新模板（带 [[批次]]...[[/批次]]）  → ReportGenerator.GenerateMultiBatch
+        //
+        // 单批路径的兼容性补丁：用户旧模板里的 {{灌浆日期}} 仍能出值——
+        // 取 batch_user_inputs 里第一个有值的 grouting_date 注入项目级 user_inputs。
+        // 多批路径里每批 BatchResolver 用本批 grouting_date，跨批日期独立。
         var wordOutputs = new List<string>();
         var wordUnknownKeys = new List<string>();
         var wordMissingImages = new List<string>();
@@ -171,25 +184,77 @@ public static class AnchorHandlers
                 : Path.Combine(src.DirectoryName ?? "", $"{Path.GetFileNameWithoutExtension(src.Name)}_Word报告");
             Directory.CreateDirectory(wordDir);
 
-            var projectResolver = new DictionaryResolver(userInputs);
-            var rowResolvers = new List<IFieldResolver>();
-            int anchorIndex = 0;
-            foreach (var br in result.BatchResults)
+            var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
+            var useMultiBatch = TemplateHasBatchMarker(wordTemplatePath);
+
+            ReportGenerateResult genResult;
+            if (useMultiBatch)
             {
-                foreach (var rw in br.RowsWithResults)
+                // 多批：每批一个 BatchSection（BatchResolver 注入项目级 + 本批批次级字段）
+                var sections = new List<BatchSection>();
+                int anchorIndex = 0;
+                foreach (var br in result.BatchResults)
                 {
-                    anchorIndex++;
-                    rowResolvers.Add(new AnchorRowResolver(
-                        rw.Input, rw.Result, br.Params, userInputs,
-                        anchorIndex: anchorIndex,
-                        curveImageDir: curveImageDir));
+                    // 本批 batch 级字段 = 项目级 ∪ 本批 batch_user_inputs ∪ {batch_id}
+                    var batchLevel = new Dictionary<string, string>(userInputs);
+                    if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
+                    {
+                        foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
+                    }
+                    batchLevel["batch_id"] = br.BatchId;
+
+                    var batchRowResolvers = new List<IFieldResolver>();
+                    foreach (var rw in br.RowsWithResults)
+                    {
+                        anchorIndex++;
+                        batchRowResolvers.Add(new AnchorRowResolver(
+                            rw.Input, rw.Result, br.Params, batchLevel,
+                            anchorIndex: anchorIndex,
+                            curveImageDir: curveImageDir));
+                    }
+
+                    sections.Add(new BatchSection(
+                        new DictionaryResolver(batchLevel),
+                        batchRowResolvers));
                 }
+                var globalResolver = new DictionaryResolver(userInputs);
+                genResult = ReportGenerator.GenerateMultiBatch(
+                    wordTemplatePath, globalResolver, sections, wordOut,
+                    catalog: AnchorFieldCatalog.All);
+            }
+            else
+            {
+                // 单批兼容：把 batch_user_inputs 里第一个有值的 grouting_date 灌入项目级
+                var mergedInputs = new Dictionary<string, string>(userInputs);
+                foreach (var bui in batchUserInputs.Values)
+                {
+                    if (bui.TryGetValue("grouting_date", out var v)
+                        && !string.IsNullOrWhiteSpace(v)
+                        && !mergedInputs.ContainsKey("grouting_date"))
+                    {
+                        mergedInputs["grouting_date"] = v;
+                        break;
+                    }
+                }
+                var projectResolver = new DictionaryResolver(mergedInputs);
+                var rowResolvers = new List<IFieldResolver>();
+                int anchorIndex = 0;
+                foreach (var br in result.BatchResults)
+                {
+                    foreach (var rw in br.RowsWithResults)
+                    {
+                        anchorIndex++;
+                        rowResolvers.Add(new AnchorRowResolver(
+                            rw.Input, rw.Result, br.Params, mergedInputs,
+                            anchorIndex: anchorIndex,
+                            curveImageDir: curveImageDir));
+                    }
+                }
+                genResult = ReportGenerator.Generate(
+                    wordTemplatePath, projectResolver, rowResolvers, wordOut,
+                    catalog: AnchorFieldCatalog.All);
             }
 
-            var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
-            var genResult = ReportGenerator.Generate(
-                wordTemplatePath, projectResolver, rowResolvers, wordOut,
-                catalog: AnchorFieldCatalog.All);
             wordOutputs.Add(wordOut);
             wordUnknownKeys.AddRange(genResult.UnknownKeys);
             wordMissingImages.AddRange(genResult.MissingImages);
@@ -227,6 +292,38 @@ public static class AnchorHandlers
                 d[prop.Name] = prop.Value.GetString() ?? "";
         }
         return d;
+    }
+
+    /// <summary>解析 batch_user_inputs: { batchId: { key: value } }。容错：跳过非字符串。</summary>
+    private static Dictionary<string, Dictionary<string, string>> ParseBatchUserInputs(JsonElement el)
+    {
+        var d = new Dictionary<string, Dictionary<string, string>>();
+        foreach (var batchProp in el.EnumerateObject())
+        {
+            if (batchProp.Value.ValueKind != JsonValueKind.Object) continue;
+            d[batchProp.Name] = ParseUserInputs(batchProp.Value);
+        }
+        return d;
+    }
+
+    /// <summary>
+    /// 检测模板里有没有 [[批次]] 字符串（用来决定 Generate vs GenerateMultiBatch）。
+    /// 解析失败时 fallback 到 false 走单批路径——真要坏，ReportGenerator 会给出明确错误。
+    /// </summary>
+    private static bool TemplateHasBatchMarker(string templatePath)
+    {
+        try
+        {
+            using var doc = WordprocessingDocument.Open(templatePath, false);
+            var body = doc.MainDocumentPart?.Document?.Body;
+            return body?.InnerText.Contains("[[批次]]") ?? false;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[anchor.run] TemplateHasBatchMarker 探测失败，按单批模式处理：{ex.Message}");
+            return false;
+        }
     }
 
     private static string SafeFileName(string s)

@@ -18,9 +18,10 @@ import {
   type AnchorStandard,
 } from '../data_processing/types';
 import { AnchorParamsSection } from '../_shared/anchorParamsForm';
+import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useReportGenerator } from './controller';
-import { USER_INPUT_GROUPS, type UserInputGroup } from './types';
+import { DEFAULT_CATALOG_ID } from './types';
 
 export function ReportGeneratorSettingsForm() {
   const c = useReportGenerator();
@@ -176,25 +177,12 @@ export function ReportGeneratorSettingsForm() {
         />
       </Field>
 
-      <div className="border-vscode-border flex items-center justify-between border-t pt-3">
-        <div className="text-vscode-text text-[12px] font-medium">
-          项目元信息（
-          {USER_INPUT_GROUPS.reduce((s, g) => s + g.fields.length, 0)} 项）
-        </div>
-        <button
-          type="button"
-          onClick={c.resetUserInputs}
-          className="text-vscode-text-dim hover:text-vscode-focus text-[11px] hover:underline"
-        >
-          全部清空
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        {USER_INPUT_GROUPS.map((g, idx) => (
-          <GroupCard key={g.id} group={g} defaultExpanded={idx === 0} />
-        ))}
-      </div>
+      <CatalogDrivenInputs
+        catalogId={DEFAULT_CATALOG_ID}
+        values={c.userInputs}
+        onChange={c.setUserInput}
+        onReset={c.resetUserInputs}
+      />
     </div>
   );
 }
@@ -362,61 +350,5 @@ function GroutingDateByBatchSection() {
         </div>
       </div>
     </Field>
-  );
-}
-
-function GroupCard({
-  group,
-  defaultExpanded,
-}: {
-  group: UserInputGroup;
-  defaultExpanded: boolean;
-}) {
-  const c = useReportGenerator();
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  const filledCount = group.fields.filter(
-    (f) => !!c.userInputs[f.key]?.trim(),
-  ).length;
-
-  return (
-    <div className="border-vscode-border rounded-[3px] border bg-[#252525]">
-      <div
-        className="hover:bg-vscode-hover flex cursor-pointer items-center px-2 py-1.5 select-none"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <i
-          className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} text-vscode-text-dim mr-1 !text-[12px]`}
-        />
-        <i
-          className={`codicon codicon-${group.icon} text-vscode-text-dim mr-1.5 !text-[12px]`}
-        />
-        <span className="text-vscode-text text-[12px] font-medium">
-          {group.label}
-        </span>
-        <span className="text-vscode-text-faint ml-auto text-[10px]">
-          {filledCount} / {group.fields.length}
-        </span>
-      </div>
-
-      {expanded && (
-        <div className="border-vscode-border space-y-2 border-t px-3 py-2">
-          {group.fields.map((f) => (
-            <div key={f.key}>
-              <div className="text-vscode-text-dim mb-0.5 text-[11px]">
-                {f.label}
-              </div>
-              <input
-                type="text"
-                value={c.userInputs[f.key]}
-                placeholder={f.placeholder}
-                onChange={(e) => c.setUserInput(f.key, e.target.value)}
-                className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus w-full rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

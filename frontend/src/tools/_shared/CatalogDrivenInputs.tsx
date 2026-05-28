@@ -76,6 +76,7 @@ export function CatalogDrivenInputs({
   }, [catalogId, shell]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCatalog();
   }, [loadCatalog]);
 
@@ -111,7 +112,11 @@ export function CatalogDrivenInputs({
   }, [catalog, includeLevels]);
 
   const totalFields = useMemo(
-    () => grouped.reduce((s, lvl) => s + lvl.groups.reduce((g, gr) => g + gr.fields.length, 0), 0),
+    () =>
+      grouped.reduce(
+        (s, lvl) => s + lvl.groups.reduce((g, gr) => g + gr.fields.length, 0),
+        0,
+      ),
     [grouped],
   );
 

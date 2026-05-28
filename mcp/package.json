@@ -1,0 +1,36 @@
+{
+  "name": "civ-core-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing civ-core sidecar RPCs (anchor / leeb / plot_curves / report / workspace / files / pdf_tools / word2pdf) as MCP tools.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "civ-core-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

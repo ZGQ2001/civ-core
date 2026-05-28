@@ -26,6 +26,7 @@ import { allLeebTools } from "./tools/leeb.js";
 import { allPlotCurvesTools } from "./tools/plot_curves.js";
 import { registerSidecarTool } from "./tools/registry.js";
 import { allReportTools } from "./tools/report.js";
+import { allReportPresetTools } from "./tools/reportPreset.js";
 import { allTemplateTools } from "./tools/template.js";
 import { allWorkspaceTools } from "./tools/workspace.js";
 import { allXlsxTools } from "./tools/xlsx.js";
@@ -48,8 +49,7 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Phase 1 工具注册（21 tools = 2 doc + 4 workspace + 3 anchor + 2 leeb
-  //                  + 1 xlsx + 1 template + 1 report + 6 plot_curves）
+  // 工具注册（25 tools = Phase 1 的 20 + report_preset.* 5）
   const phase1Tools = [
     ...allDocTools,
     ...allWorkspaceTools,
@@ -58,6 +58,7 @@ async function main(): Promise<void> {
     ...allXlsxTools,
     ...allTemplateTools,
     ...allReportTools,
+    ...allReportPresetTools,
     ...allPlotCurvesTools,
   ];
   for (const def of phase1Tools) {

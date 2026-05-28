@@ -21,6 +21,7 @@ import { AnchorParamsSection } from '../_shared/anchorParamsForm';
 import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useReportGenerator } from './controller';
+import { PresetBar } from './PresetBar';
 import { DEFAULT_CATALOG_ID } from './types';
 
 export function ReportGeneratorSettingsForm() {
@@ -176,6 +177,12 @@ export function ReportGeneratorSettingsForm() {
           }
         />
       </Field>
+
+      <PresetBar
+        catalogId={DEFAULT_CATALOG_ID}
+        values={c.userInputs}
+        onLoad={c.loadUserInputs}
+      />
 
       <CatalogDrivenInputs
         catalogId={DEFAULT_CATALOG_ID}

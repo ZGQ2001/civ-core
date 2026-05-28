@@ -84,6 +84,8 @@ interface Actions {
   setOutputDir: (p: string) => void;
   setCurveImageDir: (p: string) => void;
   setUserInput: (key: string, value: string) => void;
+  /** 整批替换 user_inputs —— 从报告预设载入时用；保留已填的非预设字段。 */
+  loadUserInputs: (values: ReportUserInputs) => void;
   resetUserInputs: () => void;
   setGroutingDateForBatch: (batchId: string, value: string) => void;
   setGroutingDateForAllBatches: (value: string) => void;
@@ -198,6 +200,11 @@ export function ReportGeneratorProvider({
 
   const setUserInput = useCallback((key: string, value: string) => {
     setUserInputs((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  /// 从预设载入：合并到当前 state（保留预设没覆盖的字段，符合「不自动清空用户输入」原则）。
+  const loadUserInputs = useCallback((values: ReportUserInputs) => {
+    setUserInputs((prev) => ({ ...prev, ...values }));
   }, []);
 
   /// 「全部清空」—— 用户主动点才清，避免误清；保留 key=空字符串方便 UI 受控。
@@ -471,6 +478,7 @@ export function ReportGeneratorProvider({
       setOutputDir,
       setCurveImageDir,
       setUserInput,
+      loadUserInputs,
       resetUserInputs,
       setGroutingDateForBatch,
       setGroutingDateForAllBatches,
@@ -501,6 +509,7 @@ export function ReportGeneratorProvider({
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
       setUserInput,
+      loadUserInputs,
       resetUserInputs,
       setGroutingDateForBatch,
       setGroutingDateForAllBatches,

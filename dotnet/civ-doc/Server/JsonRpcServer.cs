@@ -158,6 +158,7 @@ public static class JsonRpcServer
         Handlers.TemplateHandlers.RegisterAll(dispatcher);
         Handlers.ReportHandlers.RegisterAll(dispatcher);
         Handlers.CatalogHandlers.RegisterAll(dispatcher);
+        Handlers.ReportPresetHandlers.RegisterAll(dispatcher);
         Handlers.WorkspaceHandlers.RegisterAll(dispatcher);
         Handlers.FilesHandlers.RegisterAll(dispatcher);
         Handlers.PdfToolsHandlers.RegisterAll(dispatcher);

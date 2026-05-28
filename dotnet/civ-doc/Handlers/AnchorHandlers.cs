@@ -113,6 +113,9 @@ public static class AnchorHandlers
         // 曲线图目录（可选）：传给 AnchorRowResolver，{{img:曲线图}} 自动按 anchor_id 拼路径
         string? curveImageDir = p.TryGetProperty("curve_image_dir", out var ciEl)
             && ciEl.ValueKind == JsonValueKind.String ? ciEl.GetString() : null;
+        // 报告名称（可选）：影响 Word 输出文件名；留空走默认「锚杆抗拔报告.docx」
+        string? reportName = p.TryGetProperty("report_name", out var rnEl)
+            && rnEl.ValueKind == JsonValueKind.String ? rnEl.GetString() : null;
         // 项目级用户输入字段（可选）：{ client_name, project_name, test_date, ... }
         var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
             ? ParseUserInputs(uiEl)
@@ -184,7 +187,12 @@ public static class AnchorHandlers
                 : Path.Combine(src.DirectoryName ?? "", $"{Path.GetFileNameWithoutExtension(src.Name)}_Word报告");
             Directory.CreateDirectory(wordDir);
 
-            var wordOut = Path.Combine(wordDir, SafeFileName("锚杆抗拔报告.docx"));
+            var wordFileName = !string.IsNullOrWhiteSpace(reportName)
+                ? (reportName!.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)
+                    ? reportName!
+                    : $"{reportName}.docx")
+                : "锚杆抗拔报告.docx";
+            var wordOut = Path.Combine(wordDir, SafeFileName(wordFileName));
             var useMultiBatch = TemplateHasBatchMarker(wordTemplatePath);
 
             ReportGenerateResult genResult;

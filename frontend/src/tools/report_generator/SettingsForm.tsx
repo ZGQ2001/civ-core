@@ -68,8 +68,55 @@ export function ReportGeneratorSettingsForm() {
       <ImportFromDataProcessingBtn />
 
       <Field
+        label="报告名称"
+        hint="影响输出文件名；留空 = 默认「锚杆抗拔报告.docx」。可包含中文。"
+      >
+        <input
+          type="text"
+          value={c.reportName}
+          placeholder="（可选 — 例：XX环境整治-锚杆抗拔报告）"
+          onChange={(e) => c.setReportName(e.target.value)}
+          className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus w-full rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
+        />
+      </Field>
+
+      <Field
+        label="数据来源"
+        hint="result 直接读结果 xlsx 出 Word 不重算；raw 走完整链路（数据处理→出 Word）"
+      >
+        <div className="flex items-center gap-3">
+          {(
+            [
+              { v: 'raw', label: '原始数据 Excel', note: '走完整计算链路' },
+              {
+                v: 'result',
+                label: '结果数据 Excel',
+                note: '已算好的结果，直接出 Word（不重算）',
+              },
+            ] as const
+          ).map((opt) => (
+            <label
+              key={opt.v}
+              className="flex cursor-pointer items-center gap-1"
+              title={opt.note}
+            >
+              <input
+                type="radio"
+                name="dataSource"
+                value={opt.v}
+                checked={c.dataSource === opt.v}
+                onChange={() => c.setDataSource(opt.v)}
+                className="accent-vscode-focus"
+              />
+              <span className="text-[11px]">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </Field>
+
+      <Field
         label="输入 Excel"
-        hint="锚杆抗拔的原始数据或数据处理输出的结果 xlsx 都行"
+        hint="按上方「数据来源」决定：raw=原始检测数据；result=数据处理已生成的结果 xlsx"
       >
         <Picker
           value={c.excelPath}

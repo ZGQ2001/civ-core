@@ -40,9 +40,21 @@ const TOOL_ID = 'report_generator';
 const XLSX_EXTS = new Set(['.xlsx', '.xls']);
 const DOCX_EXTS = new Set(['.docx']);
 
+/**
+ * 数据来源 —— 决定走哪条 RPC 路径：
+ *   - "raw"     : 输入是原始检测数据 Excel；调 anchor.run（读 + 算 + 写结果 xlsx + 出 Word）
+ *   - "result"  : 输入是数据处理已经出的结果 Excel；调 report.run_from_result
+ *                 （读结果直接出 Word，不再重算、不再写新 xlsx）
+ * 一键从数据处理导入时默认走 result，避免重复计算。
+ */
+export type ReportDataSource = 'raw' | 'result';
+
 interface State {
   // 输入（自己 own，可独立填或一键从数据处理导入）
   excelPath: string;
+  dataSource: ReportDataSource;
+  /** 报告名称 —— 影响输出文件名；留空 = 默认「锚杆抗拔报告.docx」。 */
+  reportName: string;
   sheet: string;
   anchorStandard: AnchorStandard;
   anchorBatchIdColumn: string;
@@ -73,6 +85,8 @@ interface State {
 interface Actions {
   // 输入
   setExcelPath: (p: string) => void;
+  setDataSource: (s: ReportDataSource) => void;
+  setReportName: (n: string) => void;
   setSheet: (s: string) => void;
   setAnchorStandard: (s: AnchorStandard) => void;
   setAnchorBatchIdColumn: (s: string) => void;
@@ -139,6 +153,8 @@ export function ReportGeneratorProvider({
 
   // ── 输入 state（独立 own） ──
   const [excelPath, setExcelPathRaw] = useState('');
+  const [dataSource, setDataSource] = useState<ReportDataSource>('raw');
+  const [reportName, setReportName] = useState('');
   const [sheet, setSheet] = useState('');
   const [anchorStandard, setAnchorStandard] =
     useState<AnchorStandard>('GB 50086-2015');
@@ -295,8 +311,17 @@ export function ReportGeneratorProvider({
       );
       return;
     }
+    // 一键导入默认走「结果数据」路径——数据处理已经算过一遍，没必要再算一次；
+    // 解决用户反馈 #2+#7「从数据处理导入应该是结果数据」+「报告填充不应再生成结果 xlsx」。
+    // 拿不到 outputPath 时退化回原始（兜底，不该常态触发）。
+    const importSource: ReportDataSource =
+      dp.outputPath && dp.outputPath.trim() ? 'result' : 'raw';
+    const importPath =
+      importSource === 'result' && dp.outputPath ? dp.outputPath : dp.excelPath;
+
     // 注意 setExcelPath 内部会清旧批次缓存，所以下面 set 参数要在 set Excel 之后
-    setExcelPath(dp.excelPath);
+    setExcelPath(importPath);
+    setDataSource(importSource);
     setSheet(dp.sheet);
     setAnchorStandard(dp.anchorStandard);
     setAnchorBatchIdColumn(dp.anchorBatchIdColumn);
@@ -304,7 +329,7 @@ export function ReportGeneratorProvider({
     setAnchorParamsByBatch({ ...dp.anchorParamsByBatch });
     shell.appendOutput(
       logLine(
-        `[报告] 已从数据处理导入: ${dp.excelPath}（${upstream.batchCount} 批，参数已填 ${upstream.paramsFilledBatchCount}/${upstream.batchCount}）`,
+        `[报告] 已从数据处理导入: ${importPath}（${upstream.batchCount} 批，参数已填 ${upstream.paramsFilledBatchCount}/${upstream.batchCount}，数据来源=${importSource === 'result' ? '结果 xlsx' : '原始 xlsx'}）`,
       ),
     );
   }, [upstream, dp, shell, setExcelPath]);
@@ -376,6 +401,7 @@ export function ReportGeneratorProvider({
       if (sheet) params.sheet = sheet;
       if (outputDir.trim()) params.word_output_dir = outputDir.trim();
       if (curveImageDir.trim()) params.curve_image_dir = curveImageDir.trim();
+      if (reportName.trim()) params.report_name = reportName.trim();
       if (Object.keys(batchUserInputs).length > 0)
         params.batch_user_inputs = batchUserInputs;
 
@@ -427,6 +453,7 @@ export function ReportGeneratorProvider({
     outputDir,
     curveImageDir,
     userInputs,
+    reportName,
     shell,
   ]);
 
@@ -451,6 +478,8 @@ export function ReportGeneratorProvider({
   const ctx: Ctx = useMemo(
     () => ({
       excelPath,
+      dataSource,
+      reportName,
       sheet,
       anchorStandard,
       anchorBatchIdColumn,
@@ -469,6 +498,8 @@ export function ReportGeneratorProvider({
       upstream,
       readiness,
       setExcelPath,
+      setDataSource,
+      setReportName,
       setSheet,
       setAnchorStandard,
       setAnchorBatchIdColumn,
@@ -487,6 +518,8 @@ export function ReportGeneratorProvider({
     }),
     [
       excelPath,
+      dataSource,
+      reportName,
       sheet,
       anchorStandard,
       anchorBatchIdColumn,

@@ -491,4 +491,170 @@ public class ReportGeneratorTests : IDisposable
                 Path.Combine(_tmp.Dir, "out.docx")));
         Assert.Contains("没有可填", ex.Message);
     }
+
+    // ── GenerateMultiDetectionItem 三层模板 ──
+
+    /// <summary>建 [[检测项目]] > [[批次]] > [[每根锚杆]] 三层模板。</summary>
+    private string MakeMultiDetectionItemTemplate(string fileName, string? globalIntro = null)
+    {
+        var path = Path.Combine(_tmp.Dir, fileName);
+        using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
+        var mainPart = doc.AddMainDocumentPart();
+        mainPart.Document = new Document(new Body());
+        var body = mainPart.Document.Body!;
+
+        if (globalIntro != null)
+            body.AppendChild(MakePara(globalIntro));
+
+        body.AppendChild(MakePara("[[检测项目]]"));
+        body.AppendChild(MakePara("检测项目：{{detection_type}}"));
+        body.AppendChild(MakePara("[[批次]]"));
+        body.AppendChild(MakePara("批次：{{batch_id}}"));
+        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowStartMarker));
+
+        var tb = new DocxTableBuilder();
+        tb.Row(new CellSpec("编号"), new CellSpec("结果"));
+        tb.Row(new CellSpec("{{anchor_id}}"), new CellSpec("{{judgement_result}}"));
+        body.AppendChild(tb.Build());
+
+        body.AppendChild(MakePara(ReportGenerator.DefaultPerRowEndMarker));
+        body.AppendChild(MakePara("[[/批次]]"));
+        body.AppendChild(MakePara("[[/检测项目]]"));
+
+        return path;
+    }
+
+    [Fact]
+    public void MultiDetectionItem_单项目多批次_克隆批次保留项目级头()
+    {
+        var src = MakeMultiDetectionItemTemplate("mdi_single.docx", globalIntro: "委托方：{{client_name}}");
+        var global = new DictResolver(new() { ["client_name"] = "甲方" });
+        var item = new DetectionItemSection(
+            new DictResolver(new() { ["detection_type"] = "锚杆抗拔" }),
+            new BatchSection[]
+            {
+                new(
+                    new DictResolver(new() { ["batch_id"] = "B1" }),
+                    new IFieldResolver[]
+                    {
+                        new DictResolver(new() { ["anchor_id"] = "P-01", ["judgement_result"] = "合格" }),
+                    }),
+                new(
+                    new DictResolver(new() { ["batch_id"] = "B2" }),
+                    new IFieldResolver[]
+                    {
+                        new DictResolver(new() { ["anchor_id"] = "P-02", ["judgement_result"] = "合格" }),
+                        new DictResolver(new() { ["anchor_id"] = "P-03", ["judgement_result"] = "不合格" }),
+                    }),
+            });
+        var outPath = Path.Combine(_tmp.Dir, "mdi_single_out.docx");
+
+        var res = ReportGenerator.GenerateMultiDetectionItem(
+            src, global, new[] { item }, outPath);
+
+        Assert.Equal(3, res.RowsRendered);
+        var inner = ReadAllText(outPath);
+        Assert.Contains("委托方：甲方", inner);
+        // 检测项目级头只出现一次（不是每批一次）
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(inner, "检测项目：锚杆抗拔"));
+        // 批次级头每批一次
+        Assert.Contains("批次：B1", inner);
+        Assert.Contains("批次：B2", inner);
+        // 三根锚杆都填进去
+        Assert.Contains("P-01", inner);
+        Assert.Contains("P-02", inner);
+        Assert.Contains("P-03", inner);
+        // marker 全清掉
+        Assert.DoesNotContain("[[检测项目]]", inner);
+        Assert.DoesNotContain("[[/检测项目]]", inner);
+        Assert.DoesNotContain("[[批次]]", inner);
+        Assert.DoesNotContain("[[/批次]]", inner);
+        Assert.DoesNotContain(ReportGenerator.DefaultPerRowStartMarker, inner);
+        // 三根锚杆 → 三张表
+        Assert.Equal(3, ReadTables(outPath).Count);
+    }
+
+    [Fact]
+    public void MultiDetectionItem_多项目_检测项目头各出现一次()
+    {
+        var src = MakeMultiDetectionItemTemplate("mdi_multi.docx");
+        var global = new DictResolver(new());
+        var items = new DetectionItemSection[]
+        {
+            new(
+                new DictResolver(new() { ["detection_type"] = "锚杆抗拔" }),
+                new BatchSection[]
+                {
+                    new(
+                        new DictResolver(new() { ["batch_id"] = "锚-A" }),
+                        new IFieldResolver[]
+                        {
+                            new DictResolver(new() { ["anchor_id"] = "A-01", ["judgement_result"] = "合格" }),
+                        }),
+                }),
+            new(
+                new DictResolver(new() { ["detection_type"] = "钻芯法" }),
+                new BatchSection[]
+                {
+                    new(
+                        new DictResolver(new() { ["batch_id"] = "芯-A" }),
+                        new IFieldResolver[]
+                        {
+                            new DictResolver(new() { ["anchor_id"] = "C-01", ["judgement_result"] = "合格" }),
+                        }),
+                }),
+        };
+        var outPath = Path.Combine(_tmp.Dir, "mdi_multi_out.docx");
+
+        var res = ReportGenerator.GenerateMultiDetectionItem(src, global, items, outPath);
+        Assert.Equal(2, res.RowsRendered);
+
+        var inner = ReadAllText(outPath);
+        Assert.Contains("检测项目：锚杆抗拔", inner);
+        Assert.Contains("检测项目：钻芯法", inner);
+        Assert.Contains("批次：锚-A", inner);
+        Assert.Contains("批次：芯-A", inner);
+        Assert.Contains("A-01", inner);
+        Assert.Contains("C-01", inner);
+    }
+
+    [Fact]
+    public void MultiDetectionItem_缺起始marker_抛异常()
+    {
+        var path = Path.Combine(_tmp.Dir, "mdi_no_start.docx");
+        using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+        {
+            var mp = doc.AddMainDocumentPart();
+            mp.Document = new Document(new Body());
+            mp.Document.Body!.AppendChild(MakePara("没有检测项目 marker"));
+        }
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.GenerateMultiDetectionItem(path, new DictResolver(new()),
+                new[] { new DetectionItemSection(new DictResolver(new()),
+                    new[] { new BatchSection(new DictResolver(new()), Array.Empty<IFieldResolver>()) }) },
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains("[[检测项目]]", ex.Message);
+    }
+
+    [Fact]
+    public void MultiDetectionItem_内层缺批次marker_抛异常()
+    {
+        // 只有 [[检测项目]] 没有 [[批次]]，预校验直接报错
+        var path = Path.Combine(_tmp.Dir, "mdi_no_batch.docx");
+        using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+        {
+            var mp = doc.AddMainDocumentPart();
+            mp.Document = new Document(new Body());
+            var body = mp.Document.Body!;
+            body.AppendChild(MakePara("[[检测项目]]"));
+            body.AppendChild(MakePara("checkpoint without batch"));
+            body.AppendChild(MakePara("[[/检测项目]]"));
+        }
+        var ex = Assert.Throws<ReportGenerateException>(() =>
+            ReportGenerator.GenerateMultiDetectionItem(path, new DictResolver(new()),
+                new[] { new DetectionItemSection(new DictResolver(new()),
+                    new[] { new BatchSection(new DictResolver(new()), Array.Empty<IFieldResolver>()) }) },
+                Path.Combine(_tmp.Dir, "out.docx")));
+        Assert.Contains("[[批次]]", ex.Message);
+    }
 }

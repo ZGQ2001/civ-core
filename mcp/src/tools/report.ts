@@ -41,6 +41,7 @@ export const reportRunFromResult: ToolDef = {
     "用户重复输入工程参数（P/Lf/La/A/E 等从结果 xlsx 的隐藏 metadata sheet 自动读）。" +
     "\n\n输入 result_xlsx 必须由 anchor_run 产出（含 `_批次参数` 隐藏 sheet）。" +
     "旧版本生成的结果 xlsx 不带 metadata，会返清晰错误提示重新跑装配线。" +
+    "\n\n模板探测同 anchor_run：单层 / [[批次]] / [[检测项目]]>[[批次]]>[[每根锚杆]] 三种嵌套自动分发。" +
     "\n\n返回 {batches, anchors_total, anchors_qualified, output, word_outputs," +
     "word_unknown_keys, word_missing_images}—— 字段与 anchor_run 对齐方便 agent 一致处理。",
   inputSchema: {

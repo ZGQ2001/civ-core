@@ -67,8 +67,10 @@ export const anchorRun: ToolDef = {
   description:
     "运行锚杆抗拔（GB 50086-2015）全流程：读 Excel + 按批次套工程参数 + 算 + 写「<批>-数据分析」sheet。" +
     "返回 {batches, anchors_total, anchors_qualified, output}。" +
-    "\n\n可选 word_template_path 触发 Word 报告：模板含成对 marker " +
-    "`[[每根锚杆]]...[[/每根锚杆]]` 会被每根锚杆克隆一次；含 `[[批次]]...[[/批次]]` 启用按批分段。" +
+    "\n\n可选 word_template_path 触发 Word 报告。三层模板嵌套：外层 `[[检测项目]]...[[/检测项目]]`" +
+    "（检测项目级，可放 {{检测项目}}）→ 中层 `[[批次]]...[[/批次]]`（批次级，可放 {{批次}} {{灌浆日期}}）→" +
+    "内层 `[[每根锚杆]]...[[/每根锚杆]]`（构件级，会按每根锚杆克隆一次）。后端按命中的最外层 marker " +
+    "决定走单层 / 两层 / 三层路径，向后兼容旧模板。" +
     "`{{img:曲线图}}` 占位符配合 curve_image_dir 自动按 anchor_id 匹配 PNG 嵌入。" +
     "\n\n典型流程：先 anchor_list_batches 拿批次清单 → 为每批填 params_by_batch → 调本 tool。",
   inputSchema: {

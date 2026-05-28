@@ -196,10 +196,53 @@ public static class AnchorHandlers
                     : $"{reportName}.docx")
                 : "锚杆抗拔报告.docx";
             var wordOut = Path.Combine(wordDir, SafeFileName(wordFileName));
+            // 模板探测：三层 [[检测项目]]>[[批次]]>[[每根锚杆]] / 两层 [[批次]]>[[每根锚杆]] / 单层
+            var useMultiDetectionItem = TemplateHasMarker(wordTemplatePath, "[[检测项目]]");
             var useMultiBatch = TemplateHasBatchMarker(wordTemplatePath);
 
             ReportGenerateResult genResult;
-            if (useMultiBatch)
+            if (useMultiDetectionItem)
+            {
+                // 三层：当前装配线只 anchor 一种 calc，把所有批次包成单个 detection item
+                // 项目级字段注入 detection_type 给 {{检测项目}} 占位符用。
+                var itemLevel = new Dictionary<string, string>(userInputs);
+                itemLevel["detection_type"] = "锚杆抗拔";
+                itemLevel.TryAdd("inspection_item", "锚杆抗拔力（验收）检测");
+
+                var sections = new List<BatchSection>();
+                int anchorIndex = 0;
+                foreach (var br in result.BatchResults)
+                {
+                    var batchLevel = new Dictionary<string, string>(itemLevel);
+                    if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
+                    {
+                        foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
+                    }
+                    batchLevel["batch_id"] = br.BatchId;
+
+                    var batchRowResolvers = new List<IFieldResolver>();
+                    foreach (var rw in br.RowsWithResults)
+                    {
+                        anchorIndex++;
+                        batchRowResolvers.Add(new AnchorRowResolver(
+                            rw.Input, rw.Result, br.Params, batchLevel,
+                            anchorIndex: anchorIndex,
+                            curveImageDir: curveImageDir));
+                    }
+                    sections.Add(new BatchSection(
+                        new DictionaryResolver(batchLevel),
+                        batchRowResolvers));
+                }
+                var items = new List<DetectionItemSection>
+                {
+                    new(new DictionaryResolver(itemLevel), sections),
+                };
+                var globalResolver = new DictionaryResolver(userInputs);
+                genResult = ReportGenerator.GenerateMultiDetectionItem(
+                    wordTemplatePath, globalResolver, items, wordOut,
+                    catalog: AnchorFieldCatalog.All);
+            }
+            else if (useMultiBatch)
             {
                 // 多批：每批一个 BatchSection（BatchResolver 注入项目级 + 本批批次级字段）
                 var sections = new List<BatchSection>();
@@ -318,24 +361,27 @@ public static class AnchorHandlers
     }
 
     /// <summary>
-    /// 检测模板里有没有 [[批次]] 字符串（用来决定 Generate vs GenerateMultiBatch）。
-    /// 解析失败时 fallback 到 false 走单批路径——真要坏，ReportGenerator 会给出明确错误。
+    /// 检测模板里有没有指定 marker 字符串（用来决定走哪条 ReportGenerator 路径）。
+    /// 解析失败时 fallback 到 false——真要坏，ReportGenerator 会给出明确错误。
     /// </summary>
-    private static bool TemplateHasBatchMarker(string templatePath)
+    private static bool TemplateHasMarker(string templatePath, string marker)
     {
         try
         {
             using var doc = WordprocessingDocument.Open(templatePath, false);
             var body = doc.MainDocumentPart?.Document?.Body;
-            return body?.InnerText.Contains("[[批次]]") ?? false;
+            return body?.InnerText.Contains(marker) ?? false;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(
-                $"[anchor.run] TemplateHasBatchMarker 探测失败，按单批模式处理：{ex.Message}");
+                $"[anchor.run] 探测 marker {marker} 失败，按未命中处理：{ex.Message}");
             return false;
         }
     }
+
+    private static bool TemplateHasBatchMarker(string templatePath)
+        => TemplateHasMarker(templatePath, "[[批次]]");
 
     private static string SafeFileName(string s)
     {

@@ -46,6 +46,14 @@ public record BatchSection(
     IFieldResolver BatchResolver,
     IReadOnlyList<IFieldResolver> RowResolvers);
 
+/// <summary>
+/// 一个检测项目（detection item）的数据：检测项目级 resolver + 该项目下的多个批次。
+/// 三层模板（[[检测项目]] 包 [[批次]] 包 [[每根锚杆]]）才用得到；两层模板走 BatchSection 即可。
+/// </summary>
+public record DetectionItemSection(
+    IFieldResolver ItemResolver,
+    IReadOnlyList<BatchSection> Batches);
+
 public static class ReportGenerator
 {
     /// <summary>默认行重复起始 marker —— 用户在样表前段落里写这个字符串。</summary>
@@ -260,6 +268,199 @@ public static class ReportGenerator
             missingImages.AddRange(globalRes.MissingImages);
 
             // 5. 页眉/页脚替换（项目级字段；不嵌图，详见 Generate 中的注释）
+            ReplaceInHeadersAndFooters(mainPart, globalResolver, catalog,
+                ref totalReplaced, unknownKeys, missingImages);
+
+            mainPart.Document.Save();
+        }
+
+        return new ReportGenerateResult(
+            RowsRendered: totalRows,
+            TotalReplaced: totalReplaced,
+            UnknownKeys: unknownKeys.Distinct().ToList())
+        {
+            MissingImages = missingImages.Distinct().ToList(),
+        };
+    }
+
+    /// <summary>
+    /// 三层模板：全局 + 检测项目区块克隆 + 批次区块克隆 + 行表克隆。
+    ///
+    /// 模板要求：
+    ///   [[检测项目]]
+    ///       (检测项目级标题/段落，可有 {{检测项目}} {{检测依据}} 等)
+    ///       [[批次]]
+    ///           (批次级标题，可有 {{批次}} {{灌浆日期}} 等)
+    ///           [[每根锚杆]]
+    ///               表 2.4-{{锚杆序号}}（{{锚杆编号}}）...
+    ///           [[/每根锚杆]]
+    ///       [[/批次]]
+    ///   [[/检测项目]]
+    ///
+    /// 嵌套规则：外层 marker 必须严格包裹内层。本方法只处理三层精确匹配；要做更深嵌套
+    /// 或多个 [[检测项目]] 并列再加 method，不要硬塞这里。
+    /// </summary>
+    public static ReportGenerateResult GenerateMultiDetectionItem(
+        string templateDocxPath,
+        IFieldResolver globalResolver,
+        IReadOnlyList<DetectionItemSection> items,
+        string outputPath,
+        IReadOnlyList<FieldDef>? catalog = null,
+        string itemStartMarker = "[[检测项目]]",
+        string itemEndMarker = "[[/检测项目]]",
+        string batchStartMarker = "[[批次]]",
+        string batchEndMarker = "[[/批次]]",
+        string perRowStartMarker = DefaultPerRowStartMarker,
+        string perRowEndMarker = DefaultPerRowEndMarker)
+    {
+        if (!File.Exists(templateDocxPath))
+            throw new ReportGenerateException($"Word 模板文件不存在：{templateDocxPath}");
+        if (items.Count == 0)
+            throw new ReportGenerateException("没有可填的检测项目（items 长度为 0）");
+
+        var dir = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        File.Copy(templateDocxPath, outputPath, overwrite: true);
+
+        int totalReplaced = 0;
+        var unknownKeys = new List<string>();
+        var missingImages = new List<string>();
+        int totalRows = 0;
+
+        using (var doc = WordprocessingDocument.Open(outputPath, true))
+        {
+            var mainPart = doc.MainDocumentPart
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 MainDocumentPart）");
+            var body = mainPart.Document?.Body
+                ?? throw new ReportGenerateException("输出 docx 结构异常（缺 Body）");
+
+            // 1. 找 [[检测项目]]...[[/检测项目]] 范围
+            var (itemStart, itemEnd, itemTemplate) =
+                FindMarkerPair(body, itemStartMarker, itemEndMarker, "检测项目");
+
+            // 校验：项目模板内必须有一对 [[批次]]/[[/批次]]
+            int batchOpens = itemTemplate.OfType<Paragraph>()
+                .Count(p => p.InnerText.Contains(batchStartMarker));
+            int batchCloses = itemTemplate.OfType<Paragraph>()
+                .Count(p => p.InnerText.Contains(batchEndMarker));
+            if (batchOpens != 1 || batchCloses != 1)
+                throw new ReportGenerateException(
+                    $"{itemStartMarker} 内必须恰好包含一对 {batchStartMarker}/{batchEndMarker}" +
+                    $"（实际找到起 {batchOpens} 个、止 {batchCloses} 个）");
+
+            // 2. 把 [[检测项目]] 范围（含两 marker）从 body 摘下，留 anchor
+            var itemInsertAnchor = itemStart.PreviousSibling();
+            itemStart.Remove();
+            itemEnd.Remove();
+            foreach (var el in itemTemplate) el.Remove();
+
+            // 3. 逐检测项目：克隆项目模板 → 按 [[批次]] 展开批次 → 填字段 → 插入 body
+            OpenXmlElement? cursor = itemInsertAnchor;
+            foreach (var item in items)
+            {
+                if (item.Batches.Count == 0) continue;
+
+                // 3.1 克隆一份项目模板
+                var itemClones = itemTemplate
+                    .Select(e => (OpenXmlElement)e.CloneNode(true)).ToList();
+
+                // 3.2 在克隆里找 [[批次]] / [[/批次]]，把中间内容拎出来作为「批次模板」
+                int batchStartIdx = itemClones.FindIndex(e =>
+                    e is Paragraph p && p.InnerText.Contains(batchStartMarker));
+                int batchEndIdx = itemClones.FindIndex(batchStartIdx + 1, e =>
+                    e is Paragraph p && p.InnerText.Contains(batchEndMarker));
+                if (batchEndIdx < 0)
+                    throw new ReportGenerateException(
+                        $"检测项目模板里有起始锚点 {batchStartMarker} 但缺配对的 {batchEndMarker}");
+
+                var batchTemplate = itemClones.GetRange(
+                    batchStartIdx + 1, batchEndIdx - batchStartIdx - 1);
+                // 把批次起止 marker 段 + 中间模板从 itemClones 中剔除（之后再插入克隆好的批次）
+                itemClones.RemoveRange(batchStartIdx, batchEndIdx - batchStartIdx + 1);
+
+                // 3.3 对每个批次：克隆批次模板 → 行展开 → 填批次字段
+                var batchClones = new List<OpenXmlElement>();
+                foreach (var batch in item.Batches)
+                {
+                    var bcs = batchTemplate
+                        .Select(e => (OpenXmlElement)e.CloneNode(true)).ToList();
+
+                    int rowStartIdx = bcs.FindIndex(e =>
+                        e is Paragraph p && p.InnerText.Contains(perRowStartMarker));
+                    if (rowStartIdx >= 0)
+                    {
+                        int rowEndIdx = bcs.FindIndex(rowStartIdx + 1, e =>
+                            e is Paragraph p && p.InnerText.Contains(perRowEndMarker));
+                        if (rowEndIdx < 0)
+                            throw new ReportGenerateException(
+                                $"批次模板里有起始锚点 {perRowStartMarker} 但缺配对的 {perRowEndMarker}");
+
+                        var rowUnit = bcs.GetRange(rowStartIdx + 1, rowEndIdx - rowStartIdx - 1);
+                        bcs.RemoveRange(rowStartIdx, rowEndIdx - rowStartIdx + 1);
+
+                        var rowClones = new List<OpenXmlElement>();
+                        foreach (var rowResolver in batch.RowResolvers)
+                        {
+                            foreach (var unit in rowUnit)
+                            {
+                                var rowClone = (OpenXmlElement)unit.CloneNode(true);
+                                var rr = PlaceholderRenderer.RenderInto(
+                                    rowClone, rowResolver, catalog, mainPart);
+                                totalReplaced += rr.Replaced;
+                                unknownKeys.AddRange(rr.UnknownKeys);
+                                missingImages.AddRange(rr.MissingImages);
+                                rowClones.Add(rowClone);
+                            }
+                            totalRows++;
+                        }
+                        bcs.InsertRange(rowStartIdx, rowClones);
+                    }
+
+                    // 填批次级字段
+                    foreach (var el in bcs)
+                    {
+                        var br = PlaceholderRenderer.RenderInto(
+                            el, batch.BatchResolver, catalog, mainPart);
+                        totalReplaced += br.Replaced;
+                        unknownKeys.AddRange(br.UnknownKeys);
+                        missingImages.AddRange(br.MissingImages);
+                    }
+                    batchClones.AddRange(bcs);
+                }
+
+                // 3.4 把展开后的批次克隆插回项目克隆的「批次原位」
+                itemClones.InsertRange(batchStartIdx, batchClones);
+
+                // 3.5 填检测项目级字段（项目克隆里剩余的所有元素）
+                foreach (var el in itemClones)
+                {
+                    var ir = PlaceholderRenderer.RenderInto(
+                        el, item.ItemResolver, catalog, mainPart);
+                    totalReplaced += ir.Replaced;
+                    unknownKeys.AddRange(ir.UnknownKeys);
+                    missingImages.AddRange(ir.MissingImages);
+                }
+
+                // 3.6 插入 body
+                foreach (var clone in itemClones)
+                {
+                    if (cursor == null)
+                        cursor = body.PrependChild(clone);
+                    else
+                    {
+                        cursor.InsertAfterSelf(clone);
+                        cursor = clone;
+                    }
+                }
+            }
+
+            // 4. 全局替换（项目模板外剩余的所有段落/表）
+            var globalRes = PlaceholderRenderer.RenderInto(body, globalResolver, catalog, mainPart);
+            totalReplaced += globalRes.Replaced;
+            unknownKeys.AddRange(globalRes.UnknownKeys);
+            missingImages.AddRange(globalRes.MissingImages);
+
+            // 5. 页眉/页脚替换
             ReplaceInHeadersAndFooters(mainPart, globalResolver, catalog,
                 ref totalReplaced, unknownKeys, missingImages);
 

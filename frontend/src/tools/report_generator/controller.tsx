@@ -31,7 +31,6 @@ import {
   type AnchorStandard,
 } from '../data_processing/types';
 import type { ReportRunRes, ReportUserInputs } from './types';
-import { DEFAULT_REPORT_USER_INPUTS } from './types';
 
 /// 批次级 user_input map 的 RPC wire 类型：{ [batchId]: { [key]: value } }
 /// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
@@ -84,7 +83,7 @@ interface Actions {
   setWordTemplatePath: (p: string) => void;
   setOutputDir: (p: string) => void;
   setCurveImageDir: (p: string) => void;
-  setUserInput: (key: keyof ReportUserInputs, value: string) => void;
+  setUserInput: (key: string, value: string) => void;
   resetUserInputs: () => void;
   setGroutingDateForBatch: (batchId: string, value: string) => void;
   setGroutingDateForAllBatches: (value: string) => void;
@@ -160,9 +159,7 @@ export function ReportGeneratorProvider({
   // 用同一份），留空 = 不嵌图（模板里 {{img:曲线图}} 留原文 + 报 missingImages）
   const curveImageDir = shell.curveImageDir;
   const setCurveImageDir = shell.setCurveImageDir;
-  const [userInputs, setUserInputs] = useState<ReportUserInputs>({
-    ...DEFAULT_REPORT_USER_INPUTS,
-  });
+  const [userInputs, setUserInputs] = useState<ReportUserInputs>({});
   const [groutingDateByBatch, setGroutingDateByBatch] = useState<
     Record<string, string>
   >({});
@@ -199,15 +196,13 @@ export function ReportGeneratorProvider({
     });
   }, []);
 
-  const setUserInput = useCallback(
-    (key: keyof ReportUserInputs, value: string) => {
-      setUserInputs((prev) => ({ ...prev, [key]: value }));
-    },
-    [],
-  );
+  const setUserInput = useCallback((key: string, value: string) => {
+    setUserInputs((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
+  /// 「全部清空」—— 用户主动点才清，避免误清；保留 key=空字符串方便 UI 受控。
   const resetUserInputs = useCallback(() => {
-    setUserInputs({ ...DEFAULT_REPORT_USER_INPUTS });
+    setUserInputs({});
   }, []);
 
   const setGroutingDateForBatch = useCallback(

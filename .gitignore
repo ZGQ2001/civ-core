@@ -23,6 +23,7 @@
 *.xlsx
 *.docx
 *.pptx
+!templates/
 !frontend/src-tauri/icons/
 !frontend/src-tauri/icons/*.png
 !frontend/src-tauri/icons/*.ico
@@ -34,9 +35,6 @@ data/training_materials/
 *.log
 *.jsonl
 .vscode/
-.claude/*
-!.claude/skills/
-.deepseek/
 *.egg-info/
 .eggs/
 .pytest_cache/

@@ -6,20 +6,13 @@ import { RunBtn } from '../_shared/forms';
 import { useTemplateHelper } from './controller';
 import { FieldEditor } from './FieldEditor';
 import type { CatalogField, FieldLevel } from './types';
-import { LEVEL_COLOR, LEVEL_LABEL } from './types';
+import { LEVEL_LABEL } from './types';
 
-export function TemplateHelperPage({
-  appendOutput,
-}: {
-  appendOutput?: (line: string) => void;
-}) {
+export function TemplateHelperPage(_: { appendOutput?: (line: string) => void }) {
   const c = useTemplateHelper();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set<string>(),
   );
-  const [validateTab, setValidateTab] = useState<
-    'matched' | 'unrecognized' | 'unused' | 'hints'
-  >('hints');
   const [groupBy, setGroupBy] = useState<'group' | 'level'>('level');
   const [editMode, setEditMode] = useState(false);
   const [addingField, setAddingField] = useState(false);
@@ -74,19 +67,6 @@ export function TemplateHelperPage({
       c.setDocxPath(selected);
     }
   }, [c]);
-
-  const handleValidate = useCallback(async () => {
-    const res = await c.validate();
-    if (res) {
-      appendOutput?.(
-        `验证完成: ${res.summary.matched_count} 匹配 / ${res.summary.unrecognized_count} 未识别 / ${res.summary.hint_count} 条提示`,
-      );
-      if (res.hints.length > 0) setValidateTab('hints');
-      else setValidateTab('matched');
-    } else if (c.validateError) {
-      appendOutput?.(`验证失败: ${c.validateError}`);
-    }
-  }, [c, appendOutput]);
 
   if (c.catalogLoading) {
     return (
@@ -182,34 +162,15 @@ export function TemplateHelperPage({
           <RunBtn
             running={c.validating}
             disabled={!c.docxPath || !c.activeCatalogId || c.validating}
-            onClick={handleValidate}
+            onClick={() => c.validate()}
           >
             验证
           </RunBtn>
         </div>
-      </div>
-
-      {/* Hints bar (if validation has hints) */}
-      {c.validateResult && c.validateResult.hints.length > 0 && (
-        <div className="border-vscode-border border-b bg-yellow-900/10 px-5 py-2">
-          <div className="flex items-start gap-2 text-xs text-yellow-300">
-            <i className="codicon codicon-warning mt-0.5 shrink-0 !text-[14px]" />
-            <div className="space-y-1">
-              {c.validateResult.hints.map((h, i) => (
-                <div
-                  key={i}
-                  className={h.severity === 'error' ? 'text-red-400' : ''}
-                >
-                  {h.message}
-                  <span className="text-vscode-text-faint ml-2 text-[10px]">
-                    {h.location}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="text-vscode-text-faint text-[10px]">
+          验证结果会输出到底部「输出」面板（Ctrl+J）
         </div>
-      )}
+      </div>
 
       {/* Toolbar: group toggle + edit mode + expand/collapse */}
       <div className="border-vscode-border flex items-center gap-2 border-b px-5 py-1.5">
@@ -347,164 +308,11 @@ export function TemplateHelperPage({
         ))}
       </div>
 
-      {/* Validation Results */}
-      {c.validateResult && (
-        <>
-          <div className="bg-vscode-border h-px shrink-0" />
-          <div className="flex max-h-[280px] min-h-0 flex-col">
-            <div className="border-vscode-border flex items-center gap-1 border-b bg-[#252526] px-4 py-1">
-              <i className="codicon codicon-checklist text-vscode-text-dim !text-[14px]" />
-              <span className="text-vscode-text-dim text-[11px]">验证结果</span>
-              <div className="flex-1" />
-              <TabBtn
-                active={validateTab === 'hints'}
-                count={c.validateResult.summary.hint_count}
-                label="提示"
-                variant="warn"
-                onClick={() => setValidateTab('hints')}
-              />
-              <TabBtn
-                active={validateTab === 'matched'}
-                count={c.validateResult.summary.matched_count}
-                label="已匹配"
-                variant="success"
-                onClick={() => setValidateTab('matched')}
-              />
-              <TabBtn
-                active={validateTab === 'unrecognized'}
-                count={c.validateResult.summary.unrecognized_count}
-                label="未识别"
-                variant="error"
-                onClick={() => setValidateTab('unrecognized')}
-              />
-              <TabBtn
-                active={validateTab === 'unused'}
-                count={c.validateResult.summary.unused_count}
-                label="未使用"
-                variant="neutral"
-                onClick={() => setValidateTab('unused')}
-              />
-            </div>
-            <div className="overflow-y-auto px-4 py-2 text-xs">
-              {validateTab === 'hints' &&
-                (c.validateResult.hints.length > 0 ? (
-                  c.validateResult.hints.map((h, i) => (
-                    <div
-                      key={i}
-                      className="border-vscode-border flex items-start gap-2 border-b py-1.5 last:border-0"
-                    >
-                      <i
-                        className={cn(
-                          'codicon mt-0.5 !text-[12px]',
-                          h.severity === 'error'
-                            ? 'codicon-error text-red-400'
-                            : 'codicon-warning text-yellow-400',
-                        )}
-                      />
-                      <div>
-                        <div
-                          className={
-                            h.severity === 'error'
-                              ? 'text-red-400'
-                              : 'text-yellow-300'
-                          }
-                        >
-                          {h.message}
-                        </div>
-                        <div className="text-vscode-text-faint text-[10px]">
-                          {h.location}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-vscode-text-dim py-2 text-center">
-                    <i className="codicon codicon-pass mr-1 !text-[12px] text-green-400" />
-                    所有字段层级匹配正确
-                  </div>
-                ))}
-              {validateTab === 'matched' &&
-                c.validateResult.matched.map((m, i) => (
-                  <div
-                    key={i}
-                    className="border-vscode-border flex items-center gap-2 border-b py-1 last:border-0"
-                  >
-                    <i className="codicon codicon-check !text-[12px] text-green-400" />
-                    <code className="text-[#ce9178]">{m.placeholder}</code>
-                    <LevelBadge level={m.level} />
-                    <span className="text-vscode-text-dim">{m.name}</span>
-                    <span className="text-vscode-text-faint ml-auto text-[10px]">
-                      {m.location}
-                    </span>
-                  </div>
-                ))}
-              {validateTab === 'unrecognized' &&
-                (c.validateResult.unrecognized.length > 0 ? (
-                  c.validateResult.unrecognized.map((u, i) => (
-                    <div
-                      key={i}
-                      className="border-vscode-border flex items-center gap-2 border-b py-1 last:border-0"
-                    >
-                      <i className="codicon codicon-warning !text-[12px] text-yellow-400" />
-                      <code className="text-[#ce9178]">{u.placeholder}</code>
-                      <span className="text-vscode-text-faint ml-auto text-[10px]">
-                        {u.location}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-vscode-text-dim py-2 text-center">
-                    所有占位符均已识别
-                  </div>
-                ))}
-              {validateTab === 'unused' &&
-                (c.validateResult.unused.length > 0 ? (
-                  c.validateResult.unused.map((u, i) => (
-                    <div
-                      key={i}
-                      className="border-vscode-border flex items-center gap-2 border-b py-1 last:border-0"
-                    >
-                      <i className="codicon codicon-circle-outline text-vscode-text-faint !text-[12px]" />
-                      <span className="text-vscode-text">{u.name}</span>
-                      <LevelBadge level={u.level} />
-                      <span className="text-vscode-text-faint ml-auto text-[10px]">
-                        {u.group}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-vscode-text-dim py-2 text-center">
-                    所有字段均已使用
-                  </div>
-                ))}
-            </div>
-          </div>
-        </>
-      )}
-
-      {c.validateError && !c.validateResult && (
-        <div className="border-vscode-border border-t p-4 text-xs text-red-400">
-          <i className="codicon codicon-error mr-1 !text-[12px]" />
-          {c.validateError}
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Sub-components ──
-
-function LevelBadge({ level }: { level: string }) {
-  const label = LEVEL_LABEL[level as FieldLevel] ?? level;
-  const color = LEVEL_COLOR[level as FieldLevel] ?? 'text-vscode-text-dim';
-  return (
-    <span
-      className={cn('rounded bg-[#2d2d2d] px-1.5 py-0.5 text-[9px]', color)}
-    >
-      {label}
-    </span>
-  );
-}
 
 function FieldGroup({
   group,
@@ -674,43 +482,6 @@ function LevelDot({ level }: { level: string }) {
       className={cn('inline-block h-2 w-2 shrink-0 rounded-full', color)}
       title={LEVEL_LABEL[level as FieldLevel] ?? level}
     />
-  );
-}
-
-function TabBtn({
-  active,
-  count,
-  label,
-  variant,
-  onClick,
-}: {
-  active: boolean;
-  count: number;
-  label: string;
-  variant: 'success' | 'error' | 'warn' | 'neutral';
-  onClick: () => void;
-}) {
-  const color = {
-    success: 'text-green-400',
-    error: 'text-red-400',
-    warn: 'text-yellow-400',
-    neutral: 'text-vscode-text-faint',
-  }[variant];
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]',
-        active
-          ? 'bg-vscode-list-hover text-vscode-text'
-          : 'text-vscode-text-dim hover:text-vscode-text',
-      )}
-    >
-      <span className={cn(count > 0 && color)}>{count}</span>
-      {label}
-    </button>
   );
 }
 

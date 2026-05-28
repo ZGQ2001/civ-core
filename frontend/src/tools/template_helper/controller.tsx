@@ -16,6 +16,9 @@ import type {
   FieldCatalog,
   ValidateResult,
 } from './types';
+import { LEVEL_LABEL } from './types';
+
+const UNUSED_PREVIEW_LIMIT = 5;
 
 const TOOL_ID = 'template_helper';
 const ACCEPTED_EXTS = new Set(['.docx']);
@@ -30,9 +33,7 @@ interface State {
   saving: boolean;
 
   docxPath: string;
-  validateResult: ValidateResult | null;
   validating: boolean;
-  validateError: string | null;
 
   copiedKey: string | null;
   editingFieldKey: string | null;
@@ -86,11 +87,7 @@ export function TemplateHelperProvider({
   const [saving, setSaving] = useState(false);
 
   const [docxPath, setDocxPath] = useState('');
-  const [validateResult, setValidateResult] = useState<ValidateResult | null>(
-    null,
-  );
   const [validating, setValidating] = useState(false);
-  const [validateError, setValidateError] = useState<string | null>(null);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
@@ -114,7 +111,6 @@ export function TemplateHelperProvider({
     async (id: string) => {
       setActiveCatalogId(id);
       setCatalogLoading(true);
-      setValidateResult(null);
       setDirty(false);
       setEditingFieldKey(null);
       try {
@@ -157,8 +153,6 @@ export function TemplateHelperProvider({
     if (!ACCEPTED_EXTS.has(ext)) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDocxPath(f.path);
-    setValidateResult(null);
-    setValidateError(null);
     shell.appendOutput(logLine(`[模板助手] 已接收模板文件: ${f.path}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shell.activatedFile?.key, shell.activeToolId]);
@@ -166,23 +160,45 @@ export function TemplateHelperProvider({
   const validate = useCallback(async (): Promise<ValidateResult | null> => {
     if (!docxPath || !activeCatalogId) return null;
     setValidating(true);
-    setValidateError(null);
     try {
       const res = await rpc<ValidateResult>('template.validate', {
         docx_path: docxPath,
         catalog_id: activeCatalogId,
       });
-      setValidateResult(res);
       const s = res.summary;
       shell.appendOutput(
         logLine(
-          `[模板助手] 验证完成: ${s.matched_count} 个匹配, ${s.unrecognized_count} 个未识别, ${s.unused_count} 个未使用`,
+          `[模板助手] 验证完成: ${s.matched_count} 匹配 / ${s.unrecognized_count} 未识别 / ${s.unused_count} 未使用 / ${s.hint_count} 提示`,
         ),
       );
+      for (const h of res.hints) {
+        const tag = h.severity === 'error' ? '错误' : '警告';
+        shell.appendOutput(
+          logLine(`[模板助手]   [${tag}] ${h.message} @ ${h.location}`),
+        );
+      }
+      for (const u of res.unrecognized) {
+        shell.appendOutput(
+          logLine(`[模板助手]   未识别占位符: ${u.placeholder} @ ${u.location}`),
+        );
+      }
+      const unusedShown = res.unused.slice(0, UNUSED_PREVIEW_LIMIT);
+      for (const u of unusedShown) {
+        const lvl = LEVEL_LABEL[u.level] ?? u.level;
+        shell.appendOutput(
+          logLine(`[模板助手]   未使用字段: ${u.name}（${lvl}）`),
+        );
+      }
+      if (res.unused.length > UNUSED_PREVIEW_LIMIT) {
+        shell.appendOutput(
+          logLine(
+            `[模板助手]   …另外 ${res.unused.length - UNUSED_PREVIEW_LIMIT} 个未使用字段（略）`,
+          ),
+        );
+      }
       return res;
     } catch (e) {
       const msg = String(e);
-      setValidateError(msg);
       shell.appendOutput(logLine(`[模板助手] 验证失败: ${msg}`));
       return null;
     } finally {
@@ -327,9 +343,7 @@ export function TemplateHelperProvider({
       dirty,
       saving,
       docxPath,
-      validateResult,
       validating,
-      validateError,
       copiedKey,
       editingFieldKey,
       refreshCatalogs,
@@ -356,9 +370,7 @@ export function TemplateHelperProvider({
       dirty,
       saving,
       docxPath,
-      validateResult,
       validating,
-      validateError,
       copiedKey,
       editingFieldKey,
       refreshCatalogs,

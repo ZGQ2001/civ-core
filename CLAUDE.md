@@ -1,7 +1,8 @@
 # civ-core（筑核）
 
 土木检测内业报告自动化工具。接收 Excel/CSV/Word，自动完成数据格式化、规范评定、报告填充。
-Windows 平台，内部自用，非编程人员操作。
+**Windows 平台为主**（word2pdf 走 COM），内部自用 + 对外提供 MCP server 给 AI agent 调用。
+当前状态：源码运行，二进制 release 待 T6 打包后才出。详见根目录 `README.md`。
 
 **角色**：本文件是 AI 的宪法级上下文。放不可变的架构规则和边界。≤4000 字。每次会话必读。
 **配套文件**：`.ai/ROADMAP.md`（产品路线图）| `.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `docs/plans/`（技术方案）
@@ -32,7 +33,7 @@ graph TB
 
     subgraph Mcp ["MCP Server (Node + TS · civ-core-mcp)"]
         Mcp_Stdio["StdioServerTransport"]
-        Mcp_Tools["20 tools (Phase 1)<br/>anchor / leeb / workspace / template<br/>report / xlsx / plot_curves / doc"]
+        Mcp_Tools["25 tools<br/>anchor / leeb / workspace / template<br/>report / report_preset / xlsx / plot_curves / doc"]
         Mcp_Router["SidecarRouter<br/>同前缀策略，独立实例"]
         A_Client -- "MCP (stdio)" --> Mcp_Stdio
         Mcp_Stdio --> Mcp_Tools
@@ -41,9 +42,9 @@ graph TB
 
     subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
         CS_RPC["JsonRpcServer.RunAsync()"]
-        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>Workspace / Files / PDF<br/>word2pdf（待迁）"]
-        CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator"]
-        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写 + docx→PDF"]
+        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>Template / Catalog / Report<br/>ReportPreset / Workspace / Files<br/>PdfTools / Word2Pdf"]
+        CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator<br/>AnchorResultReader"]
+        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写 + docx→PDF（COM）"]
         CS_SQL["Microsoft.Data.Sqlite<br/>standards.db 管理"]
         CS_RPC --> CS_Handlers
         CS_Handlers --> CS_Calc
@@ -119,10 +120,10 @@ graph TB
 
 **策略：默认 C#，白名单 Python。** 未来新 calc 类型不加 Rust 代码。
 
-| sidecar              | 方法前缀                                                                                                          |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **C#（默认）**       | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*` — 及所有新方法 |
-| **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代）                                                 |
+| sidecar              | 方法前缀                                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C#（默认）**       | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `template.*` `catalog.*` `report.*` `report_preset.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*` — 及所有新方法 |
+| **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代）                                                                                                       |
 
 ## 不可变规则
 

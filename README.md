@@ -1,25 +1,9 @@
-<p align="center">
-  <!-- TODO: Logo / Banner -->
-</p>
-
 <h1 align="center">筑核 · civ-core</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
-  <img src="https://img.shields.io/github/v/release/ZGQ2001/civ-core?style=flat-square" alt="Release">
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/github/stars/ZGQ2001/civ-core?style=flat-square" alt="Stars">
-  <img src="https://img.shields.io/github/contributors/ZGQ2001/civ-core?style=flat-square" alt="Contributors">
-  <img src="https://img.shields.io/github/last-commit/ZGQ2001/civ-core?style=flat-square" alt="Last Commit">
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/ZGQ2001/civ-core/ci.yml?style=flat-square&label=CI" alt="CI">
-  <img src="https://img.shields.io/github/languages/top/ZGQ2001/civ-core?style=flat-square" alt="Language">
-  <img src="https://img.shields.io/github/languages/code-size/ZGQ2001/civ-core?style=flat-square" alt="Size">
+  <img src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License: Apache-2.0">
+  <img src="https://img.shields.io/badge/status-source--only-orange?style=flat-square" alt="Status: source-only (no binary release yet)">
 </p>
 
 <p align="center">
@@ -27,155 +11,143 @@
   <img src="https://img.shields.io/badge/C%23-.NET_9-purple?style=flat-square" alt="C#">
   <img src="https://img.shields.io/badge/TS-React_19-blue?style=flat-square" alt="TypeScript">
   <img src="https://img.shields.io/badge/Python-3.12-yellow?style=flat-square" alt="Python">
-</p>
-
-<p align="center">
-  <a href="https://star-history.com/#ZGQ2001/civ-core&Date">
-    <img src="https://api.star-history.com/svg?repos=ZGQ2001/civ-core&type=Date" alt="Star History" width="500">
-  </a>
+  <img src="https://img.shields.io/badge/MCP-server-pink?style=flat-square" alt="MCP server">
 </p>
 
 ---
 
-**筑核** 是面向土木工程检测行业的桌面端内业报告自动化工具。
+**筑核** 是面向土木工程检测行业的桌面端内业报告自动化工具：Excel/CSV 拖入 → 自动评定 → Word 报告 + 曲线图。
 
-> Excel / CSV 拖入 → 一键评定 → Word 报告 + 曲线图
-
-告别手工核对规范和逐页填 Word：软件自动完成数据读取、规范查表、强度推定、图表生成、报告填充全流程。
+> Windows 平台，内部自用为主；同时对外提供 MCP server，给 Claude Code / Codex / Cursor 等 AI agent 原生调用入口。
 
 ---
 
-## 📸 界面预览
+## 项目定位（先讲清楚再用）
 
-<p align="center">
-  <img src="docs/plot_curves_demo.png" alt="曲线图工具" width="400">
-  <img src="docs/data_processing_demo.png" alt="数据处理" width="400">
-</p>
-
-*左：曲线图工具，支持多曲线叠加、轴范围滑块、实时预览。右：数据处理工具，里氏硬度 / 锚杆抗拔模式。*
-
----
-
-## 📥 下载安装
-
-从 [Releases](https://github.com/ZGQ2001/civ-core/releases) 下载最新版 `civ-core_Setup.exe`：
-
-1. 双击安装（会自动创建桌面快捷方式）
-2. 首次启动会自动初始化规范数据库（`standards.db`）
-3. 无需安装 Office——Excel/Word 读写走 OpenXML 原生引擎
-
-> 系统要求：Windows 10+ / macOS 12+ / Linux（Wayland/X11），无需 .NET Runtime，无需 Python。
+- **当前状态**：源码运行；尚未打包二进制 release。`Releases` 页为空。T6 打包（PyInstaller + dotnet publish + Tauri externalBin + MCP Node bundle）做完后才会提供 `.exe` 安装包。
+- **运行入口有两个**：
+  1. **桌面 GUI**（Tauri 2 + React 19）—— 非编程用户日常操作的主入口。
+  2. **MCP server**（Node + TS）—— 给 AI agent 用的入口，跟 GUI 共享同一组 sidecar 但各起独立子进程。
+- **平台**：当前装配线（计算 / Excel / Word / SQLite）跨平台；只有 `word2pdf` 走 Windows COM（dynamic）的 `Word.Application`，非 Windows 抛 `PlatformNotSupported`。
+- **依赖（从源码运行时）**：
+  - .NET 9 SDK（C# sidecar）
+  - Python 3.12 + [uv](https://docs.astral.sh/uv/)（matplotlib 图表引擎）
+  - Node 20+（前端 + MCP server）
+  - Rust toolchain（Tauri 主进程）
+  - 无需 Microsoft Office（Excel/Word 读写走 OpenXML SDK；仅 `word2pdf` 需要 Word/WPS）
 
 ---
 
-## 🧰 功能
+## 功能
 
-### 📊 曲线图工具
+### 装配线（一条流水线，工序之间显式串接）
 
-检测数据 Excel → 批量出图 PNG。
+| 工序                                | 输入 → 输出                                                 | 状态                                                    |
+| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
+| 数据处理 · 锚杆抗拔 (GB 50086-2015) | 锚杆 Excel → 结果 xlsx（含数据分析 + `_批次参数` metadata） | ✅                                                      |
+| 数据处理 · 里氏硬度推定 (INSP-001)  | 里氏硬度 Excel → `_里氏硬度推定结果.xlsx`                   | ✅                                                      |
+| 数据处理 · 钻芯法 (INSP-002)        | 芯样 Excel → 结果 xlsx                                      | 🚧 骨架                                                 |
+| 数据处理 · 回弹法 (INSP-003)        | 回弹 Excel → 结果 xlsx                                      | 🚧 骨架                                                 |
+| 绘曲线图 (plot_curves)              | Excel + 预设 → 高清 PNG                                     | ✅                                                      |
+| 报告填充                            | 结果 xlsx + Word 模板 + 用户输入 → docx                     | ✅（含 [[检测项目]]>[[批次]]>[[每根锚杆]] 三层 marker） |
+| 模板助手                            | docx 模板字段校验 + catalog 4 级字段管理                    | ✅                                                      |
 
-- 拖入 Excel，选 Sheet → 选曲线模板 → 点运行
-- 支持轴范围滑块、曲线颜色/线型自定义、DPI 设置
-- 预览区实时刷新，导出前所见即所得
+### 工具
 
-**输入**：任意格式 Excel（`.xlsx` / `.xls`）
-**输出**：高清 PNG 曲线图，按行索引批量生成
-
----
-
-### 🔩 里氏硬度推定（INSP-001）
-
-钢材里氏硬度 → 抗拉强度换算。
-
-- 读入里氏硬度 Excel → 自动解析测区/构件/批次结构
-- 查《黑色金属硬度及强度换算表》→ 角度修正 → 厚度修正 → 截尾平均
-- 一键生成带合并单元格的标准报告表
-
-**输入**：里氏硬度检测 Excel
-**输出**：`_里氏硬度推定结果.xlsx`（含汇总 + 明细）
+- **报告预设**：整份 user_inputs 存 `~/.civ-core/report_presets/<id>.json`，跨报告复用 + 字段历史值下拉
+- **PDF 工具**：合并 / 按页拆 / 按范围拆（PDFsharp，原子写）
+- **Word → PDF**：仅 Windows（dynamic COM 调 Word/WPS）
 
 ---
 
-### ⚓ 锚杆抗拔试验
-
-依据 GB 50086-2015《岩土锚杆与喷射混凝土支护工程技术规范》。
-
-- 读入锚杆检测 Excel → 填写 basic info → 生成 Word 模板
-- 自动填入委托信息、工程概况、检测数据表、结论与建议
-- 支持模板自定义（通过 `templates/` 目录管理）
-
-**输入**：锚杆检测 Excel + 工程基本信息
-**输出**：锚杆抗拔检测报告 `.docx`
-
----
-
-### 🪨 钻芯法（INSP-002）
-
-混凝土芯样抗压强度推定。
-
-**输入**：芯样数据 Excel
-**输出**：钻芯法检测报告
-
----
-
-### 🔄 回弹法（INSP-003）
-
-混凝土回弹强度推定。骨架已就绪，验收评定逻辑开发中。
-
----
-
-### 📄 Word → PDF
-
-选中 `.docx` 文件 → 一键批量转 PDF。
-
-**输出**：同目录下生成同名 `.pdf`
-
----
-
-### 📎 PDF 工具
-
-- **合并**：多选 PDF → 按顺序拼成一个
-- **分拆**：一个 PDF → 按页码范围拆分，或每页独立
-
----
-
-## 🛠 开发
-
-### 技术栈
-
-| 层 | 选型 |
-|---|------|
-| UI | React 19 · TypeScript · Tailwind v4 |
-| 桌面壳 | Tauri 2.11 · Rust |
-| 计算引擎 | C# · .NET 9 · ClosedXML · OpenXML SDK |
-| 图表引擎 | Python 3.12 · matplotlib |
-| 通信协议 | JSON-RPC 2.0（stdin/stdout 行协议） |
-| 数据库 | SQLite（Microsoft.Data.Sqlite） |
-| 测试 | pytest（Python） · xUnit（C#） · ruff |
-| CI | GitHub Actions（Windows） |
-
-### 架构
+## 架构
 
 ```
-🖥 React UI  ──JSON-RPC──▶  ⚙️ Tauri 2
-                                ├── 默认 → 🔧 C# .NET 9（计算 / Excel / Word / SQLite）
-                                └── 白名单 → 📊 Python 3.12（matplotlib 图表）
-                                              └── 💾 standards.db
+GUI 入口                             Agent 入口
+🖥 Tauri 2 主进程 (Rust)            🤖 MCP server (Node + TS)
+   ├── SidecarRouter                  ├── SidecarRouter
+   │   ├── 默认 → 🔧 C# (.NET 9)     │   ├── 默认 → 🔧 C# (.NET 9)
+   │   │   计算 / Excel / Word /      │   │   （独立子进程，不共享）
+   │   │   SQLite / 模板 / 预设       │   └── 白名单 → 📊 Python 3.12
+   │   └── 白名单 → 📊 Python 3.12   │       (matplotlib 出图)
+   │       (matplotlib 出图)          └── 25 MCP tools 暴露给 agent
+   └── React 19 + Vite 前端
+   ↓                                   ↓
+   📁 工作区目录                       💾 ~/.civ-core/
+                                          standards.db / report_presets/ / catalogs/
 ```
 
-前端不感知后端语言边界。C# 负责全部计算和文档读写，Python 仅保留 matplotlib 图表引擎。
+**双客户端 / 双 sidecar**：GUI 和 MCP server 是平级入口，各自 spawn 一组 sidecar 子进程（不共享内存状态，共享文件系统）。所有业务逻辑在 sidecar 里，入口层只做 JSON-RPC 转发。Python sidecar 只承载 `plot_curves.*`（matplotlib 无可替代），其余全 C#。
 
-### 启动
+详见 [`CLAUDE.md`](CLAUDE.md)（架构宪法）和 [`.ai/RULES.md`](.ai/RULES.md)（RPC 全表 + 编码规范）。
+
+---
+
+## 技术栈
+
+| 层         | 选型                                                           |
+| ---------- | -------------------------------------------------------------- |
+| 前端 UI    | React 19 · TypeScript · Tailwind v4 · @vscode/codicons         |
+| 桌面壳     | Tauri 2.11 · Rust                                              |
+| Agent 入口 | MCP server（Node 20+ · TS · `@modelcontextprotocol/sdk` 1.29） |
+| 计算引擎   | C# · .NET 9 · ClosedXML · OpenXML SDK · PDFsharp               |
+| 图表引擎   | Python 3.12 · matplotlib（仅此一处用 Python）                  |
+| 通信协议   | JSON-RPC 2.0 over stdin/stdout 行协议                          |
+| 数据库     | SQLite (Microsoft.Data.Sqlite)                                 |
+| 测试       | xUnit (C#) · vitest (MCP) · pytest (Python) · ruff             |
+
+---
+
+## 从源码运行
+
+### 前置依赖
+
+| 工具     | 版本                                                |
+| -------- | --------------------------------------------------- |
+| .NET SDK | 9.0+                                                |
+| Python   | 3.12+（推荐用 [uv](https://docs.astral.sh/uv/) 管） |
+| Node     | 20+                                                 |
+| Rust     | stable（Tauri 2 要求）                              |
+
+### 启动 GUI
 
 ```bash
-bash run.sh                        # 一键（Tauri + Vite + 双 sidecar）
-cd frontend && npm run tauri:dev   # 手动
+# 一次性
+cd dotnet/civ-doc && dotnet build
+uv sync
+cd frontend && npm install
+
+# 跑
+cd frontend && npm run tauri:dev
 ```
 
-### 命令行
+### 启动 MCP server（接 Claude Code）
 
 ```bash
-uv run pytest                      # 跑测试
-uv run ruff check .                # 代码检查
-cd dotnet/civ-doc && dotnet test   # C# 测试
+cd mcp && npm install && npm run build
+# 在 ~/.claude/mcp_servers.json 配置 node dist/index.js，详见 mcp/CLAUDE.md
 ```
+
+---
+
+## 测试 / 静态检查
+
+```bash
+# C#
+cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test
+
+# 前端
+cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check
+
+# MCP server
+cd mcp && npm run typecheck && npm test
+
+# Python
+uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q
+```
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE)

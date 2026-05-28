@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "civ-core"
 version = "0.2.3-dev"
-description = "筑核"
+description = "筑核 · 土木检测内业报告自动化（Python sidecar 子项目，仅承载 matplotlib 图表引擎；GUI/计算/MCP 在外层子目录）"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary" }
+license = "Apache-2.0"
 authors = [
     { name = "ZGQ" },
 ]
-keywords = ["civil-engineering", "automation", "word-com", "fluent-ui"]
+keywords = ["civil-engineering", "automation", "report-generation", "matplotlib", "mcp-server"]
 
 dependencies = [
     # UI 已转 Tauri + Web（2026-05-20），删了 pyside6 + PySide6-Fluent-Widgets。

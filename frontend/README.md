@@ -1,73 +1,47 @@
-# React + TypeScript + Vite
+# civ-core · frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+筑核桌面壳 + 前端：Tauri 2.11 主进程（Rust） + React 19 + TypeScript + Tailwind v4。
 
-Currently, two official plugins are available:
+> **定位**：这是 `civ-core` 仓库的 GUI 入口，不是独立项目。架构 / 路由 / RPC 约定在仓库根目录的 [`CLAUDE.md`](../CLAUDE.md) 和 [`../.ai/RULES.md`](../.ai/RULES.md)；本目录的编码约定在 [`CLAUDE.md`](CLAUDE.md)。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 跑
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# 一次性
+npm install
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+# Dev（同时拉起 Tauri 主进程 + Vite + 双 sidecar）
+npm run tauri:dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+前置依赖：Node 20+、Rust toolchain、`dotnet build` 已跑过、`uv sync` 已跑过。详见根目录 `README.md`。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
+## 测试
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```bash
+npx tsc -b --noEmit      # 类型检查
+npm run lint             # ESLint
+npm run format:check     # Prettier
 ```
+
+## 目录结构（节选）
+
+```
+src/
+├── App.tsx                  顶层壳：Provider 嵌套 + 布局
+├── components/              VSCode 风格布局组件（TitleBar / SideBar / ...）
+├── lib/                     rpc.ts / shell.ts 等基础设施
+└── tools/                   每个工具一个目录（controller / Page / SettingsForm）
+    ├── _shared/             跨工具公共组件（CatalogDrivenInputs / forms / ...）
+    ├── data_processing/
+    ├── plot_curves/
+    ├── report_generator/
+    ├── template_helper/
+    ├── pdf_tools/
+    └── word2pdf/
+src-tauri/                   Tauri 主进程（Rust）：sidecar.rs + lib.rs
+```
+
+工具页范式（Controller / Page / SettingsForm 模板）见 [`CLAUDE.md`](CLAUDE.md)。

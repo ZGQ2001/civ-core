@@ -33,4 +33,51 @@ export const reportRenderPlaceholder: ToolDef = {
   },
 };
 
-export const allReportTools: readonly ToolDef[] = [reportRenderPlaceholder];
+export const reportRunFromResult: ToolDef = {
+  rpcMethod: "report.run_from_result",
+  mcpName: "report_run_from_result",
+  description:
+    "用已经算好的结果 xlsx 直接出 Word 报告——不重新跑 AnchorCalculator，省事且避免" +
+    "用户重复输入工程参数（P/Lf/La/A/E 等从结果 xlsx 的隐藏 metadata sheet 自动读）。" +
+    "\n\n输入 result_xlsx 必须由 anchor_run 产出（含 `_批次参数` 隐藏 sheet）。" +
+    "旧版本生成的结果 xlsx 不带 metadata，会返清晰错误提示重新跑装配线。" +
+    "\n\n返回 {batches, anchors_total, anchors_qualified, output, word_outputs," +
+    "word_unknown_keys, word_missing_images}—— 字段与 anchor_run 对齐方便 agent 一致处理。",
+  inputSchema: {
+    result_xlsx: z
+      .string()
+      .describe("anchor_run 已产出的结果 xlsx 绝对路径（含每批数据分析 sheet + _批次参数 sheet）"),
+    word_template_path: z
+      .string()
+      .describe("Word 模板绝对路径，带 {{占位符}} 和 [[每根锚杆]] / [[批次]] marker"),
+    standard: z
+      .string()
+      .optional()
+      .describe("规范代号；默认 GB 50086-2015"),
+    word_output_dir: z
+      .string()
+      .optional()
+      .describe("Word 输出目录；留空 = 结果 xlsx 同级 <stem>_Word报告/"),
+    curve_image_dir: z
+      .string()
+      .optional()
+      .describe("plot_curves 出图目录；留空 = {{img:曲线图}} 留原文并报 missing"),
+    report_name: z
+      .string()
+      .optional()
+      .describe("报告文件名；自动补 .docx 后缀；留空 = 默认「锚杆抗拔报告.docx」"),
+    user_inputs: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("报告级 + 检测项目级 user_inputs；可直接喂 report_preset_get 的返回值"),
+    batch_user_inputs: z
+      .record(z.string(), z.record(z.string(), z.string()))
+      .optional()
+      .describe("批次级 user_inputs：{batchId: {key: value}}，目前只用 grouting_date"),
+  },
+};
+
+export const allReportTools: readonly ToolDef[] = [
+  reportRenderPlaceholder,
+  reportRunFromResult,
+];

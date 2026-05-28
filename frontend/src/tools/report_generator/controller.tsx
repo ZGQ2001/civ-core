@@ -335,19 +335,27 @@ export function ReportGeneratorProvider({
   }, [upstream, dp, shell, setExcelPath]);
 
   // ── 就绪态 ──
+  // dataSource=result 时不再要求填批次参数（结果 xlsx 隐藏 metadata 已带工程参数）；
+  // 也不阻塞 anchor.list_batches 失败的情况，因为 result 路径不依赖批次列名。
   const readiness: Readiness = useMemo(() => {
     if (!excelPath) return { ready: false, reason: '请选输入 Excel' };
-    if (anchorBatchesLoading) return { ready: false, reason: '正在加载批次…' };
-    if (anchorBatchesError)
-      return { ready: false, reason: `读批次失败：${anchorBatchesError}` };
-    if (anchorBatchIds.length === 0)
-      return { ready: false, reason: 'Excel 里没读到任何批次（检查批次列名）' };
-    const missing = anchorBatchIds.filter((b) => !anchorParamsByBatch[b]);
-    if (missing.length > 0)
-      return {
-        ready: false,
-        reason: `还有 ${missing.length}/${anchorBatchIds.length} 批次未填工程参数`,
-      };
+    if (dataSource === 'raw') {
+      if (anchorBatchesLoading)
+        return { ready: false, reason: '正在加载批次…' };
+      if (anchorBatchesError)
+        return { ready: false, reason: `读批次失败：${anchorBatchesError}` };
+      if (anchorBatchIds.length === 0)
+        return {
+          ready: false,
+          reason: 'Excel 里没读到任何批次（检查批次列名）',
+        };
+      const missing = anchorBatchIds.filter((b) => !anchorParamsByBatch[b]);
+      if (missing.length > 0)
+        return {
+          ready: false,
+          reason: `还有 ${missing.length}/${anchorBatchIds.length} 批次未填工程参数`,
+        };
+    }
     if (!wordTemplatePath.trim())
       return {
         ready: false,
@@ -356,6 +364,7 @@ export function ReportGeneratorProvider({
     return { ready: true, reason: null };
   }, [
     excelPath,
+    dataSource,
     anchorBatchesLoading,
     anchorBatchesError,
     anchorBatchIds,
@@ -390,15 +399,26 @@ export function ReportGeneratorProvider({
         if (v) batchUserInputs[b] = { grouting_date: v };
       }
 
+      // dataSource 分支：
+      //   raw    → 走 anchor.run（完整链路：读原始 → 算 → 写结果 xlsx → 出 Word）
+      //   result → 走 report.run_from_result（读结果 xlsx 直接出 Word，不重算 / 不写新 xlsx）
+      // 解决用户反馈 #2+#7「报告填充不应再重算 / 应消费结果文件」。
+      const method =
+        dataSource === 'result' ? 'report.run_from_result' : 'anchor.run';
+
       const params: Record<string, unknown> = {
-        input_xlsx: excelPath,
         standard: anchorStandard,
-        batch_id_column: anchorBatchIdColumn,
-        params_by_batch: anchorParamsByBatch,
         word_template_path: wordTemplatePath.trim(),
         user_inputs: userInputsTrimmed,
       };
-      if (sheet) params.sheet = sheet;
+      if (dataSource === 'result') {
+        params.result_xlsx = excelPath;
+      } else {
+        params.input_xlsx = excelPath;
+        params.batch_id_column = anchorBatchIdColumn;
+        params.params_by_batch = anchorParamsByBatch;
+        if (sheet) params.sheet = sheet;
+      }
       if (outputDir.trim()) params.word_output_dir = outputDir.trim();
       if (curveImageDir.trim()) params.curve_image_dir = curveImageDir.trim();
       if (reportName.trim()) params.report_name = reportName.trim();
@@ -413,7 +433,7 @@ export function ReportGeneratorProvider({
         word_outputs?: string[];
         word_unknown_keys?: string[];
         word_missing_images?: string[];
-      }>('anchor.run', params);
+      }>(method, params);
 
       if (!res.word_outputs || res.word_outputs.length === 0) {
         throw new Error('后端没返回 word_outputs —— 模板替换可能跳过了');
@@ -443,6 +463,7 @@ export function ReportGeneratorProvider({
     readiness,
     running,
     excelPath,
+    dataSource,
     sheet,
     anchorStandard,
     anchorBatchIdColumn,

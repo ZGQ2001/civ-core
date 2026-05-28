@@ -5,7 +5,7 @@ Windows 平台，内部自用，非编程人员操作。
 
 **角色**：本文件是 AI 的宪法级上下文。放不可变的架构规则和边界。≤4000 字。每次会话必读。
 **配套文件**：`.ai/ROADMAP.md`（产品路线图）| `.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `docs/plans/`（技术方案）
-**子域规则**：`dotnet/CLAUDE.md` | `frontend/CLAUDE.md`（仅在操作对应目录时加载）
+**子域规则**：`dotnet/CLAUDE.md` | `frontend/CLAUDE.md` | `mcp/CLAUDE.md`（仅在操作对应目录时加载）
 
 ---
 
@@ -19,11 +19,24 @@ graph TB
         UI --> RPC_Client
     end
 
+    subgraph Agent ["AI Agent（Claude Code / Codex / Cursor）"]
+        A_Client["MCP Client（stdio）"]
+    end
+
     subgraph Tauri ["Tauri 2 主进程 (Rust)"]
         IPC_Cmd["rpc_call (tauri::command)"]
         Router["SidecarRouter<br/>前缀路由分发"]
         RPC_Client -- "invoke('rpc_call')" --> IPC_Cmd
         IPC_Cmd --> Router
+    end
+
+    subgraph Mcp ["MCP Server (Node + TS · civ-core-mcp)"]
+        Mcp_Stdio["StdioServerTransport"]
+        Mcp_Tools["20 tools (Phase 1)<br/>anchor / leeb / workspace / template<br/>report / xlsx / plot_curves / doc"]
+        Mcp_Router["SidecarRouter<br/>同前缀策略，独立实例"]
+        A_Client -- "MCP (stdio)" --> Mcp_Stdio
+        Mcp_Stdio --> Mcp_Tools
+        Mcp_Tools --> Mcp_Router
     end
 
     subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
@@ -51,18 +64,22 @@ graph TB
 
     Router -- "默认路由（全部）" --> CS_RPC
     Router -- "白名单路由<br/>plot_curves.*" --> Py_RPC
+    Mcp_Router -- "默认路由（全部）" --> CS_RPC
+    Mcp_Router -- "白名单路由<br/>plot_curves.*" --> Py_RPC
 
     CS_SQL -- "读写" --> DB
     CS_CL -- "读写" --> Disk
 
     style Frontend fill:#1e1e2e,stroke:#cba6f7,color:#cdd6f4
+    style Agent fill:#1e1e2e,stroke:#f5c2e7,color:#cdd6f4
     style Tauri fill:#11111b,stroke:#89b4fa,color:#cdd6f4
+    style Mcp fill:#11111b,stroke:#fab387,color:#cdd6f4
     style CSharp fill:#181825,stroke:#a6e3a1,color:#cdd6f4
     style Python fill:#181825,stroke:#f9e2af,color:#cdd6f4
     style Storage fill:#313244,stroke:#f5c2e7,color:#cdd6f4
 ```
 
-**双 sidecar 通过 stdin/stdout JSON-RPC 2.0 行协议通信。同协议、同错误码。前端不感知 sidecar 边界。Python 仅保留 plot_curves（matplotlib 图表引擎），其余全由 C# 接管（含 standards.db 管理）。**
+**双客户端 / 双 sidecar**：前端走 Tauri，agent 走 MCP server，两条入口各起一组 sidecar 子进程（不共享）。所有 sidecar 同协议、同错误码、同前缀路由策略——业务逻辑只在 sidecar 里，入口层只做转发。Python 仅保留 plot_curves（matplotlib 图表引擎），其余全由 C# 接管（含 standards.db 管理）。
 
 ## 领域约束
 
@@ -76,11 +93,11 @@ graph TB
 
 ### 行业风险
 
-| 风险 | 规避方式 |
-|------|---------|
-| 规范用错 | 锁定规范版本，报告注明判定依据 |
-| 项目数据串位 | 工作区隔离，一项目一文件夹 |
-| 公式实现错误 | 判定路径全覆盖测试 |
+| 风险                 | 规避方式                           |
+| -------------------- | ---------------------------------- |
+| 规范用错             | 锁定规范版本，报告注明判定依据     |
+| 项目数据串位         | 工作区隔离，一项目一文件夹         |
+| 公式实现错误         | 判定路径全覆盖测试                 |
 | 用户看不懂程序在干嘛 | 每步出日志，判定结果附公式和中间值 |
 
 ### 模块耦合
@@ -95,16 +112,17 @@ graph TB
 - C# .NET + ClosedXML + Microsoft.Data.Sqlite
 - 前端 Vite + React + TypeScript + Tailwind + codicons
 - 主进程 Tauri (Rust)
+- MCP server Node + TS + @modelcontextprotocol/sdk（agent 入口）
 - JSON-RPC 2.0 over stdin/stdout
 
 ## RPC 路由
 
 **策略：默认 C#，白名单 Python。** 未来新 calc 类型不加 Rust 代码。
 
-| sidecar | 方法前缀 |
-|---------|---------|
-| **C#（默认）** | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*` — 及所有新方法 |
-| **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代） |
+| sidecar              | 方法前缀                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **C#（默认）**       | 全部方法 — `leeb.*` `doc.*` `xlsx.*` `anchor.*` `workspace.*` `files.*` `pdf_tools.*` `word2pdf.*` — 及所有新方法 |
+| **Python（白名单）** | `ping` `version` `plot_curves.*`（唯一保留，matplotlib 无可替代）                                                 |
 
 ## 不可变规则
 
@@ -116,42 +134,49 @@ graph TB
 
 4. **图标**：只用 @vscode/codicons 真实存在的名字。`calculator` 不存在→用 `symbol-method`。
 
-5. **stdout 是协议流**：Python `api/__main__.py` 只挂 file+stderr logger；C# `Program.cs` 只写 `Console.Error`。绝不动 stdout。
+5. **stdout 是协议流**：Python `api/__main__.py` 只挂 file+stderr logger；C# `Program.cs` 只写 `Console.Error`；MCP server `mcp/src/index.ts` 只写 `process.stderr`。绝不动 stdout。
+
+6. **MCP tool 名禁含点**：MCP 规范 `[a-zA-Z0-9_-]+`。`anchor.run` → tool 名 `anchor_run`。`registerSidecarTool` 启动时校验，违规直接抛。
 
 ## 会话自检（每次开工前回答）
 
 - [ ] 这个功能走 Python 还是 C#？前缀配对了吗？
 - [ ] handler 写了 `__all__` 吗？
 - [ ] 前端 `run()` 是 `return` 值还是读闭包？
+- [ ] 新加 RPC 要不要同步加 MCP tool？要的话 `mcp/src/tools/` 加一份。
 
 ## 行为准则
 
 ### 1. 先想再动手
+
 不确定就问，别猜。有多个方案就列出来比，别自作主张。
 觉得哪里不对直接说出来，推回去也要说为什么。
 
 ### 2. 最简方案
+
 只写被要求的东西。别为「以后可能用」加功能。
 单次调用的代码不做抽象。200 行能缩到 50 就缩。
 
 ### 3. 手术刀改动
+
 只碰跟你任务相关的代码。
 不改相邻代码的格式和注释——哪怕你觉得不好。
 不该删的东西别删。你造成的 orphan 自己清，跟你无关的 dead code 别碰。
 
 ### 4. 跑通才算完
+
 把任务转成可验证目标：「加校验」→「先写失败测试，再让它过」。
 每一步有验证点。跑通验证才算这步完了，没跑通别往下一步走。
 
 ## 边界
 
-| 禁止 | 必须 |
-|------|------|
-| 没方案就改代码 | 先报告方案→确认→执行 |
-| core/ 直接读写文件 | IO 全走 infra_io/ |
-| api/handlers/ 直接做计算 | 调 core/ |
-| stdout 写日志 | stderr 或文件 |
-| pip install / 顶层 import pandas | uv add / lazy import |
-| 跨 sidecar 共享全局变量 | 共享状态走 `~/.civ-core/` 文件 |
-| 大文件 `f.read()` 一把梭 | generator / 流式 |
-| 中国源直连 | 用镜像（见 `.ai/RULES.md`） |
+| 禁止                             | 必须                           |
+| -------------------------------- | ------------------------------ |
+| 没方案就改代码                   | 先报告方案→确认→执行           |
+| core/ 直接读写文件               | IO 全走 infra_io/              |
+| api/handlers/ 直接做计算         | 调 core/                       |
+| stdout 写日志                    | stderr 或文件                  |
+| pip install / 顶层 import pandas | uv add / lazy import           |
+| 跨 sidecar 共享全局变量          | 共享状态走 `~/.civ-core/` 文件 |
+| 大文件 `f.read()` 一把梭         | generator / 流式               |
+| 中国源直连                       | 用镜像（见 `.ai/RULES.md`）    |

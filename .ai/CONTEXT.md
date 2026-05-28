@@ -6,7 +6,20 @@
 
 ---
 
-## 当前焦点（2026-05-27）
+## 当前焦点（2026-05-28）
+
+**MCP server Phase 1 上线** —— 把 civ-core 双 sidecar 的 20 个 RPC 包成标准 MCP tools，给 Claude Code / Codex / Cursor 等 agent 原生入口（2026-05-27 路线定调「主要操作者是 AI agent」的关键基础设施）。
+
+- **架构**：新顶级目录 `mcp/`（与 `dotnet/` `frontend/` 平级），Node + TS + `@modelcontextprotocol/sdk` 1.29，独立第 3 进程；启动时 spawn C# + Python 两个 sidecar 子进程（同 `sidecar.rs` 口径），把 MCP tool call 转发成 JSON-RPC 行协议。Tauri / 前端零改动。
+- **20 tools = 2 doc + 4 workspace + 3 anchor + 2 leeb + 1 xlsx + 1 template + 1 report + 6 plot_curves**。装配线 + 通用模板渲染 + 出图全路径打通。每 tool 一份 zod inputSchema，按 .describe() 写清单位 / 用法 / 触发条件。
+- **错误映射两层**：业务级 `SidecarRpcError` → MCP `isError: true` + 原 message 保留（「问题在哪 + 怎么修」）；进程级 `SidecarFatalError` → 抛出去关 transport。
+- **冒烟**：scripts/smoke.mjs 用 MCP Client SDK 跑端到端三跳——agent → MCP server → sidecar 全通；doc_ping 返 "pong"，plot_curves_list_presets 拿到 1 个用户预设。
+- **5 commit 落地**：脚手架 / sidecar 客户端+路由+7 单测 / MCP transport+doc tools / workspace+anchor 7 tools / 装配线+plot_curves 13 tools + registry callback 签名 bug 修。
+- **接入 Claude Code**：`mcp/CLAUDE.md` 写了 mcp_servers.json 配置范例，env `CIV_CORE_REPO_ROOT` 指仓库根。
+
+**前一焦点（2026-05-27）**：批次维度模板（灌浆日期按批次）—— 装配线「报告填充」工序从「报告级单值」升级到「报告级 + 批次级」两层。模型重塑：报告级（仪器/人员/检测时间/参建单位/委托方等 31 字段，扁平 `ReportUserInputs`）+ 批次级（目前唯一字段 `grouting_date`，`Record<batchId, string>`）。
+
+## 前一焦点（2026-05-27）
 
 **批次维度模板（灌浆日期按批次）上线** —— 装配线「报告填充」工序从「报告级单值」升级到「报告级 + 批次级」两层。模型重塑：报告级（仪器/人员/检测时间/参建单位/委托方等 31 字段，扁平 `ReportUserInputs`）+ 批次级（目前唯一字段 `grouting_date`，`Record<batchId, string>`）。
 
@@ -38,32 +51,33 @@
 
 > **方向定调（2026-05-27）**：系统主要操作者是 AI agent，不是人。GUI 退到「人 review agent 输出」位置。所有新功能优先评估 agent 体验，GUI 按钮做兜底。
 
-1. **MCP server：把 sidecar RPC 暴露成 MCP tools** —— agent 原生入口。30+ RPC（`anchor.*` / `doc.*` / `pdf_tools.*` / `word2pdf.*` / `xlsx.*` / `workspace.*` / `files.*` / `plot_curves.*`）包成 MCP tools，含 `inputSchema` JSON 描述；进度通知走 JSON-RPC notification → MCP progress；错误对齐「问题在哪 + 怎么修」原则。复用全部现有 sidecar 业务逻辑，只加协议层。预计 2-3 天。
-2. **钻芯/回弹切 C#** —— agent 调用 `data_processing.run` 时除 anchor 外还要能跑 leeb / 钻芯 / 回弹；data_processing calcType 下拉再加项。
-3. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 钻芯 + 回弹等多个 section；catalog 已有 `detection_item` level 概念，等钻芯/回弹切 C# 后再 wire。agent 出综合报告时刚需。
-4. **真正"一键流水线" GUI 按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— 给「人 review 长 agent 任务」用的便利路径，次优先级（agent 可直接调 MCP 串起来，不需要 GUI 按钮）。
-5. **LaTeX 报告路线**（`templates/latex/template.tex` 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
-6. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin（MCP server 独立打包还是合入 sidecar 待定）
-7. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
+1. **钻芯/回弹切 C#** —— agent 调用 `anchor_run` 已通，下一种检测类型自然顺延；data_processing calcType 下拉再加项。MCP server 已就位，新 calc 只要在 C# 加 handler，`mcp/src/tools/` 加一份 ToolDef 即可。
+2. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 钻芯 + 回弹等多个 section；catalog 已有 `detection_item` level 概念，等钻芯/回弹切 C# 后再 wire。agent 出综合报告时刚需。
+3. **MCP server Phase 2** —— 补 files._ (10) / pdf_tools._ (4) / word2pdf._ (2) / catalog._ (4) / template.validate / plot_curves 预设 CRUD，让 agent 能做完整「文件管家」工作（不只是装配线）。
+4. **MCP server 进度通知** —— anchor.run / plot_curves.run 长任务，sidecar stderr 日志透传 → MCP `notifications/message`，让 agent 看到进度。当前只返终态。
+5. **真正"一键流水线" GUI 按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— 给「人 review 长 agent 任务」用的便利路径，次优先级（agent 可直接调 MCP 串起来，不需要 GUI 按钮）。
+6. **LaTeX 报告路线**（`templates/latex/template.tex` 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
+7. **T6 打包** —— PyInstaller + dotnet publish + Tauri externalBin + mcp Node bundle（4 个产物一起出）
+8. **App.tsx 拆 useShellState hook** —— 当前 470+ 行嵌套 5 个 Provider
 
 ---
 
 ## 用户偏好
 
-| 偏好 | 来源日期 |
-|------|---------|
-| 不要 JSON 编辑器——用 form | 2026-05-21 |
-| 中间预览区 + 右侧参数区，统一交互范式 | 2026-05-21 |
-| 全局禁 emoji（UI/commit/AI 文档） | 2026-05-21 |
-| 大需求分多次 commit，每次独立验收 | 2026-05-21 |
-| 以后代码都用 C#（Python 已交付的不动） | 2026-05-22 |
-| 文档对 AI 友好、易于维护、不需要用户写专业内容 | 2026-05-22 |
-| UI 任何操作必须可观察，禁黑盒——每个 onClick 入口先 appendOutput 一行 | 2026-05-22 |
-| 字段命名要让非编程用户看得懂——中文名 + 变量符号 + 单位 + 一句话 hint 同行展示 | 2026-05-22 |
+| 偏好                                                                               | 来源日期   |
+| ---------------------------------------------------------------------------------- | ---------- |
+| 不要 JSON 编辑器——用 form                                                          | 2026-05-21 |
+| 中间预览区 + 右侧参数区，统一交互范式                                              | 2026-05-21 |
+| 全局禁 emoji（UI/commit/AI 文档）                                                  | 2026-05-21 |
+| 大需求分多次 commit，每次独立验收                                                  | 2026-05-21 |
+| 以后代码都用 C#（Python 已交付的不动）                                             | 2026-05-22 |
+| 文档对 AI 友好、易于维护、不需要用户写专业内容                                     | 2026-05-22 |
+| UI 任何操作必须可观察，禁黑盒——每个 onClick 入口先 appendOutput 一行               | 2026-05-22 |
+| 字段命名要让非编程用户看得懂——中文名 + 变量符号 + 单位 + 一句话 hint 同行展示      | 2026-05-22 |
 | 工具间不要过度耦合 —— 装配线连贯但每个工序能独立工作（提供"一键导入"代替隐式继承） | 2026-05-26 |
-| 程序不能是黑盒 —— 错误信息告诉用户"问题在哪 + 怎么修"，不只是抛异常 | 2026-05-26 |
-| 业务判断不让 AI 替用户拍板（如字段维度划分）—— 留 TODO 让用户后续 PR 决定 | 2026-05-26 |
-| 系统主要操作者是 AI agent，不是人 —— 新功能先评估 agent 体验，GUI 做兜底 | 2026-05-27 |
+| 程序不能是黑盒 —— 错误信息告诉用户"问题在哪 + 怎么修"，不只是抛异常                | 2026-05-26 |
+| 业务判断不让 AI 替用户拍板（如字段维度划分）—— 留 TODO 让用户后续 PR 决定          | 2026-05-26 |
+| 系统主要操作者是 AI agent，不是人 —— 新功能先评估 agent 体验，GUI 做兜底           | 2026-05-27 |
 
 ---
 
@@ -97,6 +111,19 @@
 
 ## 会话历史
 
+### [2026-05-28] MCP server Phase 1 上线：20 tools agent 原生入口
+
+5 个 commit 把 civ-core 双 sidecar 30+ RPC 中的 20 个包成 MCP tools。架构定调（用户拍板）：TS/Node + 独立第 3 进程转发 RPC（不走 C# 进程内嵌）+ Phase 分两步（先装配线后文件操作）。
+
+- **Commit 1 `279e50f` (脚手架)**：`mcp/` 顶级目录，package.json + tsconfig（NodeNext strict noUncheckedIndexedAccess）+ 空 index.ts；@modelcontextprotocol/sdk 1.29 + zod 3.25 装上；npm install + tsc build 跑通。
+- **Commit 2 `a1011d4` (客户端+路由)**：`sidecar.ts` Node 版 `JsonRpcSidecar`（对照 `sidecar.rs`）+ `router.ts` 同前缀策略 + 7 单测（fixture 用 node 跑 echo JSON-RPC 子进程，不依赖真 sidecar）。SidecarRpcError / SidecarFatalError 两类清晰分。`parameter properties` 防 TS2565（async IIFE 引用 this.name）。
+- **Commit 3 `d2e5a38` (MCP transport)**：`StdioServerTransport` 接上；`lib/repoRoot.ts` 环境变量 / sentinel 推断双路径；`tools/registry.ts` ToolDef + registerSidecarTool 错误映射；`tools/doc.ts` doc_ping / doc_version 探活。冒烟实测 doc_ping 返 "pong"。
+- **Commit 4 `b2002ba` (workspace+anchor)**：4 workspace + 3 anchor = 7 tools。anchor_run schema 嵌套 record + 每字段 .describe() 写清单位（N/mm/mm²/MPa）+ marker / curve_image_dir 命名约定的描述。
+- **Commit 5 `3ce8d6d` (装配线 + plot_curves + bug fix)**：补 leeb 2 + xlsx 1 + template 1 + report 1 + plot_curves 6 = 13 tools，Phase 1 共 20。**修 registry 签名 bug**：SDK 对无 inputSchema 的工具 callback 签名是 `(extra) => result`（不是 `(args) => ...`），之前误把 `extra`（含 AbortSignal）当 args 转发到 sidecar——Python 端 `list_presets()` 严格 kwargs 校验立刻爆。修法：按 def.inputSchema 有无分支注册。冒烟双 sidecar 全过。
+- **Commit 6 `<本提交>` (文档同步)**：CLAUDE.md 架构图加 MCP 节点 + 不可变规则 #6 加 MCP tool 命名 / 会话自检加「新 RPC 同步加 MCP tool」；RULES.md 加 mcp 目录 + 补 RPC 全表缺漏 catalog.\* / template.validate / list_headers + 加 MCP tools 表 + 测试命令补 mcp + 全链表格补一行；新建 `mcp/CLAUDE.md` 域规则（项目定位 / 加 tool SOP / 编码约定 / 启动调试 / 接 Claude Code 配置范例）；CONTEXT.md 更新当前焦点 + 下一步候选；PROGRESS.md 加里程碑 T8。
+
+期间确立两条约定：① **MCP tool 名禁含 `.`**（MCP 规范 `[a-zA-Z0-9_-]+`，约定 RPC `foo.bar` → tool `foo_bar`）；② **stdout 是 MCP 协议流**（跟 sidecar 同口径，stderr 才是日志）。最终 mcp typecheck + 7 单测全过；agent → MCP server → C# sidecar + Python sidecar 双链路冒烟全通。
+
 ### [2026-05-27] 批次维度模板上线：灌浆日期按批次填 + 模板助手指引
 
 2 个 commit，6 个文件，+503/−30 行。**层级模型重塑**：「报告级 + 批次级」两层（多检测内容混排留待钻芯/回弹切 C# 后再补「检测项目级」第三层）。
@@ -113,7 +140,7 @@
 
 4 个 commit 把 Python sidecar 残留 RPC 全迁 C#，符合"路由默认 C#"方向。Python sidecar 最终只承载 plot_curves（matplotlib 无可替代）。
 
-- **Commit 1 `3c21a1e` (workspace)**：4 RPC（last/set/clear/create_standard）；HomeDir 走 USERPROFILE env var 与 Python expanduser 对齐方便测试；8 xUnit。顺手修 pre-existing `TemplateHandlers.Fields_未知project_type` 用例失败：错误信息加可选目录提示（符合"程序不能是黑盒"）。
+- **Commit 1 `3c21a1e` (workspace)**：4 RPC（last/set/clear/create*standard）；HomeDir 走 USERPROFILE env var 与 Python expanduser 对齐方便测试；8 xUnit。顺手修 pre-existing `TemplateHandlers.Fields*未知project_type` 用例失败：错误信息加可选目录提示（符合"程序不能是黑盒"）。
 - **Commit 2 `c354f30` (files)**：10 RPC（list_dir/exists/create_file/folder/rename/copy/move/reveal/delete/undo_delete）；delete 走 Microsoft.VisualBasic.FileSystem 发回收站，undo_delete 用 Shell.Application COM dynamic 调 "undelete" verb；自然排序对齐 Python；26 xUnit（含实测回收站往返）。
 - **Commit 3 `50b4684` (pdf_tools)**：4 RPC（merge/split_per_page/split_by_ranges/inspect）；PDFsharp 6.2 原子写；范围表达式 "1-3,5,7-9" 解析对齐 Python；20 xUnit；卸 pypdf Python 依赖。
 - **Commit 4 `0cefda1` (word2pdf)**：2 RPC（convert/inspect）；convert 用 dynamic 调 Word.Application + 回退 KWPS（Windows 限定，对齐 Python pywin32 DispatchEx 语义）；inspect 跨平台走 OpenXML + ZipArchive 读 docProps/app.xml<Pages>；macOS/Linux 抛 PlatformNotSupported + 注释指引未来怎么补 Mac AppleScript 路径；6 xUnit。
@@ -126,7 +153,7 @@
 
 - **Commit 1**：占位符 `{}` → `{{}}`；catalog DefaultFormat 真生效（弹性位移量 2 位小数）；ReportGenerator 成对 marker `[[每根锚杆]]...[[/每根锚杆]]` 克隆段+表；catalog 加 25 个 user_input + 别名网；AnchorRowResolver 引擎注入 `anchor_index`；AnchorAnalysisSheet Round 3→2。+38 个 xUnit 用例。
 - **Commit 2**：拆 template_editor 工具（删 4 件套）；新建 report_generator 工具（独立 controller + Page + SettingsForm 按 7 组折叠 32 字段）；数据处理页删 AnchorWordReportSection；FileTree 删除确认升级到 VSCode 同款；ActivityBar 入口换名。
-- **Commit 3**：catalog 单位调整（`axial_design_load_kn` 派生字段 alias「轴向拉力设计值」，模板默认 kN 输出）；合并 test_engineer/test_date 到 inspection_*（保留旧别名）；解耦 report_generator 完全独立 own state，加「从数据处理一键导入」按钮（上游就绪态高亮）；抽 _shared/anchorParamsForm.tsx 两工具复用；图片占位符 `{{img:xxx}}` 引擎 + ImageInjector OpenXML Drawing 嵌入 + AnchorRowResolver 接 curveImageDir 按 anchor_id 拼路径 + 前端加曲线图目录 picker + missingImages 警告渲染。+5 个图片用例。
+- **Commit 3**：catalog 单位调整（`axial_design_load_kn` 派生字段 alias「轴向拉力设计值」，模板默认 kN 输出）；合并 test*engineer/test_date 到 inspection*\*（保留旧别名）；解耦 report_generator 完全独立 own state，加「从数据处理一键导入」按钮（上游就绪态高亮）；抽 \_shared/anchorParamsForm.tsx 两工具复用；图片占位符 `{{img:xxx}}` 引擎 + ImageInjector OpenXML Drawing 嵌入 + AnchorRowResolver 接 curveImageDir 按 anchor_id 拼路径 + 前端加曲线图目录 picker + missingImages 警告渲染。+5 个图片用例。
 
 最终：dotnet test 108 通过 + 1 skip，frontend tsc 通过。
 

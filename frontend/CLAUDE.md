@@ -136,10 +136,11 @@ StatusBar (22px)
 
 ## 公共组件
 
-| 文件                                 | 内容                                                                                                                                                     |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tools/_shared/forms.tsx`            | `Field` / `Picker` / `ResetBtn` / `RunBtn`（所有工具共用的 form 控件）                                                                                   |
-| `tools/_shared/anchorParamsForm.tsx` | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。 |
+| 文件                                    | 内容                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools/_shared/forms.tsx`               | `Field` / `Picker` / `ResetBtn` / `RunBtn`（所有工具共用的 form 控件）                                                                                                             |
+| `tools/_shared/anchorParamsForm.tsx`    | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。                           |
+| `tools/_shared/CatalogDrivenInputs.tsx` | 报告填充「项目元信息」公共渲染器：按 `catalog.get` 动态拉字段定义，按 level → group 分组渲染 user_input。模板助手改字段，报告填充立刻同步。接 `historyByKey` prop 显示历史值下拉。 |
 
 ## 快捷键
 

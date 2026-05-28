@@ -47,59 +47,66 @@
 
 ### C# sidecar（默认路由）
 
-| 方法                           | 文件                            | 用途                                                                                                                           |
-| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `leeb.run`                     | `Handlers/LeebHandlers.cs`      | 里氏硬度全流程（读+算+返 report_table_data）                                                                                   |
-| `leeb.preview_excel`           | `Handlers/LeebHandlers.cs`      | Excel 前 N 行预览                                                                                                              |
-| `anchor.run`                   | `Handlers/AnchorHandlers.cs`    | 锚杆抗拔全流程：读 Excel + 按批次套参数 + 算 + 写 Excel；可选 word_template_path → 出 docx（支持 curve_image_dir 嵌曲线图）    |
-| `anchor.list_batches`          | `Handlers/AnchorHandlers.cs`    | 读输入 Excel 返回所有 batch_id（前端按批次填参数前用）                                                                         |
-| `anchor.generate_template`     | `Handlers/AnchorHandlers.cs`    | 生成锚杆输入 Excel 空白模板                                                                                                    |
-| `template.fields`              | `Handlers/TemplateHandlers.cs`  | 按 catalog_id（兼容旧 project_type）返回字段 catalog（{key, name, group, level, source, value_type, default_format, aliases}） |
-| `template.validate`            | `Handlers/TemplateHandlers.cs`  | docx 模板占位符校验：匹配 / 未识别 / 未用字段 / marker 嵌套 + 字段层级 hint                                                    |
-| `catalog.list`                 | `Handlers/CatalogHandlers.cs`   | 列所有字段目录（id, name, project_type, fields 个数）                                                                          |
-| `catalog.get`                  | `Handlers/CatalogHandlers.cs`   | 读单个字段目录的完整字段定义                                                                                                   |
-| `catalog.save`                 | `Handlers/CatalogHandlers.cs`   | 新建或覆盖字段目录                                                                                                             |
-| `catalog.delete`               | `Handlers/CatalogHandlers.cs`   | 删除字段目录                                                                                                                   |
-| `report.render_placeholder`    | `Handlers/ReportHandlers.cs`    | 通用占位符渲染（docx_path + values + output_path），跟特定 calc 解耦                                                           |
-| `doc.ping`                     | `Handlers/DocHandlers.cs`       | C# 链路验证                                                                                                                    |
-| `doc.version`                  | `Handlers/DocHandlers.cs`       | C# 版本信息                                                                                                                    |
-| `xlsx.write_leeb_report_table` | `Handlers/XlsxHandlers.cs`      | 写里氏报告插入表                                                                                                               |
-| `workspace.last`               | `Handlers/WorkspaceHandlers.cs` | 读取上次工作区路径                                                                                                             |
-| `workspace.set`                | `Handlers/WorkspaceHandlers.cs` | 设置当前工作区路径                                                                                                             |
-| `workspace.clear`              | `Handlers/WorkspaceHandlers.cs` | 清除工作区记忆                                                                                                                 |
-| `workspace.create_standard`    | `Handlers/WorkspaceHandlers.cs` | 新建标准项目骨架（4 业务子目录 + .civ-core/）                                                                                  |
-| `files.list_dir`               | `Handlers/FilesHandlers.cs`     | 列目录（隐藏 .开头 + .civ-core；目录排前 + 自然排序）                                                                          |
-| `files.exists`                 | `Handlers/FilesHandlers.cs`     | 文件存在检查                                                                                                                   |
-| `files.create_file`            | `Handlers/FilesHandlers.cs`     | 创建空文件（Windows 名校验）                                                                                                   |
-| `files.create_folder`          | `Handlers/FilesHandlers.cs`     | 创建文件夹                                                                                                                     |
-| `files.rename`                 | `Handlers/FilesHandlers.cs`     | 同目录改名                                                                                                                     |
-| `files.delete`                 | `Handlers/FilesHandlers.cs`     | 发送到回收站（仅 Windows）                                                                                                     |
-| `files.undo_delete`            | `Handlers/FilesHandlers.cs`     | 从回收站还原（5 分钟内，Shell COM）                                                                                            |
-| `files.copy`                   | `Handlers/FilesHandlers.cs`     | 复制（同名追加 (2)/(3)；目录递归）                                                                                             |
-| `files.move`                   | `Handlers/FilesHandlers.cs`     | 移动（同名追加 (2)/(3)）                                                                                                       |
-| `files.reveal`                 | `Handlers/FilesHandlers.cs`     | explorer /select 定位选中                                                                                                      |
-| `pdf_tools.merge`              | `Handlers/PdfToolsHandlers.cs`  | PDF 合并（PDFsharp，原子写）                                                                                                   |
-| `pdf_tools.split_per_page`     | `Handlers/PdfToolsHandlers.cs`  | 按页拆分（{stem}\_p{n}.pdf 零填充）                                                                                            |
-| `pdf_tools.split_by_ranges`    | `Handlers/PdfToolsHandlers.cs`  | 按范围拆分（"1-3,5,7-9" 表达式）                                                                                               |
-| `pdf_tools.inspect`            | `Handlers/PdfToolsHandlers.cs`  | 预览（页数 + 大小；单文件失败不影响整体）                                                                                      |
-| `word2pdf.convert`             | `Handlers/Word2PdfHandlers.cs`  | Word→PDF 批量（仅 Windows，COM dynamic；非 Windows 抛 PlatformNotSupported）                                                   |
-| `word2pdf.inspect`             | `Handlers/Word2PdfHandlers.cs`  | 预览（段落数+页数+大小；OpenXML SDK，跨平台）                                                                                  |
+| 方法                           | 文件                               | 用途                                                                                                                           |
+| ------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `leeb.run`                     | `Handlers/LeebHandlers.cs`         | 里氏硬度全流程（读+算+返 report_table_data）                                                                                   |
+| `leeb.preview_excel`           | `Handlers/LeebHandlers.cs`         | Excel 前 N 行预览                                                                                                              |
+| `anchor.run`                   | `Handlers/AnchorHandlers.cs`       | 锚杆抗拔全流程：读 Excel + 按批次套参数 + 算 + 写 Excel；可选 word_template_path → 出 docx（支持 curve_image_dir 嵌曲线图）    |
+| `anchor.list_batches`          | `Handlers/AnchorHandlers.cs`       | 读输入 Excel 返回所有 batch_id（前端按批次填参数前用）                                                                         |
+| `anchor.generate_template`     | `Handlers/AnchorHandlers.cs`       | 生成锚杆输入 Excel 空白模板                                                                                                    |
+| `template.fields`              | `Handlers/TemplateHandlers.cs`     | 按 catalog_id（兼容旧 project_type）返回字段 catalog（{key, name, group, level, source, value_type, default_format, aliases}） |
+| `template.validate`            | `Handlers/TemplateHandlers.cs`     | docx 模板占位符校验：匹配 / 未识别 / 未用字段 / marker 嵌套 + 字段层级 hint                                                    |
+| `catalog.list`                 | `Handlers/CatalogHandlers.cs`      | 列所有字段目录（id, name, project_type, fields 个数）                                                                          |
+| `catalog.get`                  | `Handlers/CatalogHandlers.cs`      | 读单个字段目录的完整字段定义                                                                                                   |
+| `catalog.save`                 | `Handlers/CatalogHandlers.cs`      | 新建或覆盖字段目录                                                                                                             |
+| `catalog.delete`               | `Handlers/CatalogHandlers.cs`      | 删除字段目录                                                                                                                   |
+| `report.render_placeholder`    | `Handlers/ReportHandlers.cs`       | 通用占位符渲染（docx_path + values + output_path），跟特定 calc 解耦                                                           |
+| `report.run_from_result`       | `Handlers/ReportHandlers.cs`       | 读 anchor.run 已产出的结果 xlsx 直接出 Word，不重算（含隐藏 `_批次参数` sheet 读 P/Lf/La/A/E）                                 |
+| `report_preset.list`           | `Handlers/ReportPresetHandlers.cs` | 列报告 user_inputs 预设（可按 catalog_id 过滤）；按 updated_at 倒序                                                            |
+| `report_preset.get`            | `Handlers/ReportPresetHandlers.cs` | 读单个预设完整内容                                                                                                             |
+| `report_preset.save`           | `Handlers/ReportPresetHandlers.cs` | 新建或覆盖预设；server 端自动盖 updated_at                                                                                     |
+| `report_preset.delete`         | `Handlers/ReportPresetHandlers.cs` | 删预设                                                                                                                         |
+| `report_preset.rename`         | `Handlers/ReportPresetHandlers.cs` | 改预设 label（不动 id / user_inputs）                                                                                          |
+| `doc.ping`                     | `Handlers/DocHandlers.cs`          | C# 链路验证                                                                                                                    |
+| `doc.version`                  | `Handlers/DocHandlers.cs`          | C# 版本信息                                                                                                                    |
+| `xlsx.write_leeb_report_table` | `Handlers/XlsxHandlers.cs`         | 写里氏报告插入表                                                                                                               |
+| `workspace.last`               | `Handlers/WorkspaceHandlers.cs`    | 读取上次工作区路径                                                                                                             |
+| `workspace.set`                | `Handlers/WorkspaceHandlers.cs`    | 设置当前工作区路径                                                                                                             |
+| `workspace.clear`              | `Handlers/WorkspaceHandlers.cs`    | 清除工作区记忆                                                                                                                 |
+| `workspace.create_standard`    | `Handlers/WorkspaceHandlers.cs`    | 新建标准项目骨架（4 业务子目录 + .civ-core/）                                                                                  |
+| `files.list_dir`               | `Handlers/FilesHandlers.cs`        | 列目录（隐藏 .开头 + .civ-core；目录排前 + 自然排序）                                                                          |
+| `files.exists`                 | `Handlers/FilesHandlers.cs`        | 文件存在检查                                                                                                                   |
+| `files.create_file`            | `Handlers/FilesHandlers.cs`        | 创建空文件（Windows 名校验）                                                                                                   |
+| `files.create_folder`          | `Handlers/FilesHandlers.cs`        | 创建文件夹                                                                                                                     |
+| `files.rename`                 | `Handlers/FilesHandlers.cs`        | 同目录改名                                                                                                                     |
+| `files.delete`                 | `Handlers/FilesHandlers.cs`        | 发送到回收站（仅 Windows）                                                                                                     |
+| `files.undo_delete`            | `Handlers/FilesHandlers.cs`        | 从回收站还原（5 分钟内，Shell COM）                                                                                            |
+| `files.copy`                   | `Handlers/FilesHandlers.cs`        | 复制（同名追加 (2)/(3)；目录递归）                                                                                             |
+| `files.move`                   | `Handlers/FilesHandlers.cs`        | 移动（同名追加 (2)/(3)）                                                                                                       |
+| `files.reveal`                 | `Handlers/FilesHandlers.cs`        | explorer /select 定位选中                                                                                                      |
+| `pdf_tools.merge`              | `Handlers/PdfToolsHandlers.cs`     | PDF 合并（PDFsharp，原子写）                                                                                                   |
+| `pdf_tools.split_per_page`     | `Handlers/PdfToolsHandlers.cs`     | 按页拆分（{stem}\_p{n}.pdf 零填充）                                                                                            |
+| `pdf_tools.split_by_ranges`    | `Handlers/PdfToolsHandlers.cs`     | 按范围拆分（"1-3,5,7-9" 表达式）                                                                                               |
+| `pdf_tools.inspect`            | `Handlers/PdfToolsHandlers.cs`     | 预览（页数 + 大小；单文件失败不影响整体）                                                                                      |
+| `word2pdf.convert`             | `Handlers/Word2PdfHandlers.cs`     | Word→PDF 批量（仅 Windows，COM dynamic；非 Windows 抛 PlatformNotSupported）                                                   |
+| `word2pdf.inspect`             | `Handlers/Word2PdfHandlers.cs`     | 预览（段落数+页数+大小；OpenXML SDK，跨平台）                                                                                  |
 
 ### MCP server tools（Phase 1，agent 入口）
 
 20 个 tool，命名规则：RPC 方法 `anchor.run` → MCP tool 名 `anchor_run`（点改下划线）。
 完整列表见 `mcp/src/tools/` 各文件 + `allXxxTools` 数组。
 
-| 域          | tool 数 | 文件                           | 备注                                                               |
-| ----------- | ------- | ------------------------------ | ------------------------------------------------------------------ |
-| doc         | 2       | `mcp/src/tools/doc.ts`         | 探活 `doc_ping` / `doc_version`                                    |
-| workspace   | 4       | `mcp/src/tools/workspace.ts`   | last / set / clear / create_standard                               |
-| anchor      | 3       | `mcp/src/tools/anchor.ts`      | generate_template / list_batches / run（含 Word）                  |
-| leeb        | 2       | `mcp/src/tools/leeb.ts`        | run / preview_excel                                                |
-| xlsx        | 1       | `mcp/src/tools/xlsx.ts`        | write_leeb_report_table                                            |
-| template    | 1       | `mcp/src/tools/template.ts`    | template.fields                                                    |
-| report      | 1       | `mcp/src/tools/report.ts`      | render_placeholder                                                 |
-| plot_curves | 6       | `mcp/src/tools/plot_curves.ts` | list_presets/list_sheets/list_headers/preflight/run/render_preview |
+| 域            | tool 数 | 文件                            | 备注                                                               |
+| ------------- | ------- | ------------------------------- | ------------------------------------------------------------------ |
+| doc           | 2       | `mcp/src/tools/doc.ts`          | 探活 `doc_ping` / `doc_version`                                    |
+| workspace     | 4       | `mcp/src/tools/workspace.ts`    | last / set / clear / create_standard                               |
+| anchor        | 3       | `mcp/src/tools/anchor.ts`       | generate_template / list_batches / run（含 Word）                  |
+| leeb          | 2       | `mcp/src/tools/leeb.ts`         | run / preview_excel                                                |
+| xlsx          | 1       | `mcp/src/tools/xlsx.ts`         | write_leeb_report_table                                            |
+| template      | 1       | `mcp/src/tools/template.ts`     | template.fields                                                    |
+| report        | 2       | `mcp/src/tools/report.ts`       | render_placeholder / run_from_result                               |
+| report_preset | 5       | `mcp/src/tools/reportPreset.ts` | list / get / save / delete / rename                                |
+| plot_curves   | 6       | `mcp/src/tools/plot_curves.ts`  | list_presets/list_sheets/list_headers/preflight/run/render_preview |
 
 **Phase 2 待补**：files._ (10) / pdf_tools._ (4) / word2pdf._ (2) / catalog._ (4) /
 template.validate / plot_curves 预设 CRUD（save/delete/rename/copy）/ leeb.preview_excel

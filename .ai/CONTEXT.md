@@ -6,9 +6,43 @@
 
 ---
 
-## 当前焦点（2026-05-28）
+## 当前焦点（2026-05-28 晚）
 
-**MCP server Phase 1 上线** —— 把 civ-core 双 sidecar 的 20 个 RPC 包成标准 MCP tools，给 Claude Code / Codex / Cursor 等 agent 原生入口（2026-05-27 路线定调「主要操作者是 AI agent」的关键基础设施）。
+**报告填充 + 模板助手 12 项 Bug 清单全清（P1→P4 一气推完）** —— 用户列了 12 条
+bug + 3 条架构验收前提，按 P1 紧凑修复 → P2 共享/显性化 → P3 公共组件 →
+P4 大型架构 顺序逐包 commit。
+
+- **P1 [cf07e78]**：报告填充顶栏固定 + 生成按钮入顶栏；ReportGenerator 末步
+  扫 mainPart.HeaderParts/FooterParts 让页眉/页脚也支持 `{{}}` 替换（之前
+  validate 扫了 ReportGenerator 没填，语义不一致）；TemplateHandlers.
+  CheckLevelMatch 删「外层字段写在内层 scope」的 warning（批次级写在
+  [[每根锚杆]] 里就是想每根重复出现的预期行为）。
+- **P2 [b2095f5]**：ShellContext 加 curveImageDir + setter；报告填充 / 模板
+  助手共用一份占位图目录；模板助手顶部加 4 层级 chip 图例（hover 出说明 +
+  marker 写法），LevelDot 升级为带文字 chip「[报告级] 委托单位」。
+- **P3 [be2f027]**：抽 `tools/_shared/CatalogDrivenInputs.tsx`，删
+  report_generator 硬编码 `USER_INPUT_GROUPS` 32 字段，启动调 catalog.get
+  动态渲染——模板助手改字段，报告填充立刻同步。
+- **P4-1 [a7f3920 + 0a06d8b]**：新增 `report.run_from_result` RPC。
+  AnchorHandlers.Run 写结果 xlsx 时附 `_批次参数` 隐藏 sheet 持久化
+  AnchorParams；AnchorResultReader 反序列化结果 xlsx → AnchorWorkbookResult；
+  ReportHandlers.RunFromResult 复用 ReportGenerator 出 Word 不重算。
+  前端 dataSource=raw/result 二分路径，一键从数据处理导入默认走 result +
+  dp.outputPath（彻底解决用户 bug #2+#7）。
+- **P4-2 [9e3ae4c]**：`report_preset.*` 5 个 RPC（list/get/save/delete/rename）
+  - 前端 PresetBar UI（另存为对话框 / 载入下拉 / 删除）+ MCP 5 tool wrap。
+    整份报告一套预设（用户拍板）；按 catalog_id 过滤；存
+    `~/.civ-core/report_presets/<id>.json`。
+- **P4-3 [d62f861]**：报告名称可改（reportName state，影响输出 .docx 文件名，
+  自动补 .docx 扩展）+ 数据来源 radio（raw / result）+ 一键导入默认走 result。
+- **P4-4 [937d31d]**：检测项目下拉接 catalog.list 动态填，用户可切换
+  catalog_id；当前只 anchor 真正接 calc，其他 catalog 只影响 UI 字段渲染。
+- **P4-5 [937d31d]**：每个字段右侧「历史值下拉」(默认关，主开关 checkbox
+  控启停)，开启后并发拉同 catalog 所有 preset 聚合非空值，按 key 去重排序。
+  关闭立刻清空，避免误覆盖用户当前输入。
+- 模板助手 #3 误报降级（同 P1）。
+
+**前一焦点（2026-05-28 早）**：MCP server Phase 1 上线 —— 把 civ-core 双 sidecar 的 20 个 RPC 包成标准 MCP tools，给 Claude Code / Codex / Cursor 等 agent 原生入口（2026-05-27 路线定调「主要操作者是 AI agent」的关键基础设施）。
 
 - **架构**：新顶级目录 `mcp/`（与 `dotnet/` `frontend/` 平级），Node + TS + `@modelcontextprotocol/sdk` 1.29，独立第 3 进程；启动时 spawn C# + Python 两个 sidecar 子进程（同 `sidecar.rs` 口径），把 MCP tool call 转发成 JSON-RPC 行协议。Tauri / 前端零改动。
 - **20 tools = 2 doc + 4 workspace + 3 anchor + 2 leeb + 1 xlsx + 1 template + 1 report + 6 plot_curves**。装配线 + 通用模板渲染 + 出图全路径打通。每 tool 一份 zod inputSchema，按 .describe() 写清单位 / 用法 / 触发条件。
@@ -17,7 +51,7 @@
 - **5 commit 落地**：脚手架 / sidecar 客户端+路由+7 单测 / MCP transport+doc tools / workspace+anchor 7 tools / 装配线+plot_curves 13 tools + registry callback 签名 bug 修。
 - **接入 Claude Code**：`mcp/CLAUDE.md` 写了 mcp_servers.json 配置范例，env `CIV_CORE_REPO_ROOT` 指仓库根。
 
-**前一焦点（2026-05-27）**：批次维度模板（灌浆日期按批次）—— 装配线「报告填充」工序从「报告级单值」升级到「报告级 + 批次级」两层。模型重塑：报告级（仪器/人员/检测时间/参建单位/委托方等 31 字段，扁平 `ReportUserInputs`）+ 批次级（目前唯一字段 `grouting_date`，`Record<batchId, string>`）。
+**前一焦点（2026-05-27）**：批次维度模板（灌浆日期按批次）—— 装配线「报告填充」工序从「报告级单值」升级到「报告级 + 批次级」两层。模型重塑：报告级（31 字段，已在 P3 改为 catalog 驱动）+ 批次级（目前唯一字段 `grouting_date`，`Record<batchId, string>`）。
 
 ## 前一焦点（2026-05-27）
 
@@ -106,6 +140,17 @@
 - plot_curves 数据对照表格 cell 暂不能跳到曲线上对应点
 - 报告填充与绘曲线图无显式串接——用户得手动配置 plot_curves "标识列=锚杆编号" + 记住输出目录粘贴到报告填充。未来可加"自动按 anchor_id 出图"快捷路径
 - ~~批次共享字段（grouting_date 等）目前只支持项目级 user_input；多批不同值时需手动拆批输入~~ → 灌浆日期已升级为按批次维度（前端 `groutingDateByBatch` + 后端 `[[批次]]` marker dispatch）。其他批次级字段（如有需要）按相同范式扩展
+- ~~报告填充顶栏跟随内容滚动 / 生成按钮埋在中间~~ → P1 顶栏固定 + 生成按钮 + 就绪态徽章一并入顶栏（cf07e78）
+- ~~报告填充页眉里写 {{委托单位}} 验证通过但出 Word 时留原文~~ → ReportGenerator 末步扫 HeaderParts/FooterParts（cf07e78）
+- ~~模板助手批次级字段写在 [[每根锚杆]] 内被误报「重复填充」~~ → CheckLevelMatch 删该 warning 分支（cf07e78）
+- ~~报告填充和模板助手用不同的占位图目录变量~~ → ShellContext 加 curveImageDir 跨工具共享（b2095f5）
+- ~~模板助手 4 层级只有彩色圆点 / 用户看不懂~~ → 顶部加 4 chip 图例 + LevelDot 升级为带文字 chip（b2095f5）
+- ~~报告填充 USER_INPUT_GROUPS 硬编码 32 字段、跟 catalog 漂移~~ → 抽 `_shared/CatalogDrivenInputs` 公共组件（be2f027）
+- ~~报告填充会重复跑计算 + 重写结果 xlsx~~ → 新 RPC `report.run_from_result` 读结果 xlsx 出 Word，前端 dataSource=result 走它（0a06d8b）
+- ~~无填充记录保存 / 复用功能~~ → `report_preset.*` 5 RPC + 前端 PresetBar UI（9e3ae4c）
+- ~~报告文件名硬编码「锚杆抗拔报告.docx」~~ → reportName state + UI 输入框 + 后端按 report_name 取（d62f861）
+- ~~检测项目无法切换~~ → catalogId state + 顶部下拉接 catalog.list（937d31d）
+- ~~用户希望字段输入框旁有可开关的历史值下拉~~ → CatalogDrivenInputs.historyByKey + SettingsForm 主开关聚合（937d31d）
 
 ---
 

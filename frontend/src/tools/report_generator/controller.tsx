@@ -31,6 +31,7 @@ import {
   type AnchorStandard,
 } from '../data_processing/types';
 import type { ReportRunRes, ReportUserInputs } from './types';
+import { DEFAULT_CATALOG_ID } from './types';
 
 /// 批次级 user_input map 的 RPC wire 类型：{ [batchId]: { [key]: value } }
 /// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
@@ -55,6 +56,13 @@ interface State {
   dataSource: ReportDataSource;
   /** 报告名称 —— 影响输出文件名；留空 = 默认「锚杆抗拔报告.docx」。 */
   reportName: string;
+  /**
+   * 检测项目（catalog id）—— 决定字段定义、预设过滤范围、未来 calc 分发。
+   * 用户从下拉切换；不同检测项目（锚杆 / 钻芯 / 回弹）字段定义完全独立。
+   * 当前只有 anchor 一种 calc 真正落地；切到其他 catalog 仅影响 UI 字段渲染，
+   * 跑报告时仍走 anchor.run（直到钻芯/回弹切 C#）。
+   */
+  catalogId: string;
   sheet: string;
   anchorStandard: AnchorStandard;
   anchorBatchIdColumn: string;
@@ -87,6 +95,7 @@ interface Actions {
   setExcelPath: (p: string) => void;
   setDataSource: (s: ReportDataSource) => void;
   setReportName: (n: string) => void;
+  setCatalogId: (id: string) => void;
   setSheet: (s: string) => void;
   setAnchorStandard: (s: AnchorStandard) => void;
   setAnchorBatchIdColumn: (s: string) => void;
@@ -155,6 +164,7 @@ export function ReportGeneratorProvider({
   const [excelPath, setExcelPathRaw] = useState('');
   const [dataSource, setDataSource] = useState<ReportDataSource>('raw');
   const [reportName, setReportName] = useState('');
+  const [catalogId, setCatalogId] = useState<string>(DEFAULT_CATALOG_ID);
   const [sheet, setSheet] = useState('');
   const [anchorStandard, setAnchorStandard] =
     useState<AnchorStandard>('GB 50086-2015');
@@ -501,6 +511,7 @@ export function ReportGeneratorProvider({
       excelPath,
       dataSource,
       reportName,
+      catalogId,
       sheet,
       anchorStandard,
       anchorBatchIdColumn,
@@ -521,6 +532,7 @@ export function ReportGeneratorProvider({
       setExcelPath,
       setDataSource,
       setReportName,
+      setCatalogId,
       setSheet,
       setAnchorStandard,
       setAnchorBatchIdColumn,
@@ -541,6 +553,7 @@ export function ReportGeneratorProvider({
       excelPath,
       dataSource,
       reportName,
+      catalogId,
       sheet,
       anchorStandard,
       anchorBatchIdColumn,

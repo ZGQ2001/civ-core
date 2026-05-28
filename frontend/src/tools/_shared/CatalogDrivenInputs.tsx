@@ -39,6 +39,11 @@ interface Props {
   onReset?: () => void;
   /** 只渲染哪些 level（默认 report + detection_item，batch/component 留给调用方）。 */
   includeLevels?: ReadonlyArray<FieldLevel>;
+  /**
+   * 历史值 map：{ [fieldKey]: [historyValue1, historyValue2, ...] }。
+   * 不为空 + 用户主动开启对应字段下拉时显示。聚合规则由调用方决定（如从 report_preset 拉）。
+   */
+  historyByKey?: Record<string, string[]>;
 }
 
 const DEFAULT_INCLUDE_LEVELS: ReadonlyArray<FieldLevel> = [
@@ -52,6 +57,7 @@ export function CatalogDrivenInputs({
   onChange,
   onReset,
   includeLevels = DEFAULT_INCLUDE_LEVELS,
+  historyByKey,
 }: Props) {
   const shell = useShell();
   const [catalog, setCatalog] = useState<FieldCatalog | null>(null);
@@ -176,6 +182,7 @@ export function CatalogDrivenInputs({
           groups={lvl.groups}
           values={values}
           onChange={onChange}
+          historyByKey={historyByKey}
         />
       ))}
     </div>
@@ -194,12 +201,14 @@ function LevelSection({
   groups,
   values,
   onChange,
+  historyByKey,
 }: {
   level: FieldLevel;
   label: string;
   groups: Array<{ group: string; fields: CatalogField[] }>;
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  historyByKey?: Record<string, string[]>;
 }) {
   return (
     <div className="space-y-2">
@@ -218,6 +227,7 @@ function LevelSection({
           fields={g.fields}
           values={values}
           onChange={onChange}
+          historyByKey={historyByKey}
           defaultExpanded={idx === 0}
         />
       ))}
@@ -230,12 +240,14 @@ function GroupCard({
   fields,
   values,
   onChange,
+  historyByKey,
   defaultExpanded,
 }: {
   group: string;
   fields: CatalogField[];
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  historyByKey?: Record<string, string[]>;
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -260,23 +272,97 @@ function GroupCard({
       {expanded && (
         <div className="border-vscode-border space-y-2 border-t px-3 py-2">
           {fields.map((f) => (
-            <div key={f.key}>
-              <div
-                className="text-vscode-text-dim mb-0.5 text-[11px]"
-                title={`Key: ${f.key}${f.aliases.length ? `\n别名: ${f.aliases.join(', ')}` : ''}`}
-              >
-                {f.name}
-              </div>
-              <input
-                type="text"
-                value={values[f.key] ?? ''}
-                onChange={(e) => onChange(f.key, e.target.value)}
-                className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus w-full rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
-              />
-            </div>
+            <FieldRow
+              key={f.key}
+              field={f}
+              value={values[f.key] ?? ''}
+              onChange={onChange}
+              history={historyByKey?.[f.key]}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 单字段一行：左侧标签 + 输入框 + 右侧（可选）历史值下拉按钮。
+ * 历史值下拉默认折叠（用户主动开启对应字段才显示菜单），符合用户约束
+ * 「不会自动清空填写内容」延伸而来的「不主动覆盖用户输入」原则。
+ */
+function FieldRow({
+  field,
+  value,
+  onChange,
+  history,
+}: {
+  field: CatalogField;
+  value: string;
+  onChange: (key: string, value: string) => void;
+  history?: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const hasHistory = (history?.length ?? 0) > 0;
+
+  return (
+    <div>
+      <div
+        className="text-vscode-text-dim mb-0.5 text-[11px]"
+        title={`Key: ${field.key}${field.aliases.length ? `\n别名: ${field.aliases.join(', ')}` : ''}`}
+      >
+        {field.name}
+      </div>
+      <div className="relative flex items-stretch gap-1">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(field.key, e.target.value)}
+          className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus min-w-0 flex-1 rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
+        />
+        {hasHistory && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="border-vscode-border text-vscode-text-dim hover:bg-vscode-hover shrink-0 rounded-[2px] border bg-[#2a2a2a] px-1.5 text-[10px]"
+            title={`从历史预设里选（${history!.length} 个候选）`}
+          >
+            <i
+              className={`codicon codicon-chevron-${open ? 'up' : 'down'} !text-[11px]`}
+            />
+          </button>
+        )}
+        {open && hasHistory && (
+          <div className="border-vscode-border absolute top-full right-0 z-50 mt-1 max-h-48 w-full overflow-y-auto rounded border bg-[#252526] shadow-lg">
+            <div className="border-vscode-border flex items-center justify-between border-b px-2 py-1 text-[10px]">
+              <span className="text-vscode-text-dim">
+                历史值（来自报告预设）
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-vscode-text-dim hover:text-vscode-text"
+              >
+                <i className="codicon codicon-close !text-[11px]" />
+              </button>
+            </div>
+            {history!.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  onChange(field.key, v);
+                  setOpen(false);
+                }}
+                className="hover:bg-vscode-list-hover text-vscode-text block w-full truncate px-2 py-1 text-left text-[11px]"
+                title={v}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

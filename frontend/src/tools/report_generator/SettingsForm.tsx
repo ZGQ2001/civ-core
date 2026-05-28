@@ -10,22 +10,47 @@
  *   3. user_inputs 7 个折叠 group 卡片
  *   4. 「从数据处理一键导入」按钮（顶部）
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
 import {
   ANCHOR_STANDARDS,
   type AnchorStandard,
 } from '../data_processing/types';
+import { rpc } from '../../lib/rpc';
+import { logLine, useShell } from '../../lib/shell';
 import { AnchorParamsSection } from '../_shared/anchorParamsForm';
 import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
 import { Field, Picker, ResetBtn } from '../_shared/forms';
 import { useReportGenerator } from './controller';
 import { PresetBar } from './PresetBar';
-import { DEFAULT_CATALOG_ID } from './types';
+
+interface CatalogSummary {
+  id: string;
+  label: string;
+  field_count: number;
+}
 
 export function ReportGeneratorSettingsForm() {
   const c = useReportGenerator();
+  const shell = useShell();
+  const [catalogs, setCatalogs] = useState<CatalogSummary[]>([]);
+
+  // 拉一份 catalog 清单给「检测项目」下拉用 —— 跟模板助手共用同一份 RPC，
+  // 用户在模板助手里新建/复制目录，这里刷新就能看到。
+  useEffect(() => {
+    let cancelled = false;
+    rpc<{ catalogs: CatalogSummary[] }>('catalog.list')
+      .then((r) => {
+        if (!cancelled) setCatalogs(r.catalogs);
+      })
+      .catch((e) => {
+        shell.appendOutput(logLine(`[报告] 读检测项目清单失败: ${String(e)}`));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shell]);
 
   const pickExcel = useCallback(async () => {
     const sel = await openDialog({
@@ -66,6 +91,26 @@ export function ReportGeneratorSettingsForm() {
   return (
     <div className="flex flex-col space-y-4 px-6 py-4 text-xs">
       <ImportFromDataProcessingBtn />
+
+      <Field
+        label="检测项目"
+        hint="决定字段定义 / 预设过滤 / 计算分发；从模板助手已有目录里选。当前只有锚杆抗拔真正接通 calc，其余目录改字段渲染但仍走锚杆 RPC（待钻芯/回弹切 C# 后自动分发）。"
+      >
+        <select
+          value={c.catalogId}
+          onChange={(e) => c.setCatalogId(e.target.value)}
+          className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+        >
+          {catalogs.length === 0 && (
+            <option value={c.catalogId}>{c.catalogId}（加载中…）</option>
+          )}
+          {catalogs.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.label}（{cat.field_count} 字段）
+            </option>
+          ))}
+        </select>
+      </Field>
 
       <Field
         label="报告名称"
@@ -226,18 +271,102 @@ export function ReportGeneratorSettingsForm() {
       </Field>
 
       <PresetBar
-        catalogId={DEFAULT_CATALOG_ID}
+        catalogId={c.catalogId}
         values={c.userInputs}
         onLoad={c.loadUserInputs}
       />
 
+      <HistoryToggleAndInputs />
+    </div>
+  );
+}
+
+/**
+ * 历史值下拉的主开关 + 实际的字段渲染。
+ * 默认关：避免页面加载时就并发 N 次 preset_get；用户点开关后才聚合。
+ * 聚合规则：调 report_preset_list 拿 catalog 下所有预设，再依次 preset_get
+ * 取 user_inputs，按 key 去重合并。
+ */
+function HistoryToggleAndInputs() {
+  const c = useReportGenerator();
+  const shell = useShell();
+  const [historyEnabled, setHistoryEnabled] = useState(false);
+  const [historyByKey, setHistoryByKey] = useState<Record<string, string[]>>(
+    {},
+  );
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!historyEnabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHistoryByKey({});
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    (async () => {
+      try {
+        const list = await rpc<{
+          presets: Array<{ id: string }>;
+        }>('report_preset.list', { catalog_id: c.catalogId });
+        // 并发拉全部预设
+        const dtos = await Promise.all(
+          list.presets.map((p) =>
+            rpc<{
+              preset: { user_inputs: Record<string, string> };
+            }>('report_preset.get', { id: p.id }),
+          ),
+        );
+        if (cancelled) return;
+        const agg: Record<string, Set<string>> = {};
+        for (const d of dtos) {
+          for (const [k, v] of Object.entries(d.preset.user_inputs)) {
+            if (!v?.trim()) continue;
+            (agg[k] ??= new Set()).add(v);
+          }
+        }
+        const out: Record<string, string[]> = {};
+        for (const [k, s] of Object.entries(agg)) out[k] = Array.from(s).sort();
+        setHistoryByKey(out);
+      } catch (e) {
+        shell.appendOutput(logLine(`[报告] 聚合历史值失败: ${String(e)}`));
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historyEnabled, c.catalogId, shell]);
+
+  return (
+    <>
+      <label className="border-vscode-border flex cursor-pointer items-center gap-2 rounded-[2px] border bg-[#252525] px-2 py-1.5">
+        <input
+          type="checkbox"
+          checked={historyEnabled}
+          onChange={(e) => setHistoryEnabled(e.target.checked)}
+          className="accent-vscode-focus"
+        />
+        <span className="text-vscode-text text-[11px]">
+          字段右侧显示「历史值下拉」
+        </span>
+        <span className="text-vscode-text-faint flex-1 text-[10px]">
+          从同 catalog 已有预设里聚合；默认关，避免误覆盖你正在填的内容
+        </span>
+        {historyLoading && (
+          <i className="codicon codicon-loading codicon-modifier-spin text-vscode-text-dim !text-[12px]" />
+        )}
+      </label>
+
       <CatalogDrivenInputs
-        catalogId={DEFAULT_CATALOG_ID}
+        catalogId={c.catalogId}
         values={c.userInputs}
         onChange={c.setUserInput}
         onReset={c.resetUserInputs}
+        historyByKey={historyEnabled ? historyByKey : undefined}
       />
-    </div>
+    </>
   );
 }
 

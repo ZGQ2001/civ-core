@@ -37,46 +37,56 @@ function validateMcpName(name: string): void {
   }
 }
 
+/** 转发 + 错误映射的核心，给两种 callback 签名共用。 */
+async function invokeAndWrap(
+  router: SidecarRouter,
+  rpcMethod: string,
+  params: Record<string, unknown>,
+): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
+  try {
+    const result = await router.call(rpcMethod, params);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  } catch (err) {
+    if (err instanceof SidecarFatalError) throw err;
+    const msg =
+      err instanceof SidecarRpcError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    return {
+      content: [{ type: "text", text: msg }],
+      isError: true,
+    };
+  }
+}
+
 export function registerSidecarTool(
   server: McpServer,
   router: SidecarRouter,
   def: ToolDef,
 ): void {
   validateMcpName(def.mcpName);
-  server.registerTool(
-    def.mcpName,
-    {
-      description: def.description,
-      // zod raw shape 直接传；SDK 内部转 JSON Schema
-      ...(def.inputSchema ? { inputSchema: def.inputSchema } : {}),
-    },
-    async (args: unknown) => {
-      try {
-        const result = await router.call(def.rpcMethod, args ?? {});
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      } catch (err) {
-        // 致命错误抛出去（transport 层会关闭连接）
-        if (err instanceof SidecarFatalError) throw err;
 
-        // 业务级错误：MCP isError，保留 sidecar message（agent 能读到「问题在哪 + 怎么修」）
-        const msg =
-          err instanceof SidecarRpcError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : String(err);
-        return {
-          content: [{ type: "text" as const, text: msg }],
-          isError: true,
-        };
-      }
-    },
-  );
+  // SDK 的 callback 签名取决于 inputSchema 有无：
+  //   - 有 schema：(args, extra) => result   ← 第一个参数是验证后的 args
+  //   - 无 schema：(extra) => result          ← 只有 extra（含 signal 等元数据）
+  // 这两种必须分支注册，否则无 schema 时把 extra 当 args 转发 → 把 AbortSignal
+  // 当 RPC 入参塞给 sidecar，Python 端 list_presets() 收到非法 kw 报错。
+  if (def.inputSchema) {
+    server.registerTool(
+      def.mcpName,
+      { description: def.description, inputSchema: def.inputSchema },
+      async (args: Record<string, unknown>) =>
+        invokeAndWrap(router, def.rpcMethod, args ?? {}),
+    );
+  } else {
+    server.registerTool(
+      def.mcpName,
+      { description: def.description },
+      async () => invokeAndWrap(router, def.rpcMethod, {}),
+    );
+  }
 }

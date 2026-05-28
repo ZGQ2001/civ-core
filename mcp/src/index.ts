@@ -22,8 +22,13 @@ import { SidecarRouter } from "./router.js";
 import { spawnCsharpDev, spawnPythonDev } from "./sidecar.js";
 import { allAnchorTools } from "./tools/anchor.js";
 import { allDocTools } from "./tools/doc.js";
+import { allLeebTools } from "./tools/leeb.js";
+import { allPlotCurvesTools } from "./tools/plot_curves.js";
 import { registerSidecarTool } from "./tools/registry.js";
+import { allReportTools } from "./tools/report.js";
+import { allTemplateTools } from "./tools/template.js";
 import { allWorkspaceTools } from "./tools/workspace.js";
+import { allXlsxTools } from "./tools/xlsx.js";
 
 const SERVER_NAME = "civ-core-mcp";
 const SERVER_VERSION = "0.1.0";
@@ -43,8 +48,18 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Phase 1 工具注册
-  const phase1Tools = [...allDocTools, ...allWorkspaceTools, ...allAnchorTools];
+  // Phase 1 工具注册（21 tools = 2 doc + 4 workspace + 3 anchor + 2 leeb
+  //                  + 1 xlsx + 1 template + 1 report + 6 plot_curves）
+  const phase1Tools = [
+    ...allDocTools,
+    ...allWorkspaceTools,
+    ...allAnchorTools,
+    ...allLeebTools,
+    ...allXlsxTools,
+    ...allTemplateTools,
+    ...allReportTools,
+    ...allPlotCurvesTools,
+  ];
   for (const def of phase1Tools) {
     registerSidecarTool(server, router, def);
   }

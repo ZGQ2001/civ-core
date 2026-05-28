@@ -45,6 +45,22 @@ try {
   const ver = await client.callTool({ name: "doc_version", arguments: {} });
   console.error("[smoke] doc_version content:", JSON.stringify(ver.content));
 
+  // 验证 Python sidecar 路由也通：plot_curves_list_presets 走 plot_curves.* 白名单 → Python
+  const presets = await client.callTool({
+    name: "plot_curves_list_presets",
+    arguments: {},
+  });
+  const presetText = presets.content?.[0]?.text ?? "";
+  if (presets.isError) {
+    console.error(`[smoke] plot_curves_list_presets ERROR: ${presetText}`);
+  } else {
+    const parsed = JSON.parse(presetText);
+    const presetNames = parsed.presets ?? [];
+    console.error(
+      `[smoke] plot_curves 预设数: ${presetNames.length}（前 3：${presetNames.slice(0, 3).join(", ")}）`,
+    );
+  }
+
   await client.close();
   console.error("[smoke] OK");
   process.exit(0);

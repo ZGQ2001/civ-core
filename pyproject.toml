@@ -15,23 +15,17 @@ authors = [
 keywords = ["civil-engineering", "automation", "report-generation", "matplotlib", "mcp-server"]
 
 dependencies = [
-    # UI 已转 Tauri + Web（2026-05-20），删了 pyside6 + PySide6-Fluent-Widgets。
-    # Python 端只剩业务计算 + JSON-RPC sidecar；GUI 完全在 frontend/ 下。
-    # Office automation
-    "pywin32>=306",
-    "python-docx==1.2.0",
-    "openpyxl==3.1.5",
-    # Data
-    "pandas>=2.2",
-    "numpy>=1.26",
+    # Python sidecar 当前职责：plot_curves（matplotlib 图表引擎） + standards.db seed。
+    # 其余（Excel / Word / PDF / 回收站等）已迁 C# sidecar，对应依赖（pywin32 /
+    # python-docx / openpyxl / pillow / dateutil / javaobj / send2trash）已删。
+    # 钻芯 / 回弹（calc_functions.py）当前是 Python 实现，下一步切 C# 时再清。
     "matplotlib>=3.9",
-    # PDF / image（pdf_tools 已迁 C# PDFsharp；pypdf 仅 reportgen 备用图片处理走 pillow）
-    "pillow>=10.4",
-    # Utils
-    "python-dateutil>=2.9",
-    "javaobj-py3>=0.4.4",
-    "pyyaml>=6.0.3",
-    "send2trash>=2.1.0",
+    "numpy>=1.26",       # matplotlib 必依，显式声明锁版本范围
+    "openpyxl>=3.1",     # infra_io/excel_reader.py 读输入 xlsx（plot_curves 链路）
+    "pyyaml>=6.0.3",     # style_loader 解析预设 YAML
+    # tzdata：Windows stdlib zoneinfo 不带 IANA 数据库，
+    # utils/logger.py 的 ZoneInfo('Asia/Shanghai') 必依
+    "tzdata>=2024.1; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]
@@ -61,9 +55,6 @@ exclude = [
     "data",
     "logs",
     "templates",
-    "02_Core",          # legacy customtkinter code, retained until migration done
-    "00_使用手册",
-    "99_old_JSA",
 ]
 executionEnvironments = [
     { root = "src" },

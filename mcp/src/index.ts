@@ -20,8 +20,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { resolveRepoRoot } from "./lib/repoRoot.js";
 import { SidecarRouter } from "./router.js";
 import { spawnCsharpDev, spawnPythonDev } from "./sidecar.js";
+import { allAnchorTools } from "./tools/anchor.js";
 import { allDocTools } from "./tools/doc.js";
 import { registerSidecarTool } from "./tools/registry.js";
+import { allWorkspaceTools } from "./tools/workspace.js";
 
 const SERVER_NAME = "civ-core-mcp";
 const SERVER_VERSION = "0.1.0";
@@ -41,8 +43,9 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Phase 1 工具注册 —— commit 3 仅探活
-  for (const def of allDocTools) {
+  // Phase 1 工具注册
+  const phase1Tools = [...allDocTools, ...allWorkspaceTools, ...allAnchorTools];
+  for (const def of phase1Tools) {
     registerSidecarTool(server, router, def);
   }
 
@@ -65,8 +68,12 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `[${SERVER_NAME}] ready (stdio, ${allDocTools.length} tools: ${allDocTools.map((t) => t.mcpName).join(", ")})\n`,
+    `[${SERVER_NAME}] ready (stdio, ${phase1Tools.length} tools)\n`,
   );
+  // 详细 tool 清单也写一份方便排查
+  for (const t of phase1Tools) {
+    process.stderr.write(`  - ${t.mcpName} → ${t.rpcMethod}\n`);
+  }
 }
 
 main().catch((err: unknown) => {

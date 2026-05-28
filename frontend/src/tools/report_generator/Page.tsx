@@ -52,34 +52,29 @@ export function ReportGeneratorPage({
   }, [c.lastResult, shell]);
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-[#1e1e1e]">
-      {/* Header */}
-      <div className="border-vscode-border bg-[#252526] px-6 pt-4 pb-3">
-        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-          <i className="codicon codicon-file-text !text-[16px]" />
-          报告填充
-        </h1>
-        <p className="text-vscode-text-dim mt-1 text-xs">
-          把检测数据 + 项目元信息填入 Word 模板出 docx。
-        </p>
-      </div>
-
-      {/* Settings form (inline) */}
-      <ReportGeneratorSettingsForm />
-
-      {/* Generate bar */}
-      <div className="border-vscode-border border-t px-6 pt-3 pb-2">
-        {!c.readiness.ready && c.readiness.reason && (
-          <div className="mb-2 border-l-2 border-l-yellow-500 bg-[#2d2d2d] px-3 py-2 text-[11px] text-yellow-300">
-            <i className="codicon codicon-warning mr-1 !text-[12px]" />
-            {c.readiness.reason}
-          </div>
-        )}
+    <div className="flex h-full flex-col bg-[#1e1e1e]">
+      {/* 固定顶栏：标题 + 就绪态徽章 + 生成按钮（不跟随内容滚动） */}
+      <div className="border-vscode-border flex shrink-0 items-start gap-3 border-b bg-[#252526] px-6 py-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
+            <i className="codicon codicon-file-text !text-[16px]" />
+            报告填充
+          </h1>
+          <p className="text-vscode-text-dim mt-1 text-xs">
+            把检测数据 + 项目元信息填入 Word 模板出 docx。
+          </p>
+          {!c.readiness.ready && c.readiness.reason && (
+            <div className="mt-2 border-l-2 border-l-yellow-500 bg-[#2d2d2d] px-3 py-1.5 text-[11px] text-yellow-300">
+              <i className="codicon codicon-warning mr-1 !text-[12px]" />
+              {c.readiness.reason}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleRun}
           disabled={!c.readiness.ready || c.running}
-          className="bg-vscode-button hover:bg-vscode-button-hover flex w-full items-center justify-center gap-2 rounded-[3px] px-4 py-2 text-[13px] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-vscode-button hover:bg-vscode-button-hover flex shrink-0 items-center justify-center gap-2 self-start rounded-[3px] px-4 py-2 text-[13px] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           {c.running ? (
             <i className="codicon codicon-loading codicon-modifier-spin !text-[14px]" />
@@ -90,8 +85,11 @@ export function ReportGeneratorPage({
         </button>
       </div>
 
-      {/* Result */}
-      <ResultBlock onOpen={openOutput} onReveal={revealOutput} />
+      {/* 滚动内容区：参数表 + 结果 */}
+      <div className="min-h-0 flex-1 overflow-auto">
+        <ReportGeneratorSettingsForm />
+        <ResultBlock onOpen={openOutput} onReveal={revealOutput} />
+      </div>
     </div>
   );
 }

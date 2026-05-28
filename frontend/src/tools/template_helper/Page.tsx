@@ -8,7 +8,14 @@ import { FieldEditor } from './FieldEditor';
 import type { CatalogField, FieldLevel } from './types';
 import { LEVEL_LABEL } from './types';
 
-export function TemplateHelperPage(_: { appendOutput?: (line: string) => void }) {
+interface TemplateHelperPageProps {
+  appendOutput?: (line: string) => void;
+}
+
+export function TemplateHelperPage(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- prop 由 EditorArea 统一传，模板助手当前不消费但保留接口对齐
+  _props: TemplateHelperPageProps = {},
+) {
   const c = useTemplateHelper();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set<string>(),
@@ -307,7 +314,6 @@ export function TemplateHelperPage(_: { appendOutput?: (line: string) => void })
           />
         ))}
       </div>
-
     </div>
   );
 }

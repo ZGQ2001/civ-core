@@ -127,6 +127,13 @@ public static class ReportGenerator
             unknownKeys.AddRange(projectRes.UnknownKeys);
             missingImages.AddRange(projectRes.MissingImages);
 
+            // 5. 页眉/页脚替换 —— 项目级字段（{{委托单位}} 等）也允许写在页眉/页脚里。
+            // 仅 P1：传 mainPart=null，{{img:}} 占位符在页眉/页脚里会被报为 missingImages
+            // （不嵌图，保留原文）。如果未来要支持页眉图片，需把 ImageInjector 改成接受
+            // OpenXmlPart 而不是 MainDocumentPart。
+            ReplaceInHeadersAndFooters(mainPart, projectResolver, catalog,
+                ref totalReplaced, unknownKeys, missingImages);
+
             mainPart.Document.Save();
         }
 
@@ -252,6 +259,10 @@ public static class ReportGenerator
             unknownKeys.AddRange(globalRes.UnknownKeys);
             missingImages.AddRange(globalRes.MissingImages);
 
+            // 5. 页眉/页脚替换（项目级字段；不嵌图，详见 Generate 中的注释）
+            ReplaceInHeadersAndFooters(mainPart, globalResolver, catalog,
+                ref totalReplaced, unknownKeys, missingImages);
+
             mainPart.Document.Save();
         }
 
@@ -262,6 +273,38 @@ public static class ReportGenerator
         {
             MissingImages = missingImages.Distinct().ToList(),
         };
+    }
+
+    /// <summary>
+    /// 在所有 HeaderPart / FooterPart 上跑一遍 PlaceholderRenderer，
+    /// 让项目级字段（委托单位 / 项目名称 / 报告编号 等）能写进页眉页脚。
+    /// </summary>
+    private static void ReplaceInHeadersAndFooters(
+        MainDocumentPart mainPart,
+        IFieldResolver resolver,
+        IReadOnlyList<FieldDef>? catalog,
+        ref int totalReplaced,
+        List<string> unknownKeys,
+        List<string> missingImages)
+    {
+        foreach (var hp in mainPart.HeaderParts)
+        {
+            if (hp.Header == null) continue;
+            var r = PlaceholderRenderer.RenderInto(hp.Header, resolver, catalog, mainPart: null);
+            totalReplaced += r.Replaced;
+            unknownKeys.AddRange(r.UnknownKeys);
+            missingImages.AddRange(r.MissingImages);
+            hp.Header.Save();
+        }
+        foreach (var fp in mainPart.FooterParts)
+        {
+            if (fp.Footer == null) continue;
+            var r = PlaceholderRenderer.RenderInto(fp.Footer, resolver, catalog, mainPart: null);
+            totalReplaced += r.Replaced;
+            unknownKeys.AddRange(r.UnknownKeys);
+            missingImages.AddRange(r.MissingImages);
+            fp.Footer.Save();
+        }
     }
 
     // ── marker 定位 ─────────────────────────────────────────

@@ -179,7 +179,9 @@ export function TemplateHelperProvider({
       }
       for (const u of res.unrecognized) {
         shell.appendOutput(
-          logLine(`[模板助手]   未识别占位符: ${u.placeholder} @ ${u.location}`),
+          logLine(
+            `[模板助手]   未识别占位符: ${u.placeholder} @ ${u.location}`,
+          ),
         );
       }
       const unusedShown = res.unused.slice(0, UNUSED_PREVIEW_LIMIT);

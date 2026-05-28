@@ -206,28 +206,19 @@ public static class TemplateHandlers
         if (expectedIdx < 0 || actualIdx < 0) return null;
         if (expectedIdx == actualIdx) return null;
 
+        // 外层字段写在内层 scope 是合法用法（比如批次级灌浆日期写在 [[每根锚杆]] 里，
+        // 每根锚杆那行就重复出现该日期——预期行为，不报警）。
+        // 只有相反方向是真错（内层字段写在外层，根本拿不到值）。
+        if (expectedIdx < actualIdx) return null;
+
         var expectedLabel = LevelLabel.GetValueOrDefault(expectedLevel, expectedLevel);
         var actualLabel = LevelLabel.GetValueOrDefault(actualScope, actualScope);
-
-        string severity;
-        string message;
-
-        if (expectedIdx > actualIdx)
-        {
-            severity = "warning";
-            message = $"「{fieldName}」是{expectedLabel}字段，但当前在{actualLabel}区域"
-                + $"——每个重复周期都会输出相同值。建议移入 [[{MarkerLabelFor(expectedLevel)}]] 标记内。";
-        }
-        else
-        {
-            severity = "error";
-            message = $"「{fieldName}」是{expectedLabel}字段，但当前在{actualLabel}区域"
-                + $"——重复区域内无法取到该值。建议移出到{expectedLabel}区域。";
-        }
+        var message = $"「{fieldName}」是{expectedLabel}字段，但当前在{actualLabel}区域"
+            + $"——重复区域内无法取到该值。建议移出到{expectedLabel}区域。";
 
         return new Dictionary<string, object?>
         {
-            ["severity"] = severity,
+            ["severity"] = "error",
             ["field_name"] = fieldName,
             ["expected_level"] = expectedLevel,
             ["actual_scope"] = actualScope,

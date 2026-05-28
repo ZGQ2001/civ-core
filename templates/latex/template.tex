@@ -18,6 +18,7 @@
 
 % 字体
 \setCJKmainfont{SimSun}[AutoFakeBold=true]
+\setCJKsansfont{SimHei}[AutoFakeBold=true]
 \setmainfont{Times New Roman}
 \setsansfont{Arial}
 
@@ -27,11 +28,11 @@
 \newcommand{\ReportYear}{20xx}          % 年份
 \newcommand{\ReportMonth}{xx}           % 月份
 \newcommand{\ReportDay}{xx}             % 日
-\newcommand{\ReportNo}{xxxx}            % 流水号
+\newcommand{\ReportNo}{xxxx}            % 报告编号
 
 % —— 封面三行 ——
 \newcommand{\ProjectName}{%             % 工程名称（过长时在此手动换行，见封面说明）
-    小米智能制造产业基地二期项目（6号生产厂房等2项）-6号生产厂房%
+    小米智能制造产业基地二期项目 （6号生产厂房等2项）-6号生产厂房
 }
 \newcommand{\ClientName}{小米景曦科技有限公司}
 \newcommand{\InspType}{一般委托}
@@ -318,11 +319,33 @@
 
 \vspace{0.5ex}
 % ——————————————————————————————————————————
-% 此表由 excel_to_tex.py 自动生成，运行：
-%   python excel_to_tex.py 你的数据.xlsx
-% 生成 data_table.tex 后放在本文件同目录即可
+% 检测结果表 —— 直接在下方 tblr 内编辑数据行
+%   · 列数变化：修改 colspec 中的 X[..] 数量
+%   · 增/删行：复制或删除以 & 分隔的整行
+%   · 判定 = max(测点) ≤ 1.5×设计厚度 且 min(测点) ≥ 0.85×设计厚度（按 GB 50205-2020）
 % ——————————————————————————————————————————
-\input{data_table.tex}
+{\zihao{5}
+\begin{tblr}{
+  width   = \textwidth,
+  colspec = {X[1.2,c,m] X[1.5,c,m] X[1.8,c,m] X[1.5,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1.2,c,m] X[1.2,c,m]},
+  hlines, vlines,
+  row{1-2} = {font=\bfseries},
+  cell{1}{1}  = {r=2}{},
+  cell{1}{2}  = {r=2}{},
+  cell{1}{3}  = {r=2}{},
+  cell{1}{4}  = {r=2}{},
+  cell{1}{5}  = {c=5}{},
+  cell{1}{10} = {r=2}{},
+  cell{1}{11} = {r=2}{},
+}
+序号 & 构件类型 & 构件编号 & 设计厚度(mm) & 实测厚度(mm) & & & & & 平均值(mm) & 判定 \\
+     &          &          &              & 1 & 2 & 3 & 4 & 5 &           &       \\
+1  & 钢柱 & GZ-1 & 30 & 31 & 32 & 30 & 33 & 31 & 31.4 & 合格 \\
+2  & 钢柱 & GZ-2 & 30 & 30 & 31 & 32 & 30 & 31 & 30.8 & 合格 \\
+3  & 钢梁 & GL-1 & 25 & 26 & 25 & 27 & 26 & 25 & 25.8 & 合格 \\
+4  & 钢梁 & GL-2 & 25 & 25 & 26 & 25 & 27 & 26 & 25.8 & 合格 \\
+5  & 系杆 & XG-1 & 20 & 21 & 20 & 22 & 21 & 20 & 20.8 & 合格 \\
+\end{tblr}}
 
 
 % ==================== 第3章：附图 ====================

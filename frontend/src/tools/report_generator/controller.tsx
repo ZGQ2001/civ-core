@@ -55,6 +55,10 @@ interface State {
   // 本工具自己 own
   wordTemplatePath: string;
   outputDir: string;
+  /**
+   * 占位图（曲线图）目录 —— 注：实际存储在 ShellContext 上跨工具共享；
+   * 这里只是 expose 给 Ctx 消费者方便用。详见 lib/shell.ts curveImageDir。
+   */
   curveImageDir: string;
   userInputs: ReportUserInputs;
   /// 批次级 user_input：按 batchId 存。当前仅 grouting_date。
@@ -152,8 +156,10 @@ export function ReportGeneratorProvider({
   // ── Word state ──
   const [wordTemplatePath, setWordTemplatePath] = useState('');
   const [outputDir, setOutputDir] = useState('');
-  // plot_curves 出图目录 —— 留空 = 不嵌图（模板里 {{img:曲线图}} 留原文 + 报 missingImages）
-  const [curveImageDir, setCurveImageDir] = useState('');
+  // plot_curves 出图目录 —— 走 ShellContext 跨工具共享（[[报告填充]] 嵌图 / [[模板助手]] 预校验
+  // 用同一份），留空 = 不嵌图（模板里 {{img:曲线图}} 留原文 + 报 missingImages）
+  const curveImageDir = shell.curveImageDir;
+  const setCurveImageDir = shell.setCurveImageDir;
   const [userInputs, setUserInputs] = useState<ReportUserInputs>({
     ...DEFAULT_REPORT_USER_INPUTS,
   });
@@ -488,6 +494,7 @@ export function ReportGeneratorProvider({
       wordTemplatePath,
       outputDir,
       curveImageDir,
+      setCurveImageDir,
       userInputs,
       groutingDateByBatch,
       running,

@@ -349,11 +349,15 @@ export default function App() {
     [],
   );
 
+  const [curveImageDir, setCurveImageDir] = useState('');
+
   const shellValue = {
     appendOutput,
     activeToolId,
     activatedFile,
     notifyFilesChanged,
+    curveImageDir,
+    setCurveImageDir,
   };
 
   return (

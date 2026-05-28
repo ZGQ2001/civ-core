@@ -21,6 +21,13 @@ export interface ShellContextValue {
   activatedFile: ActivatedFile | null;
   /** 工具生成文件后调用，触发目录树刷新。 */
   notifyFilesChanged: () => void;
+  /**
+   * 占位图（曲线图）目录 —— 跨工具共享：报告填充用它嵌 {{img:曲线图}}，
+   * 模板助手用它跑预校验。两端读写同一份，避免一边改了另一边还停在旧路径。
+   * 空字符串 = 未配置。
+   */
+  curveImageDir: string;
+  setCurveImageDir: (dir: string) => void;
 }
 
 export const ShellContext = createContext<ShellContextValue | null>(null);

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
 import { cn } from '../../lib/cn';
+import { useShell } from '../../lib/shell';
 import { RunBtn } from '../_shared/forms';
 import { useTemplateHelper } from './controller';
 import { FieldEditor } from './FieldEditor';
@@ -17,6 +18,7 @@ export function TemplateHelperPage(
   _props: TemplateHelperPageProps = {},
 ) {
   const c = useTemplateHelper();
+  const shell = useShell();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set<string>(),
   );
@@ -74,6 +76,17 @@ export function TemplateHelperPage(
       c.setDocxPath(selected);
     }
   }, [c]);
+
+  const handlePickCurveDir = useCallback(async () => {
+    const selected = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择曲线图目录（plot_curves 出图的文件夹）',
+    });
+    if (typeof selected === 'string') {
+      shell.setCurveImageDir(selected);
+    }
+  }, [shell]);
 
   if (c.catalogLoading) {
     return (
@@ -174,10 +187,54 @@ export function TemplateHelperPage(
             验证
           </RunBtn>
         </div>
+        {/* 曲线图目录 —— 跟「报告填充」共用同一份 ShellContext.curveImageDir，两端同步 */}
+        <div className="flex items-center gap-2">
+          <span
+            className="text-vscode-text-dim shrink-0 text-[11px]"
+            title="plot_curves 出图文件夹，跟「报告填充」共用此路径"
+          >
+            曲线图目录
+          </span>
+          <input
+            type="text"
+            value={shell.curveImageDir}
+            readOnly
+            placeholder="（可选 — 跟报告填充共用）"
+            className={cn(
+              'bg-vscode-input border-vscode-border min-w-0 flex-1 truncate rounded-[2px] border px-2 py-1 text-xs',
+              shell.curveImageDir
+                ? 'text-vscode-text'
+                : 'text-vscode-text-dim italic',
+            )}
+          />
+          <button
+            type="button"
+            onClick={handlePickCurveDir}
+            className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#3a3a3a]"
+          >
+            <i className="codicon codicon-folder-opened !text-[12px]" />
+            选择
+          </button>
+          {shell.curveImageDir && (
+            <button
+              type="button"
+              onClick={() => shell.setCurveImageDir('')}
+              className="text-vscode-text-dim hover:text-vscode-text shrink-0 px-1 text-[11px]"
+              title="清除"
+            >
+              <i className="codicon codicon-close !text-[11px]" />
+            </button>
+          )}
+        </div>
         <div className="text-vscode-text-faint text-[10px]">
-          验证结果会输出到底部「输出」面板（Ctrl+J）
+          验证结果会输出到底部「输出」面板（Ctrl+J）；曲线图目录用于
+          {' {{img:xxx}} '}
+          占位符嵌图
         </div>
       </div>
+
+      {/* 层级图例 —— 让用户一眼看懂 4 个层级是什么 + 怎么在模板里写 */}
+      <LevelLegend />
 
       {/* Toolbar: group toggle + edit mode + expand/collapse */}
       <div className="border-vscode-border flex items-center gap-2 border-b px-5 py-1.5">
@@ -424,7 +481,7 @@ function FieldItem({
     >
       {editMode ? (
         <>
-          <LevelDot level={field.level} />
+          <LevelDot level={field.level} withLabel />
           <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
             {field.name}
           </span>
@@ -455,7 +512,7 @@ function FieldItem({
           className="flex w-full items-center gap-2 text-left"
           title={`点击复制: ${placeholder}\nKey: ${field.key}\n层级: ${LEVEL_LABEL[field.level] ?? field.level}${field.aliases.length > 0 ? `\n别名: ${field.aliases.join(', ')}` : ''}`}
         >
-          <LevelDot level={field.level} />
+          <LevelDot level={field.level} withLabel />
           <span className="text-vscode-text min-w-0 flex-1 truncate text-xs">
             {field.name}
           </span>
@@ -474,19 +531,95 @@ function FieldItem({
   );
 }
 
-function LevelDot({ level }: { level: string }) {
-  const color =
-    {
-      report: 'bg-blue-400',
-      detection_item: 'bg-cyan-400',
-      batch: 'bg-yellow-400',
-      component: 'bg-green-400',
-    }[level] ?? 'bg-gray-400';
+/** 4 层级的颜色/文字配置（chip 图例和 LevelDot 共用）。 */
+const LEVEL_META: Record<
+  FieldLevel,
+  { dot: string; chip: string; desc: string; markerHint: string }
+> = {
+  report: {
+    dot: 'bg-blue-400',
+    chip: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+    desc: '整份报告共享一份取值（委托方、项目名、报告编号等）',
+    markerHint: '不需要 marker，直接写 {{字段名}}',
+  },
+  detection_item: {
+    dot: 'bg-cyan-400',
+    chip: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+    desc: '同一类检测共享（锚杆抗拔 / 钻芯 各占一段）',
+    markerHint: '[[检测项目]]...[[/检测项目]] 包住该段',
+  },
+  batch: {
+    dot: 'bg-yellow-400',
+    chip: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40',
+    desc: '一批构件共享一份取值（同批次灌浆日期等）',
+    markerHint: '[[批次]]...[[/批次]] 包住该段',
+  },
+  component: {
+    dot: 'bg-green-400',
+    chip: 'bg-green-500/15 text-green-300 border-green-500/40',
+    desc: '每个构件一行（锚杆编号、弹性位移量等）',
+    markerHint: '[[每根锚杆]]...[[/每根锚杆]] 包住该段',
+  },
+};
 
+function LevelLegend() {
+  return (
+    <div className="border-vscode-border border-b bg-[#1f1f1f] px-5 py-2">
+      <div className="text-vscode-text-faint mb-1.5 text-[10px]">
+        字段层级 — 颜色越深越偏「重复区域」（按宏观→微观排列）
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(Object.keys(LEVEL_META) as FieldLevel[]).map((lvl) => {
+          const meta = LEVEL_META[lvl];
+          return (
+            <span
+              key={lvl}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]',
+                meta.chip,
+              )}
+              title={`${LEVEL_LABEL[lvl]}：${meta.desc}\n模板写法：${meta.markerHint}`}
+            >
+              <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+              {LEVEL_LABEL[lvl]}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LevelDot({
+  level,
+  withLabel = false,
+}: {
+  level: string;
+  withLabel?: boolean;
+}) {
+  const meta = LEVEL_META[level as FieldLevel];
+  const dot = meta?.dot ?? 'bg-gray-400';
+  const chip = meta?.chip ?? 'bg-gray-500/15 text-gray-300 border-gray-500/40';
+  const label = LEVEL_LABEL[level as FieldLevel] ?? level;
+
+  if (withLabel) {
+    return (
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-px text-[9px]',
+          chip,
+        )}
+        title={`${label}：${meta?.desc ?? ''}`}
+      >
+        <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
+        {label}
+      </span>
+    );
+  }
   return (
     <span
-      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', color)}
-      title={LEVEL_LABEL[level as FieldLevel] ?? level}
+      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', dot)}
+      title={label}
     />
   );
 }

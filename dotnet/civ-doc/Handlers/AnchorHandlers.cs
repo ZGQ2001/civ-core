@@ -156,7 +156,9 @@ public static class AnchorHandlers
         // 算
         var result = AnchorCalculator.Calc(workbook);
 
-        // 写 Excel 输出：每批 1 sheet（数据分析）。报告内插表语义已迁到 Word，不再 Excel 出。
+        // 写 Excel 输出：每批 1 sheet（数据分析） + 1 隐藏 sheet（批次参数 metadata，供
+        // report.run_from_result 重建 AnchorParams 用，避免用户再次输入工程参数）。
+        // 报告内插表语义已迁到 Word，不再 Excel 出。
         XLWorkbook wb = File.Exists(outPath) ? new XLWorkbook(outPath) : new XLWorkbook();
         using (wb)
         {
@@ -166,6 +168,7 @@ public static class AnchorHandlers
                 if (wb.Worksheets.TryGetWorksheet(analysisName, out var old1)) old1.Delete();
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
             }
+            AnchorResultMetadataSheet.Write(wb, paramsByBatch);
             SaveWorkbook(wb, outPath);
         }
 

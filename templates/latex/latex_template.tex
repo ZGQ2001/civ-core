@@ -1,0 +1,247 @@
+% ============================================================================
+% 北京市建设工程质量第三检测所 — 检测报告 LaTeX 模板
+% 依据《上传检测报告格式要求》(2016-01-01) 编写
+% 编译: xelatex template.tex   (需 ctex / 系统含 SimSun / SimHei / Times New Roman)
+% ============================================================================
+\documentclass[UTF8, zihao=-4, a4paper]{ctexart}
+% zihao=-4 即「小四」，对应正文字号；图表内字号在局部用 \zihao{5}/\zihao{-5}
+
+% ---- 页面 ----
+\usepackage[top=2.5cm, bottom=2.5cm, left=3.0cm, right=2.0cm,
+            headheight=14pt, headsep=2cm, footskip=1.5cm]{geometry}
+
+% ---- 字体（汉字 宋体；强调 黑体；西文 Times New Roman） ----
+\setCJKmainfont{SimSun}[BoldFont=SimHei, ItalicFont=KaiTi]
+\setCJKsansfont{SimHei}
+\setmainfont{Times New Roman}
+
+% ---- 行距与缩进 ----
+\linespread{1.5}
+\setlength{\parindent}{2em}            % 首行缩进 2 个汉字字符
+\setlength{\parskip}{0pt}              % 段间距 0
+
+% ---- 标题（一/二/三 级） ----
+\usepackage{titlesec}
+% 一级：对中、小三号 宋体加粗、段前 2 行段后 1 行、单倍行间距
+\titleformat{\section}
+  {\centering\zihao{-3}\bfseries\linespread{1.0}\selectfont}
+  {\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{2\baselineskip}{1\baselineskip}
+% 二级：左对齐、四号 黑体、段前段后各 1 行、单倍行间距
+\titleformat{\subsection}
+  {\zihao{4}\heiti\linespread{1.0}\selectfont}
+  {\thesubsection}{1em}{}
+\titlespacing*{\subsection}{0pt}{1\baselineskip}{1\baselineskip}
+% 三级：左对齐、小四号 宋体加粗、段前 1 行段后 0.5 行、单倍行间距
+\titleformat{\subsubsection}
+  {\zihao{-4}\bfseries\linespread{1.0}\selectfont}
+  {\thesubsubsection}{1em}{}
+\titlespacing*{\subsubsection}{0pt}{1\baselineskip}{0.5\baselineskip}
+
+% ---- 图表标题（五号 宋体、不加粗不倾斜、对中） ----
+\usepackage{caption}
+\captionsetup{labelsep=quad, justification=centering,
+              labelfont={}, textfont={}, font={stretch=1.0}}
+
+% ---- 封面绝对定位用 ----
+\usepackage{tikz}
+\usetikzlibrary{calc}
+
+% ---- 图表节内编号（表1-1、表1.1-1 形式由用户在 \caption 里手动写出） ----
+\usepackage{graphicx}
+\usepackage{array, booktabs, longtable, makecell, multirow}
+
+% ---- 页眉页脚（宋体 小三号） ----
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyhead[C]{\zihao{-3}\songti 北京市建设工程质量第三检测所有限责任公司\\
+              工程质量检测报告}
+\fancyfoot[L]{\zihao{-3}\songti 报告编号：\reportno}
+\fancyfoot[R]{\zihao{-3}\songti 第~\thepage~页\,/\,共~\pageref{LastPage}~页}
+\usepackage{lastpage}
+
+% 封面专用页面样式（无页眉页脚）
+\fancypagestyle{cover}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}}
+
+% ---- 超链接（隐藏框） ----
+\usepackage[hidelinks]{hyperref}
+
+% ---- 实用宏 ----
+\newcommand{\reportno}{京建质检J3—G字2016第（****）号}
+\newcommand{\projname}{*******工程}
+\newcommand{\client}{******公司}
+\newcommand{\insttype}{一般委托}
+\newcommand{\issuer}{北京市建设工程质量第三检测所有限责任公司}
+\newcommand{\reportdate}{2015年01月01日}
+
+% ============================================================================
+\begin{document}
+
+% ============================================================================
+% 封面
+% ============================================================================
+\thispagestyle{cover}
+% 标题"检 测 报 告"顶端距页面上边缘 60mm，初号 黑体，字间空 1 格 —— 用 tikz 绝对定位
+\begin{tikzpicture}[remember picture, overlay]
+  \node[anchor=north, inner sep=0pt]
+       at ([yshift=-60mm]current page.north)
+       {\zihao{0}\heiti 检\quad 测\quad 报\quad 告};
+\end{tikzpicture}%
+\vspace*{55mm}
+\begin{center}
+  {\zihao{2}\songti \reportno}\\[3cm]
+
+  {\zihao{3}\songti
+  \begin{tabular}{rl}
+    工\ 程\ 名\ 称： & \projname \\[12pt]
+    委\ 托\ 单\ 位： & \client  \\[12pt]
+    检\ 测\ 类\ 别： & \insttype \\
+  \end{tabular}}\\[3cm]
+
+  {\zihao{2}\songti \issuer}\\[1cm]
+  {\zihao{3}\songti \reportdate}
+\end{center}
+\clearpage
+
+% ============================================================================
+% 签字页（页码从此开始计为第 1 页）
+% ============================================================================
+\setcounter{page}{1}
+\thispagestyle{fancy}
+
+\begin{center}{\zihao{-2}\bfseries\songti 检测报告基本信息}\end{center}
+\vspace{1em}
+\renewcommand{\arraystretch}{1.6}
+\begin{longtable}{|p{3cm}|p{11cm}|}
+\hline 工程名称 & \projname \\\hline
+工程地点 & 北京市海淀区 \\\hline
+检测项目 & 混凝土抗压强度 \\\hline
+施工单位 & ****** \\\hline
+设计单位 & ****** \\\hline
+监理单位 & ****** \\\hline
+检测原因 & 委托检测 \\\hline
+抽样依据 & 委托方指定 \\\hline
+方法依据 & 《回弹法、超声回弹综合法检测泵送混凝土强度技术规程》DBJ/T 01-78-2003 \\\hline
+判定依据 & 《回弹法、超声回弹综合法检测泵送混凝土强度技术规程》DBJ/T 01-78-2003 \\\hline
+检测仪器 & ZBL-S220+S30901013-0867 数显混凝土回弹仪；LG1-19-08 碳化深度仪 \\\hline
+检测时间 & 2015年01月01日 \\\hline
+检测环境 & 晴~3\,$^{\circ}$C \\\hline
+检测人员 & 胡运、李瑾、张恒源 \\\hline
+检测结论 & 本次检测的 \projname 一至二层梁、板、柱 30 个构件现龄期混凝土抗压强度推定值达到设计强度标准。 \\\hline
+\end{longtable}
+
+\vspace{1em}
+\begin{tabular}{p{3cm}p{4cm}p{3cm}p{4cm}}
+批\ 准\ 人： & \makebox[3cm]{\hrulefill} & 审\ 核\ 人： & \makebox[3cm]{\hrulefill} \\[18pt]
+主\ 检\ 人： & \makebox[3cm]{\hrulefill} & 报告日期： & \reportdate \\
+\end{tabular}
+
+\vspace{2em}
+\begin{flushright}\zihao{-4}\issuer\end{flushright}
+\clearpage
+
+% ============================================================================
+% 目录（页码 ≥ 15 页时启用）
+% ============================================================================
+% \tableofcontents
+% \clearpage
+
+% ============================================================================
+% 正文 —— 以 二、回弹法检测混凝土强度报告 为示例
+% （切换报告类型只需替换本节内容；通用样式不变）
+% ============================================================================
+
+\section{概况}
+
+\subsection{工程概况}
+\projname 位于北京市海淀区。建设单位为 \client 。综合楼建筑面积 4747.5\,m$^2$，
+为钢筋混凝土框架结构，地下一层，地上三层，建筑高度 14.1\,m。\ldots\ldots
+受 \client 委托，\issuer 对该工程联合检修库一至二层梁、板、柱 30 个构件混凝土抗压强度
+进行了检测。
+
+\subsection{检测及判定依据}
+《回弹法、超声回弹综合法检测泵送混凝土强度技术规程》DBJ/T 01-78-2003。
+
+\subsection{检测人员}
+胡运、李瑾、张恒源。
+
+\subsection{检测仪器}
+\begin{table}[h]\centering
+\caption*{\zihao{5}\songti 表1.4\quad 检测仪器}
+\zihao{5}
+\begin{tabular}{|l|c|c|}
+\hline
+检测仪器名称   & 数显混凝土回弹仪          & 碳化深度仪          \\\hline
+检测仪器编号   & ZBL-S220+S30901013-0867 & LG1-19-08          \\\hline
+检定证书编号   & 京西字第14037414号       & 京西字第14020308号  \\\hline
+仪器使用有效期 & 2014.8.5\,$\sim$\,2015.2.4 & 2014.5.13\,$\sim$\,2015.5.12 \\\hline
+检测精度       & 2                       & 0.25\,mm           \\\hline
+\end{tabular}
+\end{table}
+
+\subsection{检测环境}
+晴~3\,$^{\circ}$C。
+
+\section{混凝土抗压强度检测}
+
+\subsection{检测方法}
+按照《回弹法、超声回弹综合法检测泵送混凝土强度技术规程》DBJ/T 01-78-2003 要求，
+在每一个待测构件侧面或底面均匀布置 10 个测区，每个测区大小约为 0.04\,m$^2$，
+在每个测区内测取 16 个回弹测点，并选取 30\% 的测区测量混凝土碳化深度值。
+
+\subsection{抽样依据}
+检测数量由委托方指定，现场对该工程联合检修库一至二层梁、板、柱共 30 个构件
+进行混凝土抗压强度检测。
+
+\subsection{判定依据}
+依据《回弹法、超声回弹综合法检测泵送混凝土强度技术规程》DBJ/T 01-78-2003
+进行单个构件混凝土抗压强度推定。
+
+\subsection{检测结果}
+本次检测的 \projname 一至二层梁、板、柱 30 个构件现龄期混凝土抗压强度推定值
+达到设计强度标准。混凝土抗压强度检测结果详见表 2.4，回弹测区位置示意图见图 3-1\,$\sim$\,图 3-3。
+
+\begin{table}[h]\centering
+\caption*{\zihao{5}\songti 表2.4\quad 混凝土抗压强度检测结果}
+\zihao{5}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|c|l|c|c|c|c|}
+\hline
+\makecell{序\\号} & 构件名称 & \makecell{测区强度\\换算值\\(MPa)} & \makecell{换算值\\平均值\\(MPa)} & \makecell{换算值\\标准差\\(MPa)} & \makecell{构件抗压\\强度推定值\\(MPa)} \\\hline
+1 & 一层 2-9/2-A$\sim$2-B 梁  & ~ & ~ & ~ & ~ \\\hline
+2 & 一层 2-11/2-A$\sim$2-B 梁 & ~ & ~ & ~ & ~ \\\hline
+3 & 一层 2-14/2-A$\sim$2-B 梁 & ~ & ~ & ~ & ~ \\\hline
+4 & 一层 2-16/2-A$\sim$2-B 梁 & ~ & ~ & ~ & ~ \\\hline
+5 & 一层 2-17/2-A$\sim$2-B 梁 & ~ & ~ & ~ & ~ \\\hline
+\end{tabular}
+\end{table}
+
+\section{附图}
+
+\begin{figure}[h]\centering
+% \includegraphics[width=0.7\linewidth]{fig/3-1.png}
+\framebox[0.7\linewidth]{\rule{0pt}{4cm}~图3-1 占位~}
+\caption*{\zihao{5}\songti 图3-1\quad 梁回弹测区位置示意图（单位：cm）}
+\end{figure}
+
+\begin{figure}[h]\centering
+\framebox[0.7\linewidth]{\rule{0pt}{4cm}~图3-2 占位~}
+\caption*{\zihao{5}\songti 图3-2\quad 板回弹测区位置示意图（单位：cm）}
+\end{figure}
+
+\begin{figure}[h]\centering
+\framebox[0.7\linewidth]{\rule{0pt}{4cm}~图3-3 占位~}
+\caption*{\zihao{5}\songti 图3-3\quad 柱回弹测区位置示意图（单位：cm）}
+\end{figure}
+
+\begin{figure}[h]\centering
+\framebox[0.7\linewidth]{\rule{0pt}{4cm}~现场照片占位~}
+\caption*{\zihao{5}\songti 图3-4\quad 回弹法检测混凝土强度现场检测照片}
+\end{figure}
+
+\begin{center}（本页以下空白）\end{center}
+
+\end{document}

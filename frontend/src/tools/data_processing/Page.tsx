@@ -6,7 +6,13 @@ import { useCallback, useMemo } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
-import { cn } from '../../lib/cn';
+import {
+  ErrorBanner,
+  INPUT_CLS,
+  RunBtn,
+  Select,
+  ToolHeader,
+} from '../_shared/forms';
 import { useDataProcessing } from './controller';
 import {
   CALC_TYPE_LABELS,
@@ -33,16 +39,13 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
 
   const handleRun = useCallback(async () => {
     const res = await c.run();
-    const calcLabel = CALC_TYPE_LABELS[c.calcType];
     if (res) {
+      const calcLabel = CALC_TYPE_LABELS[c.calcType];
       appendOutput?.(
         `[${new Date().toLocaleTimeString()}] ${calcLabel}: ${res.summary} → ${res.output}`,
       );
-    } else if (c.runError) {
-      appendOutput?.(
-        `[${new Date().toLocaleTimeString()}] ${calcLabel} 失败: ${c.runError}`,
-      );
     }
+    // 失败由 run() 内部统一 appendOutput；不在 await 后读 c.runError（陈旧闭包值）
   }, [c, appendOutput]);
 
   const canRun = !!c.excelPath && !c.running;
@@ -53,14 +56,10 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
   return (
     <div className="flex h-full flex-col">
       {/* 顶部：计算类型 + 选 Excel + Sheet + 表头行 + 跑 */}
-      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
-        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-          <i className="codicon codicon-symbol-method !text-[16px]" />
-          数据处理
-        </h1>
+      <ToolHeader icon="symbol-method" title="数据处理">
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-vscode-text-dim text-xs">计算:</label>
-          <select
+          <Select
             value={c.calcType}
             onChange={(e) => {
               // 守 select 的 value：理论上 options 只来自 CALC_TYPE_LABELS 的 key，
@@ -69,14 +68,13 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
               if (v in CALC_TYPE_LABELS) c.setCalcType(v as CalcType);
             }}
             title="未来会有更多计算类型（钻芯法 / 回弹法 等）"
-            className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
           >
             {calcOptions.map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
           <span className="text-vscode-text-faint">·</span>
           <button
             type="button"
@@ -96,11 +94,11 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
           )}
           <span className="text-vscode-text-faint">·</span>
           <label className="text-vscode-text-dim text-xs">Sheet:</label>
-          <select
+          <Select
             value={c.sheet}
             onChange={(e) => c.setSheet(e.target.value)}
             disabled={!c.excelPath || c.sheets.length === 0}
-            className="bg-vscode-input border-vscode-border text-vscode-text max-w-[16rem] min-w-[8rem] rounded-[2px] border px-2 py-1 text-xs"
+            className="max-w-[16rem] min-w-[8rem]"
           >
             {!c.excelPath && <option value="">（先选 Excel）</option>}
             {c.excelPath && c.sheets.length === 0 && (
@@ -111,7 +109,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
           <span className="text-vscode-text-faint">·</span>
           <label className="text-vscode-text-dim text-xs">表头行:</label>
           <input
@@ -122,28 +120,15 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
               c.setHeaderRow(Math.max(1, parseInt(e.target.value || '1', 10)))
             }
             title="表头所在的 1-based 行号；数据从下一行开始读"
-            className="bg-vscode-input border-vscode-border text-vscode-text w-14 rounded-[2px] border px-2 py-1 text-xs"
+            className={`${INPUT_CLS} w-14`}
           />
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!canRun}
-              onClick={handleRun}
-              className={cn(
-                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
-                canRun
-                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
-                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
-              )}
-            >
-              {c.running && (
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
-              )}
+            <RunBtn running={c.running} disabled={!canRun} onClick={handleRun}>
               {c.running ? '计算中…' : '开始计算'}
-            </button>
+            </RunBtn>
           </div>
         </div>
-      </div>
+      </ToolHeader>
 
       {/* 中间：表格预览 */}
       <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
@@ -154,10 +139,7 @@ export function DataProcessingPage({ appendOutput }: Props = {}) {
       {(c.result || c.runError) && (
         <div className="border-vscode-border max-h-[200px] overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="whitespace-pre-wrap text-red-400">
-              <i className="codicon codicon-error mr-1 !text-[14px]" />
-              {c.runError}
-            </div>
+            <ErrorBanner message={c.runError} onRetry={handleRun} />
           )}
           {c.result && (
             <div className="space-y-1">

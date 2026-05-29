@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { rpc } from '../../lib/rpc';
+import { catalogGetResultSchema } from '../../lib/rpcSchemas';
 import { logLine, useShell } from '../../lib/shell';
 import type {
   CatalogField,
@@ -68,9 +69,11 @@ export function CatalogDrivenInputs({
     setLoading(true);
     setError(null);
     try {
-      const res = await rpc<{ catalog: FieldCatalog }>('catalog.get', {
-        id: catalogId,
-      });
+      const res = await rpc(
+        'catalog.get',
+        { id: catalogId },
+        catalogGetResultSchema,
+      );
       setCatalog(res.catalog);
     } catch (e) {
       const msg = String(e);
@@ -93,7 +96,9 @@ export function CatalogDrivenInputs({
     const allowedLevels = new Set(includeLevels);
     const byLevel = new Map<FieldLevel, Map<string, CatalogField[]>>();
     for (const f of catalog.fields) {
-      if (f.source !== 'user_input') continue;
+      // wire 值无下划线：C# FieldSource.UserInput → ToLowerInvariant() = "userinput"，
+      // 模板助手 FieldEditor 也存 "userinput"。这里曾误写 "user_input" 导致字段全被过滤掉。
+      if (f.source !== 'userinput') continue;
       if (!allowedLevels.has(f.level as FieldLevel)) continue;
       const lvl = f.level as FieldLevel;
       let groupMap = byLevel.get(lvl);

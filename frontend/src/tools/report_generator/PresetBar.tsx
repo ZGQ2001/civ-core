@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
+import { useDialogs } from '../../components/Dialogs';
 import { rpc } from '../../lib/rpc';
 import { logLine, useShell } from '../../lib/shell';
 import type { ReportUserInputs } from './types';
@@ -37,6 +38,7 @@ interface Props {
 
 export function PresetBar({ catalogId, values, onLoad }: Props) {
   const shell = useShell();
+  const dlg = useDialogs();
   const [presets, setPresets] = useState<PresetSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -86,7 +88,13 @@ export function PresetBar({ catalogId, values, onLoad }: Props) {
 
   const handleDelete = useCallback(
     async (id: string, label: string) => {
-      if (!window.confirm(`确定删除预设「${label}」？此操作不可撤销。`)) return;
+      const ok = await dlg.confirm({
+        title: '删除预设',
+        message: `确定删除预设「${label}」？此操作不可撤销。`,
+        danger: true,
+        confirmLabel: '删除',
+      });
+      if (!ok) return;
       try {
         await rpc('report_preset.delete', { id });
         shell.appendOutput(logLine(`[报告] 已删除预设「${label}」`));
@@ -95,7 +103,7 @@ export function PresetBar({ catalogId, values, onLoad }: Props) {
         shell.appendOutput(logLine(`[报告] 删除预设失败: ${String(e)}`));
       }
     },
-    [refresh, shell],
+    [dlg, refresh, shell],
   );
 
   return (

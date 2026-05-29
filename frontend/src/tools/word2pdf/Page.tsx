@@ -7,6 +7,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
+import { ErrorBanner, RunBtn, ToolHeader } from '../_shared/forms';
 import { useWord2Pdf } from './controller';
 import type { DocxFileInfo } from './types';
 
@@ -44,11 +45,7 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
-        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-          <i className="codicon codicon-file-binary !text-[16px]" />
-          Word → PDF 批量转换
-        </h1>
+      <ToolHeader icon="file-binary" title="Word → PDF 批量转换">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -72,25 +69,12 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
             （走 COM 单进程：需装 Microsoft Word 或 WPS）
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!canRun}
-              onClick={handleRun}
-              className={cn(
-                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
-                canRun
-                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
-                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
-              )}
-            >
-              {c.running && (
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
-              )}
+            <RunBtn running={c.running} disabled={!canRun} onClick={handleRun}>
               {c.running ? '转换中…' : '开始转换'}
-            </button>
+            </RunBtn>
           </div>
         </div>
-      </div>
+      </ToolHeader>
 
       <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
         <PreviewPane />
@@ -99,10 +83,7 @@ export function Word2PdfPage({ appendOutput }: Props = {}) {
       {(c.result || c.runError) && (
         <div className="border-vscode-border max-h-[200px] space-y-2 overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="whitespace-pre-wrap text-red-400">
-              <i className="codicon codicon-error mr-1 !text-[14px]" />
-              {c.runError}
-            </div>
+            <ErrorBanner message={c.runError} onRetry={handleRun} />
           )}
           {c.result && (
             <>

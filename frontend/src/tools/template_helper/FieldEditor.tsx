@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { cn } from '../../lib/cn';
+import { INPUT_CLS, Select } from '../_shared/forms';
 import type { CatalogField, FieldLevel } from './types';
 import { LEVEL_LABEL } from './types';
 
@@ -98,7 +99,8 @@ export function FieldEditor({
             disabled={!isNew}
             placeholder="例: project_name"
             className={cn(
-              'bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs',
+              INPUT_CLS,
+              'mt-0.5 w-full',
               !isNew && 'opacity-60',
               isNew && field.key && !keyValid && 'border-red-500',
             )}
@@ -118,7 +120,7 @@ export function FieldEditor({
             value={field.name}
             onChange={(e) => set('name', e.target.value)}
             placeholder="例: 工程名称"
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className={`${INPUT_CLS} mt-0.5 w-full`}
           />
         </div>
       </div>
@@ -127,10 +129,10 @@ export function FieldEditor({
       <div className="flex gap-2">
         <div className="flex-1">
           <label className="text-vscode-text-dim text-[10px]">层级</label>
-          <select
+          <Select
             value={field.level}
             onChange={(e) => set('level', e.target.value as FieldLevel)}
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className="mt-0.5 w-full"
           >
             {LEVEL_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -138,21 +140,21 @@ export function FieldEditor({
                 {o.label.split('（')[1]?.replace('）', '') ?? ''}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex-1">
           <label className="text-vscode-text-dim text-[10px]">数据来源</label>
-          <select
+          <Select
             value={field.source}
             onChange={(e) => set('source', e.target.value)}
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className="mt-0.5 w-full"
           >
             {SOURCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -166,7 +168,7 @@ export function FieldEditor({
             onChange={(e) => set('group', e.target.value)}
             placeholder="例: 项目信息"
             list="field-groups"
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className={`${INPUT_CLS} mt-0.5 w-full`}
           />
           <datalist id="field-groups">
             {existingGroups.map((g) => (
@@ -176,17 +178,17 @@ export function FieldEditor({
         </div>
         <div className="w-20">
           <label className="text-vscode-text-dim text-[10px]">类型</label>
-          <select
+          <Select
             value={field.value_type}
             onChange={(e) => set('value_type', e.target.value)}
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className="mt-0.5 w-full"
           >
             {TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="w-20">
           <label className="text-vscode-text-dim text-[10px]">格式</label>
@@ -195,7 +197,7 @@ export function FieldEditor({
             value={field.default_format ?? ''}
             onChange={(e) => set('default_format', e.target.value || null)}
             placeholder="0.00"
-            className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+            className={`${INPUT_CLS} mt-0.5 w-full`}
           />
         </div>
       </div>
@@ -210,7 +212,7 @@ export function FieldEditor({
           value={aliasText}
           onChange={(e) => setAliasText(e.target.value)}
           placeholder="例: 项目名称, 工程名"
-          className="bg-vscode-input border-vscode-border text-vscode-text mt-0.5 w-full rounded-[2px] border px-2 py-1 text-xs"
+          className={`${INPUT_CLS} mt-0.5 w-full`}
         />
       </div>
 

@@ -23,6 +23,7 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
+import { anchorRunResultSchema } from '../../lib/rpcSchemas';
 import { logLine, useShell } from '../../lib/shell';
 import type {
   AnchorParams,
@@ -391,12 +392,7 @@ export function DataProcessingProvider({
       if (sheet) params.sheet = sheet;
       if (outputPath.trim()) params.output_xlsx = outputPath.trim();
 
-      const res = await rpc<{
-        batches: number;
-        anchors_total: number;
-        anchors_qualified: number;
-        output: string;
-      }>('anchor.run', params);
+      const res = await rpc('anchor.run', params, anchorRunResultSchema);
 
       const display: RunRes = {
         calcType: 'anchor',
@@ -428,6 +424,33 @@ export function DataProcessingProvider({
     anchorBatchIdColumn,
     anchorParamsByBatch,
     shell,
+  ]);
+
+  // ── 发布「一键导入」快照到 ShellContext，供报告填充消费 ──
+  // 解除 report_generator 对 DataProcessingProvider 的嵌套依赖（不再 useDataProcessing）。
+  // setSnapshot 是 useState setter（稳定引用），effect 只在下面这些数据字段变化时触发。
+  const setSnapshot = shell.setDataProcessingSnapshot;
+  useEffect(() => {
+    setSnapshot({
+      calcType,
+      excelPath,
+      outputPath,
+      sheet,
+      anchorStandard,
+      anchorBatchIdColumn,
+      anchorBatchIds,
+      anchorParamsByBatch,
+    });
+  }, [
+    setSnapshot,
+    calcType,
+    excelPath,
+    outputPath,
+    sheet,
+    anchorStandard,
+    anchorBatchIdColumn,
+    anchorBatchIds,
+    anchorParamsByBatch,
   ]);
 
   // ── 文件树双击 .xlsx/.xls 联动：自动设为 excelPath ──

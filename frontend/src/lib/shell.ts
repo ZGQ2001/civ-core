@@ -9,6 +9,8 @@
  */
 import { createContext, useContext } from 'react';
 
+import type { DataProcessingSnapshot } from '../tools/data_processing/types';
+
 export interface ActivatedFile {
   path: string;
   /** 单调递增；同一 path 再次激活时变化，确保 useEffect 依赖能再次触发。 */
@@ -28,6 +30,13 @@ export interface ShellContextValue {
    */
   curveImageDir: string;
   setCurveImageDir: (dir: string) => void;
+  /**
+   * 数据处理发布的「一键导入」快照（装配线显式快照）。
+   * data_processing 写、report_generator 读——下游不再直接 useDataProcessing，解除 Provider 嵌套依赖。
+   * null = 数据处理还没产生任何可导入 state。
+   */
+  dataProcessingSnapshot: DataProcessingSnapshot | null;
+  setDataProcessingSnapshot: (s: DataProcessingSnapshot) => void;
 }
 
 export const ShellContext = createContext<ShellContextValue | null>(null);

@@ -96,6 +96,14 @@ export const plotCurvesRun: ToolDef = {
       .enum(["svg", "png", "jpg", "jpeg"])
       .optional()
       .describe("临时覆盖 filename_template 的后缀；不写回预设文件。"),
+    filename_prefix: z
+      .string()
+      .optional()
+      .describe(
+        "拼在每张图文件名最前的字面前缀（不参与 {id} 替换）。多批次出图时按 sheet 调本 tool，" +
+          "各传 '<批次>_'（如 '2025.05.17_'）避免不同批相同标识列值互相覆盖；" +
+          "报告侧 anchor_run 会按 '<批次>_<anchor_id>' 优先查找曲线图。",
+      ),
   },
 };
 

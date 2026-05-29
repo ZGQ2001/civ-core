@@ -11,7 +11,7 @@ Vite + React 19 + TypeScript + Tailwind v4 + @vscode/codicons + react-resizable-
 
 ## 工具页范式
 
-所有工具页统一结构（当前 5 个：data_processing / plot_curves / report_generator / pdf_tools / word2pdf）：
+所有工具页统一结构（当前 6 个：data_processing / plot_curves / report_generator / template_helper / pdf_tools / word2pdf）：
 
 ```
 tools/<tool>/
@@ -22,9 +22,11 @@ tools/<tool>/
 └── SettingsForm.tsx   右侧参数区（在 RightPanel 内渲染）
 ```
 
-**工具间耦合原则**：工具之间不通过 useXxxCtrl() 隐式继承上游 state（曾经 report_generator 直接 useDataProcessing 是反例）。如果工具 B 想消费工具 A 的输入，提供「一键导入 A」按钮 —— 显式拷贝快照到 B 自己的 state。这样：
+**工具装配唯一来源**：工具的 ActivityBar 项 / 中间页路由 / 右侧调参 tab / Provider 挂载全部在 `tools/registry.tsx` 的 `TOOLS` + `TOOL_PROVIDERS` 注册一次，App.tsx / EditorArea 从中派生。**加工具只改 registry 两个数组，App.tsx 不动**；别再在 App 里散写 `activeToolId === 'x' ? ...` 之类的枚举。
 
-- 工具 B 能独立工作（用别人的输入 / 测试隔离）
+**工具间耦合原则**：工具之间不通过 useXxxCtrl() 隐式继承上游 state（曾经 report_generator 直接 useDataProcessing 是反例，已改）。如果工具 B 想消费工具 A 的输入，提供「一键导入 A」按钮 —— 经 `ShellContext` 的快照（如 `dataProcessingSnapshot`）显式拷贝到 B 自己的 state，B 不直接 `useXxx` 上游。这样：
+
+- 工具 B 能独立挂载/工作（用别人的输入 / 测试隔离，不依赖 Provider 嵌套顺序）
 - 装配线连贯（用户一键就能继承上游已填的）
 - 状态变化追溯清晰（不会"上游一变下游莫名重渲染"）
 
@@ -74,17 +76,15 @@ export function useXxxCtrl() {
 export function Page({ appendOutput }: { appendOutput?: (line: string) => void }) {
     const c = useXxxCtrl();
 
-    // ✅ 正确：run() 返回结果
+    // ✅ run() 内部统一把成功/失败写进输出面板（appendOutput）；Page 只用 run() 的返回值。
     const handleRun = useCallback(async () => {
         const res = await c.run();
-        if (res) {
-            appendOutput?.(`完成：${res.summary}`);
-        } else if (c.runError) {
-            appendOutput?.(`错误：${c.runError}`);
-        }
+        if (res) appendOutput?.(`完成：${res.summary}`);
+        // 失败已由 run() 内部记录，不在此读 c.runError
     }, [c, appendOutput]);
 
-    // ❌ 禁止：await c.run() 后读 c.result（陈旧闭包）
+    // ❌ 禁止：await c.run() 之后读 c.runError / c.result（都是陈旧闭包值）
+    //    需要错误详情就让 run() 返回判别联合（plot/pdf/word 即如此），别读闭包 state
 
     return (/* JSX */);
 }
@@ -107,12 +107,11 @@ export function SettingsForm() {
 export async function rpc<T>(
   method: string,
   params?: Record<string, unknown>,
-): Promise<T> {
-  return await invoke<T>('rpc_call', { method, params: params ?? {} });
-}
+  schema?: ZodType<T>, // 可选：传则运行时校验返回值
+): Promise<T>;
 ```
 
-**注意**：`as T` 无运行时校验。后端返回字段缺失时渲染才报错。未来可加 zod 校验。
+**运行时校验**：不传 `schema` 时 `as T` 无运行时校验（非关键方法用）。出错代价高的核心方法**必须**传 zod schema——校验失败抛「后端返回格式异常」，把契约漂移在边界显式化（而非渲染时静默炸 / 出错报告）。schema 集中在 `lib/rpcSchemas.ts`（唯一来源），当前覆盖 `anchor.run` / `report.run_from_result` / `catalog.get`。新增核心方法时一并加 schema。
 
 ## 布局约束
 
@@ -138,9 +137,10 @@ StatusBar (22px)
 
 | 文件                                    | 内容                                                                                                                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tools/_shared/forms.tsx`               | `Field` / `Picker` / `ResetBtn` / `RunBtn`（所有工具共用的 form 控件）                                                                                                             |
+| `tools/_shared/forms.tsx`               | **所有工具页唯一控件来源**：`ToolHeader`（统一顶栏：同底色/padding/标题）、`Field` / `Picker` / `ResetBtn`、`RunBtn`（统一运行主按钮）、`IconBtn`（统一小图标钮，`bordered` 变体）、`Select` + `INPUT_CLS`（统一下拉/输入 + `focus:border-vscode-focus` 焦点环）、`ErrorBanner`（统一报错卡 `role="alert"` + 可选「重试」恢复）。新工具/新控件先看这里有没有现成的，别重抽。 |
+| `components/Dialogs.tsx`                 | `DialogsProvider` + `useDialogs()`：promise 化统一弹窗（`confirm` / `prompt` / `alert`），取代全项目 `window.confirm/prompt/alert`。`main.tsx` 根级挂载；Esc 取消 / Enter 确认 / 点遮罩取消。 |
 | `tools/_shared/anchorParamsForm.tsx`    | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。                           |
-| `tools/_shared/CatalogDrivenInputs.tsx` | 报告填充「项目元信息」公共渲染器：按 `catalog.get` 动态拉字段定义，按 level → group 分组渲染 user_input。模板助手改字段，报告填充立刻同步。接 `historyByKey` prop 显示历史值下拉。 |
+| `tools/_shared/CatalogDrivenInputs.tsx` | 报告填充「项目元信息」公共渲染器：按 `catalog.get` 动态拉字段定义，按 level → group 分组渲染 user_input（仅 `source==='userinput'`，无下划线，与 C# 序列化对齐）。模板助手改字段，报告填充立刻同步。接 `historyByKey` prop 显示历史值下拉。 |
 
 ## 快捷键
 

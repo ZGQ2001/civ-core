@@ -1,14 +1,13 @@
 /**
- * report_generator 右侧 RightPanel「调参」tab。
+ * report_generator 右侧 RightPanel「调参」—— 拆成 3 个 tab section（数据 / 模板 / 项目字段）。
  *
- * 完全独立模式：自己填 Excel + 参数 + Word 模板 + user_inputs。
- * 顶部「从数据处理一键导入」按钮可选——上游有数据就高亮。
+ * 回归工具页范式：输入回到右侧面板（和其它工具一致），但字段远多于别的工具，
+ * 故按层级拆成 3 个调参 tab，App.tsx 把它们注入 rightTabs，AI 助手常驻最后。
  *
- * 五块：
- *   1. 输入 Excel + 规范 + 批次列 + 共享的按批次参数卡片
- *   2. Word 模板路径 + 输出目录
- *   3. user_inputs 7 个折叠 group 卡片
- *   4. 「从数据处理一键导入」按钮（顶部）
+ *   ReportDataSection     数据：一键导入 + 检测项目 + 报告名 + 数据来源 + 输入 Excel
+ *                              + 规范 + 批次列 + 按批次工程参数 + 灌浆日期
+ *   ReportTemplateSection 模板：Word 模板 + 输出目录 + 曲线图目录
+ *   ReportFieldsSection   项目字段：报告预设栏 + 历史值开关 + 项目元信息（CatalogDrivenInputs）
  */
 import { useCallback, useEffect, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -21,7 +20,7 @@ import { rpc } from '../../lib/rpc';
 import { logLine, useShell } from '../../lib/shell';
 import { AnchorParamsSection } from '../_shared/anchorParamsForm';
 import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
-import { Field, Picker, ResetBtn } from '../_shared/forms';
+import { Field, INPUT_CLS, Picker, ResetBtn, Select } from '../_shared/forms';
 import { useReportGenerator } from './controller';
 import { PresetBar } from './PresetBar';
 
@@ -31,7 +30,16 @@ interface CatalogSummary {
   field_count: number;
 }
 
-export function ReportGeneratorSettingsForm() {
+/** 每个 tab section 的统一外壳（间距 / 内边距 / 字号），保证三块视觉一致。 */
+function SectionShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col space-y-4 px-4 py-4 text-xs">{children}</div>
+  );
+}
+
+/* ────────────────────────────── 数据 tab ────────────────────────────── */
+
+export function ReportDataSection() {
   const c = useReportGenerator();
   const shell = useShell();
   const [catalogs, setCatalogs] = useState<CatalogSummary[]>([]);
@@ -61,45 +69,18 @@ export function ReportGeneratorSettingsForm() {
     if (typeof sel === 'string') c.setExcelPath(sel);
   }, [c]);
 
-  const pickTemplate = useCallback(async () => {
-    const sel = await openDialog({
-      title: '选择 Word 报告模板',
-      multiple: false,
-      filters: [{ name: 'Word', extensions: ['docx'] }],
-    });
-    if (typeof sel === 'string') c.setWordTemplatePath(sel);
-  }, [c]);
-
-  const pickOutputDir = useCallback(async () => {
-    const sel = await openDialog({
-      directory: true,
-      multiple: false,
-      title: '选择 Word 报告输出目录',
-    });
-    if (typeof sel === 'string') c.setOutputDir(sel);
-  }, [c]);
-
-  const pickCurveImageDir = useCallback(async () => {
-    const sel = await openDialog({
-      directory: true,
-      multiple: false,
-      title: '选择曲线图目录（plot_curves 出图的文件夹）',
-    });
-    if (typeof sel === 'string') c.setCurveImageDir(sel);
-  }, [c]);
-
   return (
-    <div className="flex flex-col space-y-4 px-6 py-4 text-xs">
+    <SectionShell>
       <ImportFromDataProcessingBtn />
 
       <Field
         label="检测项目"
         hint="决定字段定义 / 预设过滤 / 计算分发；从模板助手已有目录里选。当前只有锚杆抗拔真正接通 calc，其余目录改字段渲染但仍走锚杆 RPC（待钻芯/回弹切 C# 后自动分发）。"
       >
-        <select
+        <Select
           value={c.catalogId}
           onChange={(e) => c.setCatalogId(e.target.value)}
-          className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+          className="w-full"
         >
           {catalogs.length === 0 && (
             <option value={c.catalogId}>{c.catalogId}（加载中…）</option>
@@ -109,7 +90,7 @@ export function ReportGeneratorSettingsForm() {
               {cat.label}（{cat.field_count} 字段）
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field
@@ -177,19 +158,19 @@ export function ReportGeneratorSettingsForm() {
       </Field>
 
       <Field label="规范" hint="未来可扩展其他规范；当前仅支持 GB 50086-2015">
-        <select
+        <Select
           value={c.anchorStandard}
           onChange={(e) =>
             c.setAnchorStandard(e.target.value as AnchorStandard)
           }
-          className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+          className="w-full"
         >
           {ANCHOR_STANDARDS.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field
@@ -200,7 +181,7 @@ export function ReportGeneratorSettingsForm() {
           type="text"
           value={c.anchorBatchIdColumn}
           onChange={(e) => c.setAnchorBatchIdColumn(e.target.value)}
-          className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+          className={`${INPUT_CLS} w-full`}
         />
       </Field>
 
@@ -216,9 +197,44 @@ export function ReportGeneratorSettingsForm() {
       />
 
       <GroutingDateByBatchSection />
+    </SectionShell>
+  );
+}
 
-      <div className="border-vscode-border border-t pt-3" />
+/* ────────────────────────────── 模板 tab ────────────────────────────── */
 
+export function ReportTemplateSection() {
+  const c = useReportGenerator();
+
+  const pickTemplate = useCallback(async () => {
+    const sel = await openDialog({
+      title: '选择 Word 报告模板',
+      multiple: false,
+      filters: [{ name: 'Word', extensions: ['docx'] }],
+    });
+    if (typeof sel === 'string') c.setWordTemplatePath(sel);
+  }, [c]);
+
+  const pickOutputDir = useCallback(async () => {
+    const sel = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择 Word 报告输出目录',
+    });
+    if (typeof sel === 'string') c.setOutputDir(sel);
+  }, [c]);
+
+  const pickCurveImageDir = useCallback(async () => {
+    const sel = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择曲线图目录（plot_curves 出图的文件夹）',
+    });
+    if (typeof sel === 'string') c.setCurveImageDir(sel);
+  }, [c]);
+
+  return (
+    <SectionShell>
       <Field
         label="Word 模板"
         hint="带 {{占位符}} 的 .docx。按锚杆克隆：用 [[每根锚杆]] / [[/每根锚杆]] 包住；按批次输出（灌浆日期等批次级字段）：外层再包 [[批次]] / [[/批次]]。不会做？打开 ActivityBar 的「模板助手」可按层级列字段并自动验证你的模板。"
@@ -269,15 +285,23 @@ export function ReportGeneratorSettingsForm() {
           }
         />
       </Field>
+    </SectionShell>
+  );
+}
 
+/* ───────────────────────────── 项目字段 tab ──────────────────────────── */
+
+export function ReportFieldsSection() {
+  const c = useReportGenerator();
+  return (
+    <SectionShell>
       <PresetBar
         catalogId={c.catalogId}
         values={c.userInputs}
         onLoad={c.loadUserInputs}
       />
-
       <HistoryToggleAndInputs />
-    </div>
+    </SectionShell>
   );
 }
 
@@ -496,7 +520,7 @@ function GroutingDateByBatchSection() {
             type="date"
             value={broadcastDate}
             onChange={(e) => setBroadcastDate(e.target.value)}
-            className="bg-vscode-input border-vscode-border text-vscode-text min-w-0 flex-1 rounded-[2px] border px-1.5 py-0.5 text-[10px]"
+            className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus min-w-0 flex-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] focus:outline-none"
           />
           <button
             type="button"

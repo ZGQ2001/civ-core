@@ -11,7 +11,13 @@ import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
 import { PdfPreview } from '../../components/PdfPreview';
-import { Picker } from '../_shared/forms';
+import {
+  ErrorBanner,
+  IconBtn,
+  Picker,
+  RunBtn,
+  ToolHeader,
+} from '../_shared/forms';
 import { usePdfTools } from './controller';
 import { MODE_LABELS, type Mode, type PdfFileInfo } from './types';
 
@@ -81,11 +87,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
   return (
     <div className="flex h-full flex-col">
       {/* 顶部：mode 切换 + 操作 + 跑 */}
-      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
-        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-          <i className="codicon codicon-file-pdf !text-[16px]" />
-          PDF 工具
-        </h1>
+      <ToolHeader icon="file-pdf" title="PDF 工具">
         <div className="flex flex-wrap items-center gap-2">
           {(Object.entries(MODE_LABELS) as Array<[Mode, string]>).map(
             ([id, label]) => (
@@ -118,20 +120,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
             </button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!canRun}
-              onClick={handleRun}
-              className={cn(
-                'flex items-center gap-1.5 rounded-[2px] px-3 py-1 text-xs',
-                canRun
-                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
-                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
-              )}
-            >
-              {c.running && (
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
-              )}
+            <RunBtn running={c.running} disabled={!canRun} onClick={handleRun}>
               {c.running
                 ? c.mode === 'merge'
                   ? '合并中…'
@@ -139,7 +128,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
                 : c.mode === 'merge'
                   ? '开始合并'
                   : '开始拆分'}
-            </button>
+            </RunBtn>
           </div>
         </div>
         {/* 输出位置：必填、最容易被忽略，搬到顶部明确摆出来 */}
@@ -163,7 +152,7 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
             )}
           </div>
         </div>
-      </div>
+      </ToolHeader>
 
       {/* 中间：PDF 列表 */}
       <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
@@ -172,12 +161,9 @@ export function PdfToolsPage({ appendOutput }: Props = {}) {
 
       {/* 结果 / 错误 */}
       {(c.mergeResult || c.splitResult || c.runError) && (
-        <div className="border-vscode-border max-h-[200px] overflow-auto border-t px-6 py-3 text-xs">
+        <div className="border-vscode-border max-h-[200px] space-y-2 overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="whitespace-pre-wrap text-red-400">
-              <i className="codicon codicon-error mr-1 !text-[14px]" />
-              {c.runError}
-            </div>
+            <ErrorBanner message={c.runError} onRetry={handleRun} />
           )}
           {c.mergeResult && (
             <div className="flex items-center gap-2">
@@ -427,38 +413,5 @@ function PdfInfoRow({
         </div>
       )}
     </div>
-  );
-}
-
-function IconBtn({
-  icon,
-  title,
-  onClick,
-  disabled,
-  danger,
-}: {
-  icon: string;
-  title: string;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'text-vscode-text-dim flex h-6 w-6 items-center justify-center rounded',
-        disabled
-          ? 'cursor-not-allowed opacity-30'
-          : danger
-            ? 'hover:bg-vscode-hover hover:text-red-400'
-            : 'hover:bg-vscode-hover hover:text-white',
-      )}
-    >
-      <i className={`codicon codicon-${icon} !text-[12px]`} />
-    </button>
   );
 }

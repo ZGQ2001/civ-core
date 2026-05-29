@@ -22,8 +22,8 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
+import { anchorRunResultSchema } from '../../lib/rpcSchemas';
 import { logLine, useShell } from '../../lib/shell';
-import { useDataProcessing } from '../data_processing/controller';
 import {
   ANCHOR_DEFAULT_BATCH_COL,
   DEFAULT_ANCHOR_PARAMS,
@@ -157,8 +157,9 @@ export function ReportGeneratorProvider({
   children: React.ReactNode;
 }) {
   const shell = useShell();
-  // 仅用于 importFromDataProcessing()——日常 state 不依赖 dp
-  const dp = useDataProcessing();
+  // 数据处理快照（仅「一键导入」探针 + 导入用）走 ShellContext，不再直接 useDataProcessing。
+  // → report 不依赖 DataProcessingProvider 的嵌套顺序，可独立挂载/测试（见 frontend/CLAUDE.md 工具间耦合原则）。
+  const dpSnapshot = shell.dataProcessingSnapshot;
 
   // ── 输入 state（独立 own） ──
   const [excelPath, setExcelPathRaw] = useState('');
@@ -299,23 +300,35 @@ export function ReportGeneratorProvider({
 
   // ── 探针：数据处理上游是否有可导入的 state ──
   const upstream: UpstreamProbe = useMemo(() => {
-    const batchIds = dp.anchorBatchIds;
-    const filled = batchIds.filter((b) => !!dp.anchorParamsByBatch[b]).length;
+    if (!dpSnapshot) {
+      return {
+        available: false,
+        excelPath: '',
+        batchCount: 0,
+        paramsFilledBatchCount: 0,
+        reason: '数据处理还没产生可导入数据',
+      };
+    }
+    const batchIds = dpSnapshot.anchorBatchIds;
+    const filled = batchIds.filter(
+      (b) => !!dpSnapshot.anchorParamsByBatch[b],
+    ).length;
     let reason: string | null = null;
-    if (dp.calcType !== 'anchor') reason = '数据处理 calcType 不是 anchor';
-    else if (!dp.excelPath) reason = '数据处理还没选 Excel';
+    if (dpSnapshot.calcType !== 'anchor')
+      reason = '数据处理 calcType 不是 anchor';
+    else if (!dpSnapshot.excelPath) reason = '数据处理还没选 Excel';
     else if (batchIds.length === 0) reason = '数据处理还没读到批次';
     return {
       available: reason === null,
-      excelPath: dp.excelPath,
+      excelPath: dpSnapshot.excelPath,
       batchCount: batchIds.length,
       paramsFilledBatchCount: filled,
       reason,
     };
-  }, [dp.calcType, dp.excelPath, dp.anchorBatchIds, dp.anchorParamsByBatch]);
+  }, [dpSnapshot]);
 
   const importFromDataProcessing = useCallback(() => {
-    if (!upstream.available) {
+    if (!upstream.available || !dpSnapshot) {
       shell.appendOutput(
         logLine(`[报告] 无法从数据处理导入：${upstream.reason}`),
       );
@@ -325,24 +338,26 @@ export function ReportGeneratorProvider({
     // 解决用户反馈 #2+#7「从数据处理导入应该是结果数据」+「报告填充不应再生成结果 xlsx」。
     // 拿不到 outputPath 时退化回原始（兜底，不该常态触发）。
     const importSource: ReportDataSource =
-      dp.outputPath && dp.outputPath.trim() ? 'result' : 'raw';
+      dpSnapshot.outputPath && dpSnapshot.outputPath.trim() ? 'result' : 'raw';
     const importPath =
-      importSource === 'result' && dp.outputPath ? dp.outputPath : dp.excelPath;
+      importSource === 'result' && dpSnapshot.outputPath
+        ? dpSnapshot.outputPath
+        : dpSnapshot.excelPath;
 
     // 注意 setExcelPath 内部会清旧批次缓存，所以下面 set 参数要在 set Excel 之后
     setExcelPath(importPath);
     setDataSource(importSource);
-    setSheet(dp.sheet);
-    setAnchorStandard(dp.anchorStandard);
-    setAnchorBatchIdColumn(dp.anchorBatchIdColumn);
-    // 不直接复制 batchIds —— 让本地 effect 再调一次 list_batches，结果以 dp 当前 Excel 为准
-    setAnchorParamsByBatch({ ...dp.anchorParamsByBatch });
+    setSheet(dpSnapshot.sheet);
+    setAnchorStandard(dpSnapshot.anchorStandard);
+    setAnchorBatchIdColumn(dpSnapshot.anchorBatchIdColumn);
+    // 不直接复制 batchIds —— 让本地 effect 再调一次 list_batches，结果以当前 Excel 为准
+    setAnchorParamsByBatch({ ...dpSnapshot.anchorParamsByBatch });
     shell.appendOutput(
       logLine(
         `[报告] 已从数据处理导入: ${importPath}（${upstream.batchCount} 批，参数已填 ${upstream.paramsFilledBatchCount}/${upstream.batchCount}，数据来源=${importSource === 'result' ? '结果 xlsx' : '原始 xlsx'}）`,
       ),
     );
-  }, [upstream, dp, shell, setExcelPath]);
+  }, [upstream, dpSnapshot, shell, setExcelPath]);
 
   // ── 就绪态 ──
   // dataSource=result 时不再要求填批次参数（结果 xlsx 隐藏 metadata 已带工程参数）；
@@ -435,15 +450,7 @@ export function ReportGeneratorProvider({
       if (Object.keys(batchUserInputs).length > 0)
         params.batch_user_inputs = batchUserInputs;
 
-      const res = await rpc<{
-        batches: number;
-        anchors_total: number;
-        anchors_qualified: number;
-        output: string;
-        word_outputs?: string[];
-        word_unknown_keys?: string[];
-        word_missing_images?: string[];
-      }>(method, params);
+      const res = await rpc(method, params, anchorRunResultSchema);
 
       if (!res.word_outputs || res.word_outputs.length === 0) {
         throw new Error('后端没返回 word_outputs —— 模板替换可能跳过了');

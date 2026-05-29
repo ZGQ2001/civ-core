@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
+import { useDialogs } from '../../components/Dialogs';
 import { cn } from '../../lib/cn';
 import { useShell } from '../../lib/shell';
-import { RunBtn } from '../_shared/forms';
+import { RunBtn, Select, ToolHeader } from '../_shared/forms';
 import { useTemplateHelper } from './controller';
 import { FieldEditor } from './FieldEditor';
 import type { CatalogField, FieldLevel } from './types';
@@ -109,30 +110,25 @@ export function TemplateHelperPage(
   return (
     <div className="flex h-full flex-col overflow-auto bg-[#1e1e1e]">
       {/* Top bar: catalog + template + validate */}
-      <div className="border-vscode-border space-y-3 border-b bg-[#252526] px-5 py-3">
-        <div className="flex items-center gap-2">
-          <i className="codicon codicon-list-tree text-vscode-focus !text-[16px]" />
-          <h1 className="text-vscode-text text-base font-medium">模板助手</h1>
-        </div>
-
+      <ToolHeader icon="list-tree" title="模板助手">
         {/* Catalog selector + group toggle */}
         <div className="flex items-center gap-2">
           <span className="text-vscode-text-dim shrink-0 text-[11px]">
             字段目录
           </span>
-          <select
+          <Select
             value={c.activeCatalogId ?? ''}
             onChange={(e) => {
               if (e.target.value) c.selectCatalog(e.target.value);
             }}
-            className="bg-vscode-input border-vscode-border text-vscode-text min-w-0 flex-1 rounded-[2px] border px-2 py-1 text-xs"
+            className="min-w-0 flex-1"
           >
             {c.catalogs.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.label} ({cat.field_count} 字段)
               </option>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             onClick={() => c.refreshCatalogs()}
@@ -231,7 +227,7 @@ export function TemplateHelperPage(
           {' {{img:xxx}} '}
           占位符嵌图
         </div>
-      </div>
+      </ToolHeader>
 
       {/* 层级图例 —— 让用户一眼看懂 4 个层级是什么 + 怎么在模板里写 */}
       <LevelLegend />
@@ -626,6 +622,7 @@ function LevelDot({
 
 function CatalogMenu({ onClose }: { onClose: () => void }) {
   const c = useTemplateHelper();
+  const dlg = useDialogs();
   const [action, setAction] = useState<'none' | 'new' | 'copy' | 'rename'>(
     'none',
   );
@@ -651,15 +648,16 @@ function CatalogMenu({ onClose }: { onClose: () => void }) {
   }, [inputLabel, c, onClose]);
 
   const handleDelete = useCallback(async () => {
-    if (
-      !window.confirm(
-        `确定删除字段目录「${c.activeCatalog?.label}」？此操作不可撤销。`,
-      )
-    )
-      return;
+    const ok = await dlg.confirm({
+      title: '删除字段目录',
+      message: `确定删除字段目录「${c.activeCatalog?.label}」？此操作不可撤销。`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (!ok) return;
     await c.deleteCatalog();
     onClose();
-  }, [c, onClose]);
+  }, [dlg, c, onClose]);
 
   if (action === 'new' || action === 'copy') {
     return (

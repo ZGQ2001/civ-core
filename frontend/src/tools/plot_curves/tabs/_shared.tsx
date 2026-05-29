@@ -5,7 +5,7 @@
 import { cn } from '../../../lib/cn';
 
 export const inputClass =
-  'bg-vscode-input border border-vscode-border px-2 py-1 text-xs text-vscode-text rounded-[2px] w-full';
+  'bg-vscode-input border border-vscode-border focus:border-vscode-focus px-2 py-1 text-xs text-vscode-text rounded-[2px] w-full focus:outline-none';
 
 export function Row({
   label,

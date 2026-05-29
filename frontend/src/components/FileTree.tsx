@@ -30,6 +30,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../lib/cn';
 import { rpc, type FileEntry } from '../lib/rpc';
+import { useDialogs } from './Dialogs';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 类型
@@ -238,6 +239,7 @@ export function FileTree({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<number[]>([]);
   const [opBusy, setOpBusy] = useState(false);
+  const dlg = useDialogs();
 
   // refs：让 effect/callback 拿到最新值而不污染 deps
   const nodesRef = useRef(nodes);
@@ -524,10 +526,14 @@ export function FileTree({
         }
       } catch (e) {
         // 失败保持编辑态，让用户改
-        alert(`操作失败：${String(e)}`);
+        await dlg.alert({
+          title: '操作失败',
+          message: String(e),
+          tone: 'error',
+        });
       }
     },
-    [editing, fetchDir],
+    [dlg, editing, fetchDir],
   );
 
   const doDelete = useCallback((path: string) => {
@@ -548,9 +554,9 @@ export function FileTree({
       if (selectedRef.current === path) setSelectedPath(null);
       if (cur.parent) await fetchDir(cur.parent);
     } catch (e) {
-      alert(`删除失败：${String(e)}`);
+      await dlg.alert({ title: '删除失败', message: String(e), tone: 'error' });
     }
-  }, [deleteTarget, fetchDir]);
+  }, [dlg, deleteTarget, fetchDir]);
 
   const doUndoDelete = useCallback(async () => {
     if (opBusy) return;
@@ -564,11 +570,15 @@ export function FileTree({
       await fetchDir(r.parent);
       setSelectedPath(r.restored_path);
     } catch (e) {
-      alert(`撤销删除失败：${String(e)}`);
+      await dlg.alert({
+        title: '撤销删除失败',
+        message: String(e),
+        tone: 'error',
+      });
     } finally {
       setOpBusy(false);
     }
-  }, [fetchDir, opBusy]);
+  }, [dlg, fetchDir, opBusy]);
 
   const doCopyToClipboard = useCallback((path: string) => {
     setClipboard({ path, mode: 'copy' });
@@ -601,25 +611,36 @@ export function FileTree({
         }
         setSelectedPath(r.path);
       } catch (e) {
-        alert(`粘贴失败：${String(e)}`);
+        await dlg.alert({
+          title: '粘贴失败',
+          message: String(e),
+          tone: 'error',
+        });
       } finally {
         setOpBusy(false);
       }
     },
-    [clipboard, fetchDir, opBusy],
+    [dlg, clipboard, fetchDir, opBusy],
   );
 
   const doCopyPath = useCallback((path: string) => {
     navigator.clipboard.writeText(path).catch((err) => console.error(err));
   }, []);
 
-  const doReveal = useCallback(async (path: string) => {
-    try {
-      await rpc('files.reveal', { path });
-    } catch (e) {
-      alert(`在资源管理器中显示失败：${String(e)}`);
-    }
-  }, []);
+  const doReveal = useCallback(
+    async (path: string) => {
+      try {
+        await rpc('files.reveal', { path });
+      } catch (e) {
+        await dlg.alert({
+          title: '在资源管理器中显示失败',
+          message: String(e),
+          tone: 'error',
+        });
+      }
+    },
+    [dlg],
+  );
 
   const openMenu = useCallback((e: React.MouseEvent, target: string | null) => {
     e.preventDefault();

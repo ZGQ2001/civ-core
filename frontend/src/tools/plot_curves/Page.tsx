@@ -7,6 +7,15 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { cn } from '../../lib/cn';
+import { useDialogs } from '../../components/Dialogs';
+import {
+  ErrorBanner,
+  INPUT_CLS,
+  IconBtn,
+  RunBtn,
+  Select,
+  ToolHeader,
+} from '../_shared/forms';
 import { OUTPUT_FORMATS, usePlotCurves } from './controller';
 import type { PlotPreset } from './types';
 
@@ -57,24 +66,27 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
   return (
     <div className="flex h-full flex-col">
       {/* 顶部一行：Excel + Sheet + 预设 + 跑 */}
-      <div className="border-vscode-border space-y-2 border-b px-6 pt-4 pb-3">
-        <h1 className="text-vscode-text flex items-center gap-2 text-base font-medium">
-          <i className="codicon codicon-graph-line !text-[16px]" />
-          绘曲线图
-          {c.edited && (
-            <span className="ml-2 flex items-center gap-1 text-xs text-yellow-400">
-              <i className="codicon codicon-edit !text-[12px]" />
-              曲线已被调参（运行 / 预览均用编辑版）
-              <button
-                type="button"
-                onClick={c.resetPreset}
-                className="text-vscode-focus ml-1 hover:underline"
-              >
-                还原
-              </button>
-            </span>
-          )}
-        </h1>
+      <ToolHeader
+        icon="graph-line"
+        title={
+          <>
+            绘曲线图
+            {c.edited && (
+              <span className="ml-2 flex items-center gap-1 text-xs text-yellow-400">
+                <i className="codicon codicon-edit !text-[12px]" />
+                曲线已被调参（运行 / 预览均用编辑版）
+                <button
+                  type="button"
+                  onClick={c.resetPreset}
+                  className="text-vscode-focus ml-1 hover:underline"
+                >
+                  还原
+                </button>
+              </span>
+            )}
+          </>
+        }
+      >
         {/*
           顶部工具栏：按"语义组"组织，组内 gap-2，组间 gap-x-5（视觉分隔无需 · 符号）。
           flex-wrap 兼容窄窗口；ml-auto 让输出/动作组始终右靠，wrap 时整组下挪。
@@ -99,7 +111,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               </span>
             )}
             <label className="text-vscode-text-dim ml-2 text-xs">Sheet</label>
-            <select
+            <Select
               value={c.sheet}
               onChange={(e) => c.setSheet(e.target.value)}
               disabled={
@@ -112,7 +124,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                     ? '正在读 sheet 列表…'
                     : '下拉选择要绘图的 sheet'
               }
-              className="bg-vscode-input border-vscode-border text-vscode-text max-w-[16rem] min-w-[8rem] rounded-[2px] border px-2 py-1 text-xs"
+              className="max-w-[16rem] min-w-[8rem]"
             >
               {!c.excelPath && <option value="">（先选 Excel）</option>}
               {c.excelPath && c.sheetsLoading && (
@@ -128,7 +140,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                   {s}
                 </option>
               ))}
-            </select>
+            </Select>
             <label className="text-vscode-text-dim ml-2 text-xs">表头行</label>
             <input
               type="number"
@@ -138,14 +150,14 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                 c.setHeaderRow(Math.max(1, parseInt(e.target.value || '1', 10)))
               }
               title="表头所在的 1-based 行号；数据从下一行开始读"
-              className="bg-vscode-input border-vscode-border text-vscode-text w-14 rounded-[2px] border px-2 py-1 text-xs"
+              className={`${INPUT_CLS} w-14`}
             />
           </div>
 
           {/* 组 2：曲线预设（选择 + CRUD） */}
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-vscode-text-dim text-xs">曲线</label>
-            <select
+            <Select
               value={c.preset}
               onChange={(e) => c.setPreset(e.target.value)}
               disabled={c.presets.length === 0}
@@ -154,7 +166,6 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                   ? '内置曲线（只读，可"另存为"再改）'
                   : '我的曲线（可改可删）'
               }
-              className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
             >
               {c.presets.length === 0 && <option value="">（无可用）</option>}
               {c.presets.map((p) => (
@@ -163,14 +174,14 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                   {p}
                 </option>
               ))}
-            </select>
+            </Select>
             <PresetCrudButtons />
           </div>
 
           {/* 组 3：输出 + 运行（始终右靠） */}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <label className="text-vscode-text-dim text-xs">格式</label>
-            <select
+            <Select
               value={c.outputFormat ?? ''}
               onChange={(e) =>
                 c.setOutputFormat(
@@ -178,7 +189,6 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                 )
               }
               title="临时覆盖输出格式；空 = 跟随当前曲线预设的 filename_template 后缀"
-              className="bg-vscode-input border-vscode-border text-vscode-text rounded-[2px] border px-2 py-1 text-xs"
             >
               <option value="">（跟随预设）</option>
               {OUTPUT_FORMATS.map((fmt) => (
@@ -186,7 +196,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
                   {fmt.toUpperCase()}
                 </option>
               ))}
-            </select>
+            </Select>
             <button
               type="button"
               onClick={pickOutputDir}
@@ -196,22 +206,9 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               <i className="codicon codicon-folder !text-[13px]" />
               输出
             </button>
-            <button
-              type="button"
-              disabled={!canRun}
-              onClick={handleRun}
-              className={cn(
-                'flex items-center gap-1.5 rounded-[2px] px-3.5 py-1 text-xs font-medium',
-                canRun
-                  ? 'bg-vscode-button hover:bg-vscode-button-hover text-white'
-                  : 'text-vscode-text-dim cursor-not-allowed bg-[#3a3a3a]',
-              )}
-            >
-              {c.running && (
-                <i className="codicon codicon-loading codicon-modifier-spin !text-[13px]" />
-              )}
+            <RunBtn running={c.running} disabled={!canRun} onClick={handleRun}>
               {c.running ? '出图中…' : '开始批量出图'}
-            </button>
+            </RunBtn>
           </div>
         </div>
         {c.presetLoadError && (
@@ -219,7 +216,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
             曲线加载失败：{c.presetLoadError}
           </div>
         )}
-      </div>
+      </ToolHeader>
 
       {/* 中间：预览图（可切换对照视图） */}
       <div className="min-h-0 flex-1 overflow-hidden bg-[#252525]">
@@ -233,10 +230,7 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
       {(c.result || c.runError) && (
         <div className="border-vscode-border max-h-[200px] overflow-auto border-t px-6 py-3 text-xs">
           {c.runError && (
-            <div className="whitespace-pre-wrap text-red-400">
-              <i className="codicon codicon-error mr-1 !text-[14px]" />
-              {c.runError}
-            </div>
+            <ErrorBanner message={c.runError} onRetry={handleRun} />
           )}
           {c.result && (
             <div className="space-y-2">
@@ -406,7 +400,7 @@ function RowNavBar({
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
             title="输入行号回车跳转"
-            className="bg-vscode-input border-vscode-border text-vscode-text h-6 w-14 rounded-[2px] border px-1.5 text-center text-xs"
+            className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus h-6 w-14 rounded-[2px] border px-1.5 text-center text-xs focus:outline-none"
           />
           <span className="text-vscode-text-dim">/ {c.previewTotal} 行</span>
           {c.previewRowId && (
@@ -537,6 +531,7 @@ function PreviewImage() {
 /** 曲线（预设）增删改按钮组。一预设 = 一曲线，所有 UI 文案统一叫"曲线"。 */
 function PresetCrudButtons() {
   const c = usePlotCurves();
+  const dlg = useDialogs();
   const isUser = c.currentSource === 'user';
   const [busy, setBusy] = useState(false);
 
@@ -554,7 +549,11 @@ function PresetCrudButtons() {
   );
 
   const handleNewBlank = guard(async () => {
-    const name = window.prompt('新建曲线；输入名字：', '新曲线');
+    const name = await dlg.prompt({
+      title: '新建曲线',
+      label: '输入曲线名字：',
+      defaultValue: '新曲线',
+    });
     if (!name?.trim()) return;
     const blank: PlotPreset = {
       id_column: '',
@@ -576,67 +575,93 @@ function PresetCrudButtons() {
     try {
       await c.savePreset(name.trim(), blank);
     } catch (e) {
-      alert(`新建失败：${String(e)}`);
+      await dlg.alert({ title: '新建失败', message: String(e), tone: 'error' });
     }
   });
 
   const handleSave = guard(async () => {
     if (!c.effectivePreset || !c.preset) return;
     if (c.currentSource === 'system') {
-      const name = window.prompt(
-        `当前曲线「${c.preset}」是内置曲线（只读）。\n输入新名字另存为我的曲线：`,
-        `${c.preset}（我的）`,
-      );
+      const name = await dlg.prompt({
+        title: '另存为我的曲线',
+        label: `当前曲线「${c.preset}」是内置曲线（只读）。\n输入新名字另存为我的曲线：`,
+        defaultValue: `${c.preset}（我的）`,
+      });
       if (!name?.trim()) return;
       try {
         await c.savePreset(name.trim(), c.effectivePreset);
-        alert(`已另存为：${name.trim()}`);
+        await dlg.alert({
+          message: `已另存为：${name.trim()}`,
+          tone: 'success',
+        });
       } catch (e) {
-        alert(`保存失败：${String(e)}`);
+        await dlg.alert({
+          title: '保存失败',
+          message: String(e),
+          tone: 'error',
+        });
       }
     } else {
       try {
         await c.savePreset(c.preset, c.effectivePreset);
-        alert(`已保存：${c.preset}`);
+        await dlg.alert({ message: `已保存：${c.preset}`, tone: 'success' });
       } catch (e) {
-        alert(`保存失败：${String(e)}`);
+        await dlg.alert({
+          title: '保存失败',
+          message: String(e),
+          tone: 'error',
+        });
       }
     }
   });
 
   const handleCopy = guard(async () => {
     if (!c.preset) return;
-    const name = window.prompt(
-      '复制为新曲线；输入新名字：',
-      `${c.preset}（副本）`,
-    );
+    const name = await dlg.prompt({
+      title: '复制为新曲线',
+      label: '输入新曲线名字：',
+      defaultValue: `${c.preset}（副本）`,
+    });
     if (!name?.trim()) return;
     try {
       await c.copyPreset(c.preset, name.trim());
     } catch (e) {
-      alert(`复制失败：${String(e)}`);
+      await dlg.alert({ title: '复制失败', message: String(e), tone: 'error' });
     }
   });
 
   const handleRename = guard(async () => {
     if (!c.preset || !isUser) return;
-    const name = window.prompt(`重命名「${c.preset}」为：`, c.preset);
+    const name = await dlg.prompt({
+      title: '重命名曲线',
+      label: `重命名「${c.preset}」为：`,
+      defaultValue: c.preset,
+    });
     if (!name?.trim() || name.trim() === c.preset) return;
     try {
       await c.renamePreset(c.preset, name.trim());
     } catch (e) {
-      alert(`重命名失败：${String(e)}`);
+      await dlg.alert({
+        title: '重命名失败',
+        message: String(e),
+        tone: 'error',
+      });
     }
   });
 
   const handleDelete = guard(async () => {
     if (!c.preset || !isUser) return;
-    if (!window.confirm(`确定删除曲线「${c.preset}」？此操作不可撤销。`))
-      return;
+    const ok = await dlg.confirm({
+      title: '删除曲线',
+      message: `确定删除曲线「${c.preset}」？此操作不可撤销。`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (!ok) return;
     try {
       await c.deletePreset(c.preset);
     } catch (e) {
-      alert(`删除失败：${String(e)}`);
+      await dlg.alert({ title: '删除失败', message: String(e), tone: 'error' });
     }
   });
 
@@ -663,18 +688,21 @@ function PresetCrudButtons() {
         title="新建曲线（从零开始）"
         onClick={handleNewBlank}
         disabled={busy}
+        bordered
       />
       <IconBtn
         icon="copy"
         title="复制当前曲线为新曲线"
         onClick={handleCopy}
         disabled={busy}
+        bordered
       />
       <IconBtn
         icon="edit"
         title={isUser ? '重命名' : '内置曲线不可改名'}
         onClick={handleRename}
         disabled={!isUser || busy}
+        bordered
       />
       <IconBtn
         icon="trash"
@@ -682,40 +710,8 @@ function PresetCrudButtons() {
         onClick={handleDelete}
         disabled={!isUser || busy}
         danger
+        bordered
       />
     </div>
-  );
-}
-
-function IconBtn({
-  icon,
-  title,
-  onClick,
-  disabled,
-  danger,
-}: {
-  icon: string;
-  title: string;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'border-vscode-border flex h-7 w-7 items-center justify-center rounded-[2px] border transition-colors',
-        disabled
-          ? 'text-vscode-text-faint cursor-not-allowed opacity-50'
-          : danger
-            ? 'text-vscode-text-dim hover:bg-vscode-hover hover:text-red-400'
-            : 'text-vscode-text-dim hover:bg-vscode-hover hover:text-white',
-      )}
-    >
-      <i className={`codicon codicon-${icon} !text-[14px]`} />
-    </button>
   );
 }

@@ -9,7 +9,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 
 import { logLine, useShell } from '../../lib/shell';
 import { AnchorParamsSection } from '../_shared/anchorParamsForm';
-import { Field, Picker, ResetBtn } from '../_shared/forms';
+import { Field, INPUT_CLS, Picker, ResetBtn, Select } from '../_shared/forms';
 import { useDataProcessing } from './controller';
 import { ANCHOR_STANDARDS, type AnchorStandard } from './types';
 
@@ -50,7 +50,7 @@ export function DataProcessingSettingsForm() {
             type="number"
             value={c.angle}
             onChange={(e) => c.setAngle(parseFloat(e.target.value || '0'))}
-            className="bg-vscode-input border-vscode-border text-vscode-text w-32 rounded-[2px] border px-2 py-1 text-xs"
+            className={`${INPUT_CLS} w-32`}
           />
         </Field>
       )}
@@ -107,19 +107,19 @@ function AnchorSubForm() {
   return (
     <>
       <Field label="规范" hint="未来可扩展其他规范；当前仅支持 GB 50086-2015">
-        <select
+        <Select
           value={c.anchorStandard}
           onChange={(e) =>
             c.setAnchorStandard(e.target.value as AnchorStandard)
           }
-          className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+          className="w-full"
         >
           {ANCHOR_STANDARDS.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field label="输入数据模板" hint="生成空白模板让用户照样例填写">
@@ -181,11 +181,11 @@ function BatchIdColumnSelect() {
         ? '先选 Excel 才能列出表头'
         : '从当前 Excel 的表头里选';
   return (
-    <select
+    <Select
       value={c.anchorBatchIdColumn}
       onChange={(e) => c.setAnchorBatchIdColumn(e.target.value)}
       title={title}
-      className="bg-vscode-input border-vscode-border text-vscode-text w-full rounded-[2px] border px-2 py-1 text-xs"
+      className="w-full"
     >
       <option value="">（请选择）</option>
       {headers.map((h) => (
@@ -198,7 +198,7 @@ function BatchIdColumnSelect() {
           {c.anchorBatchIdColumn}（不在当前表头）
         </option>
       )}
-    </select>
+    </Select>
   );
 }
 

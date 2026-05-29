@@ -27,6 +27,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ActivityBar, type ActivityItem } from './components/ActivityBar';
 import { AgentPanel } from './components/AgentPanel';
 import { BottomPanel } from './components/BottomPanel';
+import { useDialogs } from './components/Dialogs';
 import { EditorArea } from './components/EditorArea';
 import { RightPanel, type RightTab } from './components/RightPanel';
 import { SideBar } from './components/SideBar';
@@ -34,27 +35,15 @@ import { StatusBar } from './components/StatusBar';
 import { TitleBar } from './components/TitleBar';
 import { rpc, type WorkspaceLast } from './lib/rpc';
 import { ShellContext, logLine, type ActivatedFile } from './lib/shell';
-import {
-  DataProcessingProvider,
-  DataProcessingSettingsForm,
-} from './tools/data_processing';
-import { PdfToolsProvider, PdfToolsSettingsForm } from './tools/pdf_tools';
-import {
-  PlotCurvesProvider,
-  PlotCurvesSettingsForm,
-} from './tools/plot_curves';
-import { ReportGeneratorProvider } from './tools/report_generator';
-import { TemplateHelperProvider } from './tools/template_helper';
-import { Word2PdfProvider, Word2PdfSettingsForm } from './tools/word2pdf';
+import type { DataProcessingSnapshot } from './tools/data_processing/types';
+import { ComposeProviders, TOOLS } from './tools/registry';
 
-const TOP_TOOLS: ActivityItem[] = [
-  { id: 'data_processing', icon: 'symbol-method', tooltip: '数据处理' },
-  { id: 'plot_curves', icon: 'graph-line', tooltip: '绘曲线图' },
-  { id: 'report_generator', icon: 'file-text', tooltip: '报告填充' },
-  { id: 'template_helper', icon: 'list-tree', tooltip: '模板助手' },
-  { id: 'pdf_tools', icon: 'file-pdf', tooltip: 'PDF 工具' },
-  { id: 'word2pdf', icon: 'file-binary', tooltip: 'Word → PDF' },
-];
+// ActivityBar 顶部工具从注册表派生（唯一来源，见 tools/registry.tsx）
+const TOP_TOOLS: ActivityItem[] = TOOLS.map((t) => ({
+  id: t.id,
+  icon: t.icon,
+  tooltip: t.label,
+}));
 const BOTTOM_TOOLS: ActivityItem[] = [
   { id: 'settings', icon: 'settings-gear', tooltip: '设置' },
 ];
@@ -79,6 +68,8 @@ export default function App() {
   const sidebarRef = useRef<PanelImperativeHandle>(null);
   const bottomRef = useRef<PanelImperativeHandle>(null);
   const rightRef = useRef<PanelImperativeHandle>(null);
+
+  const dlg = useDialogs();
 
   // Panel 布局持久化（拖宽 / 折叠状态记到 localStorage）。
   // id 带 v1 后缀，未来 panel 结构改了就 bump 一下避免还原到陈旧布局。
@@ -257,9 +248,13 @@ export default function App() {
       setRefreshNonce((n) => n + 1);
     } catch (e) {
       console.error('打开文件夹失败:', e);
-      alert(`打开文件夹失败：${String(e)}`);
+      await dlg.alert({
+        title: '打开文件夹失败',
+        message: String(e),
+        tone: 'error',
+      });
     }
-  }, []);
+  }, [dlg]);
 
   const handleNewWorkspace = useCallback(async () => {
     try {
@@ -269,9 +264,10 @@ export default function App() {
         title: '选择父目录（在其下创建标准项目结构）',
       });
       if (typeof parent !== 'string') return;
-      const name = window.prompt(
-        '输入项目名（将在父目录下创建同名子文件夹 + 标准骨架）：',
-      );
+      const name = await dlg.prompt({
+        title: '新建工作区',
+        label: '输入项目名（将在父目录下创建同名子文件夹 + 标准骨架）：',
+      });
       if (!name || !name.trim()) return;
       const res = await rpc<{ ok: boolean; path: string }>(
         'workspace.create_standard',
@@ -282,9 +278,13 @@ export default function App() {
       setRefreshNonce((n) => n + 1);
     } catch (e) {
       console.error('新建工作区失败:', e);
-      alert(`新建工作区失败：${String(e)}`);
+      await dlg.alert({
+        title: '新建工作区失败',
+        message: String(e),
+        tone: 'error',
+      });
     }
-  }, []);
+  }, [dlg]);
 
   const handleRefresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
   const handleCollapseAll = useCallback(
@@ -296,50 +296,11 @@ export default function App() {
     ? (workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? null)
     : null;
 
-  // 右侧 Panel 多 tab：当前工具调参 + 常驻 AI 助手（占位）。
-  // 调参 tab 只在该工具确实有 settings 时出现，AI 助手始终在。
+  // 右侧 Panel 多 tab：当前工具调参（来自注册表）+ 常驻 AI 助手。
+  // 调参 tab 只在该工具确实有 settingsTabs 时出现，AI 助手始终在。
+  const activeTool = TOOLS.find((t) => t.id === activeToolId);
   const rightTabs: RightTab[] = [
-    ...(activeToolId === 'plot_curves'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <PlotCurvesSettingsForm />,
-          },
-        ]
-      : []),
-    ...(activeToolId === 'data_processing'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <DataProcessingSettingsForm />,
-          },
-        ]
-      : []),
-    ...(activeToolId === 'pdf_tools'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <PdfToolsSettingsForm />,
-          },
-        ]
-      : []),
-    ...(activeToolId === 'word2pdf'
-      ? [
-          {
-            id: 'settings',
-            label: '调参',
-            icon: 'settings-gear',
-            node: <Word2PdfSettingsForm />,
-          },
-        ]
-      : []),
-
+    ...(activeTool?.settingsTabs ?? []),
     { id: 'agent', label: 'AI 助手', icon: 'hubot', node: <AgentPanel /> },
   ];
   const rightAvailable = rightTabs.length > 0;
@@ -350,6 +311,8 @@ export default function App() {
   );
 
   const [curveImageDir, setCurveImageDir] = useState('');
+  const [dataProcessingSnapshot, setDataProcessingSnapshot] =
+    useState<DataProcessingSnapshot | null>(null);
 
   const shellValue = {
     appendOutput,
@@ -358,150 +321,130 @@ export default function App() {
     notifyFilesChanged,
     curveImageDir,
     setCurveImageDir,
+    dataProcessingSnapshot,
+    setDataProcessingSnapshot,
   };
 
   return (
     <ShellContext.Provider value={shellValue}>
-      <PlotCurvesProvider>
-        <DataProcessingProvider>
-          <ReportGeneratorProvider>
-            <PdfToolsProvider>
-              <TemplateHelperProvider>
-                <Word2PdfProvider>
-                  <div className="flex h-screen w-screen flex-col">
-                    <TitleBar
-                      workspaceName={workspaceName}
+      <ComposeProviders>
+        <div className="flex h-screen w-screen flex-col">
+          <TitleBar workspaceName={workspaceName} toolLabel={toolLabel} />
+
+          <div className="flex min-h-0 flex-1">
+            <ActivityBar
+              topItems={TOP_TOOLS}
+              bottomItems={BOTTOM_TOOLS}
+              activeId={activeToolId}
+              onChange={setActiveToolId}
+              explorerActive={sidebarVisible}
+              onExplorerToggle={handleExplorerToggle}
+            />
+
+            {/* 主 horizontal group：SideBar(全高) | 中间(Editor+底部 Panel 竖向) | RightPanel(全高) */}
+            <Group
+              orientation="horizontal"
+              id="civ-core-main"
+              defaultLayout={mainLayout.defaultLayout}
+              onLayoutChanged={mainLayout.onLayoutChanged}
+              className="flex min-w-0 flex-1"
+            >
+              <Panel
+                panelRef={sidebarRef}
+                defaultSize={200}
+                minSize={200}
+                maxSize={400}
+                collapsible
+                collapsedSize={0}
+                id="sidebar"
+                onResize={(s) => setSidebarVisible(s.asPercentage > 0.5)}
+              >
+                <SideBar
+                  workspacePath={workspacePath}
+                  refreshNonce={refreshNonce}
+                  collapseNonce={collapseNonce}
+                  onOpenFolder={handleOpenFolder}
+                  onNewWorkspace={handleNewWorkspace}
+                  onRefresh={handleRefresh}
+                  onCollapseAll={handleCollapseAll}
+                  onFileActivate={handleFileActivate}
+                />
+              </Panel>
+              <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
+
+              {/* 中间：Editor + 底部 Panel 竖向分栏 */}
+              <Panel
+                defaultSize={rightAvailable ? 58 : 84}
+                minSize={30}
+                id="middle"
+              >
+                <Group
+                  orientation="vertical"
+                  id="civ-core-vsplit"
+                  defaultLayout={vsplitLayout.defaultLayout}
+                  onLayoutChanged={vsplitLayout.onLayoutChanged}
+                  className="flex h-full min-h-0 flex-col"
+                >
+                  <Panel defaultSize={75} minSize={20} id="editor">
+                    <EditorArea
+                      activeToolId={activeToolId}
                       toolLabel={toolLabel}
+                      appendOutput={appendOutput}
                     />
+                  </Panel>
+                  <Separator className="bg-vscode-border hover:bg-vscode-focus h-px transition-colors" />
+                  <Panel
+                    panelRef={bottomRef}
+                    defaultSize={200}
+                    minSize={150}
+                    maxSize={400}
+                    collapsible
+                    collapsedSize={0}
+                    id="bottom-panel"
+                    onResize={(s) => setBottomVisible(s.asPercentage > 0.5)}
+                  >
+                    <BottomPanel output={outputLog} onClose={toggleBottom} />
+                  </Panel>
+                </Group>
+              </Panel>
 
-                    <div className="flex min-h-0 flex-1">
-                      <ActivityBar
-                        topItems={TOP_TOOLS}
-                        bottomItems={BOTTOM_TOOLS}
-                        activeId={activeToolId}
-                        onChange={setActiveToolId}
-                        explorerActive={sidebarVisible}
-                        onExplorerToggle={handleExplorerToggle}
-                      />
+              {/* 右侧 Panel：tab 化（调参 + AI 助手） */}
+              {rightAvailable && (
+                <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
+              )}
+              <Panel
+                panelRef={rightRef}
+                defaultSize={rightAvailable ? 320 : 0}
+                minSize={rightAvailable ? 240 : 0}
+                maxSize={rightAvailable ? 600 : 0}
+                collapsible
+                collapsedSize={0}
+                id="right-panel"
+                onResize={(s) => setRightVisible(s.asPercentage > 0.5)}
+              >
+                {rightAvailable && (
+                  <RightPanel
+                    tabs={rightTabs}
+                    defaultActiveId="settings"
+                    onClose={toggleRight}
+                  />
+                )}
+              </Panel>
+            </Group>
+          </div>
 
-                      {/* 主 horizontal group：SideBar(全高) | 中间(Editor+底部 Panel 竖向) | RightPanel(全高) */}
-                      <Group
-                        orientation="horizontal"
-                        id="civ-core-main"
-                        defaultLayout={mainLayout.defaultLayout}
-                        onLayoutChanged={mainLayout.onLayoutChanged}
-                        className="flex min-w-0 flex-1"
-                      >
-                        <Panel
-                          panelRef={sidebarRef}
-                          defaultSize={200}
-                          minSize={200}
-                          maxSize={400}
-                          collapsible
-                          collapsedSize={0}
-                          id="sidebar"
-                          onResize={(s) =>
-                            setSidebarVisible(s.asPercentage > 0.5)
-                          }
-                        >
-                          <SideBar
-                            workspacePath={workspacePath}
-                            refreshNonce={refreshNonce}
-                            collapseNonce={collapseNonce}
-                            onOpenFolder={handleOpenFolder}
-                            onNewWorkspace={handleNewWorkspace}
-                            onRefresh={handleRefresh}
-                            onCollapseAll={handleCollapseAll}
-                            onFileActivate={handleFileActivate}
-                          />
-                        </Panel>
-                        <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
-
-                        {/* 中间：Editor + 底部 Panel 竖向分栏 */}
-                        <Panel
-                          defaultSize={rightAvailable ? 58 : 84}
-                          minSize={30}
-                          id="middle"
-                        >
-                          <Group
-                            orientation="vertical"
-                            id="civ-core-vsplit"
-                            defaultLayout={vsplitLayout.defaultLayout}
-                            onLayoutChanged={vsplitLayout.onLayoutChanged}
-                            className="flex h-full min-h-0 flex-col"
-                          >
-                            <Panel defaultSize={75} minSize={20} id="editor">
-                              <EditorArea
-                                activeToolId={activeToolId}
-                                toolLabel={toolLabel}
-                                appendOutput={appendOutput}
-                              />
-                            </Panel>
-                            <Separator className="bg-vscode-border hover:bg-vscode-focus h-px transition-colors" />
-                            <Panel
-                              panelRef={bottomRef}
-                              defaultSize={200}
-                              minSize={150}
-                              maxSize={400}
-                              collapsible
-                              collapsedSize={0}
-                              id="bottom-panel"
-                              onResize={(s) =>
-                                setBottomVisible(s.asPercentage > 0.5)
-                              }
-                            >
-                              <BottomPanel
-                                output={outputLog}
-                                onClose={toggleBottom}
-                              />
-                            </Panel>
-                          </Group>
-                        </Panel>
-
-                        {/* 右侧 Panel：tab 化（调参 + AI 助手） */}
-                        {rightAvailable && (
-                          <Separator className="bg-vscode-border hover:bg-vscode-focus w-px transition-colors" />
-                        )}
-                        <Panel
-                          panelRef={rightRef}
-                          defaultSize={rightAvailable ? 320 : 0}
-                          minSize={rightAvailable ? 240 : 0}
-                          maxSize={rightAvailable ? 600 : 0}
-                          collapsible
-                          collapsedSize={0}
-                          id="right-panel"
-                          onResize={(s) =>
-                            setRightVisible(s.asPercentage > 0.5)
-                          }
-                        >
-                          {rightAvailable && (
-                            <RightPanel
-                              tabs={rightTabs}
-                              defaultActiveId="settings"
-                              onClose={toggleRight}
-                            />
-                          )}
-                        </Panel>
-                      </Group>
-                    </div>
-
-                    <StatusBar
-                      workspacePath={workspacePath}
-                      toolLabel={toolLabel}
-                      sidecarStatus={sidecarStatus}
-                      bottomPanelOpen={bottomVisible}
-                      onToggleBottomPanel={toggleBottom}
-                      rightPanelOpen={rightVisible}
-                      onToggleRightPanel={toggleRight}
-                      rightPanelAvailable={rightAvailable}
-                    />
-                  </div>
-                </Word2PdfProvider>
-              </TemplateHelperProvider>
-            </PdfToolsProvider>
-          </ReportGeneratorProvider>
-        </DataProcessingProvider>
-      </PlotCurvesProvider>
+          <StatusBar
+            workspacePath={workspacePath}
+            toolLabel={toolLabel}
+            sidecarStatus={sidecarStatus}
+            bottomPanelOpen={bottomVisible}
+            onToggleBottomPanel={toggleBottom}
+            rightPanelOpen={rightVisible}
+            onToggleRightPanel={toggleRight}
+            rightPanelAvailable={rightAvailable}
+          />
+        </div>
+      </ComposeProviders>
     </ShellContext.Provider>
   );
 }

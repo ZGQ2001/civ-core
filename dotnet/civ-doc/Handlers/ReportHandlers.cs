@@ -109,11 +109,25 @@ public static class ReportHandlers
         if (!File.Exists(wordTemplatePath))
             throw new ArgumentException($"Word 模板不存在：{wordTemplatePath}");
 
-        // 反序列化结果 xlsx → AnchorWorkbookResult（不再算）
-        var result = AnchorResultReader.Read(resultXlsx, standard);
+        // 反序列化结果 xlsx → AnchorWorkbookResult（不再算）+ 持久化的灌浆日期
+        var result = AnchorResultReader.Read(resultXlsx, standard, out var persistedGroutingDates);
         if (result.NRowsTotal == 0)
             throw new ArgumentException(
                 $"结果 xlsx 没有任何数据行：{resultXlsx} —— 文件可能已损坏或是空模板");
+
+        // 灌浆日期回退：结果 xlsx 的 metadata sheet 已持久化各批灌浆日期。把它并入
+        // batchUserInputs，让 result 路径自带日期、不再依赖 GUI/预设。优先级跟
+        // anchor.run 的「批次信息」sheet 回退一致：GUI/预设传入 > 结果 xlsx（TryAdd 不覆盖）。
+        foreach (var (batchId, date) in persistedGroutingDates)
+        {
+            if (string.IsNullOrWhiteSpace(date)) continue;
+            if (!batchUserInputs.TryGetValue(batchId, out var bui))
+            {
+                bui = new Dictionary<string, string>();
+                batchUserInputs[batchId] = bui;
+            }
+            bui.TryAdd("grouting_date", date);
+        }
 
         // Word 输出目录：默认在结果 xlsx 同级
         var src = new FileInfo(resultXlsx);

@@ -5,8 +5,9 @@
 //   - anchor.run 在 params_by_batch 缺批次 / 缺灌浆日期时回退读它（agent 只写一个 xlsx 即可跑）
 //
 // 跟结果 xlsx 的隐藏「_批次参数」(AnchorResultMetadataSheet) 分工：
-//   - 本表在输入文件、可见、含灌浆日期 —— 是用户 / agent 录入的来源
-//   - _批次参数 在结果文件、隐藏、不含日期 —— 是算完持久化供 report.run_from_result 复用
+//   - 本表在输入文件、可见 —— 是用户 / agent 录入的来源
+//   - _批次参数 在结果文件、隐藏 —— 是算完持久化供 report.run_from_result 复用
+//   两表都含灌浆日期（口径一致）：录入走本表，结果路径走 _批次参数 兜底。
 //
 // 列顺序固定（批次, P, Lf, La, A, E, 灌浆日期），按位置解析，对中英文标题兼容。
 

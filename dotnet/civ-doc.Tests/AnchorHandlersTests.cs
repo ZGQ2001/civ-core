@@ -253,6 +253,111 @@ public class AnchorHandlersTests
         }
     }
 
+    // ── report.run_from_result 消费持久化灌浆日期 ──────────────────────
+
+    [Fact]
+    public void RunFromResult_结果xlsx自带灌浆日期_无batch_user_inputs也出日期()
+    {
+        using var tmp = new TempDocx();
+        string input = TempXlsx();
+        string resultXlsx = TempXlsx();
+        try
+        {
+            WriteTwoBatchInput(input);
+            var outDir = Path.Combine(tmp.Dir, "out");
+
+            // 1) anchor.run：batch_user_inputs 给两批灌浆日期 → 持久化进结果 xlsx。
+            //    不出 Word，这步只为产生带日期的结果 xlsx。
+            var runJson = $@"{{
+                ""input_xlsx"": ""{Esc(input)}"",
+                ""output_xlsx"": ""{Esc(resultXlsx)}"",
+                ""standard"": ""GB 50086-2015"",
+                ""params_by_batch"": {{
+                    ""批次1"": {{ ""P"":180000, ""Lf"":500, ""La"":7500, ""A"":804.25, ""E"":200000 }},
+                    ""批次2"": {{ ""P"":180000, ""Lf"":500, ""La"":7500, ""A"":804.25, ""E"":200000 }}
+                }},
+                ""batch_user_inputs"": {{
+                    ""批次1"": {{ ""grouting_date"": ""2026-05-01"" }},
+                    ""批次2"": {{ ""grouting_date"": ""2026-06-15"" }}
+                }}
+            }}";
+            AnchorHandlers.Run(ParseJson(runJson));
+
+            // metadata sheet 已带日期（直接断言一次，证明持久化生效）
+            var persisted = AnchorResultReader.Read(resultXlsx, "GB 50086-2015", out var dates);
+            Assert.Equal(2, persisted.NBatches);
+            Assert.Equal("2026-05-01", dates["批次1"]);
+            Assert.Equal("2026-06-15", dates["批次2"]);
+
+            // 2) report.run_from_result：关键 —— 不传 batch_user_inputs，日期从结果 xlsx 回退。
+            var tpl = MakeNewTemplate(tmp.Dir, "new.docx");
+            var rfrJson = $@"{{
+                ""result_xlsx"": ""{Esc(resultXlsx)}"",
+                ""standard"": ""GB 50086-2015"",
+                ""word_template_path"": ""{Esc(tpl)}"",
+                ""word_output_dir"": ""{Esc(outDir)}""
+            }}";
+            var r = (Dictionary<string, object?>)ReportHandlers.RunFromResult(ParseJson(rfrJson))!;
+            var text = ReadAllText(((List<string>)r["word_outputs"]!)[0]);
+
+            Assert.Contains("2026-05-01", text);
+            Assert.Contains("2026-06-15", text);
+        }
+        finally
+        {
+            if (File.Exists(input)) File.Delete(input);
+            if (File.Exists(resultXlsx)) File.Delete(resultXlsx);
+        }
+    }
+
+    [Fact]
+    public void RunFromResult_GUI传入日期_覆盖结果xlsx持久化日期()
+    {
+        using var tmp = new TempDocx();
+        string input = TempXlsx();
+        string resultXlsx = TempXlsx();
+        try
+        {
+            WriteTwoBatchInput(input);
+            var outDir = Path.Combine(tmp.Dir, "out");
+            var runJson = $@"{{
+                ""input_xlsx"": ""{Esc(input)}"",
+                ""output_xlsx"": ""{Esc(resultXlsx)}"",
+                ""standard"": ""GB 50086-2015"",
+                ""params_by_batch"": {{
+                    ""批次1"": {{ ""P"":180000, ""Lf"":500, ""La"":7500, ""A"":804.25, ""E"":200000 }},
+                    ""批次2"": {{ ""P"":180000, ""Lf"":500, ""La"":7500, ""A"":804.25, ""E"":200000 }}
+                }},
+                ""batch_user_inputs"": {{
+                    ""批次1"": {{ ""grouting_date"": ""2026-05-01"" }}
+                }}
+            }}";
+            AnchorHandlers.Run(ParseJson(runJson));
+
+            var tpl = MakeNewTemplate(tmp.Dir, "new.docx");
+            // GUI 传 批次1 一个不同日期 → 应覆盖持久化的 2026-05-01（GUI/预设优先）
+            var rfrJson = $@"{{
+                ""result_xlsx"": ""{Esc(resultXlsx)}"",
+                ""standard"": ""GB 50086-2015"",
+                ""word_template_path"": ""{Esc(tpl)}"",
+                ""word_output_dir"": ""{Esc(outDir)}"",
+                ""batch_user_inputs"": {{
+                    ""批次1"": {{ ""grouting_date"": ""2030-12-31"" }}
+                }}
+            }}";
+            var r = (Dictionary<string, object?>)ReportHandlers.RunFromResult(ParseJson(rfrJson))!;
+            var text = ReadAllText(((List<string>)r["word_outputs"]!)[0]);
+
+            Assert.Contains("2030-12-31", text);      // GUI 覆盖生效
+            Assert.DoesNotContain("2026-05-01", text); // 持久化的被覆盖
+        }
+        finally
+        {
+            if (File.Exists(input)) File.Delete(input);
+            if (File.Exists(resultXlsx)) File.Delete(resultXlsx);
+        }
+    }
+
     /// <summary>2 批输入：在 AnchorTemplateWriter 默认 1 批基础上追加 1 行批次2。</summary>
     private static void WriteTwoBatchInput(string path)
     {

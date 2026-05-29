@@ -216,8 +216,19 @@ public static class AnchorHandlers
         var result = AnchorCalculator.Calc(workbook);
 
         // 写 Excel 输出：每批 1 sheet（数据分析） + 1 隐藏 sheet（批次参数 metadata，供
-        // report.run_from_result 重建 AnchorParams 用，避免用户再次输入工程参数）。
+        // report.run_from_result 重建 AnchorParams + 拿灌浆日期用，避免用户再次输入）。
         // 报告内插表语义已迁到 Word，不再 Excel 出。
+        //
+        // 持久化灌浆日期：取 batchUserInputs（已并入「批次信息」sheet 回退）里每批的
+        // grouting_date 写进 metadata sheet 第 7 列 —— 让结果 xlsx 自带日期，result 路径
+        // 不再依赖 GUI/预设。
+        var groutingDateByBatch = new Dictionary<string, string>();
+        foreach (var (batchId, bui) in batchUserInputs)
+        {
+            if (bui.TryGetValue("grouting_date", out var date)
+                && !string.IsNullOrWhiteSpace(date))
+                groutingDateByBatch[batchId] = date;
+        }
         XLWorkbook wb = File.Exists(outPath) ? new XLWorkbook(outPath) : new XLWorkbook();
         using (wb)
         {
@@ -227,7 +238,7 @@ public static class AnchorHandlers
                 if (wb.Worksheets.TryGetWorksheet(analysisName, out var old1)) old1.Delete();
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
             }
-            AnchorResultMetadataSheet.Write(wb, paramsByBatch);
+            AnchorResultMetadataSheet.Write(wb, paramsByBatch, groutingDateByBatch);
             SaveWorkbook(wb, outPath);
         }
 

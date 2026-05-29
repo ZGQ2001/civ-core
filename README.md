@@ -18,7 +18,7 @@
 
 **筑核** 是面向土木工程检测行业的桌面端内业报告自动化工具：Excel/CSV 拖入 → 自动评定 → Word 报告 + 曲线图。
 
-> Windows 平台，内部自用为主；同时对外提供 MCP server，给 Claude Code / Codex / Cursor 等 AI agent 原生调用入口。
+> 内部自用为主；同时对外提供 MCP server，给 Claude Code / Codex / Cursor 等 AI agent 原生调用入口。
 
 ---
 

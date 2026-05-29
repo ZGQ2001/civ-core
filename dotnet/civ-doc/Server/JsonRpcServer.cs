@@ -155,6 +155,7 @@ public static class JsonRpcServer
         Handlers.XlsxHandlers.RegisterAll(dispatcher);
         Handlers.LeebHandlers.RegisterAll(dispatcher);
         Handlers.AnchorHandlers.RegisterAll(dispatcher);
+        Handlers.CoatingHandlers.RegisterAll(dispatcher);
         Handlers.TemplateHandlers.RegisterAll(dispatcher);
         Handlers.ReportHandlers.RegisterAll(dispatcher);
         Handlers.CatalogHandlers.RegisterAll(dispatcher);

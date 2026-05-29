@@ -135,12 +135,12 @@ StatusBar (22px)
 
 ## 公共组件
 
-| 文件                                    | 内容                                                                                                                                                                               |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文件                                    | 内容                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tools/_shared/forms.tsx`               | **所有工具页唯一控件来源**：`ToolHeader`（统一顶栏：同底色/padding/标题）、`Field` / `Picker` / `ResetBtn`、`RunBtn`（统一运行主按钮）、`IconBtn`（统一小图标钮，`bordered` 变体）、`Select` + `INPUT_CLS`（统一下拉/输入 + `focus:border-vscode-focus` 焦点环）、`ErrorBanner`（统一报错卡 `role="alert"` + 可选「重试」恢复）。新工具/新控件先看这里有没有现成的，别重抽。 |
-| `components/Dialogs.tsx`                 | `DialogsProvider` + `useDialogs()`：promise 化统一弹窗（`confirm` / `prompt` / `alert`），取代全项目 `window.confirm/prompt/alert`。`main.tsx` 根级挂载；Esc 取消 / Enter 确认 / 点遮罩取消。 |
-| `tools/_shared/anchorParamsForm.tsx`    | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。                           |
-| `tools/_shared/CatalogDrivenInputs.tsx` | 报告填充「项目元信息」公共渲染器：按 `catalog.get` 动态拉字段定义，按 level → group 分组渲染 user_input（仅 `source==='userinput'`，无下划线，与 C# 序列化对齐）。模板助手改字段，报告填充立刻同步。接 `historyByKey` prop 显示历史值下拉。 |
+| `components/Dialogs.tsx`                | `DialogsProvider` + `useDialogs()`：promise 化统一弹窗（`confirm` / `prompt` / `alert`），取代全项目 `window.confirm/prompt/alert`。`main.tsx` 根级挂载；Esc 取消 / Enter 确认 / 点遮罩取消。                                                                                                                                                                                |
+| `tools/_shared/anchorParamsForm.tsx`    | 锚杆按批次工程参数 UI（P/Lf/La/A/E 5 字段 × N 批次折叠卡片）。data_processing 和 report_generator 通过 props 传 batchIds / paramsByBatch / setter 复用。                                                                                                                                                                                                                     |
+| `tools/_shared/CatalogDrivenInputs.tsx` | 报告填充「项目元信息」公共渲染器：按 `catalog.get` 动态拉字段定义，按 level → group 分组渲染 user_input（仅 `source==='userinput'`，无下划线，与 C# 序列化对齐）。模板助手改字段，报告填充立刻同步。接 `historyByKey` prop 显示历史值下拉。                                                                                                                                  |
 
 ## 快捷键
 

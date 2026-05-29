@@ -10,11 +10,12 @@
 \usepackage{fontawesome5}
 \usepackage{setspace}
 \usepackage{ulem}
-\usepackage{xcolor}     % tabularray 的 bg= 颜色需要此包
-\usepackage{lastpage}   % 自动获取总页数，替代手动 \label{ReportEnd}
+\usepackage{xcolor}
+\usepackage{lastpage}
+\usepackage{caption} % 引入图表标题控制宏包
 
 % 页面边距
-\geometry{top=42mm, bottom=30mm, left=25mm, right=25mm, headheight=60pt}
+\geometry{top=42mm, bottom=28mm, left=25mm, right=25mm, headheight=100pt}
 
 % 字体
 \setCJKmainfont{SimSun}[AutoFakeBold=true]
@@ -22,136 +23,184 @@
 \setmainfont{Times New Roman}
 \setsansfont{Arial}
 
-% ==================== 【变量配置区 — 每次出报告只改这里】====================
+% ==================== 【变量配置区】====================
 
 % —— 报告基本信息 ——
-\newcommand{\ReportYear}{20xx}          % 年份
-\newcommand{\ReportMonth}{xx}           % 月份
-\newcommand{\ReportDay}{xx}             % 日
-\newcommand{\ReportNo}{xxxx}            % 报告编号
+\newcommand{\ReportYear}{2026}
+\newcommand{\ReportMonth}{01}
+\newcommand{\ReportDay}{02}
+\newcommand{\ReportNo}{0973}
 
 % —— 封面三行 ——
-\newcommand{\ProjectName}{%             % 工程名称（过长时在此手动换行，见封面说明）
-    小米智能制造产业基地二期项目 （6号生产厂房等2项）-6号生产厂房
-}
-\newcommand{\ClientName}{小米景曦科技有限公司}
+\newcommand{\ProjectName}{门头沟区永定河沿线环境整治提升（项目）（一标段）}
+\newcommand{\ClientName}{北京市门头沟区市政市容服务中心}
 \newcommand{\InspType}{一般委托}
 
 % —— 主表字段 ——
-\newcommand{\InspLocation}{北京市亦庄经济开发区}
-\newcommand{\InspItem}{防火涂层厚度检测}
-\newcommand{\ConstructUnit}{中建二局集团有限公司}
-\newcommand{\DesignUnit}{中国汽车工业工程有限公司}
-\newcommand{\SupervUnit}{北京中联环建设监理有限责任公司}
-\newcommand{\SampleBasis}{委托方指定数量}
-\newcommand{\MethodBasis}{《建筑防火涂料（板）工程设计、施工与验收规程》（DB11/1245-2015）}
-\newcommand{\JudgeBasis}{《钢结构工程施工质量验收标准》（GB 50205-2020）}
-% 检测仪器：多行用 \\ 分隔
+\newcommand{\InspLocation}{北京市门头沟区}
+\newcommand{\InspItem}{锚杆抗拔力试验}
+\newcommand{\ConstructUnit}{北京市市政二建设工程有限责任公司}
+\newcommand{\DesignUnit}{中外建华诚工程技术集团有限公司}
+\newcommand{\SupervUnit}{北京新森智业工程咨询有限公司}
+\newcommand{\SampleBasis}{委托方指定}
+\newcommand{\MethodBasis}{《岩土锚杆与喷射混凝土支护工程技术规范》（GB 50086-2015）}
+\newcommand{\JudgeBasis}{《岩土锚杆与喷射混凝土支护工程技术规范》（GB 50086-2015）}
+
+% 检测仪器
 \newcommand{\InstrumentList}{%
-    GLM50+612445282 \quad 激光测距仪 \\
-    MC-2000+BC200134 \quad 涂层测厚仪 \\
-    （0$\sim$200）mm+87756 \quad 数显游标卡尺%
+    ZP-30T+M230314 \quad 锚杆拉力计\\
+    （0$\sim$50）mm+11050653 \quad 百分表 
 }
-\newcommand{\InspStartDate}{2026年05月19日}
-\newcommand{\InspEndDate}{2026年05月19日}
-\newcommand{\InspEnv}{晴、32℃}
-\newcommand{\InspPersonnel}{李瑾、李红月、孟林}
-% 检测结论（首行自动缩进两字）
+
+\newcommand{\InspStartDate}{2025年06月20日}
+\newcommand{\InspEndDate}{2025年12月30日}
+\newcommand{\InspEnv}{/}
+\newcommand{\InspPersonnel}{李瑾、李红月、卓越}
+
+% 检测结论
 \newcommand{\Conclusion}{%
-    \hspace*{2\ccwd}本次对\ProjectName{}的钢柱、钢梁进行了防火涂层厚度检测，检测结果合格。%
+    \hspace*{2\ccwd}本次对\ProjectName{}的209根锚杆进行了锚杆抗拔力检测，试验结果为合格。检测结果详见表2.4-1$\sim$表2.4-209。%
 }
+
+% 签章占位
 \newcommand{\Approver}{}
 \newcommand{\Reviewer}{}
 \newcommand{\MainInsp}{}
 \newcommand{\Remarks}{/}
 
-% —— 第1章概况正文 ——
+% —— 正文动态描述 ——
 \newcommand{\ProjectOverview}{%
-\hspace*{2\ccwd}工程概况第一段描述，包括建筑基本参数。
-
-\hspace*{2\ccwd}工程概况第二段描述，防火涂料设计要求等。
+\hspace*{2\ccwd}工程概况第一段描述，包括建筑基本参数、锚杆设计参数（如孔径、锚固长度、设计抗拔力等）。
 
 \hspace*{2\ccwd}受\ClientName{}委托，北京市建设工程质量第三检测所有限责任公司对\ProjectName{}进行了\InspItem{}。%
 }
 
-% —— 第2章检测方法正文 ——
 \newcommand{\MethodDesc}{%
-\hspace*{2\ccwd}按照\MethodBasis{}要求，采用测针法对防火涂层厚度进行检测。每个构件测量不少于5个点，取平均值作为该构件的厚度代表值。%
+\hspace*{2\ccwd}按照\MethodBasis{}要求，对锚杆施加抗拔力进行检测。采用分级加荷法，记录各级荷载下的锚头位移量。%
 }
 
-% ==================== 样式配置 ====================
+% ==================== 样式配置（对应 Word 排版规范） ====================
 \ctexset{
     section = {
-        format     = \zihao{-3}\heiti\bfseries\centering,
+        format     = \zihao{-3}\songti\bfseries\centering, % 小三号、宋体加粗、对中
         number     = \arabic{section},
-        name       = {, },
-        beforeskip = 0.5\baselineskip,
-        afterskip  = 0.2\baselineskip
+        name       = {,},
+        aftername  = \hspace{1\ccwd}, % 编号数字后面空1格（1个汉字字符）
+        beforeskip = 2\baselineskip,  % 段前2行
+        afterskip  = 1\baselineskip,  % 段后1行
     },
     subsection = {
-        format     = \zihao{4}\heiti\bfseries,
+        format     = \zihao{4}\heiti\raggedright, % 四号、黑体、左对齐
         number     = \arabic{section}.\arabic{subsection},
-        name       = {, },
-        beforeskip = 0.3\baselineskip,
-        afterskip  = 0.1\baselineskip
+        name       = {,},
+        aftername  = \hspace{1\ccwd}, 
+        beforeskip = 1\baselineskip,  % 段前1行
+        afterskip  = 1\baselineskip,  % 段后1行
+    },
+    subsubsection = {
+        format     = \zihao{-4}\songti\bfseries\raggedright, % 小四号、宋体加粗、左对齐
+        number     = \arabic{section}.\arabic{subsection}.\arabic{subsubsection},
+        name       = {,},
+        aftername  = \hspace{1\ccwd}, 
+        beforeskip = 1\baselineskip,  % 段前1行
+        afterskip  = 0.5\baselineskip,% 段后0.5行
     }
 }
-\renewcommand{\normalsize}{\zihao{-4}}
+
+% —— 正文段落与字体全局设置 ——
+\renewcommand{\normalsize}{\zihao{-4}} % 全局默认字体大小设为小四
+\setlength{\parindent}{2\ccwd}         % 首行缩进严格设定为2个汉字字符
+\setlength{\parskip}{0pt}              % 段间距设为0
+\setstretch{1.5}                       % 行间距设定为1.5倍（需引入 setspace 宏包）
+
+% —— 图表标题格式设置 ——
+\DeclareCaptionFont{songti}{\songti}
+
+% 定义一个自定义的标签分隔符（两个汉字字符宽度）
+\DeclareCaptionLabelSeparator{twospaces}{\hspace*{2\ccwd}}
+
+\captionsetup{
+    font={songti, small},        % 现在 caption 认识 songti 了，对应五号字
+    labelsep=twospaces,          % 编号与标题之间空2格
+    justification=centering,     % 对中放置
+    singlelinecheck=false,
+    figurename=图,               % 强制叫“图”而不是照片
+    tablename=表                 % 强制叫“表”
+}
 
 % ==================== 文档开始 ====================
 \begin{document}
 
+% 针对封面和注意事项页开启独立的页边距
+% 上2.5cm、下2.5cm、左3.0cm、右2.0cm
+\newgeometry{top=25mm, bottom=25mm, left=30mm, right=20mm}
+
 % ==================== 第一页：封面 ====================
 \begin{titlepage}
     \pagestyle{empty}
-    \heiti\sffamily\bfseries\zihao{3}
-
-    \vspace*{15mm}
+    
+    % —— 顶部绝对定位 ——
+    % 字顶端距页面上边缘60mm（已考虑初号字自身高度偏移）
+    \vspace*{20mm}
 
     \begin{center}
-        % 字间距只用 \CJKglue，不再叠加 \hspace，避免双重间距
-        {\zihao{0}\renewcommand{\CJKglue}{\hskip 0.5em}检测报告}
+        {\heiti\zihao{0} 检\hspace{0.5\ccwd}测\hspace{0.5\ccwd}报\hspace{0.5\ccwd}告}
     \end{center}
 
-    \vspace{5mm}
+    % 核心修改：大幅缩减大标题与报告编号之间的垂直间距，消除松散感
+    \vspace{0mm}
 
     \begin{center}
-        {\kaishu\rmfamily\mdseries
-        京建质检 J\textsubscript{3}—G 字 \ReportYear{}第（\ReportNo{}）号}
+        {\songti\zihao{3} 京建质检 J\raisebox{-0.5ex}{\zihao{5}\rmfamily 3}—G 字 \ReportYear{} 第（\ReportNo{}）号}
     \end{center}
 
-    \vspace{55mm}
+    % 报告编号与中部表格之间的间距，保持与原件一致的视觉留白
+    \vspace{40mm} 
 
-    \renewcommand{\arraystretch}{1.6}
     \begin{center}
-        \kaishu\rmfamily
-        % 说明：工程名称过长（>16字）时，在 \ProjectName 内部用 \\ 手动换行
-        \begin{tabular}{p{3.2cm} @{\hspace{0.5em}} l}
-            工\hfill 程\hfill 名\hfill 称: &
-                \qquad\uline{\makebox[10.5cm][c]{\ProjectName{}}} \\
-            委\hfill 托\hfill 单\hfill 位: &
-                \qquad\uline{\makebox[10.5cm][c]{\ClientName{}}} \\
-            检\hfill 测\hfill 类\hfill 别: &
-                \qquad\uline{\makebox[10.5cm][c]{\InspType{}}} \\
+        \begin{tabular}{@{} l @{\hspace{0.2em}} l @{}}
+            {\heiti\zihao{3} 工\hspace{0.5\ccwd}程\hspace{0.5\ccwd}名\hspace{0.5\ccwd}称：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \ProjectName \par
+                    \vspace{1mm} 
+                    \hrule height 1.5pt
+                } \\[2mm]
+            {\heiti\zihao{3} 委\hspace{0.5\ccwd}托\hspace{0.5\ccwd}单\hspace{0.5\ccwd}位：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \ClientName \par
+                    \vspace{2mm}
+                    \hrule height 1.5pt
+                } \\[1mm]
+            {\heiti\zihao{3} 检\hspace{0.5\ccwd}测\hspace{0.5\ccwd}类\hspace{0.5\ccwd}别：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \InspType \par
+                    \vspace{2mm}
+                    \hrule height 1.5pt
+                } \\
         \end{tabular}
     \end{center}
 
     \vfill
-
+    
+    % —— 底部落款与日期绝对定位 ——
     \begin{center}
-        北京市建设工程质量第三检测所有限责任公司 \\
-        \vspace{8mm}
-        \ReportYear{}年\ReportMonth{}月\ReportDay{}日
+        {\heiti\zihao{3} 北京市建设工程质量第三检测所有限责任公司} \\[15mm] % 缩减公司名与日期的垂直间距，对应Word中的紧凑行距
+        {\heiti\zihao{3} \ReportYear{} 年 \ReportMonth{} 月 \ReportDay{} 日}
     \end{center}
+    
+    % 字体下端距页面下边缘42mm
+    \vspace*{16mm}
 \end{titlepage}
 
 % ==================== 第二页：注意事项 ====================
+% 由于前面未改变物理纸张，\clearpage 后进入第二页，这页自然是封皮背面。
+% 双面打印时，刚好印在封面背后。
 \clearpage
 \pagestyle{empty}
 
 \begin{center}
     \vspace*{0mm}
-    {\zihao{2}\bfseries 注\quad 意\quad 事\quad 项}
+    {\heiti\zihao{2}\bfseries 注\quad 意\quad 事\quad 项}
     \vspace{15mm}
 \end{center}
 
@@ -177,45 +226,67 @@
     传\qquad 真：010-88378878
 \end{flushleft}
 
-% ==================== 第三页：工程质量检测报告主表 ====================
+% ==================== 恢复正文页边距 ====================
 \clearpage
+% 将页边距恢复为全局设置（顶42mm，底30mm，左25mm，右25mm），保证后续正文及表格的排版不受封面影响
+\restoregeometry
+
+% ==================== 页眉页脚 ====================
 \pagenumbering{arabic}
 \pagestyle{fancy}
-\fancyhf{}
+\fancyhf{} % 清空默认页眉页脚
 
-% 页眉：用 \makebox 控制宽度，避免 parbox 溢出
+% —— 页眉布局 ——
 \fancyhead[C]{%
-    \zihao{-3}\mdseries\songti
-    北京市建设工程质量第三检测所有限责任公司\\
-    工程质量检测报告\\[0.6ex]
-    \makebox[0.9\textwidth][s]{%
-        京建质检 J$_3$-G 字 \ReportYear{}第（\ReportNo{}）号%
+    \begin{center}
+        \vspace*{7.5ex} % 整体适度下沉，避免顶出页边缘
+        \songti\zihao{-3} 北京市建设工程质量第三检测所有限责任公司\\[0.5ex]
+        工程质量检测报告
+    \end{center}
+    \vspace{0ex}
+    {\songti\zihao{-3}%
+    % makebox 强制占满整行，内部使用 \hfill 把左右两端死死推到页边距边界
+    \makebox[\textwidth][s]{%
+        京建质检 J$_3$—G 字 \ReportYear{} 第（\ReportNo{}）号%
         \hfill
         第 \thepage\ 页\enspace 共 \pageref{LastPage}\ 页%
-    }%
+    }}%
+    \vspace{0.8ex}% 横线与文字的微小间隙
 }
-\cfoot{\zihao{-3}\mdseries\songti 北京市建设工程质量第三检测所有限责任公司}
-\renewcommand{\headrulewidth}{1.5pt}
-\renewcommand{\footrulewidth}{0pt}
-\renewcommand{\footrule}{\hbox to\headwidth{\vspace{1mm}\dotfill}\vspace{0.2mm}}
+
+\fancyfoot[C]{\songti\zihao{-3} 北京市建设工程质量第三检测所有限责任公司}
+
+% 强制加粗页眉底线（1.5pt），彻底隔绝表头与正文
+\renewcommand{\headrulewidth}{2pt}
+
+% —— 核心修改：自定义超高密度、极细点状虚线页脚线 ——
+\renewcommand{\footrule}{%
+    \vspace{-3mm} % 向上微调，拉开虚线与下方公司名称的垂直间距
+    % 使用 \cleaders 铺满整个页脚宽度
+    % 定义小盒子：将间距从 0.25em 缩小到 0.15em (特别密)
+    % 盒子内容：替换句号，改用 \rule[0pt]{0.4pt}{0.4pt} 画基线上 0.4pt 宽、0.4pt 高的微小方块 (极细)
+    \hbox to \headwidth{\cleaders\hbox to 0.05em{\hss\rule[0pt]{0.4pt}{0.4pt}\hss}\hfill}%
+    \vspace{0mm} % 调整虚线本身占据的物理高度
+}
 
 \vspace*{0mm}
 
+% ==================== 第三页：工程质量检测报告主表 ====================
 \noindent
-{\zihao{-4}
+{\zihao{5} % <=== 修改点：将小四号（-4）改为五号（5），匹配原件密度，防止日期折行
 \begin{tblr}{
   width   = \textwidth,
-  colspec = {X[22,c,m] X[32,l,m] X[21,c,m] X[32,l,m] X[21,c,m] X[32,l,m]},
-  hspan   = minimal,
-  hlines,
-  vlines,
-  vline{1,Z} = {0pt},       % 去掉左右外边框，视觉上与页面融合
-  row{1}     = {ht=1.5cm},
-  row{2-9}   = {ht=1.0cm},
-  row{10}    = {ht=1.0cm},  % 检测仪器，可多行
-  row{11-12} = {ht=1.0cm},
-  row{13}    = {ht=3.2cm},  % 检测结论
-  row{14-15} = {ht=1.5cm},
+  colspec = {Q[c,m,wd=2.8cm] X[c,m] Q[c,m,wd=2.0cm] X[c,m] Q[c,m,wd=2.2cm] X[c,m]},
+  hspan   = minimal, 
+  % 边框线控制：开启内部所有网格线，强行切断最左(1)和最右(Z)的外围垂直线
+  hlines     = {0.5pt, solid},
+  hline{1,Z} = {0.5pt, solid},
+  vlines     = {0.5pt, solid},
+  vline{1,Z} = {0pt}, 
+  % 行高根据五号字微调
+  rows       = {ht=0.85cm}, 
+  row{10}    = {ht=1.2cm}, 
+  row{13}    = {ht=2.8cm}, % 结论框高度适度收紧
 }
 工程名称 & \SetCell[c=5]{l} \ProjectName{}     & & & & \\
 检测地点 & \SetCell[c=5]{l} \InspLocation{}    & & & & \\
@@ -227,13 +298,17 @@
 方法依据 & \SetCell[c=5]{l} \MethodBasis{}     & & & & \\
 判定依据 & \SetCell[c=5]{l} \JudgeBasis{}      & & & & \\
 检测仪器 & \SetCell[c=5]{l} {\InstrumentList{}}& & & & \\
+% 核心跨列对齐逻辑：时间占据第2至4列，环境名固定在第5列，环境值占据第6列
 检测时间 & \SetCell[c=3]{l} \InspStartDate{}$\sim$\InspEndDate{} & & & 检测环境 & \InspEnv{} \\
 检测人员 & \SetCell[c=5]{l} \InspPersonnel{}   & & & & \\
 检测结论 & \SetCell[c=5]{l,t} \Conclusion{}    & & & & \\
 批准人   & \Approver{}  & 审核人 & \Reviewer{} & 主检人 & \MainInsp{} \\
+% <=== 修改点：补齐原件中缺失的两行
+检测试验单位 & \SetCell[c=5]{l} 北京市建设工程质量第三检测所有限责任公司 & & & & \\
+报告日期 & \SetCell[c=5]{l} \ReportYear{} 年 \ReportMonth{} 月 \ReportDay{} 日 & & & & \\
 备注     & \SetCell[c=5]{l} \Remarks{}         & & & & \\
 \end{tblr}}
- 
+
 \clearpage
 
 % ==================== 第四页起：正文 ====================
@@ -241,24 +316,18 @@
 \section{概况}
 
 \subsection{工程概况}
-
 \begin{spacing}{1.5}
 \ProjectOverview{}
 \end{spacing}
 
-
 \subsection{检测及判定依据}
-
 \begin{itemize}[label={\small\faBookOpen}, leftmargin=3em, itemsep=0.5ex]
     \item \MethodBasis{}
     \item \JudgeBasis{}
 \end{itemize}
 
-
 \subsection{检测人员}
-
 \hspace*{2\ccwd}\InspPersonnel{}
-
 
 \subsection{检测仪器}
 \begin{center}
@@ -269,49 +338,40 @@
 {\zihao{-4}
 \begin{tblr}{
   width   = \textwidth,
-  % 第1列为属性名，后续列为各仪器——增/减仪器时同步增/减列
-  colspec = {X[2,c,m] X[3,c,m] X[3,c,m] X[3,c,m]},
+  % 已自适应调整为 3 列，适配抗拔力仪器数量
+  colspec = {X[2,c,m] X[3,c,m] X[3,c,m]},
   hlines, vlines,
   row{1}  = { font=\bfseries},
 }
-检测仪器名称   & 激光测距仪              & 涂层测厚仪               & 数显游标卡尺 \\
-检测仪器编号   & GLM50+612445282         & MC-2000+BC200134         & （0$\sim$200）mm+87756 \\
-检定证书编号   & JZ001号                 & JZ002号                  & JZ003号 \\
-仪器使用有效期 & 2025.06$\sim$2026.06   & 2025.06$\sim$2026.06    & 2025.06$\sim$2026.06 \\
-检测精度       & 1mm                     & $\pm$3\%                 & 0.01mm \\
+检测仪器名称   & 锚杆拉力计              & 百分表               \\
+检测仪器编号   & ZP-30T+M230314          & （0$\sim$50）mm+11050653 \\
+检定证书编号   & JZ001号                 & JZ002号              \\
+仪器使用有效期 & 2025.06$\sim$2026.06    & 2025.06$\sim$2026.06 \\
+检测精度       & 1\%F.S                  & 0.01mm               \\
 \end{tblr}}
 \end{center}
 
-
 \subsection{检测环境}
-
 \hspace*{2\ccwd}\InspEnv{}
 
 
-% ==================== 第2章（根据报告类型修改章节名） ====================
-\section{防火涂层厚度检测}
-
+% ==================== 第2章：动态绑定检测项目 ====================
+\section{\InspItem}
 
 \subsection{检测方法}
-
 \begin{spacing}{1.5}
 \MethodDesc{}
 \end{spacing}
 
-
 \subsection{抽样依据}
-
 \begin{spacing}{1.5}
-\hspace*{2\ccwd}按照委托方要求，本次对\ProjectName{}的钢柱、钢梁、系杆及水平支撑进行检测。
+\hspace*{2\ccwd}按照委托方要求，本次对\ProjectName{}的锚杆进行抗拔力检测，共抽取209根。
 \end{spacing}
 
-
 \subsection{判定依据}
-
 \begin{spacing}{1.5}
 \hspace*{2\ccwd}依据\JudgeBasis{}及\MethodBasis{}进行判定。
 \end{spacing}
-
 
 \subsection{检测结果}
 
@@ -319,61 +379,43 @@
 
 \vspace{0.5ex}
 % ——————————————————————————————————————————
-% 检测结果表 —— 直接在下方 tblr 内编辑数据行
-%   · 列数变化：修改 colspec 中的 X[..] 数量
-%   · 增/删行：复制或删除以 & 分隔的整行
-%   · 判定 = max(测点) ≤ 1.5×设计厚度 且 min(测点) ≥ 0.85×设计厚度（按 GB 50205-2020）
+% 锚杆抗拔力长表格汇总 —— 支持无限跨页
 % ——————————————————————————————————————————
 {\zihao{5}
-\begin{tblr}{
+\begin{longtblr}[
+  label = {tab:test_results},
+]{
   width   = \textwidth,
-  colspec = {X[1.2,c,m] X[1.5,c,m] X[1.8,c,m] X[1.5,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1,c,m] X[1.2,c,m] X[1.2,c,m]},
+  colspec = {X[1,c,m] X[2,c,m] X[2,c,m] X[2,c,m] X[2,c,m] X[1.5,c,m]},
   hlines, vlines,
-  row{1-2} = {font=\bfseries},
-  cell{1}{1}  = {r=2}{},
-  cell{1}{2}  = {r=2}{},
-  cell{1}{3}  = {r=2}{},
-  cell{1}{4}  = {r=2}{},
-  cell{1}{5}  = {c=5}{},
-  cell{1}{10} = {r=2}{},
-  cell{1}{11} = {r=2}{},
+  row{1}  = {font=\bfseries},
+  rowhead = 1, % 每页重复第1行表头
 }
-序号 & 构件类型 & 构件编号 & 设计厚度(mm) & 实测厚度(mm) & & & & & 平均值(mm) & 判定 \\
-     &          &          &              & 1 & 2 & 3 & 4 & 5 &           &       \\
-1  & 钢柱 & GZ-1 & 30 & 31 & 32 & 30 & 33 & 31 & 31.4 & 合格 \\
-2  & 钢柱 & GZ-2 & 30 & 30 & 31 & 32 & 30 & 31 & 30.8 & 合格 \\
-3  & 钢梁 & GL-1 & 25 & 26 & 25 & 27 & 26 & 25 & 25.8 & 合格 \\
-4  & 钢梁 & GL-2 & 25 & 25 & 26 & 25 & 27 & 26 & 25.8 & 合格 \\
-5  & 系杆 & XG-1 & 20 & 21 & 20 & 22 & 21 & 20 & 20.8 & 合格 \\
-\end{tblr}}
-
+序号 & 锚杆编号 & 设计抗拔力(kN) & 最大试验荷载(kN) & 累计位移量(mm) & 判定 \\
+1 & MG-001 & 100.0 & 120.0 & 5.23 & 合格 \\
+2 & MG-002 & 100.0 & 120.0 & 4.81 & 合格 \\
+3 & MG-003 & 100.0 & 120.0 & 6.02 & 合格 \\
+% 在此处填入或由外部脚本注入其余 206 根锚杆的数据...
+\end{longtblr}}
 
 % ==================== 第3章：附图 ====================
 \section{附图}
 
-% 使用方法：
-%   1. 将图片文件放在 template.tex 同目录
-%   2. 修改 \includegraphics 中的文件名
-%   3. 复制下方图块添加更多附图
-
 \begin{center}
-    % 图片不存在时显示占位框，不影响编译
     \IfFileExists{fig_placeholder.png}{%
         \includegraphics[width=0.85\textwidth]{fig_placeholder.png}%
     }{%
         \fbox{\parbox{0.85\textwidth}{%
             \centering\vspace{2.5cm}
-            【图片占位符 — 请将图片放入同目录并修改文件名】
+            【现场检测照片占位符】
             \vspace{2.5cm}%
         }}%
     }
-
-    \vspace{1ex}
-    图~3-1\quad 示意图（单位：cm）
+    \vspace{1ex} \\
+    图~3-1\quad 现场检测示意图
 \end{center}
 
 \vfill
-
-    \zihao{-4}（以下空白）
+\zihao{-4}（以下空白）
 
 \end{document}

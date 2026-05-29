@@ -69,6 +69,7 @@ def run(
     header_row: int = 1,
     preset_override: dict[str, Any] | None = None,
     output_format: str | None = None,
+    filename_prefix: str | None = None,
 ) -> dict:
     """跑一次批量绘图。
 
@@ -78,6 +79,10 @@ def run(
     output_format（可选 svg/png/jpg/jpeg）：临时覆盖预设 filename_template 的后缀，
     不写回预设文件。下游 chart_writer 按 suffix 派 matplotlib 格式；
     report_generator 的智能查找识别 svg/png/jpg/jpeg 全格式。
+
+    filename_prefix（可选）：拼在每张图文件名最前。多批次（多 sheet）出图时调用方
+    传 "<批次>_" 前缀，避免各批相同标识列值（如锚杆编号 1/2/3）互相覆盖；报告侧
+    AnchorRowResolver 会按 "<批次>_<编号>" 优先查找。
     """
     excel = Path(excel_path)
     out_dir = Path(output_dir) if output_dir else excel.parent / "曲线图"
@@ -90,6 +95,7 @@ def run(
         header_row=header_row,
         preset_override=preset_override,
         output_format=output_format,
+        filename_prefix=filename_prefix or "",
     )
 
     return {

@@ -19,16 +19,22 @@ public class AnchorRowResolver : IFieldResolver
     private readonly IReadOnlyDictionary<string, string> _userInputs;
     private readonly int _anchorIndex;
     private readonly string? _curveImageDir;
+    private readonly string? _batchId;
 
     /// <param name="anchorIndex">
     /// 1-based 全局序号 —— 模板里 {{锚杆序号}} 填这个值。0 表示未设置（旧调用方兼容）。
     /// 报告级别全局递增（209 根全在一份报告里，从 1 数到 209）。
     /// </param>
     /// <param name="curveImageDir">
-    /// 曲线图目录（来自 plot_curves 输出）。{{img:曲线图}} 占位符会按 anchor_id 智能查找：
+    /// 曲线图目录（来自 plot_curves 输出）。{{img:曲线图}} 占位符会智能查找：
     ///   1) 优先 svg > png > jpg > jpeg
-    ///   2) 精确匹配 {anchor_id}.{ext}，否则前缀匹配 {anchor_id}_*.{ext}（避免误中 {id}1.svg）
+    ///   2) 多批次出图按「&lt;批次&gt;_&lt;编号&gt;」命名（plot_curves filename_prefix），故先按
+    ///      batchId 前缀找；再回退裸 anchor_id（单批 / 旧图）
+    ///   3) 每种 stem 都先精确匹配 {stem}.{ext}，否则前缀匹配 {stem}_*.{ext}
     /// 见 <see cref="FindCurveImage"/>。null 时 curve_image 字段返 null，引擎报 missingImages。
+    /// </param>
+    /// <param name="batchId">
+    /// 本行所属批次 ID —— 用于多批次曲线图按「&lt;批次&gt;_&lt;编号&gt;」查找。null = 不加批次前缀。
     /// </param>
     public AnchorRowResolver(
         AnchorRowInput input,
@@ -36,7 +42,8 @@ public class AnchorRowResolver : IFieldResolver
         AnchorParams @params,
         IReadOnlyDictionary<string, string>? userInputs = null,
         int anchorIndex = 0,
-        string? curveImageDir = null)
+        string? curveImageDir = null,
+        string? batchId = null)
     {
         _input = input;
         _result = result;
@@ -44,6 +51,7 @@ public class AnchorRowResolver : IFieldResolver
         _userInputs = userInputs ?? new Dictionary<string, string>();
         _anchorIndex = anchorIndex;
         _curveImageDir = curveImageDir;
+        _batchId = batchId;
     }
 
     public object? GetValue(string fieldKey) => fieldKey switch
@@ -81,7 +89,7 @@ public class AnchorRowResolver : IFieldResolver
         "anchor_index" => _anchorIndex,
         "curve_image" => _curveImageDir is null
             ? null
-            : FindCurveImage(_curveImageDir, _input.AnchorId),
+            : FindCurveImage(_curveImageDir, _batchId, _input.AnchorId),
 
         // ── 用户输入兜底 ──
         _ => _userInputs.TryGetValue(fieldKey, out var v) ? v : null,
@@ -91,23 +99,40 @@ public class AnchorRowResolver : IFieldResolver
     private static readonly string[] _curveImageExtensions = { ".svg", ".png", ".jpg", ".jpeg" };
 
     /// <summary>
-    /// 在 <paramref name="dir"/> 下按 <paramref name="anchorId"/> 智能查找曲线图。
-    /// 匹配顺序：每个扩展名先试精确（{id}.ext），再试前缀（{id}_*.ext）。
-    /// 前缀匹配只接 "{id}_" 开头，避免 "1" 误中 "11_xxx.svg"。
+    /// 在 <paramref name="dir"/> 下查找某根锚杆的曲线图。
+    /// 查找顺序（命中即返回）：
+    ///   1) 若有 batchId：按 stem「{batchId}_{anchorId}」找（多批次出图前缀命名）
+    ///   2) 回退：按 stem「{anchorId}」找（单批 / 未加前缀的旧图）
+    /// 每个 stem 内：每个扩展名先精确（{stem}.ext）再前缀（{stem}_*.ext）。
     /// </summary>
-    private static string? FindCurveImage(string dir, string anchorId)
+    private static string? FindCurveImage(string dir, string? batchId, string anchorId)
     {
         if (!Directory.Exists(dir)) return null;
 
+        if (!string.IsNullOrWhiteSpace(batchId))
+        {
+            var byBatch = FindByStem(dir, $"{batchId}_{anchorId}");
+            if (byBatch != null) return byBatch;
+        }
+        return FindByStem(dir, anchorId);
+    }
+
+    /// <summary>
+    /// 在 <paramref name="dir"/> 下按文件名主干 <paramref name="stem"/> 查找。
+    /// 每个扩展名先试精确（{stem}.ext），再试前缀（{stem}_*.ext）。
+    /// 前缀匹配只接 "{stem}_" 开头，避免 "1" 误中 "11_xxx.svg"。
+    /// </summary>
+    private static string? FindByStem(string dir, string stem)
+    {
         foreach (var ext in _curveImageExtensions)
         {
-            var exact = Path.Combine(dir, anchorId + ext);
+            var exact = Path.Combine(dir, stem + ext);
             if (File.Exists(exact)) return exact;
 
             string[] prefixMatches;
             try
             {
-                prefixMatches = Directory.GetFiles(dir, $"{anchorId}_*{ext}");
+                prefixMatches = Directory.GetFiles(dir, $"{stem}_*{ext}");
             }
             catch (DirectoryNotFoundException)
             {

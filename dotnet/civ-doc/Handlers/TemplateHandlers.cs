@@ -89,7 +89,7 @@ public static class TemplateHandlers
     {
         ["report"] = "报告级",
         ["detection_item"] = "检测项目级",
-        ["batch"] = "检测批级",
+        ["batch"] = "批次级",
         ["component"] = "构件级",
     };
 

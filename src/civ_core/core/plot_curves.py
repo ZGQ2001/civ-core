@@ -268,6 +268,7 @@ def build_jobs(
     preset: dict[str, Any],
     rows: list[dict[str, Any]],
     output_dir: Path | str,
+    filename_prefix: str = "",
 ) -> tuple[list[PlotJob], BuildSummary]:
     """预设 + 数据行 → (PlotJob 列表, BuildSummary)。
 
@@ -279,6 +280,10 @@ def build_jobs(
 
     注意：JSON 字段名 filename_template / title_template 是字面意义的"字符串模板"
     （含 {id} 占位符），与"预设"概念无关，因此保留 template 命名。
+
+    filename_prefix（可选）：拼在每张图文件名最前（不影响标题）。多批次出图时调用方
+    传 "<批次>_" 之类前缀，避免不同 sheet 里相同标识列值（如各批锚杆编号都是 1/2/3）
+    互相覆盖。前缀是字面字符串、不参与 {id} 替换；调用方负责取值与去非法字符。
     """
     out_dir = Path(output_dir)
     available_cols = list(rows[0].keys()) if rows else []
@@ -341,7 +346,7 @@ def build_jobs(
         jobs.append(
             PlotJob(
                 title=title_tpl.format(id=id_str),
-                output_path=out_dir / fname_tpl.format(id=id_str),
+                output_path=out_dir / (filename_prefix + fname_tpl.format(id=id_str)),
                 x_axis=x_axis,
                 y_axis=y_axis,
                 series=series_list,
@@ -446,6 +451,7 @@ def run_plot_curves(
     progress_cb: Callable[[int, int], None] | None = None,
     preset_override: dict[str, Any] | None = None,
     output_format: str | None = None,
+    filename_prefix: str = "",
 ) -> RunResult:
     """工具入口：读 Excel → 套预设 → 批量出 PNG。
 
@@ -480,6 +486,7 @@ def run_plot_curves(
         "preset": preset_name,
         "header_row": header_row,
         "output_format_override": output_format,
+        "filename_prefix": filename_prefix or None,
     }
 
     try:
@@ -520,7 +527,7 @@ def run_plot_curves(
             )
 
         log.info("🔨 构建绘图任务...")
-        jobs, summary = build_jobs(preset, rows, out_dir)
+        jobs, summary = build_jobs(preset, rows, out_dir, filename_prefix=filename_prefix)
         log.info(
             "   ↳ 有效任务 %d 个（跳过空行 %d，跳过缺数据行 %d）",
             len(jobs),

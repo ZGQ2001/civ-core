@@ -8,6 +8,8 @@
 //     提示用户「这份 xlsx 不是 anchor.run 出的，请重新跑装配线」
 //   - 列顺序按 AnchorAnalysisSheet.Write 的约定硬编码：1=编号 + 2..12=11 位移 +
 //     13=M + 14=Q + 15=R + 16=判定文字。后续如果改 sheet 列序，本 reader 同步改。
+//   - 灌浆日期是批次级 user_input（不是 calc 结果），所以不塞进 AnchorWorkbookResult，
+//     而由 3 参重载用 out 旁路给出；report.run_from_result 据此回退灌浆日期。
 
 using ClosedXML.Excel;
 using CivCore.Doc.ReportTables;
@@ -16,13 +18,20 @@ namespace CivCore.Doc.Calc.Anchor;
 
 public static class AnchorResultReader
 {
+    /// <summary>仅取计算结果（不需要灌浆日期的调用方用）。</summary>
     public static AnchorWorkbookResult Read(string resultXlsxPath, string standard)
+        => Read(resultXlsxPath, standard, out _);
+
+    /// <summary>取计算结果 + 持久化的灌浆日期（batch_id → yyyy-MM-dd，无日期的批次不出现）。</summary>
+    public static AnchorWorkbookResult Read(
+        string resultXlsxPath, string standard, out Dictionary<string, string> groutingDateByBatch)
     {
         if (!File.Exists(resultXlsxPath))
             throw new ArgumentException($"结果 xlsx 文件不存在：{resultXlsxPath}");
 
         using var wb = new XLWorkbook(resultXlsxPath);
         var paramsByBatch = AnchorResultMetadataSheet.Read(wb);
+        groutingDateByBatch = AnchorResultMetadataSheet.ReadGroutingDates(wb);
         if (paramsByBatch.Count == 0)
             throw new InvalidOperationException(
                 $"结果 xlsx 缺「{AnchorResultMetadataSheet.SheetName}」sheet —— 无法重建工程参数。" +

@@ -23,7 +23,7 @@ import {
 
 import { rpc } from '../../lib/rpc';
 import { logLine, useShell } from '../../lib/shell';
-import type { PlotPreset, PreviewRes, RunRes } from './types';
+import type { FailedItem, PlotPreset, PreviewRes, RunRes } from './types';
 
 const TOOL_ID = 'plot_curves';
 const ACCEPTED_EXTS = new Set(['.xlsx', '.xls']);
@@ -86,6 +86,21 @@ export type RunOutcome =
   | { kind: 'error'; message: string }
   | null;
 
+/** 多批次（多 sheet）一次出全部的结果汇总。 */
+export type RunAllOutcome =
+  | {
+      kind: 'ok';
+      sheetCount: number;
+      totalWritten: number;
+      totalFailed: number;
+      failedSheets: string[];
+    }
+  | { kind: 'error'; message: string }
+  | null;
+
+/** 结果分析 sheet 名后缀（AnchorAnalysisSheet 写入约定）；多批次出图按去后缀的批次名加前缀。 */
+const ANALYSIS_SHEET_SUFFIX = '-数据分析';
+
 interface Actions {
   setPreset: (name: string) => void;
   setExcelPath: (p: string) => void;
@@ -98,6 +113,8 @@ interface Actions {
   patchPreset: (updater: (p: PlotPreset) => PlotPreset) => void;
   resetPreset: () => void;
   run: () => Promise<RunOutcome>;
+  /** 多批次：对每个数据 sheet 各出一组图，文件名加「<批次>_」前缀防跨批撞名。 */
+  runAllSheets: () => Promise<RunAllOutcome>;
   // CRUD（操作完会自动 refresh 预设列表）
   savePreset: (name: string, data: PlotPreset) => Promise<void>;
   deletePreset: (name: string) => Promise<void>;
@@ -455,6 +472,90 @@ export function PlotCurvesProvider({
     shell,
   ]);
 
+  // ── 出全部批次（多 sheet 循环，各加批次前缀）─────────────────
+  const runAllSheets = useCallback(async (): Promise<RunAllOutcome> => {
+    if (!excelPath || !preset || running) return null;
+    // 过滤掉 _ 开头的元 sheet（如 _批次参数）；其余每个 sheet 出一组图。
+    const targetSheets = sheets.filter((s) => !s.startsWith('_'));
+    if (targetSheets.length === 0)
+      return { kind: 'error', message: '没有可出图的 sheet（全部被过滤）' };
+
+    setRunning(true);
+    setRunError(null);
+    setResult(null);
+    try {
+      const allWritten: string[] = [];
+      const allFailed: FailedItem[] = [];
+      let skippedEmptyId = 0;
+      let skippedBadData = 0;
+      let outDir = '';
+      const failedSheets: string[] = [];
+
+      for (const s of targetSheets) {
+        // 批次 token = sheet 名去「-数据分析」后缀，与 C# AnchorExcelReader / 报告侧 batch_id 对齐，
+        // 保证报告按「<批次>_<编号>」能找到本批图。
+        const batch = s.endsWith(ANALYSIS_SHEET_SUFFIX)
+          ? s.slice(0, -ANALYSIS_SHEET_SUFFIX.length)
+          : s;
+        const params: Record<string, unknown> = {
+          excel_path: excelPath,
+          preset,
+          sheet: s,
+          header_row: headerRow,
+          filename_prefix: `${batch}_`,
+        };
+        if (outputDir.trim()) params.output_dir = outputDir.trim();
+        if (workingPreset) params.preset_override = workingPreset;
+        if (outputFormat) params.output_format = outputFormat;
+        try {
+          const res = await rpc<RunRes>('plot_curves.run', params);
+          allWritten.push(...res.written);
+          allFailed.push(...res.failed);
+          skippedEmptyId += res.summary.skipped_empty_id;
+          skippedBadData += res.summary.skipped_bad_data;
+          outDir = res.output_dir;
+        } catch (e) {
+          failedSheets.push(s);
+          allFailed.push({ path: s, error: String(e) });
+        }
+      }
+
+      // 汇总成单个 RunRes，复用现有成功卡片展示
+      setResult({
+        written: allWritten,
+        failed: allFailed,
+        summary: {
+          total: allWritten.length + allFailed.length,
+          written_count: allWritten.length,
+          failed_count: allFailed.length,
+          skipped_empty_id: skippedEmptyId,
+          skipped_bad_data: skippedBadData,
+        },
+        output_dir: outDir,
+      });
+      shell.notifyFilesChanged();
+      return {
+        kind: 'ok',
+        sheetCount: targetSheets.length,
+        totalWritten: allWritten.length,
+        totalFailed: allFailed.length,
+        failedSheets,
+      };
+    } finally {
+      setRunning(false);
+    }
+  }, [
+    excelPath,
+    preset,
+    sheets,
+    headerRow,
+    outputDir,
+    outputFormat,
+    workingPreset,
+    running,
+    shell,
+  ]);
+
   const ctx: Ctx = useMemo(
     () => ({
       presets,
@@ -498,6 +599,7 @@ export function PlotCurvesProvider({
       patchPreset,
       resetPreset,
       run,
+      runAllSheets,
       savePreset,
       deletePreset,
       renamePreset,
@@ -539,6 +641,7 @@ export function PlotCurvesProvider({
       patchPreset,
       resetPreset,
       run,
+      runAllSheets,
       savePreset,
       deletePreset,
       renamePreset,

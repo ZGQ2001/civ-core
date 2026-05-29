@@ -18,6 +18,8 @@ export const anchorGenerateTemplate: ToolDef = {
   mcpName: "anchor_generate_template",
   description:
     "生成空白锚杆抗拔输入 Excel 模板（按指定规范的列定义）。" +
+    "含可见「批次信息」sheet（批次/P/Lf/La/A/E/灌浆日期）——按批次工程参数 + 灌浆日期填这里，" +
+    "anchor_run 会自动读取，无需再传 params_by_batch。" +
     "返回 {ok, path}。用户拿模板填数据后用 anchor_run。",
   inputSchema: {
     output_xlsx: z
@@ -49,6 +51,19 @@ export const anchorListBatches: ToolDef = {
   },
 };
 
+export const anchorReadBatchInfo: ToolDef = {
+  rpcMethod: "anchor.read_batch_info",
+  mcpName: "anchor_read_batch_info",
+  description:
+    "读输入 Excel 的「批次信息」sheet → 各批工程参数 + 灌浆日期。" +
+    "返回 {batches: [{batch_id, params: {P,Lf,La,A,E}|null, grouting_date}]}。" +
+    "sheet 缺失（别人给的旧 Excel）返回空列表。" +
+    "用于在 anchor_run 之前确认 xlsx 里已填好参数（params=null 表示该批还没填）。",
+  inputSchema: {
+    input_xlsx: z.string().describe("锚杆数据 Excel 绝对路径"),
+  },
+};
+
 /**
  * 每批工程参数 schema：P / Lf / La / A / E 5 字段全必填，按 AnchorParams.Create
  * 的入参签名定义（dotnet/civ-doc/Calc/Anchor/AnchorParams.cs）。
@@ -77,9 +92,11 @@ export const anchorRun: ToolDef = {
     input_xlsx: z.string().describe("锚杆数据 Excel 绝对路径"),
     params_by_batch: z
       .record(z.string(), anchorParamsSchema)
+      .optional()
       .describe(
-        "{ batchId: {P,Lf,La,A,E} }。每个批次的工程参数全必填。" +
-          "batchId 必须覆盖 anchor_list_batches 返回的所有 batch_id（缺谁报错）。",
+        "{ batchId: {P,Lf,La,A,E} }。可选 —— 不传则从输入 xlsx 的「批次信息」sheet 读。" +
+          "传了的批次以传入值为准（覆盖 sheet）；最终每个 batch_id 都得有参数（GUI 或 sheet），" +
+          "否则报错。纯 agent 流推荐把参数写进「批次信息」sheet，这里不传。",
       ),
     output_xlsx: z
       .string()
@@ -136,5 +153,6 @@ export const anchorRun: ToolDef = {
 export const allAnchorTools: readonly ToolDef[] = [
   anchorGenerateTemplate,
   anchorListBatches,
+  anchorReadBatchInfo,
   anchorRun,
 ];

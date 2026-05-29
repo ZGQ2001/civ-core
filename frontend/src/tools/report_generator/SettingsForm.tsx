@@ -185,16 +185,29 @@ export function ReportDataSection() {
         />
       </Field>
 
-      <AnchorParamsSection
-        excelReady={!!c.excelPath}
-        batchIds={c.anchorBatchIds}
-        paramsByBatch={c.anchorParamsByBatch}
-        loading={c.anchorBatchesLoading}
-        error={c.anchorBatchesError}
-        onSetBatch={c.setAnchorParamsForBatch}
-        onSetAll={c.setAnchorParamsForAllBatches}
-        emptyHint="先选输入 Excel，这里会按批次展开参数表"
-      />
+      {/* 结果数据来源：工程参数已随结果 xlsx 持久化（隐藏 _批次参数 sheet），无需再填。
+          原始数据来源：按批次填参数（会从输入 xlsx 的「批次信息」sheet 预填，可覆盖）。 */}
+      {c.dataSource === 'result' ? (
+        <Field
+          label="锚杆工程参数"
+          hint="结果数据已含各批工程参数（生成时从结果 xlsx 读取）"
+        >
+          <div className="text-vscode-text-faint border-l-2 border-l-[#3a3a3a] py-1 pl-2 text-[11px] leading-relaxed">
+            已随「结果数据 Excel」持久化，无需在此填写。
+          </div>
+        </Field>
+      ) : (
+        <AnchorParamsSection
+          excelReady={!!c.excelPath}
+          batchIds={c.anchorBatchIds}
+          paramsByBatch={c.anchorParamsByBatch}
+          loading={c.anchorBatchesLoading}
+          error={c.anchorBatchesError}
+          onSetBatch={c.setAnchorParamsForBatch}
+          onSetAll={c.setAnchorParamsForAllBatches}
+          emptyHint="先选输入 Excel，这里会按批次展开参数表（从「批次信息」sheet 预填）"
+        />
+      )}
 
       <GroutingDateByBatchSection />
     </SectionShell>

@@ -151,6 +151,7 @@ P4 大型架构 顺序逐包 commit。
 - ~~报告文件名硬编码「锚杆抗拔报告.docx」~~ → reportName state + UI 输入框 + 后端按 report_name 取（d62f861）
 - ~~检测项目无法切换~~ → catalogId state + 顶部下拉接 catalog.list（937d31d）
 - ~~用户希望字段输入框旁有可开关的历史值下拉~~ → CatalogDrivenInputs.historyByKey + SettingsForm 主开关聚合（937d31d）
+- ~~result 路径灌浆日期丢失（`_批次参数` 隐藏 sheet 只存工程参数无日期，走「结果数据」来源时日期仍靠 GUI/预设）~~ → `AnchorResultMetadataSheet` 加第 7 列「灌浆日期」；`anchor.run` 持久化各批 grouting_date；`AnchorResultReader.Read` 加 out 旁路；`report.run_from_result` 按 GUI/预设优先、结果 xlsx 兜底合并（与 anchor.run 的「批次信息」回退同口径）。result xlsx 现自带日期，旧文件无第 7 列向后兼容
 
 ---
 

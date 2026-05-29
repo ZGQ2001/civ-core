@@ -82,9 +82,21 @@ export interface ValidateResult {
 export const LEVEL_LABEL: Record<FieldLevel, string> = {
   report: '报告级',
   detection_item: '检测项目级',
-  batch: '检测批级',
+  batch: '批次级',
   component: '构件级',
 };
+
+/**
+ * 层级的宏观→微观规范顺序 —— 报告级 > 检测项目级 > 批次级 > 构件级。
+ * 用于「按层级」分组时固定分组排列（否则按字段插入顺序，看着乱）。
+ * 与 C# TemplateHandlers.LevelOrder 对齐。
+ */
+export const LEVEL_ORDER: FieldLevel[] = [
+  'report',
+  'detection_item',
+  'batch',
+  'component',
+];
 
 export const LEVEL_COLOR: Record<FieldLevel, string> = {
   report: 'text-blue-400',

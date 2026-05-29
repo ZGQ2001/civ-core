@@ -41,6 +41,14 @@ const REQUIRED_PER_ROW_MARKER = '[[每根锚杆]]';
 /// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
 type BatchUserInputsWire = Record<string, Record<string, string>>;
 
+/// anchor.read_batch_info 返回的单批信息 —— 输入 xlsx「批次信息」sheet 一行。
+/// params 为 null = 该批在 sheet 里没填齐工程参数（前端回退默认值）。
+interface BatchInfoEntry {
+  batch_id: string;
+  params: AnchorParams | null;
+  grouting_date: string;
+}
+
 const TOOL_ID = 'report_generator';
 const XLSX_EXTS = new Set(['.xlsx', '.xls']);
 const DOCX_EXTS = new Set(['.docx']);
@@ -274,7 +282,10 @@ export function ReportGeneratorProvider({
     });
   }, []);
 
-  // ── 自动拉批次清单（excelPath/sheet/batchCol 变化时）──
+  // ── 自动拉批次清单 + 读「批次信息」sheet 预填参数/灌浆日期 ──
+  // 上游（用户填的输入 xlsx）把按批工程参数 + 灌浆日期写在「批次信息」sheet；这里读出来
+  // 预填表单（填过一次不必在 GUI 重输）。表单仍可覆盖：prev 有值（用户改过 / 上次预填）
+  // 就保留，否则用 sheet 值，再否则默认。result xlsx 无此 sheet → 当空处理。
   const batchReqIdRef = useRef(0);
   useEffect(() => {
     if (!excelPath) return;
@@ -283,27 +294,39 @@ export function ReportGeneratorProvider({
     setAnchorBatchesLoading(true);
     setAnchorBatchesError(null);
     /* eslint-enable react-hooks/set-state-in-effect */
-    rpc<{ batches: string[] }>('anchor.list_batches', {
-      input_xlsx: excelPath,
-      sheet: sheet || null,
-      batch_id_column: anchorBatchIdColumn,
-    })
-      .then((r) => {
+    Promise.all([
+      rpc<{ batches: string[] }>('anchor.list_batches', {
+        input_xlsx: excelPath,
+        sheet: sheet || null,
+        batch_id_column: anchorBatchIdColumn,
+      }),
+      rpc<{ batches: BatchInfoEntry[] }>('anchor.read_batch_info', {
+        input_xlsx: excelPath,
+      }).catch(() => ({ batches: [] as BatchInfoEntry[] })),
+    ])
+      .then(([lb, bi]) => {
         if (myId !== batchReqIdRef.current) return;
-        setAnchorBatchIds(r.batches);
-        // 新批次补默认参数；保留已填的
+        const infoByBatch = new Map<string, BatchInfoEntry>(
+          bi.batches.map((e): [string, BatchInfoEntry] => [e.batch_id, e]),
+        );
+        setAnchorBatchIds(lb.batches);
+        // 工程参数：保留已填 → sheet 预填 → 默认
         setAnchorParamsByBatch((prev) => {
           const next: Record<string, AnchorParams> = {};
-          for (const b of r.batches) {
-            next[b] = prev[b] ?? { ...DEFAULT_ANCHOR_PARAMS };
-          }
+          for (const b of lb.batches)
+            next[b] = prev[b] ??
+              infoByBatch.get(b)?.params ?? { ...DEFAULT_ANCHOR_PARAMS };
           return next;
         });
-        // 灌浆日期：新批次进来补空 string；旧批次（同 batchId）保留已填值。
-        // 旧批次（这次 Excel 没出现的）直接被丢弃（构造 next 时不带过来），符合预期。
+        // 灌浆日期：保留已填（非空）→ sheet 预填 → 空
         setGroutingDateByBatch((prev) => {
           const next: Record<string, string> = {};
-          for (const b of r.batches) next[b] = prev[b] ?? '';
+          for (const b of lb.batches) {
+            const cur = prev[b] ?? '';
+            next[b] = cur.trim()
+              ? cur
+              : (infoByBatch.get(b)?.grouting_date ?? '');
+          }
           return next;
         });
       })

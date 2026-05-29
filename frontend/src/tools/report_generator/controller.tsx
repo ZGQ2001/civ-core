@@ -30,8 +30,12 @@ import {
   type AnchorParams,
   type AnchorStandard,
 } from '../data_processing/types';
+import type { ValidateResult } from '../template_helper/types';
 import type { ReportRunRes, ReportUserInputs } from './types';
 import { DEFAULT_CATALOG_ID } from './types';
+
+/** 报告按锚杆展开必需的重复锚点 —— 与 C# ReportGenerator.DefaultPerRowStartMarker 对齐。 */
+const REQUIRED_PER_ROW_MARKER = '[[每根锚杆]]';
 
 /// 批次级 user_input map 的 RPC wire 类型：{ [batchId]: { [key]: value } }
 /// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
@@ -88,6 +92,12 @@ interface State {
   running: boolean;
   lastResult: ReportRunRes | null;
   runError: string | null;
+
+  // 模板体检 —— 选完 Word 模板自动跑 template.validate（复用模板助手同一 RPC），
+  // 在「生成」之前就把缺锚点 / 层级错 / 未识别占位符摆出来，不等生成失败才发现。
+  templateCheck: ValidateResult | null;
+  templateChecking: boolean;
+  templateCheckError: string | null;
 }
 
 interface Actions {
@@ -198,6 +208,15 @@ export function ReportGeneratorProvider({
   const [lastResult, setLastResult] = useState<ReportRunRes | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
+  // ── 模板体检 state ──
+  const [templateCheck, setTemplateCheck] = useState<ValidateResult | null>(
+    null,
+  );
+  const [templateChecking, setTemplateChecking] = useState(false);
+  const [templateCheckError, setTemplateCheckError] = useState<string | null>(
+    null,
+  );
+
   // 切 Excel → 清掉批次缓存（防串味）
   const setExcelPath = useCallback((p: string) => {
     setExcelPathRaw(p);
@@ -298,6 +317,42 @@ export function ReportGeneratorProvider({
       });
   }, [excelPath, sheet, anchorBatchIdColumn]);
 
+  // ── 自动体检模板（选/换 Word 模板 或 切检测项目时跑 template.validate）──
+  // 复用模板助手同一 RPC（上下游共用一份校验逻辑），把问题前置到「生成」之前。
+  const templateCheckReqRef = useRef(0);
+  useEffect(() => {
+    const path = wordTemplatePath.trim();
+    if (!path) {
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setTemplateCheck(null);
+      setTemplateChecking(false);
+      setTemplateCheckError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
+      return;
+    }
+    const myId = ++templateCheckReqRef.current;
+
+    setTemplateChecking(true);
+    setTemplateCheckError(null);
+
+    rpc<ValidateResult>('template.validate', {
+      docx_path: path,
+      catalog_id: catalogId,
+    })
+      .then((r) => {
+        if (myId !== templateCheckReqRef.current) return;
+        setTemplateCheck(r);
+      })
+      .catch((e) => {
+        if (myId !== templateCheckReqRef.current) return;
+        setTemplateCheck(null);
+        setTemplateCheckError(String(e));
+      })
+      .finally(() => {
+        if (myId === templateCheckReqRef.current) setTemplateChecking(false);
+      });
+  }, [wordTemplatePath, catalogId]);
+
   // ── 探针：数据处理上游是否有可导入的 state ──
   const upstream: UpstreamProbe = useMemo(() => {
     if (!dpSnapshot) {
@@ -386,6 +441,19 @@ export function ReportGeneratorProvider({
         ready: false,
         reason: '请选 Word 模板（带 {{占位符}} + [[每根锚杆]] 锚点）',
       };
+    // 模板体检：已确认模板缺 [[每根锚杆]] 重复锚点 → 报告必然无法按锚杆展开，前置拦截。
+    // （生成始终走 anchor 路径、必需此锚点；体检还在跑 / 失败时 fail-open，交后端兜底报错）
+    if (
+      templateCheck &&
+      !templateCheck.markers.some(
+        (m) => m.type === 'open' && m.text === REQUIRED_PER_ROW_MARKER,
+      )
+    )
+      return {
+        ready: false,
+        reason:
+          '模板缺 [[每根锚杆]] 重复锚点 —— 报告无法按锚杆展开（见下方「模板体检」，可一键复制锚点段）',
+      };
     return { ready: true, reason: null };
   }, [
     excelPath,
@@ -395,6 +463,7 @@ export function ReportGeneratorProvider({
     anchorBatchIds,
     anchorParamsByBatch,
     wordTemplatePath,
+    templateCheck,
   ]);
 
   // ── run ──
@@ -534,6 +603,9 @@ export function ReportGeneratorProvider({
       running,
       lastResult,
       runError,
+      templateCheck,
+      templateChecking,
+      templateCheckError,
       upstream,
       readiness,
       setExcelPath,
@@ -577,6 +649,9 @@ export function ReportGeneratorProvider({
       running,
       lastResult,
       runError,
+      templateCheck,
+      templateChecking,
+      templateCheckError,
       upstream,
       readiness,
       setExcelPath,

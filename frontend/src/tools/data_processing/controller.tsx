@@ -23,13 +23,17 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
-import { anchorRunResultSchema } from '../../lib/rpcSchemas';
+import {
+  anchorRunResultSchema,
+  coatingRunResultSchema,
+} from '../../lib/rpcSchemas';
 import { logLine, useShell } from '../../lib/shell';
 import type {
   AnchorParams,
   AnchorStandard,
   CalcType,
   CellValue,
+  CoatingStandard,
   MergeRange,
   PreviewRes,
   RunRes,
@@ -83,6 +87,10 @@ interface State {
   anchorBatchesLoading: boolean;
   anchorBatchesError: string | null;
   anchorParamsByBatch: Record<string, AnchorParams>;
+
+  // coating 专属（设计厚度在 Excel 列里，无需按批次填参数）
+  coatingStandard: CoatingStandard;
+  coatingBatchIdColumn: string;
 }
 
 interface Actions {
@@ -100,6 +108,11 @@ interface Actions {
   setAnchorParamsForBatch: (batchId: string, params: AnchorParams) => void;
   setAnchorParamsForAllBatches: (params: AnchorParams) => void;
   generateAnchorTemplate: (outputPath: string) => Promise<string | null>;
+
+  // coating
+  setCoatingStandard: (s: CoatingStandard) => void;
+  setCoatingBatchIdColumn: (s: string) => void;
+  generateCoatingTemplate: (outputPath: string) => Promise<string | null>;
 }
 
 /** 模板生成结果（按钮下方反馈用）。 */
@@ -113,6 +126,7 @@ type Ctx = State &
   Actions & {
     defaultOutput: string;
     anchorTemplateStatus: TemplateStatus;
+    coatingTemplateStatus: TemplateStatus;
   };
 
 const DataProcessingContext = createContext<Ctx | null>(null);
@@ -172,6 +186,13 @@ export function DataProcessingProvider({
   const [anchorTemplateStatus, setAnchorTemplateStatus] =
     useState<TemplateStatus>({ kind: 'idle' });
 
+  // coating 专属 state
+  const [coatingStandard, setCoatingStandard] =
+    useState<CoatingStandard>('GB 50205-2020');
+  const [coatingBatchIdColumn, setCoatingBatchIdColumn] = useState('批次');
+  const [coatingTemplateStatus, setCoatingTemplateStatus] =
+    useState<TemplateStatus>({ kind: 'idle' });
+
   // 切 Excel → 清掉旧预览 + 清 sheet 选择 + 清结果 + 清批次
   const setExcelPath = useCallback((p: string) => {
     setExcelPathRaw(p);
@@ -202,7 +223,12 @@ export function DataProcessingProvider({
     const dir = idx > 0 ? excelPath.slice(0, idx) : '';
     const file = idx > 0 ? excelPath.slice(idx + 1) : excelPath;
     const stem = file.replace(/\.[^.]+$/, '');
-    const tag = calcType === 'anchor' ? '锚杆' : '里氏';
+    const tag =
+      calcType === 'anchor'
+        ? '锚杆'
+        : calcType === 'coating'
+          ? '防火涂层'
+          : '里氏';
     return `${dir}${sep}${stem}_${tag}_结果.xlsx`;
   }, [excelPath, calcType]);
 
@@ -350,12 +376,41 @@ export function DataProcessingProvider({
     [anchorStandard, shell],
   );
 
+  const generateCoatingTemplate = useCallback(
+    async (savePath: string): Promise<string | null> => {
+      setCoatingTemplateStatus({ kind: 'running' });
+      shell.appendOutput(logLine(`[防火涂层] 生成模板 → ${savePath}`));
+      try {
+        const r = await rpc<{ ok: boolean; path: string }>(
+          'coating.generate_template',
+          { output_xlsx: savePath, standard: coatingStandard },
+        );
+        setCoatingTemplateStatus({ kind: 'ok', path: r.path });
+        shell.appendOutput(logLine(`[防火涂层] 模板已生成: ${r.path}`));
+        shell.notifyFilesChanged();
+        return r.path;
+      } catch (e) {
+        const message = String(e);
+        console.error('coating.generate_template 失败:', e);
+        setCoatingTemplateStatus({ kind: 'error', message });
+        shell.appendOutput(logLine(`[防火涂层] 生成模板失败: ${message}`));
+        return null;
+      }
+    },
+    [coatingStandard, shell],
+  );
+
   const run = useCallback(async (): Promise<RunRes | null> => {
     if (!excelPath || running) return null;
     setRunning(true);
     setRunError(null);
     setResult(null);
-    const label = calcType === 'anchor' ? '锚杆' : '里氏';
+    const label =
+      calcType === 'anchor'
+        ? '锚杆'
+        : calcType === 'coating'
+          ? '防火涂层'
+          : '里氏';
     shell.appendOutput(logLine(`[${label}] 开始计算: ${excelPath}`));
     try {
       if (calcType === 'leeb') {
@@ -396,6 +451,31 @@ export function DataProcessingProvider({
         setResult(display);
         shell.appendOutput(
           logLine(`[里氏] 完成: ${display.summary} → ${display.output}`),
+        );
+        shell.notifyFilesChanged();
+        return display;
+      }
+
+      if (calcType === 'coating') {
+        // 防火涂层厚度（GB 50205-2020 厚涂型验收）—— 设计厚度在 Excel 列里，无需按批次填参数
+        const params: Record<string, unknown> = {
+          input_xlsx: excelPath,
+          standard: coatingStandard,
+          batch_id_column: coatingBatchIdColumn,
+        };
+        if (sheet) params.sheet = sheet;
+        if (outputPath.trim()) params.output_xlsx = outputPath.trim();
+
+        const res = await rpc('coating.run', params, coatingRunResultSchema);
+
+        const display: RunRes = {
+          calcType: 'coating',
+          output: res.output,
+          summary: `${res.batches} 批 / ${res.members_qualified}/${res.members_total} 构件合格`,
+        };
+        setResult(display);
+        shell.appendOutput(
+          logLine(`[防火涂层] 完成: ${display.summary} → ${display.output}`),
         );
         shell.notifyFilesChanged();
         return display;
@@ -442,6 +522,8 @@ export function DataProcessingProvider({
     anchorStandard,
     anchorBatchIdColumn,
     anchorParamsByBatch,
+    coatingStandard,
+    coatingBatchIdColumn,
     shell,
   ]);
 
@@ -515,6 +597,9 @@ export function DataProcessingProvider({
       anchorBatchesError,
       anchorParamsByBatch,
       anchorTemplateStatus,
+      coatingStandard,
+      coatingBatchIdColumn,
+      coatingTemplateStatus,
       setCalcType,
       setExcelPath,
       setSheet,
@@ -527,6 +612,9 @@ export function DataProcessingProvider({
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
       generateAnchorTemplate,
+      setCoatingStandard,
+      setCoatingBatchIdColumn,
+      generateCoatingTemplate,
     }),
     [
       calcType,
@@ -554,12 +642,16 @@ export function DataProcessingProvider({
       anchorBatchesError,
       anchorParamsByBatch,
       anchorTemplateStatus,
+      coatingStandard,
+      coatingBatchIdColumn,
+      coatingTemplateStatus,
       setExcelPath,
       setCalcType,
       run,
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
       generateAnchorTemplate,
+      generateCoatingTemplate,
     ],
   );
 

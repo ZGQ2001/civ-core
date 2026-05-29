@@ -16,6 +16,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const serverPath = join(__dirname, "..", "dist", "index.js");
@@ -105,6 +107,43 @@ try {
   } else {
     const parsed = JSON.parse(listingText);
     console.error(`[smoke] files_list_dir 条目数: ${(parsed.entries ?? []).length}`);
+  }
+
+  // ── 新检测类型 coating：装配线三跳（generate_template → run）──────
+  const coatingExpected = [
+    "coating_generate_template", "coating_list_batches", "coating_run",
+  ];
+  const coatingMissing = coatingExpected.filter((n) => !toolNames.has(n));
+  if (coatingMissing.length > 0) {
+    console.error(`[smoke] FAIL: 缺少 coating 工具: ${coatingMissing.join(", ")}`);
+    await client.close().catch(() => undefined);
+    process.exit(1);
+  }
+  {
+    const tmpl = join(tmpdir(), `coating_smoke_${Date.now()}.xlsx`);
+    const out = join(tmpdir(), `coating_smoke_${Date.now()}_结果.xlsx`);
+    const gen = await client.callTool({
+      name: "coating_generate_template",
+      arguments: { output_xlsx: tmpl },
+    });
+    console.error(`[smoke] coating_generate_template isError: ${gen.isError === true}`);
+    const run = await client.callTool({
+      name: "coating_run",
+      arguments: { input_xlsx: tmpl, output_xlsx: out },
+    });
+    const runText = run.content?.[0]?.text ?? "";
+    if (run.isError) {
+      console.error(`[smoke] coating_run ERROR: ${runText}`);
+      await client.close().catch(() => undefined);
+      process.exit(1);
+    }
+    const parsed = JSON.parse(runText);
+    console.error(
+      `[smoke] coating_run: ${parsed.members_qualified}/${parsed.members_total} 构件合格（${parsed.batches} 批）`,
+    );
+    for (const f of [tmpl, out]) {
+      try { rmSync(f); } catch { /* 清理失败忽略 */ }
+    }
   }
 
   // ── Python 预设写路径 roundtrip：copy → list → delete ────────────

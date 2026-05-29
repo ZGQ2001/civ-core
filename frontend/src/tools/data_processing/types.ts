@@ -4,15 +4,17 @@
  * 当前支持的 calcType：
  *   - leeb: 里氏硬度（→ 后端 leeb.run）
  *   - anchor: 锚杆抗拔试验 GB 50086-2015（→ 后端 anchor.run）
+ *   - coating: 防火涂层厚度 GB 50205-2020 厚涂型验收（→ 后端 coating.run）
  *
  * preview_excel 是通用读 Excel（与 calcType 无关），沿用 leeb.preview_excel；
  * 列表加批次清单（anchor 独有）走 anchor.list_batches。
  */
-export type CalcType = 'leeb' | 'anchor';
+export type CalcType = 'leeb' | 'anchor' | 'coating';
 
 export const CALC_TYPE_LABELS: Record<CalcType, string> = {
   leeb: '里氏硬度',
   anchor: '锚杆抗拔试验',
+  coating: '防火涂层厚度',
 };
 
 export type CellValue = string | number | boolean | null;
@@ -69,6 +71,11 @@ export const ANCHOR_STANDARDS = ['GB 50086-2015'] as const;
 export type AnchorStandard = (typeof ANCHOR_STANDARDS)[number];
 
 export const ANCHOR_DEFAULT_BATCH_COL = '批次';
+
+// ── 防火涂层专属 ────────────────────────────────────────────
+
+export const COATING_STANDARDS = ['GB 50205-2020'] as const;
+export type CoatingStandard = (typeof COATING_STANDARDS)[number];
 
 /**
  * 数据处理 → 报告填充 的「一键导入」快照（装配线显式快照，避免下游直接 useDataProcessing）。

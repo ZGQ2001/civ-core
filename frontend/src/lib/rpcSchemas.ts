@@ -25,6 +25,14 @@ export const anchorRunResultSchema = z.object({
   word_missing_images: z.array(z.string()).optional(),
 });
 
+/** coating.run 返回（厚涂型防火涂层厚度验收）。member 单位的计数，无 Word 路径。 */
+export const coatingRunResultSchema = z.object({
+  batches: z.number(),
+  members_total: z.number(),
+  members_qualified: z.number(),
+  output: z.string(),
+});
+
 /** 与 template_helper/types 的 CatalogField 对齐（调用点 setCatalog 会做编译期可赋值检查）。 */
 const catalogFieldSchema = z.object({
   key: z.string(),

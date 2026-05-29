@@ -6,7 +6,23 @@
 
 ---
 
-## 当前焦点（2026-05-28 晚）
+## 当前焦点（2026-05-29）
+
+**MCP server Phase 2 收尾：剩余 25 个 sidecar RPC 全包成 MCP tools** —— 在 Phase 1 的
+20 + report_preset 5 + anchor_read_batch_info 之外，补齐 catalog 4 / template.validate 1 /
+files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 预设 CRUD 4。MCP tool 总数 **52**，基本
+与 sidecar RPC 全表对齐（仅剩「`leeb.preview_excel` 与 `plot_curves.list_sheets` 是否合并成
+通用 `excel_preview`」待评估）。纯协议适配，零业务逻辑——每个 ToolDef 一份 zod schema 跟
+C#/Python handler 入参一一对照；Windows-only / 破坏性的 files.delete/undo_delete/reveal 在
+description 里显式标注（用户拍板「全 10 个都包」）。
+
+- **冒烟扩展**：`scripts/smoke.mjs` 加 Phase 2 回归守卫（tools/list 必须含全部 25 新 tool）+
+  `catalog_list`（C# 读路径）+ `files_list_dir`（C# 文件路径）+ plot_curves 预设
+  `copy→list→delete` roundtrip（Python 写路径）。三跳全绿。
+- **踩坑**：smoke 初版临时预设名取了 `__smoke_copy__`，被 `preset_manager` 校验拒（预设名
+  不能以下划线开头）——这是校验在正常工作，不是 bug；改用合法中文名后 roundtrip 通过。
+
+## 前一焦点（2026-05-28 晚）
 
 **报告填充 + 模板助手 12 项 Bug 清单全清（P1→P4 一气推完）** —— 用户列了 12 条
 bug + 3 条架构验收前提，按 P1 紧凑修复 → P2 共享/显性化 → P3 公共组件 →
@@ -87,7 +103,7 @@ P4 大型架构 顺序逐包 commit。
 
 1. **钻芯/回弹切 C#** —— agent 调用 `anchor_run` 已通，下一种检测类型自然顺延；data_processing calcType 下拉再加项。MCP server 已就位，新 calc 只要在 C# 加 handler，`mcp/src/tools/` 加一份 ToolDef 即可。
 2. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 钻芯 + 回弹等多个 section；catalog 已有 `detection_item` level 概念，等钻芯/回弹切 C# 后再 wire。agent 出综合报告时刚需。
-3. **MCP server Phase 2** —— 补 files._ (10) / pdf_tools._ (4) / word2pdf._ (2) / catalog._ (4) / template.validate / plot_curves 预设 CRUD，让 agent 能做完整「文件管家」工作（不只是装配线）。
+3. ~~**MCP server Phase 2**~~ —— ✅ 已完成（2026-05-29）：catalog 4 / template.validate / files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 预设 CRUD 4 全包，MCP 52 tool 与 sidecar RPC 全表对齐。agent 现在能做完整「文件管家」工作（不只是装配线）。
 4. **MCP server 进度通知** —— anchor.run / plot_curves.run 长任务，sidecar stderr 日志透传 → MCP `notifications/message`，让 agent 看到进度。当前只返终态。
 5. **真正"一键流水线" GUI 按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— 给「人 review 长 agent 任务」用的便利路径，次优先级（agent 可直接调 MCP 串起来，不需要 GUI 按钮）。
 6. **LaTeX 报告路线**（`templates/latex/template.tex` 已贴入，未定方向：替代 docx？只生成 data_table fragment？给 ReportGenerator 加 latex 后端？）
@@ -156,6 +172,25 @@ P4 大型架构 顺序逐包 commit。
 ---
 
 ## 会话历史
+
+### [2026-05-29] MCP server Phase 2：补齐 25 tool，52 tool 与 RPC 全表对齐
+
+Phase 1 留的「文件管家 + 配置 + 预设 CRUD」缺口一次补完。纯 ToolDef 声明，无业务逻辑。
+
+- **新增 25 tool**：catalog 4（list/get/save/delete）+ template.validate 1 + files 10
+  （含 Windows-only 的 delete/undo_delete/reveal，用户拍板全包）+ pdf_tools 4 + word2pdf 2 +
+  plot_curves 预设 CRUD 4（save/delete/rename/copy）。新建 `catalog.ts` / `files.ts` /
+  `pdfTools.ts` / `word2pdf.ts`，扩 `template.ts` / `plot_curves.ts`。
+- **index.ts**：`phase1Tools` → `allTools`，注册全部 13 个域；修了「25 tools = 20 + 5」的
+  陈旧注释（实际 anchor 早已 4 tool）。
+- **每个 schema 跟 handler 入参对照**：照 `mcp/CLAUDE.md` SOP，逐字段读 C#/Python handler 的
+  `RequireString`/`params.get` 确认 key 名（catalog.save 的 `FieldCatalogDto`、files 的
+  `parent`/`name`/`src`/`dst_parent`、pdf 的 `inputs`/`expr`、plot_curves CRUD 的
+  `source_name`/`new_name` 等），不靠猜。
+- **冒烟**：scripts/smoke.mjs 加回归守卫 + 三条新探针（catalog_list / files_list_dir /
+  plot_curves 预设 roundtrip），端到端 52 tool 全绿。
+- **2 commit**：feat（tool 代码 + index 注册 + 冒烟）/ docs（RULES 工具表 + mcp CLAUDE 目录树 +
+  CONTEXT + PROGRESS）。
 
 ### [2026-05-28] MCP server Phase 1 上线：20 tools agent 原生入口
 

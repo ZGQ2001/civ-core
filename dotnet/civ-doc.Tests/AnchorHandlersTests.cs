@@ -94,6 +94,14 @@ public class AnchorHandlersTests
         try
         {
             AnchorTemplateWriter.Write(input);
+            // 模板现在自带「批次信息」sheet（含批次1默认参数）会被 run 当回退读取；
+            // 本用例要测「参数哪都没填」→ 先删掉它，否则不会缺参数。
+            using (var wb = new XLWorkbook(input))
+            {
+                if (wb.Worksheets.TryGetWorksheet(AnchorBatchInfoSheet.SheetName, out var bi))
+                    bi.Delete();
+                wb.Save();
+            }
             var json = $@"{{
                 ""input_xlsx"": ""{Esc(input)}"",
                 ""standard"": ""GB 50086-2015"",
@@ -104,6 +112,51 @@ public class AnchorHandlersTests
             Assert.Contains("批次1", ex.Message);
         }
         finally { if (File.Exists(input)) File.Delete(input); }
+    }
+
+    [Fact]
+    public void ReadBatchInfo_读模板批次信息_返回批次1默认参数()
+    {
+        string path = TempXlsx();
+        try
+        {
+            AnchorTemplateWriter.Write(path);
+            var p = ParseJson($"{{\"input_xlsx\":\"{Esc(path)}\"}}");
+            var r = (Dictionary<string, object?>)AnchorHandlers.ReadBatchInfo(p)!;
+            var batches = (List<Dictionary<string, object?>>)r["batches"]!;
+            Assert.Single(batches);
+            Assert.Equal("批次1", batches[0]["batch_id"]);
+            Assert.NotNull(batches[0]["params"]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Run_省略params_by_batch_从批次信息sheet读参数()
+    {
+        string input = TempXlsx();
+        string output = TempXlsx();
+        try
+        {
+            // 模板自带「批次信息」sheet（批次1 默认参数）；run 不传 params_by_batch 应能从中回退。
+            AnchorTemplateWriter.Write(input);
+            var json = $@"{{
+                ""input_xlsx"": ""{Esc(input)}"",
+                ""output_xlsx"": ""{Esc(output)}"",
+                ""standard"": ""GB 50086-2015""
+            }}";
+            var p = ParseJson(json);
+            var r = (Dictionary<string, object?>)AnchorHandlers.Run(p)!;
+
+            Assert.Equal(1, (int)r["batches"]!);
+            Assert.Equal(3, (int)r["anchors_total"]!);
+            Assert.True(File.Exists(output));
+        }
+        finally
+        {
+            if (File.Exists(input)) File.Delete(input);
+            if (File.Exists(output)) File.Delete(output);
+        }
     }
 
     // ── 批次维度 user_inputs (grouting_date) 端到端测试 ──────────────────

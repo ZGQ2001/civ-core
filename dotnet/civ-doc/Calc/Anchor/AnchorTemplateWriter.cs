@@ -63,12 +63,22 @@ public static class AnchorTemplateWriter
         range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
         range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
 
+        // 「批次信息」sheet：按批次的工程参数 + 灌浆日期 —— 这些批次级元数据的唯一来源。
+        // 预填一行样例批次（与数据 sheet 的「批次1」对应）+ 默认参数，用户照填即可，
+        // 之后前端 / agent 直接读它（anchor.read_batch_info），生成报告不必再在 GUI 重输。
+        AnchorBatchInfoSheet.Write(wb, new[]
+        {
+            new AnchorBatchInfo("批次1",
+                AnchorParams.Create(180000, 500, 7500, 804.25, 200000),
+                GroutingDate: ""),
+        });
+
         // 第二个 sheet 写说明
         var help = wb.Worksheets.Add("说明");
         help.Cell(1, 1).Value = $"锚杆抗拔试验数据模板（{standard}）";
         help.Cell(1, 1).Style.Font.Bold = true;
         help.Cell(1, 1).Style.Font.FontSize = 14;
-        help.Cell(3, 1).Value = "1. 「批次」列：同批次的锚杆共享一组工程参数（P/Lf/La/A/E），在前端 RightPanel 录入。";
+        help.Cell(3, 1).Value = "1. 「批次」列：同批次的锚杆共享一组工程参数（P/Lf/La/A/E）。在「批次信息」sheet 按批次填参数 + 灌浆日期，前端会自动读取预填（也可在前端覆盖）。";
         help.Cell(4, 1).Value = "2. 位移读数单位：毫米（mm）；Nt = 轴向拉力设计值 P。";
         help.Cell(5, 1).Value = "3. 0.1Nt 表示 0.1·P 时的位移读数，0.4Nt 表示 0.4·P，依此类推。";
         help.Cell(6, 1).Value = "4. 1.2Nt-1min/3min/5min 是持荷阶段三次读数；1.2Nt-5min 是总位移。";

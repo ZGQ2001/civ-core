@@ -30,6 +30,7 @@ public static class AnchorHandlers
     {
         d.Register("anchor.generate_template", GenerateTemplate);
         d.Register("anchor.list_batches", ListBatches);
+        d.Register("anchor.read_batch_info", ReadBatchInfo);
         d.Register("anchor.run", Run);
     }
 
@@ -81,6 +82,42 @@ public static class AnchorHandlers
         return new Dictionary<string, object?> { ["batches"] = batches };
     }
 
+    /// <summary>
+    /// 读输入 Excel 的「批次信息」sheet → 各批工程参数 + 灌浆日期，给前端预填表单。
+    /// sheet 缺失（旧模板 / 别人给的 Excel）返回空列表，前端回退默认值。
+    /// </summary>
+    public static object ReadBatchInfo(JsonElement? @params)
+    {
+        if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException("操作参数格式错误，请重试");
+        var p = @params.Value;
+
+        var inputXlsx = p.GetProperty("input_xlsx").GetString()
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
+
+        FileGuard.CheckExcelSize(inputXlsx);
+        var infos = AnchorBatchInfoSheet.Read(inputXlsx);
+
+        return new Dictionary<string, object?>
+        {
+            ["batches"] = infos.Select(i => new Dictionary<string, object?>
+            {
+                ["batch_id"] = i.BatchId,
+                ["params"] = i.Params is { } prm
+                    ? new Dictionary<string, object?>
+                    {
+                        ["P"] = prm.AxialDesignLoad,
+                        ["Lf"] = prm.FreeLength,
+                        ["La"] = prm.AnchorLength,
+                        ["A"] = prm.SteelArea,
+                        ["E"] = prm.ElasticModulus,
+                    }
+                    : null,
+                ["grouting_date"] = i.GroutingDate,
+            }).ToList(),
+        };
+    }
+
     /// <summary>读 Excel + 按批次套参数 + 算 + 写两个 sheet/批 输出。</summary>
     public static object Run(JsonElement? @params)
     {
@@ -128,8 +165,29 @@ public static class AnchorHandlers
             ? ParseBatchUserInputs(buiEl)
             : new Dictionary<string, Dictionary<string, string>>();
 
-        // params_by_batch: { "B1": {P,Lf,La,A,E}, "B2": {...}, ... }
-        var paramsByBatch = ParseParamsByBatch(p.GetProperty("params_by_batch"));
+        // params_by_batch（可选）: { "B1": {P,Lf,La,A,E}, ... }。前端 GUI 填了就传。
+        var paramsByBatch = p.TryGetProperty("params_by_batch", out var pbEl)
+            && pbEl.ValueKind == JsonValueKind.Object
+            ? ParseParamsByBatch(pbEl)
+            : new Dictionary<string, AnchorParams>();
+
+        // 「批次信息」sheet 回退：GUI 没传的批次工程参数 / 灌浆日期，从输入 xlsx 的
+        // 「批次信息」sheet 补上 —— 让「填到 xlsx 就不用在 GUI 再填」成立，也让 agent
+        // 只写一个 xlsx 即可跑。优先级：GUI 传入 > sheet（TryAdd 不覆盖已有）。
+        foreach (var info in AnchorBatchInfoSheet.Read(inputXlsx))
+        {
+            if (info.Params is { } prm)
+                paramsByBatch.TryAdd(info.BatchId, prm);
+            if (!string.IsNullOrWhiteSpace(info.GroutingDate))
+            {
+                if (!batchUserInputs.TryGetValue(info.BatchId, out var bui))
+                {
+                    bui = new Dictionary<string, string>();
+                    batchUserInputs[info.BatchId] = bui;
+                }
+                bui.TryAdd("grouting_date", info.GroutingDate);
+            }
+        }
 
         AnchorStandards.Validate(standard);
 
@@ -146,7 +204,8 @@ public static class AnchorHandlers
             .Select(b => b.BatchId).ToList();
         if (missing.Count > 0)
             throw new ArgumentException(
-                $"以下批次缺工程参数：{string.Join(", ", missing)}");
+                $"以下批次缺工程参数（在 GUI 按批次填，或在输入 Excel 的「批次信息」sheet 填）："
+                + string.Join(", ", missing));
 
         // 装配 workbook
         var batches = batchRows.Select(b => new AnchorBatchInput(

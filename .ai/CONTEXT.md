@@ -6,7 +6,28 @@
 
 ---
 
-## 当前焦点（2026-05-29）
+## 当前焦点（2026-05-30）
+
+**装配线第 2 个检测类型「防火涂层厚度」上线 Layer 1-4（GB 50205-2020 §13.4.3 厚涂型验收）**
+—— 路线图第四阶段「持续往流水线上加工位」首次落地：data_processing calcType 从 leeb/anchor
+扩到三项。照 `civ-core-add-detection-type` SOP 以锚杆画瓢，4 个 commit 各层独立验收。
+
+- **判定（用户拍板厚涂型·验收口径）**：每构件 ≥80% 测点 ≥ 设计厚度 **且** 最薄处 ≥ 设计 × 85%
+  （依据已核对 `civil-codes-vault` GB_50205-2020 §13.4.3 + 附录 E）。闭区间，恰 80%/85% 判合格。
+- **数据三层**：构件 → 截面（每 3m[国标]/1m[北京地标]）→ 截面内测点（钢梁 3 面 / 钢柱 4 面）。
+  与锚杆「一行=一根=一判定」不同，是「一构件=多测点 → 聚合判定」。
+- **输入 = 长表（每行一测点）**（用户选）：批次/构件位置/构件类型/设计厚度/截面号/测点位置/实测厚度，
+  单位统一 mm，统一处理梁3/柱4/变截面数、无合并单元格。**设计厚度在 Excel 列里**（按构件），
+  故 coating.run **不需要 params_by_batch**、前端无「按批次填参数」表单（比锚杆简单）。
+- **结果 = 宽表**（贴用户现有「防火（钢梁/钢柱）」sheet）：构件合并 + 截面行 + 各测点 + 平均值/
+  合格率/最薄处/设计/判定；测点位置一致用面名表头否则测点1..K；不合格附原因 + 标注判定依据（可追溯）。
+- **4 commit**：L1 计算底座(+11 xUnit) / L2 Excel读+模板+宽表(+9) / L3 RPC handler(+4，全套229绿) /
+  L4 前端 calcType + MCP `coating_*` 3 tool（smoke 端到端 coating_run 2/2 构件合格，agent→MCP→C# 三跳通）。
+- **本轮不含 Layer 5（报告填充/Word 输出）**：需用户给/做一份防火涂层 Word 模板（走 `civ-core-make-template`），
+  挂 `CoatingFieldCatalog` + `CatalogStore.BuildCoatingCatalog` + coating.run 接 word_template_path。留作下一阶段。
+- **未 push / 未开 PR**，分支 `feat/coating-thickness`（基于 main e9900e6，4 commit）。
+
+## 前一焦点（2026-05-29）
 
 **MCP server Phase 2 收尾：剩余 25 个 sidecar RPC 全包成 MCP tools** —— 在 Phase 1 的
 20 + report_preset 5 + anchor_read_batch_info 之外，补齐 catalog 4 / template.validate 1 /
@@ -101,8 +122,11 @@ P4 大型架构 顺序逐包 commit。
 
 > **方向定调（2026-05-27）**：系统主要操作者是 AI agent，不是人。GUI 退到「人 review agent 输出」位置。所有新功能优先评估 agent 体验，GUI 按钮做兜底。
 
-1. **钻芯/回弹切 C#** —— agent 调用 `anchor_run` 已通，下一种检测类型自然顺延；data_processing calcType 下拉再加项。MCP server 已就位，新 calc 只要在 C# 加 handler，`mcp/src/tools/` 加一份 ToolDef 即可。
-2. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 钻芯 + 回弹等多个 section；catalog 已有 `detection_item` level 概念，等钻芯/回弹切 C# 后再 wire。agent 出综合报告时刚需。
+0. **防火涂层 Layer 5（报告填充 / Word 输出）** —— L1-4 已落（算+出结果 Excel）；补 `CoatingFieldCatalog`
+   + `CatalogStore.BuildCoatingCatalog` + coating.run 接 `word_template_path` + `CoatingRowResolver`，
+   让防火涂层也能一键出 Word 报告。需先有一份防火涂层 Word 模板（走 `civ-core-make-template`）。
+1. **钻芯/回弹切 C#** —— 防火涂层已验证「加检测类型」全链路（SOP 跑通），第三种类型照此顺延；data_processing calcType 下拉再加项。MCP server 已就位，新 calc 只要在 C# 加 handler，`mcp/src/tools/` 加一份 ToolDef 即可。
+2. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 防火涂层 + 钻芯等多个 section；catalog 已有 `detection_item` level 概念，现已有 2 个真实 calc 类型可混排。agent 出综合报告时刚需。
 3. ~~**MCP server Phase 2**~~ —— ✅ 已完成（2026-05-29）：catalog 4 / template.validate / files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 预设 CRUD 4 全包，MCP 52 tool 与 sidecar RPC 全表对齐。agent 现在能做完整「文件管家」工作（不只是装配线）。
 4. **MCP server 进度通知** —— anchor.run / plot_curves.run 长任务，sidecar stderr 日志透传 → MCP `notifications/message`，让 agent 看到进度。当前只返终态。
 5. **真正"一键流水线" GUI 按钮**（数据处理 → 绘曲线图 → 报告填充 串起来）—— 给「人 review 长 agent 任务」用的便利路径，次优先级（agent 可直接调 MCP 串起来，不需要 GUI 按钮）。
@@ -172,6 +196,27 @@ P4 大型架构 顺序逐包 commit。
 ---
 
 ## 会话历史
+
+### [2026-05-30] 新检测类型「防火涂层厚度」Layer 1-4（GB 50205-2020 厚涂型验收）
+
+装配线第 2 个真实 calc 类型，路线图第四阶段「加工位」首次落地。照 `civ-core-add-detection-type`
+SOP 以锚杆画瓢，4 个 commit 各层独立验收（用户偏好「大需求分多次 commit」）。
+
+- **入手先查规范**：`civil-codes-vault/10_检测项目/涂层厚度检测.md` + 核对 `40_规范原文/GB_50205-2020.md`
+  §13.4.3 原文 + `GB_T_50621-2010.md` §13 测点布置。用户拍板厚涂型·验收口径（非膨胀型 / 非现场评定）。
+- **看用户真实数据定结构**：`D:\3JS\...\钢结构检测通用表.xlsx`「防火（钢梁/钢柱）」sheet —— 钢梁 3 面
+  (梁侧/梁侧/梁底)、钢柱 4 面(东/西/南/北)，设计厚度按构件、μm/mm 混用。用户选「长表输入」（清洁、
+  agent 友好），我们统一 mm；结果按其熟悉宽表版式出。
+- **L1 计算底座**：`Calc/Coating/` Columns/Standards/Domain/Math/Calculator。ComputeMember 两条件
+  （合格率≥80% + 最薄≥设计×85%），不合格写原因。+11 xUnit（四分支 + 边界）。`5d34840`
+- **L2 Excel+模板+宽表**：CoatingExcelReader（长表按批次+构件分组，设计厚度一致性校验防串位）/
+  CoatingTemplateWriter（梁柱样例）/ CoatingAnalysisSheet（宽表、面名表头、附原因+判定依据）。+9 xUnit。`d2909e7`
+- **L3 RPC**：CoatingHandlers（generate_template/list_batches/run，无 params_by_batch）+ JsonRpcServer
+  注册一行。+4 xUnit 端到端，全套 229 绿。`077d7e5`
+- **L4 前端+MCP**：data_processing calcType 加 coating + CoatingSubForm（无按批次参数）+
+  coatingRunResultSchema；MCP `coating_*` 3 tool + smoke 三跳探针。frontend tsc/eslint/prettier 绿，
+  mcp typecheck+7测+smoke（coating_run 2/2 构件合格）。`e2b8f32`
+- **不含 Layer 5**（报告填充/Word）—— 留待下一阶段（需防火涂层 Word 模板）。
 
 ### [2026-05-29] MCP server Phase 2：补齐 25 tool，52 tool 与 RPC 全表对齐
 

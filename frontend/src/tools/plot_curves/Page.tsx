@@ -61,7 +61,28 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
     }
   }, [c, appendOutput]);
 
+  const handleRunAll = useCallback(async () => {
+    const outcome = await c.runAllSheets();
+    if (!outcome) return;
+    const ts = new Date().toLocaleTimeString();
+    if (outcome.kind === 'error') {
+      appendOutput?.(`[${ts}] plot_curves 出全部批次: ${outcome.message}`);
+      return;
+    }
+    appendOutput?.(
+      [
+        `[${ts}] plot_curves 出全部批次: ${outcome.sheetCount} 个 sheet`,
+        `  → 共写 ${outcome.totalWritten} / 失败 ${outcome.totalFailed}` +
+          (outcome.failedSheets.length
+            ? ` / 出错 sheet: ${outcome.failedSheets.join('、')}`
+            : ''),
+      ].join('\n'),
+    );
+  }, [c, appendOutput]);
+
   const canRun = !!c.excelPath && !!c.preset && !c.running;
+  // 非元 sheet（_ 开头的如 _批次参数 跳过）数量 > 1 时才显示「出全部批次」
+  const dataSheetCount = c.sheets.filter((s) => !s.startsWith('_')).length;
 
   return (
     <div className="flex h-full flex-col">
@@ -206,6 +227,18 @@ export function PlotCurvesPage({ appendOutput }: Props = {}) {
               <i className="codicon codicon-folder !text-[13px]" />
               输出
             </button>
+            {dataSheetCount > 1 && (
+              <button
+                type="button"
+                onClick={handleRunAll}
+                disabled={!canRun}
+                title={`为全部 ${dataSheetCount} 个 sheet（批次）各出一组图，文件名按「批次_编号」命名防跨批撞名`}
+                className="border-vscode-border flex shrink-0 items-center gap-1 rounded-[2px] border bg-[#2d2d2d] px-2.5 py-1 text-xs hover:bg-[#3a3a3a] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <i className="codicon codicon-run-all !text-[13px]" />
+                出全部批次
+              </button>
+            )}
             <RunBtn running={c.running} disabled={!canRun} onClick={handleRun}>
               {c.running ? '出图中…' : '开始批量出图'}
             </RunBtn>

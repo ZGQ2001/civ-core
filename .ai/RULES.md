@@ -61,7 +61,7 @@
 | `catalog.save`                 | `Handlers/CatalogHandlers.cs`      | 新建或覆盖字段目录                                                                                                             |
 | `catalog.delete`               | `Handlers/CatalogHandlers.cs`      | 删除字段目录                                                                                                                   |
 | `report.render_placeholder`    | `Handlers/ReportHandlers.cs`       | 通用占位符渲染（docx_path + values + output_path），跟特定 calc 解耦                                                           |
-| `report.run_from_result`       | `Handlers/ReportHandlers.cs`       | 读 anchor.run 已产出的结果 xlsx 直接出 Word，不重算（含隐藏 `_批次参数` sheet 读 P/Lf/La/A/E）                                 |
+| `report.run_from_result`       | `Handlers/ReportHandlers.cs`       | 读 anchor.run 已产出的结果 xlsx 直接出 Word，不重算（隐藏 `_批次参数` sheet 读 P/Lf/La/A/E + 灌浆日期；日期 GUI/预设优先、文件兜底） |
 | `report_preset.list`           | `Handlers/ReportPresetHandlers.cs` | 列报告 user_inputs 预设（可按 catalog_id 过滤）；按 updated_at 倒序                                                            |
 | `report_preset.get`            | `Handlers/ReportPresetHandlers.cs` | 读单个预设完整内容                                                                                                             |
 | `report_preset.save`           | `Handlers/ReportPresetHandlers.cs` | 新建或覆盖预设；server 端自动盖 updated_at                                                                                     |

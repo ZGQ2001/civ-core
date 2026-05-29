@@ -26,7 +26,7 @@ const SOURCE_OPTIONS = [
 const LEVEL_OPTIONS: { value: FieldLevel; label: string }[] = [
   { value: 'report', label: '报告级（整份报告填一次）' },
   { value: 'detection_item', label: '检测项目级（每个检测项目）' },
-  { value: 'batch', label: '检测批级（每个检测批）' },
+  { value: 'batch', label: '批次级（每个批次）' },
   { value: 'component', label: '构件级（每个构件/锚杆）' },
 ];
 

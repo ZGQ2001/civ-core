@@ -7,8 +7,8 @@ import { useShell } from '../../lib/shell';
 import { RunBtn, Select, ToolHeader } from '../_shared/forms';
 import { useTemplateHelper } from './controller';
 import { FieldEditor } from './FieldEditor';
-import type { CatalogField, FieldLevel } from './types';
-import { LEVEL_LABEL } from './types';
+import type { CatalogField, FieldLevel, ValidateHint } from './types';
+import { LEVEL_LABEL, LEVEL_ORDER } from './types';
 
 interface TemplateHelperPageProps {
   appendOutput?: (line: string) => void;
@@ -35,19 +35,32 @@ export function TemplateHelperPage(
     ];
   }, [c.activeCatalog]);
 
-  const grouped = useMemo(() => {
-    if (!c.activeCatalog) return new Map<string, CatalogField[]>();
+  // 分组结果 = [分组名, 字段[]] 的有序数组。
+  // 按层级：固定 报告级→检测项目级→批次级→构件级（LEVEL_ORDER），不再按字段插入顺序乱排。
+  // 按用途：保持字段插入顺序。
+  const groupedEntries = useMemo<[string, CatalogField[]][]>(() => {
+    if (!c.activeCatalog) return [];
+    if (groupBy === 'level') {
+      const byLevel = new Map<FieldLevel, CatalogField[]>();
+      for (const f of c.activeCatalog.fields) {
+        const lvl = f.level as FieldLevel;
+        const arr = byLevel.get(lvl);
+        if (arr) arr.push(f);
+        else byLevel.set(lvl, [f]);
+      }
+      return LEVEL_ORDER.filter((lvl) => byLevel.has(lvl)).map((lvl) => [
+        LEVEL_LABEL[lvl] || lvl,
+        byLevel.get(lvl)!,
+      ]);
+    }
     const map = new Map<string, CatalogField[]>();
     for (const f of c.activeCatalog.fields) {
-      const key =
-        groupBy === 'level'
-          ? LEVEL_LABEL[f.level as FieldLevel] || f.level
-          : f.group || '其他';
+      const key = f.group || '其他';
       const arr = map.get(key);
       if (arr) arr.push(f);
       else map.set(key, [f]);
     }
-    return map;
+    return Array.from(map.entries());
   }, [c.activeCatalog, groupBy]);
 
   const toggleGroup = useCallback((group: string) => {
@@ -60,8 +73,8 @@ export function TemplateHelperPage(
   }, []);
 
   const expandAll = useCallback(() => {
-    setExpandedGroups(new Set(grouped.keys()));
-  }, [grouped]);
+    setExpandedGroups(new Set(groupedEntries.map(([name]) => name)));
+  }, [groupedEntries]);
 
   const collapseAll = useCallback(() => {
     setExpandedGroups(new Set());
@@ -229,6 +242,9 @@ export function TemplateHelperPage(
         </div>
       </ToolHeader>
 
+      {/* 体检结果 —— 验证后结构化展示，错误/未识别一眼可见（不再只埋在底部输出面板） */}
+      <ValidateResults />
+
       {/* 层级图例 —— 让用户一眼看懂 4 个层级是什么 + 怎么在模板里写 */}
       <LevelLegend />
 
@@ -345,7 +361,7 @@ export function TemplateHelperPage(
             />
           </div>
         )}
-        {Array.from(grouped.entries()).map(([group, fields]) => (
+        {groupedEntries.map(([group, fields]) => (
           <FieldGroup
             key={group}
             group={group}
@@ -372,6 +388,239 @@ export function TemplateHelperPage(
 }
 
 // ── Sub-components ──
+
+/**
+ * 模板体检结果面板 —— 验证后把 template.validate 的结构化结果摆在页面顶部，
+ * 错误 / 未识别占位符一眼可见（取代「只往底部输出面板灌文本」）。
+ *
+ * 排版优先级（从上到下，越靠上越要命）：
+ *   1. 需修正（hints）：层级错配等，红=error / 黄=warning
+ *   2. 未识别占位符：模板里写了但 catalog 不认识的 {{xxx}}
+ *   3. 检测到的锚点（markers）：给用户「marker 被认出来了」的确认
+ *   4. 未使用字段 / 已匹配字段：折叠，次要
+ */
+function ValidateResults() {
+  const c = useTemplateHelper();
+  const [showUnused, setShowUnused] = useState(false);
+  const [showMatched, setShowMatched] = useState(false);
+
+  const v = c.lastValidation;
+  if (!v) return null;
+
+  const s = v.summary;
+  const allClear = v.hints.length === 0 && v.unrecognized.length === 0;
+
+  return (
+    <div className="border-vscode-border border-b bg-[#1d1d1d] px-5 py-2.5">
+      {/* 标题行 + 计数 chips + 收起 */}
+      <div className="flex items-center gap-2">
+        <i
+          className={cn(
+            'codicon !text-[14px]',
+            allClear
+              ? 'codicon-pass text-green-400'
+              : 'codicon-warning text-yellow-400',
+          )}
+        />
+        <span className="text-vscode-text text-xs font-medium">
+          {allClear ? '模板体检通过' : '模板体检结果'}
+        </span>
+        <div className="ml-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+          <Chip tone="ok" label={`匹配 ${s.matched_count}`} />
+          {v.hints.length > 0 && (
+            <Chip tone="error" label={`需修正 ${v.hints.length}`} />
+          )}
+          {s.unrecognized_count > 0 && (
+            <Chip tone="warn" label={`未识别 ${s.unrecognized_count}`} />
+          )}
+          {s.unused_count > 0 && (
+            <Chip tone="muted" label={`未使用 ${s.unused_count}`} />
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={c.dismissValidation}
+          className="text-vscode-text-dim hover:text-vscode-text ml-auto shrink-0 p-0.5"
+          title="收起体检结果"
+        >
+          <i className="codicon codicon-close !text-[12px]" />
+        </button>
+      </div>
+
+      {/* 1. 需修正 —— 层级错配等，最要命，永远展开 */}
+      {v.hints.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {v.hints.map((h, i) => (
+            <HintRow key={`${h.field_name}-${i}`} hint={h} />
+          ))}
+        </div>
+      )}
+
+      {/* 2. 未识别占位符 —— 模板里写了但 catalog 不认识 */}
+      {v.unrecognized.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {v.unrecognized.map((u, i) => (
+            <div
+              key={`${u.placeholder}-${i}`}
+              className="flex items-start gap-2 rounded-[2px] border border-l-2 border-yellow-600/40 border-l-yellow-500 bg-[#2a2620] px-2 py-1 text-[11px]"
+            >
+              <i className="codicon codicon-question mt-0.5 shrink-0 !text-[12px] text-yellow-400" />
+              <div className="min-w-0">
+                <code className="text-yellow-200">{u.placeholder}</code>
+                <span className="text-vscode-text-dim ml-2">
+                  未识别 —— catalog
+                  里没有这个字段（检查拼写，或去下方字段表加/改）
+                </span>
+                <div className="text-vscode-text-faint mt-0.5">
+                  {u.location}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 3. 检测到的锚点 marker —— 给「认出来了」的确认 */}
+      <div className="text-vscode-text-faint mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+        <span>检测到锚点：</span>
+        {v.markers.length === 0 ? (
+          <span className="italic">无（模板未用 [[…]] 重复区域）</span>
+        ) : (
+          v.markers.map((m, i) => (
+            <code
+              key={`${m.text}-${i}`}
+              className="border-vscode-border text-vscode-text-dim rounded border bg-[#252525] px-1"
+            >
+              {m.text}
+            </code>
+          ))
+        )}
+      </div>
+
+      {allClear && v.markers.length === 0 && (
+        <div className="text-vscode-text-faint mt-1 text-[10px]">
+          所有占位符都识别且层级正确。
+        </div>
+      )}
+
+      {/* 4. 折叠：未使用字段 / 已匹配字段 */}
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+        {v.unused.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowUnused((x) => !x)}
+            className="text-vscode-text-dim hover:text-vscode-text flex items-center gap-1"
+          >
+            <i
+              className={cn(
+                'codicon !text-[10px]',
+                showUnused ? 'codicon-chevron-down' : 'codicon-chevron-right',
+              )}
+            />
+            未使用字段 {v.unused.length}
+          </button>
+        )}
+        {v.matched.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowMatched((x) => !x)}
+            className="text-vscode-text-dim hover:text-vscode-text flex items-center gap-1"
+          >
+            <i
+              className={cn(
+                'codicon !text-[10px]',
+                showMatched ? 'codicon-chevron-down' : 'codicon-chevron-right',
+              )}
+            />
+            已匹配字段 {v.matched.length}
+          </button>
+        )}
+      </div>
+      {showUnused && v.unused.length > 0 && (
+        <div className="mt-1 max-h-32 overflow-y-auto rounded-[2px] bg-[#161616] px-2 py-1.5 text-[10px]">
+          <div className="flex flex-wrap gap-1.5">
+            {v.unused.map((u) => (
+              <span
+                key={u.key}
+                className="text-vscode-text-dim border-vscode-border inline-flex items-center gap-1 rounded border bg-[#252525] px-1.5 py-0.5"
+                title={`${u.key}（${LEVEL_LABEL[u.level] ?? u.level}）`}
+              >
+                {u.name}
+                <span className="text-vscode-text-faint">
+                  {LEVEL_LABEL[u.level] ?? u.level}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {showMatched && v.matched.length > 0 && (
+        <div className="mt-1 max-h-32 overflow-y-auto rounded-[2px] bg-[#161616] px-2 py-1.5 text-[10px]">
+          <div className="flex flex-wrap gap-1.5">
+            {v.matched.map((m, i) => (
+              <span
+                key={`${m.key}-${i}`}
+                className="text-vscode-text-dim border-vscode-border inline-flex items-center gap-1 rounded border bg-[#252525] px-1.5 py-0.5"
+                title={`${m.placeholder} → ${m.key} @ ${m.location}`}
+              >
+                {m.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 体检计数小 chip —— ok/error/warn/muted 四色。 */
+function Chip({
+  tone,
+  label,
+}: {
+  tone: 'ok' | 'error' | 'warn' | 'muted';
+  label: string;
+}) {
+  const cls = {
+    ok: 'bg-green-500/15 text-green-300 border-green-500/40',
+    error: 'bg-red-500/15 text-red-300 border-red-500/40',
+    warn: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40',
+    muted: 'bg-gray-500/15 text-gray-300 border-gray-500/40',
+  }[tone];
+  return (
+    <span className={cn('rounded-full border px-1.5 py-px', cls)}>{label}</span>
+  );
+}
+
+/** 单条「需修正」提示 —— error 红 / warning 黄，带位置。 */
+function HintRow({ hint }: { hint: ValidateHint }) {
+  const isError = hint.severity === 'error';
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2 rounded-[2px] border border-l-2 px-2 py-1 text-[11px]',
+        isError
+          ? 'border-red-600/40 border-l-red-500 bg-[#2a1d1d]'
+          : 'border-yellow-600/40 border-l-yellow-500 bg-[#2a2620]',
+      )}
+    >
+      <i
+        className={cn(
+          'codicon mt-0.5 shrink-0 !text-[12px]',
+          isError
+            ? 'codicon-error text-red-400'
+            : 'codicon-warning text-yellow-400',
+        )}
+      />
+      <div className="min-w-0">
+        <span className={isError ? 'text-red-200' : 'text-yellow-200'}>
+          {hint.message}
+        </span>
+        <div className="text-vscode-text-faint mt-0.5">{hint.location}</div>
+      </div>
+    </div>
+  );
+}
 
 function FieldGroup({
   group,

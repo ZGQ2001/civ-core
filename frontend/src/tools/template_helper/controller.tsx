@@ -34,6 +34,8 @@ interface State {
 
   docxPath: string;
   validating: boolean;
+  /** 最近一次「验证」的结构化结果 —— 页内体检面板渲染用；选新模板/换目录时清空。 */
+  lastValidation: ValidateResult | null;
 
   copiedKey: string | null;
   editingFieldKey: string | null;
@@ -44,6 +46,8 @@ interface Actions {
   selectCatalog: (id: string) => Promise<void>;
   setDocxPath: (p: string) => void;
   validate: () => Promise<ValidateResult | null>;
+  /** 收起页内体检面板（不影响日志已输出的内容）。 */
+  dismissValidation: () => void;
   copyPlaceholder: (text: string, key: string) => void;
 
   addField: (field: CatalogField) => void;
@@ -86,11 +90,22 @@ export function TemplateHelperProvider({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [docxPath, setDocxPath] = useState('');
+  const [docxPath, setDocxPathRaw] = useState('');
   const [validating, setValidating] = useState(false);
+  const [lastValidation, setLastValidation] = useState<ValidateResult | null>(
+    null,
+  );
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
+
+  // 换模板 → 旧体检结果作废（避免拿 A 模板的结果误导 B 模板）。
+  const setDocxPath = useCallback((p: string) => {
+    setDocxPathRaw(p);
+    setLastValidation(null);
+  }, []);
+
+  const dismissValidation = useCallback(() => setLastValidation(null), []);
 
   const refreshCatalogs = useCallback(async () => {
     setCatalogsLoading(true);
@@ -113,6 +128,7 @@ export function TemplateHelperProvider({
       setCatalogLoading(true);
       setDirty(false);
       setEditingFieldKey(null);
+      setLastValidation(null); // 换目录 → 旧体检结果作废
       try {
         const res = await rpc<{ catalog: FieldCatalog }>('catalog.get', {
           id,
@@ -165,6 +181,7 @@ export function TemplateHelperProvider({
         docx_path: docxPath,
         catalog_id: activeCatalogId,
       });
+      setLastValidation(res); // 结构化结果存进 state，页内体检面板渲染
       const s = res.summary;
       shell.appendOutput(
         logLine(
@@ -346,12 +363,14 @@ export function TemplateHelperProvider({
       saving,
       docxPath,
       validating,
+      lastValidation,
       copiedKey,
       editingFieldKey,
       refreshCatalogs,
       selectCatalog,
       setDocxPath,
       validate,
+      dismissValidation,
       copyPlaceholder,
       addField,
       updateField,
@@ -373,11 +392,14 @@ export function TemplateHelperProvider({
       saving,
       docxPath,
       validating,
+      lastValidation,
       copiedKey,
       editingFieldKey,
       refreshCatalogs,
       selectCatalog,
+      setDocxPath,
       validate,
+      dismissValidation,
       copyPlaceholder,
       addField,
       updateField,

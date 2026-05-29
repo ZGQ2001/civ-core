@@ -16,7 +16,7 @@ sidecar 里；本目录只做**协议适配 + 错误映射**。
 
 ## 目录结构
 
-```
+```text
 mcp/
 ├── CLAUDE.md                  本文件
 ├── package.json               @modelcontextprotocol/sdk + zod

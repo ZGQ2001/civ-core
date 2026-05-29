@@ -1,8 +1,8 @@
 /**
- * template.* —— 字段目录查询（给 agent / 用户配 user_inputs 时参考）。
+ * template.* —— 字段目录查询 + docx 模板占位符校验。
  *
- * Phase 1 仅暴露 template.fields；template.validate（docx 占位符校验）留待 Phase 2，
- * 因为它面向「人 review 模板」场景，agent 自己很少直接用。
+ * template.fields 查字段清单；template.validate 体检一份 docx 模板：占位符是否都能
+ * 命中字段、有没有未识别的、哪些字段没用上、重复标记 marker 嵌套是否合法。
  */
 
 import { z } from "zod";
@@ -22,4 +22,23 @@ export const templateFields: ToolDef = {
   },
 };
 
-export const allTemplateTools: readonly ToolDef[] = [templateFields];
+export const templateValidate: ToolDef = {
+  rpcMethod: "template.validate",
+  mcpName: "template_validate",
+  description:
+    "体检一份 Word 模板（docx）的占位符。扫 `{{字段}}` 占位符 + `[[标记]]...[[/标记]]` 重复标记，" +
+    "对照指定字段目录给出：matched（命中字段）/ unrecognized（写了但没对应字段，多半拼错）/ " +
+    "unused（目录里有但模板没用）/ markers（嵌套结构）/ hints（层级放错位置等可操作提示）/ summary。" +
+    "\n\nagent 用法：用户给了甲方模板、或自己改了模板后，先 validate 一遍确认占位符都对得上，再喂给 anchor_run 的 word_template_path。",
+  inputSchema: {
+    docx_path: z.string().describe("Word 模板 docx 绝对路径"),
+    catalog_id: z
+      .string()
+      .describe("对照的字段目录 id（如 'anchor'）；决定哪些占位符算「识别」"),
+  },
+};
+
+export const allTemplateTools: readonly ToolDef[] = [
+  templateFields,
+  templateValidate,
+];

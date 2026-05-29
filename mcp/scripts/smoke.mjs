@@ -61,6 +61,87 @@ try {
     );
   }
 
+  // ── Phase 2 回归守卫：所有新域 tool 必须在 list 里 ─────────────────
+  const toolNames = new Set(list.tools.map((t) => t.name));
+  const expectedPhase2 = [
+    "catalog_list", "catalog_get", "catalog_save", "catalog_delete",
+    "template_validate",
+    "files_list_dir", "files_exists", "files_create_file", "files_create_folder",
+    "files_rename", "files_copy", "files_move", "files_delete",
+    "files_undo_delete", "files_reveal",
+    "pdf_tools_merge", "pdf_tools_split_per_page", "pdf_tools_split_by_ranges",
+    "pdf_tools_inspect",
+    "word2pdf_convert", "word2pdf_inspect",
+    "plot_curves_save_preset", "plot_curves_delete_preset",
+    "plot_curves_rename_preset", "plot_curves_copy_preset",
+  ];
+  const missing = expectedPhase2.filter((n) => !toolNames.has(n));
+  if (missing.length > 0) {
+    console.error(`[smoke] FAIL: 缺少 Phase 2 工具: ${missing.join(", ")}`);
+    await client.close().catch(() => undefined);
+    process.exit(1);
+  }
+  console.error(`[smoke] Phase 2 工具齐全（${expectedPhase2.length} 个）`);
+
+  // ── C# 读路径（doc 之外）：catalog_list ──────────────────────────
+  const catalogs = await client.callTool({ name: "catalog_list", arguments: {} });
+  const catalogText = catalogs.content?.[0]?.text ?? "";
+  if (catalogs.isError) {
+    console.error(`[smoke] catalog_list ERROR: ${catalogText}`);
+  } else {
+    const parsed = JSON.parse(catalogText);
+    console.error(`[smoke] catalog 数: ${(parsed.catalogs ?? []).length}`);
+  }
+
+  // ── C# 文件路径：files_list_dir 列 mcp/ 目录 ─────────────────────
+  const mcpDir = join(__dirname, "..");
+  const listing = await client.callTool({
+    name: "files_list_dir",
+    arguments: { path: mcpDir },
+  });
+  const listingText = listing.content?.[0]?.text ?? "";
+  if (listing.isError) {
+    console.error(`[smoke] files_list_dir ERROR: ${listingText}`);
+  } else {
+    const parsed = JSON.parse(listingText);
+    console.error(`[smoke] files_list_dir 条目数: ${(parsed.entries ?? []).length}`);
+  }
+
+  // ── Python 预设写路径 roundtrip：copy → list → delete ────────────
+  // 预设名不能以下划线开头（preset_manager 校验），用普通中文临时名。
+  const TMP = "冒烟临时副本";
+  const baseParsed = JSON.parse(presetText || "{}");
+  const basePresets = baseParsed.presets ?? [];
+  const src = baseParsed.default ?? basePresets[0];
+  if (src) {
+    // 仅当上次残留时才预删（避免删不存在项产生误导性 ERROR 行）
+    if (basePresets.includes(TMP)) {
+      await client.callTool({
+        name: "plot_curves_delete_preset",
+        arguments: { name: TMP },
+      });
+    }
+    const copy = await client.callTool({
+      name: "plot_curves_copy_preset",
+      arguments: { source_name: src, new_name: TMP },
+    });
+    console.error(`[smoke] copy_preset(${src}→${TMP}) isError: ${copy.isError === true}`);
+    const after = await client.callTool({
+      name: "plot_curves_list_presets",
+      arguments: {},
+    });
+    const afterParsed = JSON.parse(after.content?.[0]?.text ?? "{}");
+    const present = (afterParsed.presets ?? []).includes(TMP);
+    console.error(`[smoke] 临时预设已出现: ${present}`);
+    const del = await client.callTool({
+      name: "plot_curves_delete_preset",
+      arguments: { name: TMP },
+    });
+    console.error(`[smoke] delete_preset isError: ${del.isError === true}`);
+  } else {
+    console.error("[smoke] 无可复制的预设，跳过 plot_curves CRUD roundtrip");
+  }
+
   await client.close();
   console.error("[smoke] OK");
   process.exit(0);

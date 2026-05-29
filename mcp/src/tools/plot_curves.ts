@@ -1,8 +1,9 @@
 /**
  * plot_curves.* —— matplotlib 出曲线图（Python sidecar，唯一保留的 Python 路径）。
  *
- * Phase 1 暴露 6 个：list_presets / list_sheets / list_headers / preflight / run / render_preview。
- * 预设 CRUD（save/delete/rename/copy）留待 Phase 2——更偏「人维护预设」，agent 暂用不上。
+ * 10 个 tool：list_presets / list_sheets / list_headers / preflight / run / render_preview
+ * + 预设 CRUD（save_preset / delete_preset / rename_preset / copy_preset）。
+ * 预设 CRUD 只管**用户**预设（落 ~/.civ-core/）；系统预设受保护，删/改会抛 PresetError。
  *
  * 注意：所有方法走 Python sidecar（SidecarRouter 前缀路由自动）。
  */
@@ -129,6 +130,56 @@ export const plotCurvesRenderPreview: ToolDef = {
   },
 };
 
+export const plotCurvesSavePreset: ToolDef = {
+  rpcMethod: "plot_curves.save_preset",
+  mcpName: "plot_curves_save_preset",
+  description:
+    "保存（新增或覆盖）一条用户预设。返回 {ok, name}。" +
+    "与系统预设同名时，用户预设在 list_presets 合并时会盖过系统预设。" +
+    "data 是完整的 plot_curves 预设字典（结构同 list_presets 的 details[name] / run 的 preset_override）。",
+  inputSchema: {
+    name: z.string().describe("预设名"),
+    data: z
+      .record(z.string(), z.unknown())
+      .describe("预设完整字典（plot_curves 预设结构）"),
+  },
+};
+
+export const plotCurvesDeletePreset: ToolDef = {
+  rpcMethod: "plot_curves.delete_preset",
+  mcpName: "plot_curves_delete_preset",
+  description:
+    "删除一条用户预设。返回 {ok, name}。" +
+    "⚠️ 只能删用户预设——系统预设受保护，删它会报 PresetError。",
+  inputSchema: {
+    name: z.string().describe("要删除的用户预设名"),
+  },
+};
+
+export const plotCurvesRenamePreset: ToolDef = {
+  rpcMethod: "plot_curves.rename_preset",
+  mcpName: "plot_curves_rename_preset",
+  description:
+    "重命名一条用户预设。返回 {ok, old_name, new_name}。" +
+    "⚠️ 只能改用户预设；要改系统预设请先用 plot_curves_copy_preset 复制成用户预设。",
+  inputSchema: {
+    old_name: z.string().describe("现用户预设名"),
+    new_name: z.string().describe("新名"),
+  },
+};
+
+export const plotCurvesCopyPreset: ToolDef = {
+  rpcMethod: "plot_curves.copy_preset",
+  mcpName: "plot_curves_copy_preset",
+  description:
+    "把任一预设（系统或用户）复制成一条新的用户预设。返回 {ok, source, new_name}。" +
+    "常用于：以系统预设为模板，复制后再 save_preset 微调出自己的版本。",
+  inputSchema: {
+    source_name: z.string().describe("源预设名（系统或用户均可）"),
+    new_name: z.string().describe("复制出的新用户预设名"),
+  },
+};
+
 export const allPlotCurvesTools: readonly ToolDef[] = [
   plotCurvesListPresets,
   plotCurvesListSheets,
@@ -136,4 +187,8 @@ export const allPlotCurvesTools: readonly ToolDef[] = [
   plotCurvesPreflight,
   plotCurvesRun,
   plotCurvesRenderPreview,
+  plotCurvesSavePreset,
+  plotCurvesDeletePreset,
+  plotCurvesRenamePreset,
+  plotCurvesCopyPreset,
 ];

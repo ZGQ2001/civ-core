@@ -27,16 +27,21 @@ mcp/
 │   ├── router.ts              SidecarRouter 前缀路由（同 Rust 端策略）
 │   ├── lib/
 │   │   └── repoRoot.ts        解析仓库根（env / sentinel 推断）
-│   └── tools/
+│   └── tools/             共 52 tool（基本与 sidecar RPC 全表对齐）
 │       ├── registry.ts        ToolDef 接口 + registerSidecarTool 帮手
-│       ├── doc.ts             doc_ping / doc_version 探活
+│       ├── doc.ts             doc 2 tool（ping / version 探活）
 │       ├── workspace.ts       workspace 4 tool
-│       ├── anchor.ts          anchor 3 tool
+│       ├── anchor.ts          anchor 4 tool
 │       ├── leeb.ts            leeb 2 tool
 │       ├── xlsx.ts            xlsx 1 tool
-│       ├── template.ts        template 1 tool
-│       ├── report.ts          report 1 tool
-│       └── plot_curves.ts     plot_curves 6 tool（走 Python sidecar）
+│       ├── template.ts        template 2 tool（fields / validate）
+│       ├── report.ts          report 2 tool
+│       ├── reportPreset.ts    report_preset 5 tool
+│       ├── catalog.ts         catalog 4 tool（字段目录 CRUD）
+│       ├── files.ts           files 10 tool（文件管理；delete/undo/reveal 仅 Win）
+│       ├── pdfTools.ts        pdf_tools 4 tool
+│       ├── word2pdf.ts        word2pdf 2 tool（convert 仅 Win）
+│       └── plot_curves.ts     plot_curves 10 tool（走 Python sidecar；含预设 CRUD）
 ├── tests/                     vitest 单测 + echo fixture
 └── scripts/
     └── smoke.mjs              端到端冒烟：用 MCP Client SDK 驱动本 server

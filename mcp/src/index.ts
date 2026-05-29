@@ -10,7 +10,8 @@
  *      （前缀路由：plot_curves.* → Python，其余 → C#）
  *   3. 用 StdioServerTransport 连 agent；本进程 stdout = MCP 协议流，stderr = 日志
  *
- * 当前进度（commit 3）：只注册探活 doc_ping / doc_version；commit 4-5 起逐步补 18 个工具。
+ * 工具覆盖：Phase 1 装配线核心 + Phase 2（catalog / template.validate / files /
+ * pdf_tools / word2pdf / plot_curves 预设 CRUD），基本与 sidecar RPC 全表对齐。
  *
  * 仓库根定位：环境变量 CIV_CORE_REPO_ROOT 优先，否则从 dist/ 向上推断（见 lib/repoRoot.ts）。
  */
@@ -21,13 +22,17 @@ import { resolveRepoRoot } from "./lib/repoRoot.js";
 import { SidecarRouter } from "./router.js";
 import { spawnCsharpDev, spawnPythonDev } from "./sidecar.js";
 import { allAnchorTools } from "./tools/anchor.js";
+import { allCatalogTools } from "./tools/catalog.js";
 import { allDocTools } from "./tools/doc.js";
+import { allFilesTools } from "./tools/files.js";
 import { allLeebTools } from "./tools/leeb.js";
+import { allPdfToolsTools } from "./tools/pdfTools.js";
 import { allPlotCurvesTools } from "./tools/plot_curves.js";
 import { registerSidecarTool } from "./tools/registry.js";
 import { allReportTools } from "./tools/report.js";
 import { allReportPresetTools } from "./tools/reportPreset.js";
 import { allTemplateTools } from "./tools/template.js";
+import { allWord2PdfTools } from "./tools/word2pdf.js";
 import { allWorkspaceTools } from "./tools/workspace.js";
 import { allXlsxTools } from "./tools/xlsx.js";
 
@@ -49,8 +54,10 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // 工具注册（25 tools = Phase 1 的 20 + report_preset.* 5）
-  const phase1Tools = [
+  // 工具注册：与 sidecar RPC 全表对齐（除 calc 类型 stub）。
+  // doc 2 / workspace 4 / anchor 4 / leeb 2 / xlsx 1 / template 2 / report 2 /
+  // report_preset 5 / catalog 4 / files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 10。
+  const allTools = [
     ...allDocTools,
     ...allWorkspaceTools,
     ...allAnchorTools,
@@ -59,9 +66,13 @@ async function main(): Promise<void> {
     ...allTemplateTools,
     ...allReportTools,
     ...allReportPresetTools,
+    ...allCatalogTools,
+    ...allFilesTools,
+    ...allPdfToolsTools,
+    ...allWord2PdfTools,
     ...allPlotCurvesTools,
   ];
-  for (const def of phase1Tools) {
+  for (const def of allTools) {
     registerSidecarTool(server, router, def);
   }
 
@@ -84,10 +95,10 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `[${SERVER_NAME}] ready (stdio, ${phase1Tools.length} tools)\n`,
+    `[${SERVER_NAME}] ready (stdio, ${allTools.length} tools)\n`,
   );
   // 详细 tool 清单也写一份方便排查
-  for (const t of phase1Tools) {
+  for (const t of allTools) {
     process.stderr.write(`  - ${t.mcpName} → ${t.rpcMethod}\n`);
   }
 }

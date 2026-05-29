@@ -186,6 +186,33 @@ public class AnchorRowResolverTests
         var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path);
         Assert.Equal(target, rv.GetValue("curve_image"));
     }
+
+    [Fact]
+    public void GetValue_curve_image_批次前缀优先命中()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        // 多批次出图：plot_curves 按「<批次>_<编号>」命名。同目录里裸编号也存在时，
+        // 应优先取批次前缀的图（避免跨批撞名取错图）。
+        var batchTarget = Path.Combine(tmp.Path, "批次1_P-01.png");
+        File.WriteAllBytes(batchTarget, new byte[] { 0x89 });
+        File.WriteAllBytes(Path.Combine(tmp.Path, "P-01.png"), new byte[] { 0x89 });
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path, batchId: "批次1");
+        Assert.Equal(batchTarget, rv.GetValue("curve_image"));
+    }
+
+    [Fact]
+    public void GetValue_curve_image_无批次前缀文件_回退裸编号()
+    {
+        var (i, r, p) = Sample();
+        using var tmp = new TempDir();
+        var target = Path.Combine(tmp.Path, "P-01.svg"); // 单批旧图，无前缀
+        File.WriteAllText(target, "<svg/>");
+
+        var rv = new AnchorRowResolver(i, r, p, curveImageDir: tmp.Path, batchId: "批次1");
+        Assert.Equal(target, rv.GetValue("curve_image"));
+    }
 }
 
 /// <summary>测试用临时目录，using 块结束时自动删。</summary>

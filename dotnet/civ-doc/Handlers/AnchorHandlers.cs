@@ -286,7 +286,8 @@ public static class AnchorHandlers
                         batchRowResolvers.Add(new AnchorRowResolver(
                             rw.Input, rw.Result, br.Params, batchLevel,
                             anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir));
+                            curveImageDir: curveImageDir,
+                            batchId: br.BatchId));
                     }
                     sections.Add(new BatchSection(
                         new DictionaryResolver(batchLevel),
@@ -323,7 +324,8 @@ public static class AnchorHandlers
                         batchRowResolvers.Add(new AnchorRowResolver(
                             rw.Input, rw.Result, br.Params, batchLevel,
                             anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir));
+                            curveImageDir: curveImageDir,
+                            batchId: br.BatchId));
                     }
 
                     sections.Add(new BatchSection(
@@ -360,7 +362,8 @@ public static class AnchorHandlers
                         rowResolvers.Add(new AnchorRowResolver(
                             rw.Input, rw.Result, br.Params, mergedInputs,
                             anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir));
+                            curveImageDir: curveImageDir,
+                            batchId: br.BatchId));
                     }
                 }
                 genResult = ReportGenerator.Generate(

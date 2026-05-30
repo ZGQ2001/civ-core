@@ -27,6 +27,9 @@
 !frontend/src-tauri/icons/
 !frontend/src-tauri/icons/*.png
 !frontend/src-tauri/icons/*.ico
+# 品牌源文件（native 图标由 app-icon.svg 经 `tauri icon` 生成，需可追溯）
+!frontend/src-tauri/app-icon.svg
+!frontend/public/favicon.svg
 !frontend/src-tauri/icons/*.icns
 data/training_materials/
 # ==========================================

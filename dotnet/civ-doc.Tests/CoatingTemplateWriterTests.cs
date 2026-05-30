@@ -36,15 +36,17 @@ public class CoatingTemplateWriterTests
         try
         {
             CoatingTemplateWriter.Write(path);
-            // 样例：梁 长度8（国标 ⌈8/3⌉=3 截面）、柱 截面数3
+            // 样例（国标）：梁 默认设计3.3=薄型 → 膨胀型 5处×3点；柱 默认24=厚型 截面数3 → 截面×面
             var r = CoatingTemplateExpander.Expand(path, path, CoatingStandards.GB_50205_2020);
             Assert.Equal(2, r.Members);
-            Assert.Contains("测点数据-梁", r.Sheets);
+            Assert.Contains("测点数据-梁-膨胀型", r.Sheets);
             Assert.Contains("测点数据-柱", r.Sheets);
 
             using var wb = new XLWorkbook(path);
-            var beam = wb.Worksheet("测点数据-梁");
-            Assert.Equal(3, beam.LastRowUsed()!.RowNumber() - 1); // 3 截面
+            var beam = wb.Worksheet("测点数据-梁-膨胀型");
+            Assert.Equal(5, beam.LastRowUsed()!.RowNumber() - 1); // 梁 膨胀型 5 处
+            var col = wb.Worksheet("测点数据-柱");
+            Assert.Equal(3, col.LastRowUsed()!.RowNumber() - 1);  // 柱 厚型 3 截面
         }
         finally { File.Delete(path); }
     }

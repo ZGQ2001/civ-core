@@ -110,6 +110,37 @@ public class CoatingExcelReaderTests
     }
 
     [Fact]
+    public void ReadRows_5处3点膨胀型sheet_15点入一构件()
+    {
+        // 国标膨胀型 sheet「测点数据-柱-膨胀型」：5 处 × 3 点（点1/点2/点3）= 15 测点
+        string path = Save(wb =>
+        {
+            var ws = wb.Worksheets.Add("测点数据-柱-膨胀型");
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "截面号", "点1", "点2", "点3" };
+            for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+            int r = 2;
+            for (int chu = 1; chu <= 5; chu++)
+            {
+                ws.Cell(r, 1).Value = "B1"; ws.Cell(r, 2).Value = "超薄柱1"; ws.Cell(r, 3).Value = "柱";
+                ws.Cell(r, 4).Value = "超薄型"; ws.Cell(r, 5).Value = 2.0; ws.Cell(r, 6).Value = chu;
+                ws.Cell(r, 7).Value = 1.95; ws.Cell(r, 8).Value = 1.90; ws.Cell(r, 9).Value = 1.92;
+                r++;
+            }
+        });
+        try
+        {
+            var batches = CoatingExcelReader.ReadRows(path);
+            var m = Assert.Single(batches[0].Members);
+            Assert.Equal("超薄柱1", m.Location);
+            Assert.Equal(2.0, m.DesignThickness);
+            Assert.Equal(15, m.Points.Length);     // 5 处 × 3 点
+            Assert.Equal("点1", m.Points[0].Position);
+            Assert.Equal(5, m.Points[14].SectionNo); // 末点在第 5 处
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void ReadRows_无测点数据sheet_抛异常_提示先展开()
     {
         string path = Save(wb => wb.Worksheets.Add("构件清单").Cell(1, 1).Value = "批次");

@@ -54,25 +54,32 @@ public class CoatingAnalysisSheetTests
             using var read = new XLWorkbook(path);
             var sheet = read.Worksheet("B1-数据分析");
 
-            // 列：序号|构件位置|构件类型|涂层类型|截面号|梁侧面|梁侧面|梁底面|平均值|合格率|最薄处|设计厚度|判定
+            // 列(K=3)：序号|位置|类型|涂层类型|截面号|梁侧面|梁侧面|梁底面|本段均值|构件均值|设计厚度|判定下限|合格率|最薄处|判定
             Assert.Equal("涂层类型", sheet.Cell(1, 4).GetString());
             Assert.Equal("截面号", sheet.Cell(1, 5).GetString());
             Assert.Equal("梁底面", sheet.Cell(1, 8).GetString());
-            Assert.Equal("判定", sheet.Cell(1, 13).GetString());
+            Assert.Equal("本段均值", sheet.Cell(1, 9).GetString());
+            Assert.Equal("构件均值", sheet.Cell(1, 10).GetString());
+            Assert.Equal("判定下限", sheet.Cell(1, 12).GetString());
+            Assert.Equal("判定", sheet.Cell(1, 15).GetString());
 
-            // 梁1（行2 起，跨 2 截面）厚型 合格
+            // 梁1（行2 起，跨 2 截面）厚型 合格；判定下限=设计×0.85=17
             Assert.Equal("梁1", sheet.Cell(2, 2).GetString());
             Assert.Equal("厚型", sheet.Cell(2, 4).GetString());
-            Assert.Equal("合格", sheet.Cell(2, 13).GetString());
+            Assert.Equal(17.0, sheet.Cell(2, 12).GetDouble(), precision: 9);
+            Assert.Equal("合格", sheet.Cell(2, 15).GetString());
 
             // 梁2（行4 起）不合格
             Assert.Equal("梁2", sheet.Cell(4, 2).GetString());
-            Assert.Contains("不合格", sheet.Cell(4, 13).GetString());
+            Assert.Contains("不合格", sheet.Cell(4, 15).GetString());
 
-            // 梁3（行6）薄型 合格（膨胀型按构件均值判定）
+            // 梁3（行6）薄型 合格（均值4.933≥下限4.8）；合格率列「—」；
+            // 判定下限=max(5×0.95=4.75, 5−0.2=4.8)=4.8（设计>4mm，−200µm 兜底更严）
             Assert.Equal("梁3", sheet.Cell(6, 2).GetString());
             Assert.Equal("薄型", sheet.Cell(6, 4).GetString());
-            Assert.Equal("合格", sheet.Cell(6, 13).GetString());
+            Assert.Equal("—", sheet.Cell(6, 13).GetString());
+            Assert.Equal(4.8, sheet.Cell(6, 12).GetDouble(), precision: 9);
+            Assert.Equal("合格", sheet.Cell(6, 15).GetString());
         }
         finally { File.Delete(path); }
     }

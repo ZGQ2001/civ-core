@@ -16,13 +16,13 @@ public class CoatingTemplateExpanderTests
         using var wb = new XLWorkbook();
 
         var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
-        var ph = new[] { "构件类型", "测点位置", "默认设计厚度" };
+        var ph = new[] { "构件类型", "测点位置", "默认设计厚度（mm）" };
         for (int c = 0; c < ph.Length; c++) preset.Cell(1, c + 1).Value = ph[c];
         preset.Cell(2, 1).Value = "梁"; preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面"; preset.Cell(2, 3).Value = 3.3;
         preset.Cell(3, 1).Value = "柱"; preset.Cell(3, 2).Value = "东侧面,西侧面,南侧面,北侧面"; preset.Cell(3, 3).Value = 24;
 
         var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
-        var lh = new[] { "批次", "构件位置", "构件类型", "长度(m)", "截面数", "设计厚度" };
+        var lh = new[] { "批次", "构件位置", "构件类型", "长度(m)", "截面数", "设计厚度（mm）" };
         for (int c = 0; c < lh.Length; c++) list.Cell(1, c + 1).Value = lh[c];
         int r = 2;
         foreach (var row in memberRows)

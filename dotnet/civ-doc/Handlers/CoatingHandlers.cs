@@ -1,15 +1,16 @@
-// coating.* RPC 方法注册与实现（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
+// coating.* RPC（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
 //
-// 方法清单：
-//   coating.generate_template(output_xlsx, standard?)
-//     -> {ok, path}
-//   coating.list_batches(input_xlsx, sheet?, batch_id_column?)
-//     -> {batches: [str, ...]}
+// 流程（构件清单驱动）：
+//   coating.generate_template(output_xlsx, standard?)              -> {ok, path}   出「类型预设」+「构件清单」模板
+//   （用户填构件清单）
+//   coating.expand_template(input_xlsx, output_xlsx?, standard?)   -> {ok, path, members, total_sections, sheets}  展开「测点数据-<类型>」网格
+//   （用户在网格里填实测数字）
 //   coating.run(input_xlsx, output_xlsx?, standard?, sheet?, batch_id_column?)
-//     -> {batches, members_total, members_qualified, output}
+//                                                                  -> {batches, members_total, members_qualified, members_pending, output}
+//   coating.list_batches(input_xlsx, sheet?, batch_id_column?)     -> {batches}    信息性
 //
-// 与 anchor 的差异：设计厚度在输入 Excel 列里（按构件），不需要前端按批次填工程参数，
-// 故无 params_by_batch / read_batch_info。输出每批一个「<批>-数据分析」宽表 sheet。
+// 涂层类型按设计厚度自动分级；本轮只厚型出合格/不合格，薄型/超薄型 Verdict=待判定。
+// 间距随地标（国标 3m / 北京地标 1m），驱动 expand 的截面数。
 
 using System.Text.Json;
 using ClosedXML.Excel;
@@ -27,15 +28,15 @@ public static class CoatingHandlers
     public static void RegisterAll(Dispatcher d)
     {
         d.Register("coating.generate_template", GenerateTemplate);
+        d.Register("coating.expand_template", ExpandTemplate);
         d.Register("coating.list_batches", ListBatches);
         d.Register("coating.run", Run);
     }
 
-    /// <summary>生成空白输入模板。前端「生成模板」按钮调。</summary>
+    /// <summary>生成空白模板（类型预设 + 构件清单）。</summary>
     public static object GenerateTemplate(JsonElement? @params)
     {
         var p = RequireObject(@params);
-
         var outputXlsx = p.GetProperty("output_xlsx").GetString()
             ?? throw new ArgumentException("未指定输出文件路径");
         string standard = OptString(p, "standard") ?? CoatingStandards.GB_50205_2020;
@@ -45,36 +46,55 @@ public static class CoatingHandlers
             throw new ArgumentException($"输出目录不存在：{outDir}");
 
         CoatingTemplateWriter.Write(outputXlsx, standard);
-
         return new Dictionary<string, object?> { ["ok"] = true, ["path"] = outputXlsx };
     }
 
-    /// <summary>读输入 Excel 返回所有批次 ID（信息性；批次列缺失时返回单元素默认批）。</summary>
+    /// <summary>读「构件清单」展开成「测点数据-&lt;类型&gt;」网格（output 缺省写回 input）。</summary>
+    public static object ExpandTemplate(JsonElement? @params)
+    {
+        var p = RequireObject(@params);
+        var inputXlsx = p.GetProperty("input_xlsx").GetString()
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
+        string standard = OptString(p, "standard") ?? CoatingStandards.GB_50205_2020;
+        string outputXlsx = OptString(p, "output_xlsx") ?? inputXlsx;
+
+        FileGuard.CheckExcelSize(inputXlsx);
+        var r = CoatingTemplateExpander.Expand(inputXlsx, outputXlsx, standard);
+
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["path"] = outputXlsx,
+            ["members"] = r.Members,
+            ["total_sections"] = r.TotalSections,
+            ["sheets"] = r.Sheets,
+        };
+    }
+
+    /// <summary>读「测点数据」返回所有批次 ID（信息性）。</summary>
     public static object ListBatches(JsonElement? @params)
     {
         var p = RequireObject(@params);
-
         var inputXlsx = p.GetProperty("input_xlsx").GetString()
             ?? throw new ArgumentException("未指定输入 Excel 文件");
         string? sheet = OptString(p, "sheet");
-        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.DefaultBatchIdColumn;
+        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.Batch;
 
         FileGuard.CheckExcelSize(inputXlsx);
         var batches = CoatingExcelReader.ListBatchIds(inputXlsx, sheet, batchCol);
         return new Dictionary<string, object?> { ["batches"] = batches };
     }
 
-    /// <summary>读 Excel + 按构件聚合判定 + 每批写一个宽表 sheet。</summary>
+    /// <summary>读「测点数据」宽表 + 按构件聚合判定 + 每批写一个宽表 sheet。</summary>
     public static object Run(JsonElement? @params)
     {
         var p = RequireObject(@params);
-
         var inputXlsx = p.GetProperty("input_xlsx").GetString()
             ?? throw new ArgumentException("未指定输入 Excel 文件");
         string? outputXlsx = OptString(p, "output_xlsx");
         string standard = OptString(p, "standard") ?? CoatingStandards.GB_50205_2020;
         string? sheet = OptString(p, "sheet");
-        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.DefaultBatchIdColumn;
+        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.Batch;
 
         FileGuard.CheckExcelSize(inputXlsx);
         CoatingStandards.Validate(standard);
@@ -99,7 +119,7 @@ public static class CoatingHandlers
             {
                 var name = SafeSheetName($"{br.BatchId}-数据分析");
                 if (wb.Worksheets.TryGetWorksheet(name, out var old)) old.Delete();
-                CoatingAnalysisSheet.Write(wb.Worksheets.Add(name), br);
+                CoatingAnalysisSheet.Write(wb.Worksheets.Add(name), br, standard);
             }
             SaveWorkbook(wb, outPath);
         }
@@ -109,6 +129,7 @@ public static class CoatingHandlers
             ["batches"] = result.NBatches,
             ["members_total"] = result.NMembersTotal,
             ["members_qualified"] = result.NQualifiedTotal,
+            ["members_pending"] = result.NPendingTotal,
             ["output"] = outPath,
         };
     }

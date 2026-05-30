@@ -1,4 +1,4 @@
-// CoatingCalculator 单测：多批多构件聚合 + 规范校验。
+// CoatingCalculator 单测：多批多构件按 Verdict 聚合 + 规范校验。
 
 using CivCore.Doc.Calc.Coating;
 using Xunit;
@@ -16,7 +16,7 @@ public class CoatingCalculatorTests
     }
 
     [Fact]
-    public void Calc_两批_聚合计数正确()
+    public void Calc_两批_按Verdict聚合计数()
     {
         var workbook = new CoatingWorkbookInput(
             CoatingStandards.GB_50205_2020,
@@ -24,28 +24,30 @@ public class CoatingCalculatorTests
             {
                 new CoatingBatchInput("B1", new[]
                 {
-                    Member("梁1", 20, 21, 22, 20, 23, 21),  // 合格
-                    Member("梁2", 20, 16, 16, 16, 21, 18),  // 不合格
+                    Member("梁1", 20, 21, 22, 20, 23, 21),  // 厚型 合格
+                    Member("梁2", 20, 16, 16, 16, 21, 18),  // 厚型 不合格
+                    Member("梁3", 5, 4.8, 5.1, 4.9),        // 薄型 待判定
                 }),
                 new CoatingBatchInput("B2", new[]
                 {
-                    Member("梁3", 20, 20, 20, 20, 20, 17),  // 合格（边界）
+                    Member("梁4", 20, 20, 20, 20, 20, 17),  // 厚型 合格（边界）
                 }),
             });
 
         var result = CoatingCalculator.Calc(workbook);
 
         Assert.Equal(2, result.NBatches);
-        Assert.Equal(3, result.NMembersTotal);
+        Assert.Equal(4, result.NMembersTotal);
         Assert.Equal(2, result.NQualifiedTotal);
+        Assert.Equal(1, result.NPendingTotal);
 
         Assert.Equal("B1", result.BatchResults[0].BatchId);
         Assert.Equal(1, result.BatchResults[0].NQualified);
-        Assert.Equal(2, result.BatchResults[0].NTotal);
+        Assert.Equal(1, result.BatchResults[0].NPending);
+        Assert.Equal(3, result.BatchResults[0].NTotal);
 
-        Assert.Equal("B2", result.BatchResults[1].BatchId);
         Assert.Equal(1, result.BatchResults[1].NQualified);
-        Assert.Equal(1, result.BatchResults[1].NTotal);
+        Assert.Equal(0, result.BatchResults[1].NPending);
     }
 
     [Fact]
@@ -66,9 +68,9 @@ public class CoatingCalculatorTests
         var rows = result.BatchResults[0].MembersWithResults;
 
         Assert.Equal("柱A", rows[0].Input.Location);
-        Assert.True(rows[0].Result.Qualified);
+        Assert.Equal(CoatingVerdict.合格, rows[0].Result.Verdict);
         Assert.Equal("柱B", rows[1].Input.Location);
-        Assert.False(rows[1].Result.Qualified);
+        Assert.Equal(CoatingVerdict.不合格, rows[1].Result.Verdict);
     }
 
     [Fact]

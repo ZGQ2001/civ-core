@@ -1,9 +1,10 @@
-// 生成「防火涂层厚度」输入 Excel 空白模板（长表：每行一个测点）。
-// 用户点「生成模板」→ 下载 xlsx → 照样例填数据 → 跑计算。
+// 生成「防火涂层厚度」输入 Excel 空白模板（构件清单驱动）。
 //
-// 表头（按 CoatingColumns 契约）：
-//   批次 | 构件位置 | 构件类型 | 设计厚度 | 截面号 | 测点位置 | 实测厚度
-// 样例：1 根钢梁（2 截面 × 3 面）+ 1 根钢柱（2 截面 × 4 面），演示长表怎么填。
+// 模板含 3 张 sheet：
+//   「类型预设」 预填 梁/柱（构件类型 → 测点面布置 + 默认设计厚度），可改/可加。
+//   「构件清单」 用户主填：一构件一行（批次/构件位置/构件类型/长度(m)/截面数/设计厚度）。
+//   「说明」     用法。
+// 用户填完构件清单 → coating.expand_template 展开成「测点数据-<类型>」网格 → 只填数字 → coating.run。
 
 using ClosedXML.Excel;
 using CivCore.Doc.Server;
@@ -12,31 +13,62 @@ namespace CivCore.Doc.Calc.Coating;
 
 public static class CoatingTemplateWriter
 {
-    public const string TemplateSheetName = "防火涂层厚度数据";
-
-    // 钢梁 3 面、钢柱 4 面（GB 50205-2020 附录 E 测点布置）
-    private static readonly string[] BeamFaces = { "梁侧面", "梁侧面", "梁底面" };
-    private static readonly string[] ColumnFaces = { "东侧面", "西侧面", "南侧面", "北侧面" };
-
-    /// <summary>写空白模板到 path（覆盖已存在文件）。</summary>
     public static void Write(string path, string standard = CoatingStandards.GB_50205_2020)
     {
         CoatingStandards.Validate(standard);
-
         using var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add(TemplateSheetName);
 
-        var headers = new[]
+        // ① 类型预设（预填梁/柱）
+        var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
+        WriteHeader(preset, new[]
         {
-            CoatingColumns.DefaultBatchIdColumn,
-            CoatingColumns.MemberLocation,
-            CoatingColumns.MemberType,
-            CoatingColumns.DesignThickness,
-            CoatingColumns.SectionNo,
-            CoatingColumns.PointPosition,
-            CoatingColumns.MeasuredThickness,
-        };
+            CoatingColumns.MemberType, CoatingColumns.PointPositions, CoatingColumns.DefaultDesignThickness,
+        });
+        preset.Cell(2, 1).Value = "梁";
+        preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面";
+        preset.Cell(2, 3).Value = 3.3;
+        preset.Cell(3, 1).Value = "柱";
+        preset.Cell(3, 2).Value = "东侧面,西侧面,南侧面,北侧面";
+        preset.Cell(3, 3).Value = 24;
+        Frame(preset, 3, 3);
+        preset.Column(2).Width = 30;
 
+        // ② 构件清单（空 + 2 行样例）
+        var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
+        WriteHeader(list, new[]
+        {
+            CoatingColumns.Batch, CoatingColumns.MemberLocation, CoatingColumns.MemberType,
+            CoatingColumns.LengthM, CoatingColumns.SectionCount, CoatingColumns.DesignThickness,
+        });
+        // 样例：梁填长度(自动算截面数)、柱直接填截面数；设计厚度留空走类型预设默认
+        list.Cell(2, 1).Value = "批次1";
+        list.Cell(2, 2).Value = "地上一层1/A轴钢梁";
+        list.Cell(2, 4).Value = 8; // 长度 8m
+        list.Cell(3, 1).Value = "批次1";
+        list.Cell(3, 2).Value = "地上一层1/4×4/A轴钢柱";
+        list.Cell(3, 5).Value = 3; // 截面数 3
+        Frame(list, 3, 6);
+        list.Column(2).Width = 26;
+
+        // ③ 说明
+        var help = wb.Worksheets.Add("说明");
+        help.Cell(1, 1).Value = $"防火涂层厚度检测模板（{standard}）";
+        help.Cell(1, 1).Style.Font.Bold = true;
+        help.Cell(1, 1).Style.Font.FontSize = 14;
+        help.Cell(3, 1).Value = "1. 在「构件清单」一构件一行：构件位置必填；构件类型可留空（自动从名字含「梁/柱」识别）。";
+        help.Cell(4, 1).Value = "2. 截面数：填「长度(m)」自动算（国标每3m、北京地标每1m 一截面，向上取整），或直接填「截面数」覆盖。";
+        help.Cell(5, 1).Value = "3. 设计厚度：留空用「类型预设」默认；个别构件不同（如有的3.3、有的2.0）在本行填覆盖。";
+        help.Cell(6, 1).Value = "4. 涂层类型按设计厚度自动分级：≥7mm 厚型、3~7mm 薄型、≤3mm 超薄型（决定判定与精度）。";
+        help.Cell(7, 1).Value = "5. 填完构件清单 → 运行「展开测点网格」生成「测点数据-梁/柱」表 → 只在网格里填实测数字 → 计算。";
+        help.Cell(8, 1).Value = "6. 单位统一 mm；厚型显示2位（游标卡尺）、薄型/超薄型3位（涂层测厚仪）。";
+        help.Cell(9, 1).Value = "7. 本轮只厚型出合格/不合格；薄型/超薄型判定待接入。";
+        help.Column(1).Width = 115;
+
+        AtomicFile.SaveWorkbook(wb, path);
+    }
+
+    private static void WriteHeader(IXLWorksheet ws, string[] headers)
+    {
         for (int c = 0; c < headers.Length; c++)
         {
             var cell = ws.Cell(1, c + 1);
@@ -45,59 +77,12 @@ public static class CoatingTemplateWriter
             cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             cell.Style.Fill.BackgroundColor = XLColor.LightGray;
         }
-
-        int row = 2;
-        // 样例钢梁：设计 24mm，2 截面 × 3 面（厚涂型）
-        row = WriteSample(ws, row, "批次1", "地上一层1/A轴钢梁", "梁", 24, sections: 2, BeamFaces,
-            sampleThicknesses: new double[] { 25, 24, 30, 26, 22, 28 });
-        // 样例钢柱：设计 24mm，2 截面 × 4 面
-        row = WriteSample(ws, row, "批次1", "地上一层1/4×4/A轴钢柱", "柱", 24, sections: 2, ColumnFaces,
-            sampleThicknesses: new double[] { 25, 26, 24, 27, 31, 28, 27, 26 });
-
-        for (int c = 1; c <= headers.Length; c++) ws.Column(c).AdjustToContents();
-        ws.Column(2).Width = 24;
-
-        var range = ws.Range(1, 1, row - 1, headers.Length);
-        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-        range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-
-        // 说明 sheet
-        var help = wb.Worksheets.Add("说明");
-        help.Cell(1, 1).Value = $"防火涂层厚度检测数据模板（{standard} §13.4.3 厚涂型）";
-        help.Cell(1, 1).Style.Font.Bold = true;
-        help.Cell(1, 1).Style.Font.FontSize = 14;
-        help.Cell(3, 1).Value = "1. 长表：每行一个测点。同一构件的多个测点（多截面、多面）排成多行，每行都填「构件位置」。";
-        help.Cell(4, 1).Value = "2. 「批次」可不填（不分批时所有构件归入「全部」批）。";
-        help.Cell(5, 1).Value = "3. 厚度单位统一 mm；「设计厚度」按构件填（同一构件各行应一致）。";
-        help.Cell(6, 1).Value = "4. 测点布置（附录 E）：钢梁每截面 3 面（两侧面+底面），钢柱每截面 4 面（东/西/南/北）；梁柱每隔 3m（北京地标 1m）取一截面。";
-        help.Cell(7, 1).Value = "5. 判定（按构件）：≥80% 测点 ≥ 设计厚度，且最薄处 ≥ 设计 × 85%，两者都满足为合格。";
-        help.Column(1).Width = 110;
-
-        AtomicFile.SaveWorkbook(wb, path);
     }
 
-    private static int WriteSample(
-        IXLWorksheet ws, int startRow, string batch, string location, string type,
-        double design, int sections, string[] faces, double[] sampleThicknesses)
+    private static void Frame(IXLWorksheet ws, int lastRow, int lastCol)
     {
-        int row = startRow;
-        int k = 0;
-        for (int s = 1; s <= sections; s++)
-        {
-            foreach (var face in faces)
-            {
-                ws.Cell(row, 1).Value = batch;
-                ws.Cell(row, 2).Value = location;
-                ws.Cell(row, 3).Value = type;
-                ws.Cell(row, 4).Value = design;
-                ws.Cell(row, 5).Value = s;
-                ws.Cell(row, 6).Value = face;
-                ws.Cell(row, 7).Value = k < sampleThicknesses.Length ? sampleThicknesses[k] : design;
-                k++;
-                row++;
-            }
-        }
-        return row;
+        var range = ws.Range(1, 1, lastRow, lastCol);
+        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
     }
 }

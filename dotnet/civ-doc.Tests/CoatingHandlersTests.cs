@@ -1,4 +1,4 @@
-// CoatingHandlers 端到端冒烟：generate_template → 填数据 → coating.run → 验证输出 sheet。
+// CoatingHandlers 端到端：generate_template → expand_template → 填数字 → coating.run。
 
 using System.IO;
 using System.Text.Json;
@@ -15,14 +15,47 @@ public class CoatingHandlersTests
         Path.Combine(Path.GetTempPath(), $"coating_h_{Guid.NewGuid():N}.xlsx");
 
     private static JsonElement P(string json) => JsonDocument.Parse(json).RootElement.Clone();
-
     private static string Esc(string path) => path.Replace("\\", "\\\\");
 
-    private static readonly string[] LongHeaders =
-        { "批次", "构件位置", "构件类型", "设计厚度", "截面号", "测点位置", "实测厚度" };
+    /// <summary>建含「类型预设」+「构件清单」的输入（梁/柱各一根，设计厚型）。</summary>
+    private static void WriteListInput(string path)
+    {
+        using var wb = new XLWorkbook();
+        var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
+        var ph = new[] { "构件类型", "测点位置", "默认设计厚度" };
+        for (int c = 0; c < ph.Length; c++) preset.Cell(1, c + 1).Value = ph[c];
+        preset.Cell(2, 1).Value = "梁"; preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面"; preset.Cell(2, 3).Value = 20;
+        preset.Cell(3, 1).Value = "柱"; preset.Cell(3, 2).Value = "东侧面,西侧面,南侧面,北侧面"; preset.Cell(3, 3).Value = 24;
+
+        var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
+        var lh = new[] { "批次", "构件位置", "构件类型", "长度(m)", "截面数", "设计厚度" };
+        for (int c = 0; c < lh.Length; c++) list.Cell(1, c + 1).Value = lh[c];
+        list.Cell(2, 1).Value = "B1"; list.Cell(2, 2).Value = "钢梁1"; list.Cell(2, 5).Value = 2;
+        list.Cell(3, 1).Value = "B1"; list.Cell(3, 2).Value = "钢柱1"; list.Cell(3, 5).Value = 2;
+        wb.SaveAs(path);
+    }
+
+    /// <summary>把所有「测点数据」sheet 的测点格（截面号右侧）填上 value。</summary>
+    private static void FillPoints(string path, double value)
+    {
+        using var wb = new XLWorkbook(path);
+        foreach (var ws in wb.Worksheets.Where(w => w.Name.StartsWith(CoatingColumns.PointDataSheet)))
+        {
+            int lastCol = ws.Row(1).LastCellUsed()!.Address.ColumnNumber;
+            int lastRow = ws.LastRowUsed()!.RowNumber();
+            // 截面号列号
+            int sectionCol = 0;
+            for (int c = 1; c <= lastCol; c++)
+                if (ws.Cell(1, c).GetString() == "截面号") { sectionCol = c; break; }
+            for (int r = 2; r <= lastRow; r++)
+                for (int c = sectionCol + 1; c <= lastCol; c++)
+                    ws.Cell(r, c).Value = value;
+        }
+        wb.Save();
+    }
 
     [Fact]
-    public void GenerateTemplate_应生成_xlsx()
+    public void GenerateTemplate_生成模板含类型预设构件清单()
     {
         string path = TempXlsx();
         try
@@ -30,46 +63,56 @@ public class CoatingHandlersTests
             var r = (Dictionary<string, object?>)CoatingHandlers.GenerateTemplate(
                 P($"{{\"output_xlsx\":\"{Esc(path)}\"}}"))!;
             Assert.True((bool)r["ok"]!);
-            Assert.True(File.Exists(path));
+            using var wb = new XLWorkbook(path);
+            Assert.True(wb.Worksheets.Contains(CoatingColumns.TypePresetSheet));
+            Assert.True(wb.Worksheets.Contains(CoatingColumns.MemberListSheet));
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void ListBatches_模板默认含_批次1()
+    public void ExpandTemplate_出梁柱测点数据网格()
     {
         string path = TempXlsx();
         try
         {
-            CoatingTemplateWriter.Write(path);
-            var r = (Dictionary<string, object?>)CoatingHandlers.ListBatches(
+            WriteListInput(path);
+            var r = (Dictionary<string, object?>)CoatingHandlers.ExpandTemplate(
                 P($"{{\"input_xlsx\":\"{Esc(path)}\"}}"))!;
-            var batches = (List<string>)r["batches"]!;
-            Assert.Contains("批次1", batches);
+            Assert.True((bool)r["ok"]!);
+            Assert.Equal(2, (int)r["members"]!);
+            Assert.Equal(4, (int)r["total_sections"]!); // 梁2 + 柱2 截面
+
+            using var wb = new XLWorkbook(path);
+            Assert.True(wb.Worksheets.Contains("测点数据-梁"));
+            Assert.True(wb.Worksheets.Contains("测点数据-柱"));
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void Run_模板样例_两构件全合格()
+    public void Run_展开填数字后_厚型出合格()
     {
         string input = TempXlsx();
         string output = TempXlsx();
         try
         {
-            CoatingTemplateWriter.Write(input);
+            WriteListInput(input);
+            CoatingHandlers.ExpandTemplate(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"));
+            FillPoints(input, 25); // 梁≥20、柱≥24 → 都厚型合格
+
             var r = (Dictionary<string, object?>)CoatingHandlers.Run(P($@"{{
                 ""input_xlsx"": ""{Esc(input)}"",
                 ""output_xlsx"": ""{Esc(output)}""
             }}"))!;
 
-            Assert.Equal(1, (int)r["batches"]!);
             Assert.Equal(2, (int)r["members_total"]!);
-            Assert.Equal(2, (int)r["members_qualified"]!); // 样例梁/柱都达标
+            Assert.Equal(2, (int)r["members_qualified"]!);
+            Assert.Equal(0, (int)r["members_pending"]!);
             Assert.True(File.Exists(output));
 
             using var wb = new XLWorkbook(output);
-            Assert.Contains("批次1-数据分析", wb.Worksheets.Select(w => w.Name));
+            Assert.Contains("B1-数据分析", wb.Worksheets.Select(w => w.Name));
         }
         finally
         {
@@ -79,55 +122,30 @@ public class CoatingHandlersTests
     }
 
     [Fact]
-    public void Run_含不合格构件_合格计数正确_判定写入sheet()
+    public void Run_薄型构件_待判定_不计入合格()
     {
         string input = TempXlsx();
-        string output = TempXlsx();
         try
         {
-            // 自建长表：梁1 合格，梁2 不合格（多数测点 < 设计 24）
+            // 类型预设默认设计 3.3（薄型），构件清单不覆盖
             using (var wb = new XLWorkbook())
             {
-                var ws = wb.Worksheets.Add("Sheet1");
-                for (int c = 0; c < LongHeaders.Length; c++) ws.Cell(1, c + 1).Value = LongHeaders[c];
-                int row = 2;
-                void Pt(string loc, double design, int sec, string pos, double t)
-                {
-                    ws.Cell(row, 1).Value = "B1";
-                    ws.Cell(row, 2).Value = loc;
-                    ws.Cell(row, 3).Value = "梁";
-                    ws.Cell(row, 4).Value = design;
-                    ws.Cell(row, 5).Value = sec;
-                    ws.Cell(row, 6).Value = pos;
-                    ws.Cell(row, 7).Value = t;
-                    row++;
-                }
-                // 梁1：全 ≥24 → 合格
-                Pt("梁1", 24, 1, "梁侧面", 25); Pt("梁1", 24, 1, "梁侧面", 26); Pt("梁1", 24, 1, "梁底面", 27);
-                // 梁2：多数 < 24 → 合格率不达 → 不合格
-                Pt("梁2", 24, 1, "梁侧面", 10); Pt("梁2", 24, 1, "梁侧面", 11); Pt("梁2", 24, 1, "梁底面", 12);
+                var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
+                preset.Cell(1, 1).Value = "构件类型"; preset.Cell(1, 2).Value = "测点位置"; preset.Cell(1, 3).Value = "默认设计厚度";
+                preset.Cell(2, 1).Value = "梁"; preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面"; preset.Cell(2, 3).Value = 3.3;
+                var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
+                list.Cell(1, 1).Value = "批次"; list.Cell(1, 2).Value = "构件位置"; list.Cell(1, 5).Value = "截面数";
+                list.Cell(2, 1).Value = "B1"; list.Cell(2, 2).Value = "薄涂梁1"; list.Cell(2, 5).Value = 1;
                 wb.SaveAs(input);
             }
+            CoatingHandlers.ExpandTemplate(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"));
+            FillPoints(input, 3.5);
 
-            var r = (Dictionary<string, object?>)CoatingHandlers.Run(P($@"{{
-                ""input_xlsx"": ""{Esc(input)}"",
-                ""output_xlsx"": ""{Esc(output)}""
-            }}"))!;
-
-            Assert.Equal(2, (int)r["members_total"]!);
-            Assert.Equal(1, (int)r["members_qualified"]!);
-
-            using var read = new XLWorkbook(output);
-            var sheet = read.Worksheet("B1-数据分析");
-            int verdictCol = sheet.LastColumnUsed()!.ColumnNumber();
-            // 梁1 行2 合格；梁2 行3 不合格
-            Assert.Equal("合格", sheet.Cell(2, verdictCol).GetString());
-            Assert.Contains("不合格", sheet.Cell(3, verdictCol).GetString());
+            var r = (Dictionary<string, object?>)CoatingHandlers.Run(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"))!;
+            Assert.Equal(1, (int)r["members_total"]!);
+            Assert.Equal(0, (int)r["members_qualified"]!);
+            Assert.Equal(1, (int)r["members_pending"]!);
         }
-        finally
-        {
-            if (File.Exists(input)) File.Delete(input);
-            if (File.Exists(output)) File.Delete(output);
-        }
+        finally { if (File.Exists(input)) File.Delete(input); }
     }
 }

@@ -1,31 +1,39 @@
-// 防火涂层厚度输入 Excel 列名契约（GB 50205-2020 厚涂型验收）。
+// 防火涂层厚度三张 sheet 的名字 + 列名契约。
 //
-// 长表格式：每行一个测点。1 个 sheet 放所有构件，按「批次」+「构件位置」分组，
-// 同一构件的多个测点（跨截面、跨面）排成多行。设计厚度按构件填（同构件各行一致）。
+//   「类型预设」  构件类型 → 测点位置(逗号) + 默认设计厚度
+//   「构件清单」  批次 / 构件位置 / 构件类型 / 长度(m) / 截面数 / 设计厚度  —— 用户主填
+//   「测点数据」  批次 / 构件位置 / 构件类型 / 涂层类型 / 设计厚度 / 截面号 / <测点面名列…>  —— expand 生成，用户填数字
 //
-// 列名容错：trim + 大小写不敏感；中英文括号差异由 NormalizeHeader 抹平
-// （与 AnchorColumns.NormalizeHeader 同口径）。
+// 列名容错由 NormalizeHeader 抹平（与 AnchorColumns 同口径：trim + 全角括号/连字符 + 小写）。
 
 namespace CivCore.Doc.Calc.Coating;
 
 public static class CoatingColumns
 {
-    public const string DefaultBatchIdColumn = "批次";
+    // sheet 名
+    public const string TypePresetSheet = "类型预设";
+    public const string MemberListSheet = "构件清单";
+    public const string PointDataSheet = "测点数据";
+
+    // 通用列名
+    public const string Batch = "批次";
     public const string MemberLocation = "构件位置";
     public const string MemberType = "构件类型";
     public const string DesignThickness = "设计厚度";
     public const string SectionNo = "截面号";
-    public const string PointPosition = "测点位置";
-    public const string MeasuredThickness = "实测厚度";
+    public const string CoatingCategory = "涂层类型";
 
-    /// <summary>除「批次」外的数据列（reader 必需）。</summary>
-    public static readonly string[] DataColumns =
-    {
-        MemberLocation, MemberType, DesignThickness,
-        SectionNo, PointPosition, MeasuredThickness,
-    };
+    // 「类型预设」专属列
+    public const string PointPositions = "测点位置";
+    public const string DefaultDesignThickness = "默认设计厚度";
 
-    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 小写比较用。</summary>
+    // 「构件清单」专属列
+    public const string LengthM = "长度(m)";
+    public const string SectionCount = "截面数";
+
+    public const string DefaultBatchId = "全部";
+
+    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 去空格 + 小写。</summary>
     public static string NormalizeHeader(string s)
     {
         if (s == null) return "";

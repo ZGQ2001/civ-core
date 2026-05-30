@@ -1,9 +1,10 @@
-// 防火涂层厚度判定核心（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
+// 防火涂层厚度判定核心（GB 50205-2020 §13.4.3 防火涂料涂层厚度验收）。
 //
 //   涂层类型按设计厚度分级（CoatingStandards.Classify）：厚型 / 薄型 / 超薄型。
 //   厚型判定：合格率 = (实测 ≥ 设计厚度 的测点数)/总数 ≥ 80%  且  最薄处 ≥ 设计 × 0.85
 //             两者都满足 → 合格（≥ 闭区间，恰 80%/85% 判合格）。
-//   薄型/超薄型：本轮不出判定（Verdict=待判定）—— 方法按地标分叉、需原文，留后续。
+//   膨胀型（薄型/超薄型）判定：构件均值 ≥ max(设计 × 0.95, 设计 − 0.2mm)
+//             即偏差 ≥ −5% 且 ≥ −200µm（两条同时成立，取较严下限）。
 //
 // 判定按原始值算（不先四舍五入）；显示精度由 CoatingStandards.ThicknessDecimals 控制（在报告表里 round）。
 
@@ -31,22 +32,31 @@ public static class CoatingMath
         bool ratioPass = ratio >= CoatingStandards.RatioThreshold;
         bool minPass = min >= lower;
 
+        // 膨胀型均值下限 = max(设计×0.95, 设计−0.2)；厚型不适用，置 0/true 占位。
+        double meanLower = 0;
+        bool meanPass = true;
+
         CoatingVerdict verdict;
         string? reason = null;
-        if (category == CoatingCategory.厚型)
+        if (CoatingStandards.IsExpansion(category))
+        {
+            meanLower = Math.Max(
+                designThickness * CoatingStandards.ExpansionMeanFactor,
+                designThickness - CoatingStandards.AbsoluteFloorMm);
+            meanPass = mean >= meanLower;
+            verdict = meanPass ? CoatingVerdict.合格 : CoatingVerdict.不合格;
+            if (!meanPass) reason = BuildExpansionFailReason(designThickness, mean, meanLower);
+        }
+        else
         {
             bool qualified = ratioPass && minPass;
             verdict = qualified ? CoatingVerdict.合格 : CoatingVerdict.不合格;
             if (!qualified) reason = BuildFailReason(ratioPass, minPass, ratio, min, lower);
         }
-        else
-        {
-            // 薄型/超薄型本轮不出判定（口径待原文）
-            verdict = CoatingVerdict.待判定;
-        }
 
         return new CoatingMemberResult(
-            category, n, nQualified, ratio, min, lower, mean, ratioPass, minPass, verdict, reason);
+            category, n, nQualified, ratio, min, lower, mean, ratioPass, minPass,
+            meanLower, meanPass, verdict, reason);
     }
 
     private static string BuildFailReason(
@@ -58,5 +68,14 @@ public static class CoatingMath
         if (!minPass)
             parts.Add($"最薄处 {min:F2}mm < 下限 {lower:F2}mm（设计×{CoatingStandards.MinFactor:F2}）");
         return string.Join("；", parts);
+    }
+
+    private static string BuildExpansionFailReason(double design, double mean, double meanLower)
+    {
+        double byFactor = design * CoatingStandards.ExpansionMeanFactor;
+        double byFloor = design - CoatingStandards.AbsoluteFloorMm;
+        return $"构件均值 {mean:F3}mm < 下限 {meanLower:F3}mm"
+            + $"（设计×{CoatingStandards.ExpansionMeanFactor:F2}={byFactor:F3}，"
+            + $"−{CoatingStandards.AbsoluteFloorMm * 1000:F0}µm 兜底={byFloor:F3}，取较严者）";
     }
 }

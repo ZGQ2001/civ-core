@@ -1,4 +1,4 @@
-// CoatingAnalysisSheet 单测：宽表结果写入（涂层类型列 + 精度 + 判定/待接入）。
+// CoatingAnalysisSheet 单测：宽表结果写入（涂层类型列 + 精度 + 厚型/膨胀型判定）。
 
 using System.IO;
 using ClosedXML.Excel;
@@ -25,7 +25,7 @@ public class CoatingAnalysisSheetTests
     }
 
     [Fact]
-    public void Write_宽表_含涂层类型列_厚型判定_薄型待接入()
+    public void Write_宽表_含涂层类型列_厚型与膨胀型判定()
     {
         var beamFaces = new[] { "梁侧面", "梁侧面", "梁底面" };
         var workbook = new CoatingWorkbookInput(
@@ -36,7 +36,7 @@ public class CoatingAnalysisSheetTests
                 {
                     Member("梁1", "梁", 20, 2, beamFaces, new double[] { 25, 26, 27, 24, 25, 28 }), // 厚型 合格
                     Member("梁2", "梁", 20, 2, beamFaces, new double[] { 10, 10, 10, 25, 26, 28 }), // 厚型 不合格
-                    Member("梁3", "梁", 5, 1, beamFaces, new double[] { 4.8, 5.1, 4.9 }),            // 薄型 待接入
+                    Member("梁3", "梁", 5, 1, beamFaces, new double[] { 4.8, 5.1, 4.9 }),            // 薄型 合格（均值4.933 ≥ 下限4.8）
                 }),
             });
         var result = CoatingCalculator.Calc(workbook);
@@ -69,10 +69,10 @@ public class CoatingAnalysisSheetTests
             Assert.Equal("梁2", sheet.Cell(4, 2).GetString());
             Assert.Contains("不合格", sheet.Cell(4, 13).GetString());
 
-            // 梁3（行6）薄型 待接入
+            // 梁3（行6）薄型 合格（膨胀型按构件均值判定）
             Assert.Equal("梁3", sheet.Cell(6, 2).GetString());
             Assert.Equal("薄型", sheet.Cell(6, 4).GetString());
-            Assert.Contains("待接入", sheet.Cell(6, 13).GetString());
+            Assert.Equal("合格", sheet.Cell(6, 13).GetString());
         }
         finally { File.Delete(path); }
     }

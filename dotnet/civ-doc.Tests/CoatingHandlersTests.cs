@@ -122,7 +122,7 @@ public class CoatingHandlersTests
     }
 
     [Fact]
-    public void Run_薄型构件_待判定_不计入合格()
+    public void Run_薄型构件_均值达标_合格()
     {
         string input = TempXlsx();
         try
@@ -139,12 +139,12 @@ public class CoatingHandlersTests
                 wb.SaveAs(input);
             }
             CoatingHandlers.ExpandTemplate(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"));
-            FillPoints(input, 3.5);
+            FillPoints(input, 3.5); // 均值 3.5 ≥ 下限 max(3.3×0.95, 3.3−0.2)=3.135 → 合格
 
             var r = (Dictionary<string, object?>)CoatingHandlers.Run(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"))!;
             Assert.Equal(1, (int)r["members_total"]!);
-            Assert.Equal(0, (int)r["members_qualified"]!);
-            Assert.Equal(1, (int)r["members_pending"]!);
+            Assert.Equal(1, (int)r["members_qualified"]!);
+            Assert.Equal(0, (int)r["members_pending"]!);
         }
         finally { if (File.Exists(input)) File.Delete(input); }
     }

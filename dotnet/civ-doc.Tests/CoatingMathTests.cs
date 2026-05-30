@@ -1,6 +1,6 @@
-// CoatingMath 单测 —— 涂层类型分级 + 厚型验收判定（GB 50205-2020 §13.4.3）。
+// CoatingMath 单测 —— 涂层类型分级 + 验收判定（GB 50205-2020 §13.4.3）。
 //   厚型（设计≥7）：合格率 ≥ 80% 且 最薄处 ≥ 设计 × 0.85（闭区间，恰 80%/85% 判合格）。
-//   薄型(3,7)/超薄型(≤3)：本轮 Verdict=待判定。
+//   膨胀型 薄型(3,7)/超薄型(≤3)：构件均值 ≥ max(设计×0.95, 设计−0.2mm)（−5% 且 −200µm 兜底）。
 
 using CivCore.Doc.Calc.Coating;
 using Xunit;
@@ -93,23 +93,61 @@ public class CoatingMathTests
         Assert.Equal(3, r.NPoints);
     }
 
-    // ── 薄型/超薄型：本轮待判定 ──
+    // ── 膨胀型（薄型/超薄型）判定：构件均值 ≥ max(设计×0.95, 设计−0.2) ──
 
     [Fact]
-    public void ComputeMember_薄型_待判定_不出合格不合格()
+    public void ComputeMember_薄型_均值恰下限_合格()
     {
-        var r = CoatingMath.ComputeMember(5, new double[] { 4.5, 5.1, 4.8 });
+        // 设计 3.5（<4，−5% 起作用）：下限 = max(3.325, 3.3) = 3.325；均值恰 3.325 → 合格（闭区间）
+        var r = CoatingMath.ComputeMember(3.5, new double[] { 3.325, 3.325, 3.325 });
+
         Assert.Equal(CoatingCategory.薄型, r.Category);
-        Assert.Equal(CoatingVerdict.待判定, r.Verdict);
+        Assert.Equal(CoatingVerdict.合格, r.Verdict);
+        Assert.True(r.MeanPass);
+        Assert.Equal(3.325, r.MeanLowerLimit, precision: 9);
         Assert.Null(r.FailReason);
     }
 
     [Fact]
-    public void ComputeMember_超薄型_待判定()
+    public void ComputeMember_薄型_均值略低_不合格_原因含构件均值()
     {
-        var r = CoatingMath.ComputeMember(2, new double[] { 1.8, 2.1, 1.9 });
+        var r = CoatingMath.ComputeMember(3.5, new double[] { 3.2, 3.3, 3.3 }); // 均值 ≈3.267 < 3.325
+
+        Assert.Equal(CoatingVerdict.不合格, r.Verdict);
+        Assert.False(r.MeanPass);
+        Assert.Contains("构件均值", r.FailReason);
+    }
+
+    [Fact]
+    public void ComputeMember_超薄型_均值达标_合格()
+    {
+        // 设计 2：下限 = max(1.9, 1.8) = 1.9；均值 ≈1.923 → 合格
+        var r = CoatingMath.ComputeMember(2, new double[] { 1.95, 1.9, 1.92 });
+
         Assert.Equal(CoatingCategory.超薄型, r.Category);
-        Assert.Equal(CoatingVerdict.待判定, r.Verdict);
+        Assert.Equal(CoatingVerdict.合格, r.Verdict);
+        Assert.Equal(1.9, r.MeanLowerLimit, precision: 9);
+    }
+
+    [Fact]
+    public void ComputeMember_超薄型_均值不达_不合格()
+    {
+        var r = CoatingMath.ComputeMember(2, new double[] { 1.8, 1.85, 1.9 }); // 均值 1.85 < 1.9
+
+        Assert.Equal(CoatingCategory.超薄型, r.Category);
+        Assert.Equal(CoatingVerdict.不合格, r.Verdict);
+    }
+
+    [Fact]
+    public void ComputeMember_膨胀型_设计大于4mm_200µm兜底比5百分比更严()
+    {
+        // 设计 5（>4）：×0.95=4.75，−0.2=4.8 → 下限取 4.8（兜底更严）。
+        // 均值 4.78：过了 −5%(≥4.75) 但没过 −200µm(≥4.8) → 不合格，证明兜底起作用。
+        var r = CoatingMath.ComputeMember(5, new double[] { 4.78, 4.78, 4.78 });
+
+        Assert.Equal(CoatingCategory.薄型, r.Category);
+        Assert.Equal(4.8, r.MeanLowerLimit, precision: 9);
+        Assert.Equal(CoatingVerdict.不合格, r.Verdict);
     }
 
     // ── 入参校验 ──

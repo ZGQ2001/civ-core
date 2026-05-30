@@ -1,4 +1,4 @@
-// coating.* RPC（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
+// coating.* RPC（GB 50205-2020 §13.4.3 防火涂料涂层厚度验收）。
 //
 // 流程（构件清单驱动）：
 //   coating.generate_template(output_xlsx, standard?)              -> {ok, path}   出「类型预设」+「构件清单」模板
@@ -9,8 +9,8 @@
 //                                                                  -> {batches, members_total, members_qualified, members_pending, output}
 //   coating.list_batches(input_xlsx, sheet?, batch_id_column?)     -> {batches}    信息性
 //
-// 涂层类型按设计厚度自动分级；本轮只厚型出合格/不合格，薄型/超薄型 Verdict=待判定。
-// 间距随地标（国标 3m / 北京地标 1m），驱动 expand 的截面数。
+// 涂层类型按设计厚度自动分级：厚型按 80%+最薄85%；膨胀型(薄/超薄)按构件均值 ≥ 设计×0.95。
+// 国标膨胀型按 5 处×3 点布点；地标按截面，间距随地标（国标 3m / 北京地标 1m）驱动 expand 截面数。
 
 using System.Text.Json;
 using ClosedXML.Excel;

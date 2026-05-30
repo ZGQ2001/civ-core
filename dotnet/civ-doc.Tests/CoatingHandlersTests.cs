@@ -148,4 +148,68 @@ public class CoatingHandlersTests
         }
         finally { if (File.Exists(input)) File.Delete(input); }
     }
+
+    [Fact]
+    public void Run_国标超薄型_5处3点_均值不达_不合格()
+    {
+        string input = TempXlsx();
+        try
+        {
+            // 默认设计 2（超薄型）；国标 → 展开成「测点数据-梁-膨胀型」5 处×3 点
+            using (var wb = new XLWorkbook())
+            {
+                var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
+                preset.Cell(1, 1).Value = "构件类型"; preset.Cell(1, 2).Value = "测点位置"; preset.Cell(1, 3).Value = "默认设计厚度";
+                preset.Cell(2, 1).Value = "梁"; preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面"; preset.Cell(2, 3).Value = 2.0;
+                var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
+                list.Cell(1, 1).Value = "批次"; list.Cell(1, 2).Value = "构件位置"; list.Cell(1, 5).Value = "截面数";
+                list.Cell(2, 1).Value = "B1"; list.Cell(2, 2).Value = "超薄梁1"; list.Cell(2, 5).Value = 1;
+                wb.SaveAs(input);
+            }
+            CoatingHandlers.ExpandTemplate(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"));
+            using (var wb = new XLWorkbook(input))
+                Assert.True(wb.Worksheets.Contains("测点数据-梁-膨胀型")); // 5 处×3 点表
+            FillPoints(input, 1.8); // 均值 1.8 < 下限 max(2×0.95=1.9, 2−0.2=1.8)=1.9 → 不合格
+
+            var r = (Dictionary<string, object?>)CoatingHandlers.Run(P($"{{\"input_xlsx\":\"{Esc(input)}\"}}"))!;
+            Assert.Equal(1, (int)r["members_total"]!);
+            Assert.Equal(0, (int)r["members_qualified"]!);
+            Assert.Equal(0, (int)r["members_pending"]!);
+        }
+        finally { if (File.Exists(input)) File.Delete(input); }
+    }
+
+    [Fact]
+    public void Run_地标膨胀型_截面布局_合格()
+    {
+        string input = TempXlsx();
+        string std = CoatingStandards.BeijingLocal;
+        try
+        {
+            // 地标 + 薄型(默认3.3) → 不走 5 处×3 点，仍按截面×面（2 截面 × 3 面 = 6 点）
+            using (var wb = new XLWorkbook())
+            {
+                var preset = wb.Worksheets.Add(CoatingColumns.TypePresetSheet);
+                preset.Cell(1, 1).Value = "构件类型"; preset.Cell(1, 2).Value = "测点位置"; preset.Cell(1, 3).Value = "默认设计厚度";
+                preset.Cell(2, 1).Value = "梁"; preset.Cell(2, 2).Value = "梁侧面,梁侧面,梁底面"; preset.Cell(2, 3).Value = 3.3;
+                var list = wb.Worksheets.Add(CoatingColumns.MemberListSheet);
+                list.Cell(1, 1).Value = "批次"; list.Cell(1, 2).Value = "构件位置"; list.Cell(1, 5).Value = "截面数";
+                list.Cell(2, 1).Value = "B1"; list.Cell(2, 2).Value = "薄涂梁1"; list.Cell(2, 5).Value = 2;
+                wb.SaveAs(input);
+            }
+            CoatingHandlers.ExpandTemplate(P($"{{\"input_xlsx\":\"{Esc(input)}\",\"standard\":\"{std}\"}}"));
+            using (var wb = new XLWorkbook(input))
+            {
+                Assert.True(wb.Worksheets.Contains("测点数据-梁"));        // 截面布局
+                Assert.False(wb.Worksheets.Contains("测点数据-梁-膨胀型"));
+            }
+            FillPoints(input, 3.5); // 均值 3.5 ≥ 下限 3.135 → 合格
+
+            var r = (Dictionary<string, object?>)CoatingHandlers.Run(
+                P($"{{\"input_xlsx\":\"{Esc(input)}\",\"standard\":\"{std}\"}}"))!;
+            Assert.Equal(1, (int)r["members_total"]!);
+            Assert.Equal(1, (int)r["members_qualified"]!);
+        }
+        finally { if (File.Exists(input)) File.Delete(input); }
+    }
 }

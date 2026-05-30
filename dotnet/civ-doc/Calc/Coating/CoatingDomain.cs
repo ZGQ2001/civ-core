@@ -57,7 +57,7 @@ public record CoatingMemberInput(
     }
 }
 
-/// <summary>单构件结果。薄/超薄 Verdict=待判定；不合格时 FailReason 写清哪条没过（"程序不能是黑盒"）。</summary>
+/// <summary>单构件结果。厚型走合格率+最薄；膨胀型（薄/超薄）走构件均值；不合格时 FailReason 写清哪条没过（"程序不能是黑盒"）。</summary>
 public record CoatingMemberResult(
     CoatingCategory Category, // 涂层类型（厚/薄/超薄）
     int NPoints,              // 测点总数
@@ -68,6 +68,8 @@ public record CoatingMemberResult(
     double MeanThickness,     // 构件总均值
     bool RatioPass,           // 合格率 ≥ 80%（厚型用）
     bool MinPass,             // 最薄 ≥ 下限（厚型用）
+    double MeanLowerLimit,    // 均值下限 = max(设计×0.95, 设计−0.2)（膨胀型用；厚型置 0）
+    bool MeanPass,            // 构件均值 ≥ 均值下限（膨胀型用；厚型置 true 占位）
     CoatingVerdict Verdict,   // 合格 / 不合格 / 待判定
     string? FailReason        // 不合格原因（合格/待判定时为 null）
 );

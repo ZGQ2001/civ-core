@@ -26,7 +26,7 @@ public class CoatingCalculatorTests
                 {
                     Member("梁1", 20, 21, 22, 20, 23, 21),  // 厚型 合格
                     Member("梁2", 20, 16, 16, 16, 21, 18),  // 厚型 不合格
-                    Member("梁3", 5, 4.8, 5.1, 4.9),        // 薄型 待判定
+                    Member("梁3", 5, 4.5, 4.6, 4.7),        // 薄型 不合格（均值 4.6 < 下限 4.8）
                 }),
                 new CoatingBatchInput("B2", new[]
                 {
@@ -39,11 +39,11 @@ public class CoatingCalculatorTests
         Assert.Equal(2, result.NBatches);
         Assert.Equal(4, result.NMembersTotal);
         Assert.Equal(2, result.NQualifiedTotal);
-        Assert.Equal(1, result.NPendingTotal);
+        Assert.Equal(0, result.NPendingTotal);  // 膨胀型现已出判定，无待判定
 
         Assert.Equal("B1", result.BatchResults[0].BatchId);
         Assert.Equal(1, result.BatchResults[0].NQualified);
-        Assert.Equal(1, result.BatchResults[0].NPending);
+        Assert.Equal(0, result.BatchResults[0].NPending);
         Assert.Equal(3, result.BatchResults[0].NTotal);
 
         Assert.Equal(1, result.BatchResults[1].NQualified);

@@ -497,7 +497,9 @@ export function DataProcessingProvider({
           standard: coatingStandard,
           batch_id_column: coatingBatchIdColumn,
         };
-        if (sheet) params.sheet = sheet;
+        // 不传 sheet：coating 的测点数据天然跨多张「测点数据-<类型>」表，由后端按前缀
+        // 自动发现全部。预览自动选中的首表是「类型预设」，传过去会让后端只读那张表 →
+        // 报「缺少截面号列」。所以这里刻意不转发通用的单表选择。
         if (outputPath.trim()) params.output_xlsx = outputPath.trim();
 
         const res = await rpc('coating.run', params, coatingRunResultSchema);

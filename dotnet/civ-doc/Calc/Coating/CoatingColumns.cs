@@ -6,6 +6,8 @@
 //
 // 列名容错由 NormalizeHeader 抹平（与 AnchorColumns 同口径：trim + 全角括号/连字符 + 小写）。
 
+using System.Text.RegularExpressions;
+
 namespace CivCore.Doc.Calc.Coating;
 
 public static class CoatingColumns
@@ -33,14 +35,19 @@ public static class CoatingColumns
 
     public const string DefaultBatchId = "全部";
 
-    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 去空格 + 小写。</summary>
+    // 尾部单位/备注括注，如「默认设计厚度(mm)」「长度(m)」。土木工程师常顺手在列名标单位，
+    // 不剥掉就匹配不上裸列名常量。全角括号已先转半角，故只需匹配半角；只剥末尾一组。
+    private static readonly Regex TrailingParen = new(@"\([^()]*\)$", RegexOptions.Compiled);
+
+    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 去空格 + 小写 + 剥尾部单位括注。</summary>
     public static string NormalizeHeader(string s)
     {
         if (s == null) return "";
-        return s.Trim()
+        var t = s.Trim()
             .Replace('（', '(').Replace('）', ')')
             .Replace('–', '-').Replace('—', '-')
             .Replace(" ", "")
             .ToLowerInvariant();
+        return TrailingParen.Replace(t, "");
     }
 }

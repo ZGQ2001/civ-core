@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="筑核 civ-core">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024" role="img" aria-label="筑核 civ-core">
   <defs>
+    <linearGradient id="cc-tile" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#26262b"/>
+      <stop offset="1" stop-color="#141417"/>
+    </linearGradient>
     <linearGradient id="cc-hex" x1="22" y1="14" x2="78" y2="86" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#3aa0e3"/>
       <stop offset="1" stop-color="#0d5c93"/>
@@ -9,14 +13,14 @@
       <stop offset="1" stop-color="#dcebf7"/>
     </linearGradient>
   </defs>
-  <!-- 六边形外壳：螺母/锚杆头 + 核之细胞 -->
+  <!-- 暗色圆角底板 -->
+  <rect x="2" y="2" width="96" height="96" rx="22" fill="url(#cc-tile)"/>
+  <!-- 六边形外壳 -->
   <polygon points="32,18 68,18 86,50 68,82 32,82 14,50"
            fill="url(#cc-hex)" stroke="url(#cc-hex)" stroke-width="9" stroke-linejoin="round"/>
-  <!-- 顶部高光：金属印章质感 -->
   <polygon points="32,18 68,18 86,50 14,50" fill="#ffffff" opacity="0.08"/>
-  <!-- 结构工字钢：核心 -->
+  <!-- 结构工字钢 -->
   <path d="M33,30 H67 V39 H56 V61 H67 V70 H33 V61 H44 V39 H33 Z" fill="url(#cc-beam)"/>
-  <!-- 铆钉孔 -->
   <g fill="url(#cc-hex)">
     <circle cx="41" cy="34.5" r="2.1"/>
     <circle cx="59" cy="34.5" r="2.1"/>

@@ -3,6 +3,7 @@
  * 顶部 32px header：标题 "资源管理器" + 4 个图标按钮
  * 内容区：文件树 / empty state（B1 阶段是 placeholder，T4 接 Python 文件树）
  */
+import { AppLogo } from './AppLogo';
 import { cn } from '../lib/cn';
 import { FileTree } from './FileTree';
 
@@ -114,7 +115,16 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-      <p className="text-vscode-text-dim text-xs">尚未打开工作区。</p>
+      <AppLogo size={44} className="mb-1" />
+      <div className="flex items-baseline gap-1.5 leading-none">
+        <span className="text-vscode-text text-base font-semibold tracking-wide">
+          筑核
+        </span>
+        <span className="text-vscode-text-faint text-[11px] tracking-wider">
+          civ-core
+        </span>
+      </div>
+      <p className="text-vscode-text-dim mt-1 mb-1 text-xs">尚未打开工作区。</p>
       <button
         type="button"
         onClick={onOpenFolder}

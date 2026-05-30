@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
+import { AppLogo } from './AppLogo';
 import { cn } from '../lib/cn';
 
 interface Props {
@@ -38,12 +39,12 @@ export function TitleBar({ workspaceName, toolLabel }: Props) {
       data-tauri-drag-region
       className="bg-vscode-activity border-vscode-border flex h-[30px] shrink-0 items-center border-b select-none"
     >
-      {/* 左侧 logo 占位（48px 对齐下面的 Activity Bar） */}
+      {/* 左侧 logo（48px 对齐下面的 Activity Bar） */}
       <div
         data-tauri-drag-region
         className="flex w-12 items-center justify-center"
       >
-        <i className="codicon codicon-symbol-misc text-vscode-text-dim !text-[14px]" />
+        <AppLogo size={18} />
       </div>
 
       {/* 居中标题 —— 也是 drag region */}

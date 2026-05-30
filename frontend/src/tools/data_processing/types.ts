@@ -74,7 +74,8 @@ export const ANCHOR_DEFAULT_BATCH_COL = '批次';
 
 // ── 防火涂层专属 ────────────────────────────────────────────
 
-export const COATING_STANDARDS = ['GB 50205-2020'] as const;
+// 国标（间距 3m）/ 北京地标（间距 1m）；当前驱动展开的截面数 + 判定依据标注。
+export const COATING_STANDARDS = ['GB 50205-2020', '北京地标'] as const;
 export type CoatingStandard = (typeof COATING_STANDARDS)[number];
 
 /**

@@ -30,6 +30,7 @@ export const coatingRunResultSchema = z.object({
   batches: z.number(),
   members_total: z.number(),
   members_qualified: z.number(),
+  members_pending: z.number().optional(), // 薄型/超薄型待接入数
   output: z.string(),
 });
 

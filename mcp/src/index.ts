@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   });
 
   // 工具注册：与 sidecar RPC 全表对齐（除 calc 类型 stub）。
-  // doc 2 / workspace 4 / anchor 4 / coating 3 / leeb 2 / xlsx 1 / template 2 / report 2 /
+  // doc 2 / workspace 4 / anchor 4 / coating 4 / leeb 2 / xlsx 1 / template 2 / report 2 /
   // report_preset 5 / catalog 4 / files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 10。
   const allTools = [
     ...allDocTools,

@@ -1,4 +1,4 @@
-// CoatingExcelReader 单测：用 ClosedXML 内存里建长表 sheet 喂给 reader。
+// CoatingExcelReader 单测：读「测点数据-<类型>」宽表（expand 生成、用户填数字的那张）。
 
 using System.IO;
 using ClosedXML.Excel;
@@ -9,180 +9,133 @@ namespace CivCore.Doc.Tests;
 
 public class CoatingExcelReaderTests
 {
-    private static readonly string[] Headers =
+    // 写一张「测点数据-梁」sheet：批次|构件位置|构件类型|涂层类型|设计厚度|截面号|梁侧面|梁侧面|梁底面
+    private static void WriteBeamSheet(XLWorkbook wb, string name = "测点数据-梁")
     {
-        "批次", "构件位置", "构件类型", "设计厚度", "截面号", "测点位置", "实测厚度",
-    };
+        var ws = wb.Worksheets.Add(name);
+        var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "截面号", "梁侧面", "梁侧面", "梁底面" };
+        for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+        // 梁1：2 截面 × 3 面（设计 20 → 厚型）
+        var rows = new[]
+        {
+            new object[] { "B1", "梁1", "梁", "厚型", 20, 1, 21, 22, 27 },
+            new object[] { "B1", "梁1", "梁", "厚型", 20, 2, 24, 25, 28 },
+        };
+        int r = 2;
+        foreach (var row in rows)
+        {
+            for (int c = 0; c < row.Length; c++) ws.Cell(r, c + 1).Value = XLCellValue.FromObject(row[c]);
+            r++;
+        }
+    }
 
-    private static string MakeTempFile(Action<IXLWorksheet> setup)
+    private static string Save(Action<XLWorkbook> setup)
     {
-        string path = Path.Combine(Path.GetTempPath(), $"coating_test_{Guid.NewGuid():N}.xlsx");
+        string path = Path.Combine(Path.GetTempPath(), $"coating_rd_{Guid.NewGuid():N}.xlsx");
         using var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add("Sheet1");
-        for (int c = 0; c < Headers.Length; c++) ws.Cell(1, c + 1).Value = Headers[c];
-        setup(ws);
+        setup(wb);
         wb.SaveAs(path);
         return path;
     }
 
-    /// <summary>写一个测点行。</summary>
-    private static void Row(IXLWorksheet ws, int r, string batch, string loc, string type,
-        double design, int section, string pos, double thickness)
-    {
-        ws.Cell(r, 1).Value = batch;
-        ws.Cell(r, 2).Value = loc;
-        ws.Cell(r, 3).Value = type;
-        ws.Cell(r, 4).Value = design;
-        ws.Cell(r, 5).Value = section;
-        ws.Cell(r, 6).Value = pos;
-        ws.Cell(r, 7).Value = thickness;
-    }
-
     [Fact]
-    public void ReadRows_单批一构件_两截面六测点()
+    public void ReadRows_单sheet_一构件_两截面六测点()
     {
-        string path = MakeTempFile(ws =>
-        {
-            int r = 2;
-            Row(ws, r++, "B1", "梁1", "梁", 24, 1, "梁侧面", 25);
-            Row(ws, r++, "B1", "梁1", "梁", 24, 1, "梁侧面", 26);
-            Row(ws, r++, "B1", "梁1", "梁", 24, 1, "梁底面", 27);
-            Row(ws, r++, "B1", "梁1", "梁", 24, 2, "梁侧面", 24);
-            Row(ws, r++, "B1", "梁1", "梁", 24, 2, "梁侧面", 25);
-            Row(ws, r++, "B1", "梁1", "梁", 24, 2, "梁底面", 28);
-        });
+        string path = Save(wb => WriteBeamSheet(wb));
         try
         {
             var batches = CoatingExcelReader.ReadRows(path);
             Assert.Single(batches);
             Assert.Equal("B1", batches[0].BatchId);
-            Assert.Single(batches[0].Members);
-            var m = batches[0].Members[0];
+            var m = Assert.Single(batches[0].Members);
             Assert.Equal("梁1", m.Location);
             Assert.Equal("梁", m.MemberType);
-            Assert.Equal(24, m.DesignThickness);
+            Assert.Equal(20, m.DesignThickness);
             Assert.Equal(6, m.Points.Length);
             Assert.Equal("梁侧面", m.Points[0].Position);
+            Assert.Equal("梁底面", m.Points[2].Position);
             Assert.Equal(2, m.Points[5].SectionNo);
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void ReadRows_批次列为空_归入默认批()
+    public void ReadRows_多类型sheet_合并所有构件()
     {
-        string path = MakeTempFile(ws =>
+        string path = Save(wb =>
         {
-            int r = 2;
-            Row(ws, r++, "", "柱1", "柱", 24, 1, "东侧面", 25);
-            Row(ws, r++, "", "柱1", "柱", 24, 1, "西侧面", 26);
+            WriteBeamSheet(wb);
+            var ws = wb.Worksheets.Add("测点数据-柱");
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "截面号", "东侧面", "西侧面", "南侧面", "北侧面" };
+            for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+            ws.Cell(2, 1).Value = "B1"; ws.Cell(2, 2).Value = "柱1"; ws.Cell(2, 3).Value = "柱";
+            ws.Cell(2, 4).Value = "厚型"; ws.Cell(2, 5).Value = 24; ws.Cell(2, 6).Value = 1;
+            ws.Cell(2, 7).Value = 25; ws.Cell(2, 8).Value = 26; ws.Cell(2, 9).Value = 24; ws.Cell(2, 10).Value = 27;
         });
         try
         {
             var batches = CoatingExcelReader.ReadRows(path);
             Assert.Single(batches);
-            Assert.Equal(CoatingExcelReader.DefaultBatchId, batches[0].BatchId);
-            Assert.Single(batches[0].Members);
-            Assert.Equal(2, batches[0].Members[0].Points.Length);
+            Assert.Equal(2, batches[0].Members.Count); // 梁1 + 柱1
+            var col = batches[0].Members.First(x => x.Location == "柱1");
+            Assert.Equal(4, col.Points.Length);
+            Assert.Equal("北侧面", col.Points[3].Position);
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void ReadRows_多批多构件_保持出现顺序()
+    public void ReadRows_构件位置留空行_向上继承()
     {
-        string path = MakeTempFile(ws =>
+        string path = Save(wb =>
         {
-            int r = 2;
-            Row(ws, r++, "B2", "梁A", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "B1", "梁B", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "B2", "梁C", "梁", 24, 1, "梁底面", 25);
+            var ws = wb.Worksheets.Add("测点数据-梁");
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "截面号", "梁侧面", "梁侧面", "梁底面" };
+            for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+            // 第一行填全，第二行构件位置/设计留空（模拟合并/手工）
+            ws.Cell(2, 1).Value = "B1"; ws.Cell(2, 2).Value = "梁1"; ws.Cell(2, 5).Value = 20; ws.Cell(2, 6).Value = 1;
+            ws.Cell(2, 7).Value = 21; ws.Cell(2, 8).Value = 22; ws.Cell(2, 9).Value = 23;
+            ws.Cell(3, 6).Value = 2; // 仅截面号 + 测点
+            ws.Cell(3, 7).Value = 24; ws.Cell(3, 8).Value = 25; ws.Cell(3, 9).Value = 26;
         });
         try
         {
             var batches = CoatingExcelReader.ReadRows(path);
-            Assert.Equal(2, batches.Count);
-            Assert.Equal("B2", batches[0].BatchId);
-            Assert.Equal(2, batches[0].Members.Count);
-            Assert.Equal("梁A", batches[0].Members[0].Location);
-            Assert.Equal("B1", batches[1].BatchId);
+            var m = Assert.Single(batches[0].Members);
+            Assert.Equal("梁1", m.Location);
+            Assert.Equal(6, m.Points.Length); // 两行都归到梁1
+            Assert.Equal(20, m.DesignThickness);
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void ReadRows_缺实测厚度列_抛异常_提示列名()
+    public void ReadRows_无测点数据sheet_抛异常_提示先展开()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"coating_missing_{Guid.NewGuid():N}.xlsx");
-        using (var wb = new XLWorkbook())
-        {
-            var ws = wb.Worksheets.Add("Sheet1");
-            // 只写到「测点位置」，故意缺「实测厚度」
-            for (int c = 0; c < 6; c++) ws.Cell(1, c + 1).Value = Headers[c];
-            ws.Cell(2, 2).Value = "梁1";
-            wb.SaveAs(path);
-        }
+        string path = Save(wb => wb.Worksheets.Add("构件清单").Cell(1, 1).Value = "批次");
         try
         {
             var ex = Assert.Throws<ArgumentException>(() => CoatingExcelReader.ReadRows(path));
-            Assert.Contains("实测厚度", ex.Message);
+            Assert.Contains("expand_template", ex.Message);
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void ReadRows_同构件设计厚度不一致_抛异常()
+    public void ListBatchIds_去重保序()
     {
-        string path = MakeTempFile(ws =>
+        string path = Save(wb =>
         {
-            int r = 2;
-            Row(ws, r++, "B1", "梁1", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "B1", "梁1", "梁", 30, 2, "梁底面", 25); // 设计厚度变了
+            var ws = wb.Worksheets.Add("测点数据-梁");
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "截面号", "梁侧面" };
+            for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+            ws.Cell(2, 1).Value = "A"; ws.Cell(2, 2).Value = "m1"; ws.Cell(2, 5).Value = 20; ws.Cell(2, 6).Value = 1; ws.Cell(2, 7).Value = 21;
+            ws.Cell(3, 1).Value = "B"; ws.Cell(3, 2).Value = "m2"; ws.Cell(3, 5).Value = 20; ws.Cell(3, 6).Value = 1; ws.Cell(3, 7).Value = 21;
+            ws.Cell(4, 1).Value = "A"; ws.Cell(4, 2).Value = "m3"; ws.Cell(4, 5).Value = 20; ws.Cell(4, 6).Value = 1; ws.Cell(4, 7).Value = 21;
         });
         try
         {
-            var ex = Assert.Throws<ArgumentException>(() => CoatingExcelReader.ReadRows(path));
-            Assert.Contains("设计厚度不一致", ex.Message);
-        }
-        finally { File.Delete(path); }
-    }
-
-    [Fact]
-    public void ReadRows_设计厚度带单位后缀_容错解析()
-    {
-        string path = MakeTempFile(ws =>
-        {
-            ws.Cell(2, 1).Value = "B1";
-            ws.Cell(2, 2).Value = "柱1";
-            ws.Cell(2, 3).Value = "柱";
-            ws.Cell(2, 4).Value = "24mm"; // 文本带单位
-            ws.Cell(2, 5).Value = 1;
-            ws.Cell(2, 6).Value = "东侧面";
-            ws.Cell(2, 7).Value = 25;
-        });
-        try
-        {
-            var batches = CoatingExcelReader.ReadRows(path);
-            Assert.Equal(24, batches[0].Members[0].DesignThickness);
-        }
-        finally { File.Delete(path); }
-    }
-
-    [Fact]
-    public void ListBatchIds_去重并保序()
-    {
-        string path = MakeTempFile(ws =>
-        {
-            int r = 2;
-            Row(ws, r++, "A", "m1", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "B", "m2", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "A", "m3", "梁", 24, 1, "梁底面", 25);
-            Row(ws, r++, "C", "m4", "梁", 24, 1, "梁底面", 25);
-        });
-        try
-        {
-            var ids = CoatingExcelReader.ListBatchIds(path);
-            Assert.Equal(new[] { "A", "B", "C" }, ids);
+            Assert.Equal(new[] { "A", "B" }, CoatingExcelReader.ListBatchIds(path));
         }
         finally { File.Delete(path); }
     }

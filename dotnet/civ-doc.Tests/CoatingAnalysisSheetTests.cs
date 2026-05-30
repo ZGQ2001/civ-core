@@ -1,4 +1,4 @@
-// CoatingAnalysisSheet 单测：宽表结果写入 + 读回关键单元格。
+// CoatingAnalysisSheet 单测：宽表结果写入（涂层类型列 + 精度 + 判定/待接入）。
 
 using System.IO;
 using ClosedXML.Excel;
@@ -25,9 +25,8 @@ public class CoatingAnalysisSheetTests
     }
 
     [Fact]
-    public void Write_宽表_表头与判定正确()
+    public void Write_宽表_含涂层类型列_厚型判定_薄型待接入()
     {
-        // 钢梁 2 截面 × 3 面，design=24；一个合格一个不合格
         var beamFaces = new[] { "梁侧面", "梁侧面", "梁底面" };
         var workbook = new CoatingWorkbookInput(
             CoatingStandards.GB_50205_2020,
@@ -35,8 +34,9 @@ public class CoatingAnalysisSheetTests
             {
                 new CoatingBatchInput("B1", new[]
                 {
-                    Member("梁1", "梁", 24, 2, beamFaces, new double[] { 25, 26, 27, 24, 25, 28 }), // 合格
-                    Member("梁2", "梁", 24, 2, beamFaces, new double[] { 10, 10, 10, 25, 26, 28 }), // 不合格
+                    Member("梁1", "梁", 20, 2, beamFaces, new double[] { 25, 26, 27, 24, 25, 28 }), // 厚型 合格
+                    Member("梁2", "梁", 20, 2, beamFaces, new double[] { 10, 10, 10, 25, 26, 28 }), // 厚型 不合格
+                    Member("梁3", "梁", 5, 1, beamFaces, new double[] { 4.8, 5.1, 4.9 }),            // 薄型 待接入
                 }),
             });
         var result = CoatingCalculator.Calc(workbook);
@@ -47,28 +47,32 @@ public class CoatingAnalysisSheetTests
             using (var wb = new XLWorkbook())
             {
                 var ws = wb.Worksheets.Add("B1-数据分析");
-                CoatingAnalysisSheet.Write(ws, result.BatchResults[0]);
+                CoatingAnalysisSheet.Write(ws, result.BatchResults[0], CoatingStandards.GB_50205_2020);
                 wb.SaveAs(path);
             }
 
             using var read = new XLWorkbook(path);
             var sheet = read.Worksheet("B1-数据分析");
 
-            // 表头：测点位置一致 → 用面名
-            Assert.Equal("序号", sheet.Cell(1, 1).GetString());
-            Assert.Equal("构件位置", sheet.Cell(1, 2).GetString());
-            Assert.Equal("梁侧面", sheet.Cell(1, 5).GetString());
-            Assert.Equal("梁底面", sheet.Cell(1, 7).GetString());
-            Assert.Equal("平均值", sheet.Cell(1, 8).GetString());
-            Assert.Equal("判定", sheet.Cell(1, 12).GetString());
+            // 列：序号|构件位置|构件类型|涂层类型|截面号|梁侧面|梁侧面|梁底面|平均值|合格率|最薄处|设计厚度|判定
+            Assert.Equal("涂层类型", sheet.Cell(1, 4).GetString());
+            Assert.Equal("截面号", sheet.Cell(1, 5).GetString());
+            Assert.Equal("梁底面", sheet.Cell(1, 8).GetString());
+            Assert.Equal("判定", sheet.Cell(1, 13).GetString());
 
-            // 第 1 构件（梁1，行 2 起，跨 2 截面）合格
+            // 梁1（行2 起，跨 2 截面）厚型 合格
             Assert.Equal("梁1", sheet.Cell(2, 2).GetString());
-            Assert.Equal("合格", sheet.Cell(2, 12).GetString());
+            Assert.Equal("厚型", sheet.Cell(2, 4).GetString());
+            Assert.Equal("合格", sheet.Cell(2, 13).GetString());
 
-            // 第 2 构件（梁2，行 4 起）不合格 + 原因
+            // 梁2（行4 起）不合格
             Assert.Equal("梁2", sheet.Cell(4, 2).GetString());
-            Assert.Contains("不合格", sheet.Cell(4, 12).GetString());
+            Assert.Contains("不合格", sheet.Cell(4, 13).GetString());
+
+            // 梁3（行6）薄型 待接入
+            Assert.Equal("梁3", sheet.Cell(6, 2).GetString());
+            Assert.Equal("薄型", sheet.Cell(6, 4).GetString());
+            Assert.Contains("待接入", sheet.Cell(6, 13).GetString());
         }
         finally { File.Delete(path); }
     }

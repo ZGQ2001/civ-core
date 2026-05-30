@@ -1,11 +1,11 @@
-// 防火涂层厚度判定核心公式（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
+// 防火涂层厚度判定核心（GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收）。
 //
-//   合格率 = (实测 ≥ 设计厚度 的测点数) / 测点总数      "80% 面积满足耐火极限"
-//   最薄处 = min(实测)
-//   下限   = 设计厚度 × 0.85
-//   合格 ⇔ 合格率 ≥ 80%  且  最薄处 ≥ 下限
+//   涂层类型按设计厚度分级（CoatingStandards.Classify）：厚型 / 薄型 / 超薄型。
+//   厚型判定：合格率 = (实测 ≥ 设计厚度 的测点数)/总数 ≥ 80%  且  最薄处 ≥ 设计 × 0.85
+//             两者都满足 → 合格（≥ 闭区间，恰 80%/85% 判合格）。
+//   薄型/超薄型：本轮不出判定（Verdict=待判定）—— 方法按地标分叉、需原文，留后续。
 //
-// 用 ≥（闭区间）：恰 80%、恰 85% 判合格（规范"不应低于"= 允许等于）。
+// 判定按原始值算（不先四舍五入）；显示精度由 CoatingStandards.ThicknessDecimals 控制（在报告表里 round）。
 
 namespace CivCore.Doc.Calc.Coating;
 
@@ -19,6 +19,8 @@ public static class CoatingMath
         if (designThickness <= 0)
             throw new ArgumentException($"设计厚度必须 > 0，得到 {designThickness}");
 
+        var category = CoatingStandards.Classify(designThickness);
+
         int n = thicknesses.Count;
         int nQualified = thicknesses.Count(t => t >= designThickness);
         double ratio = (double)nQualified / n;
@@ -28,11 +30,23 @@ public static class CoatingMath
 
         bool ratioPass = ratio >= CoatingStandards.RatioThreshold;
         bool minPass = min >= lower;
-        bool qualified = ratioPass && minPass;
-        string? reason = qualified ? null : BuildFailReason(ratioPass, minPass, ratio, min, lower);
+
+        CoatingVerdict verdict;
+        string? reason = null;
+        if (category == CoatingCategory.厚型)
+        {
+            bool qualified = ratioPass && minPass;
+            verdict = qualified ? CoatingVerdict.合格 : CoatingVerdict.不合格;
+            if (!qualified) reason = BuildFailReason(ratioPass, minPass, ratio, min, lower);
+        }
+        else
+        {
+            // 薄型/超薄型本轮不出判定（口径待原文）
+            verdict = CoatingVerdict.待判定;
+        }
 
         return new CoatingMemberResult(
-            n, nQualified, ratio, min, lower, mean, ratioPass, minPass, qualified, reason);
+            category, n, nQualified, ratio, min, lower, mean, ratioPass, minPass, verdict, reason);
     }
 
     private static string BuildFailReason(

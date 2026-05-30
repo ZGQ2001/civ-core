@@ -1,12 +1,10 @@
 // 防火涂层「数据分析」sheet 写入：宽表版式（贴合用户现有「防火（钢梁/钢柱）」sheet）。
 //
-//   序号 | 构件位置 | 构件类型 | 截面号 | 测点1..K | 平均值 | 合格率 | 最薄处 | 设计厚度 | 判定
+//   序号 | 构件位置 | 构件类型 | 涂层类型 | 截面号 | 测点1..K | 平均值 | 合格率 | 最薄处 | 设计厚度 | 判定
 //
-// 一个构件跨多行（每截面一行），序号/构件位置/构件类型/平均值/合格率/最薄处/设计厚度/判定
-// 按构件合并；测点列展开各面实测值。测点列数 K = 该批构件单截面最多测点数；若全批测点位置
-// 标签一致则用面名做表头（钢梁：梁侧面…；钢柱：东侧面…），否则用「测点1..K」。
-//
-// 判定不合格时在「判定」单元格附原因（程序不能是黑盒），末尾标注判定依据（可追溯）。
+// 一个构件跨多行（每截面一行），构件级列按构件合并；测点列展开各面实测值。
+// 厚度按涂层类型显示精度四舍五入（厚型 2 位/游标卡尺、薄型超薄型 3 位/涂层测厚仪）。
+// 判定：厚型 合格/不合格(附原因)；薄型/超薄型「待接入」（本轮不出判定）。末尾标注判定依据（可追溯）。
 
 using ClosedXML.Excel;
 using CivCore.Doc.Calc.Coating;
@@ -15,13 +13,12 @@ namespace CivCore.Doc.ReportTables;
 
 public static class CoatingAnalysisSheet
 {
-    /// <summary>一个截面：序号 + 该截面各测点（按输入顺序）。</summary>
     private sealed record SectionView(int SectionNo, List<CoatingPoint> Points);
 
     private sealed record MemberView(
         CoatingMemberInput Input, CoatingMemberResult Result, List<SectionView> Sections);
 
-    public static void Write(IXLWorksheet ws, CoatingBatchResult batch)
+    public static void Write(IXLWorksheet ws, CoatingBatchResult batch, string standard)
     {
         var members = batch.MembersWithResults
             .Select(mr => new MemberView(mr.Input, mr.Result, GroupSections(mr.Input)))
@@ -34,8 +31,8 @@ public static class CoatingAnalysisSheet
         var pointHeaders = ResolvePointHeaders(members, k);
 
         // 列布局
-        const int colSerial = 1, colLoc = 2, colType = 3, colSection = 4;
-        int colPointStart = 5;
+        const int colSerial = 1, colLoc = 2, colType = 3, colCat = 4, colSection = 5;
+        int colPointStart = 6;
         int colMean = colPointStart + k;
         int colRatio = colMean + 1;
         int colMin = colRatio + 1;
@@ -43,11 +40,11 @@ public static class CoatingAnalysisSheet
         int colVerdict = colDesign + 1;
         int totalCols = colVerdict;
 
-        // 表头
         var headers = new string[totalCols];
         headers[colSerial - 1] = "序号";
         headers[colLoc - 1] = "构件位置";
         headers[colType - 1] = "构件类型";
+        headers[colCat - 1] = "涂层类型";
         headers[colSection - 1] = "截面号";
         for (int i = 0; i < k; i++) headers[colPointStart - 1 + i] = pointHeaders[i];
         headers[colMean - 1] = "平均值";
@@ -68,12 +65,11 @@ public static class CoatingAnalysisSheet
         int serial = 1;
         foreach (var m in members)
         {
-            int span = Math.Max(1, m.Sections.Count);
+            int dec = CoatingStandards.ThicknessDecimals(m.Result.Category);
             int memberStart = row;
 
             if (m.Sections.Count == 0)
             {
-                // 理论上不会（Create 保证 ≥1 点），兜底写一行
                 ws.Cell(row, colSection).Value = 1;
                 row++;
             }
@@ -83,28 +79,37 @@ public static class CoatingAnalysisSheet
                 {
                     ws.Cell(row, colSection).Value = sec.SectionNo;
                     for (int i = 0; i < sec.Points.Count && i < k; i++)
-                        ws.Cell(row, colPointStart + i).Value = Math.Round(sec.Points[i].Thickness, 2);
+                        ws.Cell(row, colPointStart + i).Value = Math.Round(sec.Points[i].Thickness, dec);
                     row++;
                 }
             }
             int memberEnd = row - 1;
 
-            // 构件级（合并跨截面行）
             SetMerged(ws, memberStart, memberEnd, colSerial, serial);
             SetMerged(ws, memberStart, memberEnd, colLoc, m.Input.Location);
             SetMerged(ws, memberStart, memberEnd, colType, m.Input.MemberType);
-            SetMerged(ws, memberStart, memberEnd, colMean, Math.Round(m.Result.MeanThickness, 2));
-            SetMerged(ws, memberStart, memberEnd, colRatio,
-                $"{m.Result.NQualifiedPoints}/{m.Result.NPoints} ({m.Result.QualifiedRatio * 100:F1}%)");
-            SetMerged(ws, memberStart, memberEnd, colMin, Math.Round(m.Result.MinThickness, 2));
-            SetMerged(ws, memberStart, memberEnd, colDesign, m.Input.DesignThickness);
+            SetMerged(ws, memberStart, memberEnd, colCat, m.Result.Category.ToString());
+            SetMerged(ws, memberStart, memberEnd, colMean, Math.Round(m.Result.MeanThickness, dec));
+            SetMerged(ws, memberStart, memberEnd, colMin, Math.Round(m.Result.MinThickness, dec));
+            SetMerged(ws, memberStart, memberEnd, colDesign, Math.Round(m.Input.DesignThickness, dec));
+
+            // 合格率：厚型才有意义；薄/超薄显示「—」
+            var ratioCell = MergedTopLeft(ws, memberStart, memberEnd, colRatio);
+            ratioCell.Value = m.Result.Category == CoatingCategory.厚型
+                ? $"{m.Result.NQualifiedPoints}/{m.Result.NPoints} ({m.Result.QualifiedRatio * 100:F1}%)"
+                : "—";
 
             var verdictCell = MergedTopLeft(ws, memberStart, memberEnd, colVerdict);
-            verdictCell.Value = m.Result.Qualified
-                ? "合格"
-                : $"不合格（{m.Result.FailReason}）";
-            if (!m.Result.Qualified)
+            verdictCell.Value = m.Result.Verdict switch
+            {
+                CoatingVerdict.合格 => "合格",
+                CoatingVerdict.不合格 => $"不合格（{m.Result.FailReason}）",
+                _ => $"待接入（{m.Result.Category}）",
+            };
+            if (m.Result.Verdict == CoatingVerdict.不合格)
                 verdictCell.Style.Font.FontColor = XLColor.Red;
+            else if (m.Result.Verdict == CoatingVerdict.待判定)
+                verdictCell.Style.Font.FontColor = XLColor.Gray;
 
             serial++;
         }
@@ -124,14 +129,13 @@ public static class CoatingAnalysisSheet
 
         // 汇总 + 判定依据（可追溯）
         ws.Cell(lastRow + 2, 1).Value =
-            $"合格率：{batch.NQualified}/{batch.NTotal} 构件" +
-            (batch.NTotal > 0 ? $" ({100.0 * batch.NQualified / batch.NTotal:F1}%)" : "");
+            $"厚型 {batch.NQualified}/{batch.NTotal - batch.NPending} 合格" +
+            (batch.NPending > 0 ? $"；薄型/超薄型 {batch.NPending} 个判定待接入" : "");
         ws.Cell(lastRow + 2, 1).Style.Font.Bold = true;
         ws.Cell(lastRow + 3, 1).Value =
-            $"判定依据：GB 50205-2020 §13.4.3（厚涂型）—— ≥{CoatingStandards.RatioThreshold * 100:F0}% 测点 ≥ 设计厚度，且最薄处 ≥ 设计 × {CoatingStandards.MinFactor:F2}";
+            $"判定依据：{standard} 厚涂型涂层厚度 —— ≥{CoatingStandards.RatioThreshold * 100:F0}% 测点 ≥ 设计厚度，且最薄处 ≥ 设计 × {CoatingStandards.MinFactor:F2}";
     }
 
-    /// <summary>把构件的测点按截面号分组（升序），组内保持输入顺序。</summary>
     private static List<SectionView> GroupSections(CoatingMemberInput member)
     {
         var order = new List<int>();
@@ -150,7 +154,6 @@ public static class CoatingAnalysisSheet
         return order.Select(sn => new SectionView(sn, map[sn])).ToList();
     }
 
-    /// <summary>全批测点位置标签一致 → 用面名表头；否则「测点1..K」。</summary>
     private static string[] ResolvePointHeaders(List<MemberView> members, int k)
     {
         string[]? candidate = null;

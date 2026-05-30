@@ -8,24 +8,20 @@
 
 ## 当前焦点（2026-05-30）
 
-**装配线第 2 个检测类型「防火涂层厚度」上线 Layer 1-4（GB 50205-2020 §13.4.3 厚涂型验收）**
+**装配线第 2 个检测类型「防火涂层厚度」上线（GB 50205-2020 §13.4.3 厚涂型验收）+ 输入层重构**
 —— 路线图第四阶段「持续往流水线上加工位」首次落地：data_processing calcType 从 leeb/anchor
-扩到三项。照 `civ-core-add-detection-type` SOP 以锚杆画瓢，4 个 commit 各层独立验收。
+扩到三项。先按 SOP 出 v1（长表），用户实测「8m梁要27行全填」太痛，**重构为构件清单驱动**。7 commit。
 
 - **判定（用户拍板厚涂型·验收口径）**：每构件 ≥80% 测点 ≥ 设计厚度 **且** 最薄处 ≥ 设计 × 85%
-  （依据已核对 `civil-codes-vault` GB_50205-2020 §13.4.3 + 附录 E）。闭区间，恰 80%/85% 判合格。
-- **数据三层**：构件 → 截面（每 3m[国标]/1m[北京地标]）→ 截面内测点（钢梁 3 面 / 钢柱 4 面）。
-  与锚杆「一行=一根=一判定」不同，是「一构件=多测点 → 聚合判定」。
-- **输入 = 长表（每行一测点）**（用户选）：批次/构件位置/构件类型/设计厚度/截面号/测点位置/实测厚度，
-  单位统一 mm，统一处理梁3/柱4/变截面数、无合并单元格。**设计厚度在 Excel 列里**（按构件），
-  故 coating.run **不需要 params_by_batch**、前端无「按批次填参数」表单（比锚杆简单）。
-- **结果 = 宽表**（贴用户现有「防火（钢梁/钢柱）」sheet）：构件合并 + 截面行 + 各测点 + 平均值/
-  合格率/最薄处/设计/判定；测点位置一致用面名表头否则测点1..K；不合格附原因 + 标注判定依据（可追溯）。
-- **4 commit**：L1 计算底座(+11 xUnit) / L2 Excel读+模板+宽表(+9) / L3 RPC handler(+4，全套229绿) /
-  L4 前端 calcType + MCP `coating_*` 3 tool（smoke 端到端 coating_run 2/2 构件合格，agent→MCP→C# 三跳通）。
-- **本轮不含 Layer 5（报告填充/Word 输出）**：需用户给/做一份防火涂层 Word 模板（走 `civ-core-make-template`），
-  挂 `CoatingFieldCatalog` + `CatalogStore.BuildCoatingCatalog` + coating.run 接 word_template_path。留作下一阶段。
-- **未 push / 未开 PR**，分支 `feat/coating-thickness`（基于 main e9900e6，4 commit）。
+  （核对 `civil-codes-vault` GB_50205-2020 §13.4.3 + 附录 E）。闭区间，恰 80%/85% 判合格。**判定核心未变**。
+- **数据三层**：构件 → 截面 → 截面内测点（钢梁 3 面 / 钢柱 4 面）。一构件=多测点 → 聚合判定（不同于锚杆一行一判）。
+- **输入 = 构件清单驱动 + 一键展开**（重构后，用户几乎只填数字）：3 张 sheet —— ①「类型预设」(构件类型→测点面+默认设计厚度，预填梁/柱) ②「构件清单」(一构件一行：位置/类型/长度或截面数/设计厚度) ③ `coating.expand_template` 展开成「测点数据-梁/柱」面名网格，用户只填数字。**解析**：类型从构件位置名识别；**截面数=⌈长度/间距⌉**（国标3m/北京地标1m，从用户数据反推验证：12.05→5、8m地标→8）；设计厚度类型默认+构件覆盖（解决同类型几根3.3几根2.0）。
+- **涂层类型按设计厚度自动分级**（≥7厚/3~7薄/≤3超薄）—— 与构件类型(梁/柱)两个维度；决定判定口径+精度。**本轮只厚型出合格/不合格**，薄型/超薄型 Verdict=待判定（无地标原文，方法待原文）。**精度**：厚型2位(游标卡尺)/薄超薄3位(测厚仪)。
+- **地标/国标 selector**：当前驱动展开的截面数 + 判定依据标注；薄/超薄分叉口径+模板留后续。
+- **结果 = 宽表**：构件合并 + 截面行 + 各测点(面名) + 涂层类型 + 平均值/合格率/最薄处/设计/判定；不合格附原因、薄超薄标「待接入」、标注判定依据。
+- **C# 245 xUnit 绿(1 skip)；前端 tsc/eslint/prettier 绿；mcp typecheck+7测+build+smoke 绿**（56 tool，coating_expand_template 三跳通：2构件/6截面/测点数据-梁,柱）。
+- **本轮不含 Layer 5（报告填充/Word）**：需防火涂层 Word 模板（走 `civ-core-make-template`），挂 `CoatingFieldCatalog` + `CatalogStore.BuildCoatingCatalog` + coating.run 接 word_template_path。留下一阶段。
+- **未 push / 未开 PR**，分支 `feat/coating-thickness`（基于 main e9900e6，7 commit）。
 
 ## 前一焦点（2026-05-29）
 
@@ -217,6 +213,14 @@ SOP 以锚杆画瓢，4 个 commit 各层独立验收（用户偏好「大需求
   coatingRunResultSchema；MCP `coating_*` 3 tool + smoke 三跳探针。frontend tsc/eslint/prettier 绿，
   mcp typecheck+7测+smoke（coating_run 2/2 构件合格）。`e2b8f32`
 - **不含 Layer 5**（报告填充/Word）—— 留待下一阶段（需防火涂层 Word 模板）。
+
+**同日·输入层重构（v1 长表 → 构件清单驱动）**：用户实测长表录入太痛（8m梁27行全填），拍板返工。
+新方案：「类型预设 + 构件清单 → `coating.expand_template` 一键展开成测点网格 → 只填数字」。用户两条补充落地：
+①同类型不同设计厚度走「类型默认 + 构件清单覆盖」；②加地标/国标 selector（间距 3m/1m，驱动截面数；薄/超薄方法+模板待后续）。
+拍板修正：**截面数=⌈长度/间距⌉**（非 floor+1；用户给 8.1/3→3、6/3→2 校准）；涂层类型按设计厚度分级（≥7厚/3~7薄/≤3超薄），
+本轮只厚型出判定、薄/超薄待接入；精度厚型2位、薄超薄3位。2 commit（C# 重构 `80ae32a` + 前端/MCP `4a95e8a`）；
+C# 测试 229→245、新增 CoatingTemplateExpander + CoatingSheetUtil，宽表 reader 跨「测点数据-<类型>」多 sheet 合并。
+教训[[feedback...]]：别为 reader 干净牺牲用户录入负担——录入体验是检测内业工具的第一性。
 
 ### [2026-05-29] MCP server Phase 2：补齐 25 tool，52 tool 与 RPC 全表对齐
 

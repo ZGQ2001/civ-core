@@ -29,7 +29,8 @@ T8 ✅ MCP server：把 sidecar RPC 包成 MCP tools，agent 原生入口（Phas
 
 | commit     | 日期       | 内容                                                                                                                                      |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `<本系列>` | 2026-05-30 | feat(coating): 防火涂层厚度检测 Layer 1-4（GB 50205-2020 §13.4.3 厚涂型验收；计算底座/Excel读+模板+宽表/RPC handler/前端 calcType+MCP；+24 xUnit；端到端 smoke 三跳）|
+| `<本系列>` | 2026-05-30 | refactor(coating): 输入层重构构件清单驱动 + 一键展开（coating.expand_template）+ 涂层类型分级（厚/薄/超薄；本轮只厚型出判定）+ 地标/国标（ceil截面数）；弃长表；C# 245 测试；mcp 56 tool smoke 三跳 |
+| `<本系列>` | 2026-05-30 | feat(coating): 防火涂层厚度检测 v1（GB 50205-2020 §13.4.3 厚涂型验收；计算底座/Excel读+模板/RPC/前端 calcType+MCP）→ 后被构件清单驱动重构 |
 | `<本系列>` | 2026-05-29 | feat(mcp): Phase 2 补齐 25 tool（catalog/template.validate/files/pdf_tools/word2pdf/plot_curves 预设 CRUD）→ 52 tool 与 RPC 全表对齐      |
 | `<本系列>` | 2026-05-28 | feat(mcp): MCP server Phase 1（5 commit；20 tools；端到端三跳冒烟全通）                                                                   |
 | `3ce8d6d`  | 2026-05-28 | feat(mcp): Phase 1 凑齐 20 tools + 修 registry callback 签名 bug（leeb/xlsx/template/report/plot_curves）                                 |

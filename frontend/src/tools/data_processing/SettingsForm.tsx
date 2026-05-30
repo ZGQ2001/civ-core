@@ -375,8 +375,10 @@ function CoatingSubForm() {
       <div className="border-vscode-border bg-vscode-input/30 rounded-[3px] border px-3 py-2 text-[11px] leading-relaxed">
         <i className="codicon codicon-info text-vscode-focus mr-1 !text-[12px]" />
         流程：生成模板 → 填「构件清单」(每构件一行) → 展开测点网格 →
-        网格里填实测数字 → 顶部「开始计算」。厚型判定：≥80% 测点 ≥ 设计厚度 且
-        最薄处 ≥ 设计 × 85%；薄型/超薄型本轮判定待接入。
+        网格里填实测数字 → 顶部「开始计算」。判定：厚型 ≥80% 测点 ≥ 设计厚度 且
+        最薄处 ≥ 设计 × 85%；膨胀型(薄/超薄) 构件均值 ≥ 设计 × 95%(偏差−5%)。
+        国标薄/超薄按 5 处×3
+        点布点（展开成「测点数据-类型-膨胀型」表），地标按截面。
       </div>
     </>
   );

@@ -6,7 +6,22 @@
 
 ---
 
-## 当前焦点（2026-05-30）
+## 当前焦点（2026-05-31）
+
+**防火涂层补齐「薄型/超薄型（膨胀型）」判定（GB 50205-2020 §13.4.3 膨胀型）** —— 之前只厚型出
+判定、薄/超薄一律「待判定」，本轮接入膨胀型判定 + 国标 5 处×3 点布点。分支 `feat/coating-thin-ultrathin`
+（基于 main，4 commit + 1 个顺手修 logo lint blocker），**未 push**。C# 255 测试绿、前端 tsc/lint/fmt 绿、MCP 7 测+typecheck 绿。
+
+- **判定（用户拍板，各规范各算法）**：厚型 GB 50205「80% 测点 + 最薄×0.85」**原样不动**；膨胀型（薄/超薄）
+  **构件均值 ≥ 设计×0.95（偏差−5%）且 ≥ 设计−0.2mm（−200µm 兜底，取较严 max）**。地标国标都按 −5%。
+- **布点（标准×涂层类型）**：国标 + 薄/超薄 → **5 处×3 点**（参照 GB/T 50621 §12 防腐，sheet「测点数据-<类型>-膨胀型」，
+  列 点1/点2/点3，截面号=处号 1~5，固定 5 处）；国标厚型 / 地标任意 → 截面×面（现状）。同类型混涂层类型拆两张 sheet。
+- **范围**：只做梁/柱（桁架/网架/檩条/顶板少见，本轮不做）。`待判定` 链路保留置 0（梁柱已全判）。
+- **宽表**：统一一套列服务厚/膨胀；加「本段均值（每行）/判定下限」列，「平均值」改名「构件均值」；合格率膨胀型「—」；
+  footer 按出现的涂层类型分别标判定依据。精度沿用 `ThicknessDecimals`（厚2位/薄超薄3位 mm）。
+- **未做**：Layer 5（报告填充/Word）仍缺防火涂层 Word 模板，待后续。
+
+## 前一焦点（2026-05-30）
 
 **装配线第 2 个检测类型「防火涂层厚度」上线（GB 50205-2020 §13.4.3 厚涂型验收）+ 输入层重构**
 —— 路线图第四阶段「持续往流水线上加工位」首次落地：data_processing calcType 从 leeb/anchor
@@ -21,7 +36,7 @@
 - **结果 = 宽表**：构件合并 + 截面行 + 各测点(面名) + 涂层类型 + 平均值/合格率/最薄处/设计/判定；不合格附原因、薄超薄标「待接入」、标注判定依据。
 - **C# 245 xUnit 绿(1 skip)；前端 tsc/eslint/prettier 绿；mcp typecheck+7测+build+smoke 绿**（56 tool，coating_expand_template 三跳通：2构件/6截面/测点数据-梁,柱）。
 - **本轮不含 Layer 5（报告填充/Word）**：需防火涂层 Word 模板（走 `civ-core-make-template`），挂 `CoatingFieldCatalog` + `CatalogStore.BuildCoatingCatalog` + coating.run 接 word_template_path。留下一阶段。
-- **未 push / 未开 PR**，分支 `feat/coating-thickness`（基于 main e9900e6，7 commit）。
+- **已合并 main 并 push**（L1-4 + 输入层重构 7 commit + logo）；薄/超薄判定见上方 2026-05-31 焦点。
 
 ## 前一焦点（2026-05-29）
 
@@ -119,8 +134,8 @@ P4 大型架构 顺序逐包 commit。
 > **方向定调（2026-05-27）**：系统主要操作者是 AI agent，不是人。GUI 退到「人 review agent 输出」位置。所有新功能优先评估 agent 体验，GUI 按钮做兜底。
 
 0. **防火涂层 Layer 5（报告填充 / Word 输出）** —— L1-4 已落（算+出结果 Excel）；补 `CoatingFieldCatalog`
-   + `CatalogStore.BuildCoatingCatalog` + coating.run 接 `word_template_path` + `CoatingRowResolver`，
-   让防火涂层也能一键出 Word 报告。需先有一份防火涂层 Word 模板（走 `civ-core-make-template`）。
+   - `CatalogStore.BuildCoatingCatalog` + coating.run 接 `word_template_path` + `CoatingRowResolver`，
+     让防火涂层也能一键出 Word 报告。需先有一份防火涂层 Word 模板（走 `civ-core-make-template`）。
 1. **钻芯/回弹切 C#** —— 防火涂层已验证「加检测类型」全链路（SOP 跑通），第三种类型照此顺延；data_processing calcType 下拉再加项。MCP server 已就位，新 calc 只要在 C# 加 handler，`mcp/src/tools/` 加一份 ToolDef 即可。
 2. **多检测内容混排**（启用第 3 层「检测项目级」）—— 一份报告含锚杆 + 防火涂层 + 钻芯等多个 section；catalog 已有 `detection_item` level 概念，现已有 2 个真实 calc 类型可混排。agent 出综合报告时刚需。
 3. ~~**MCP server Phase 2**~~ —— ✅ 已完成（2026-05-29）：catalog 4 / template.validate / files 10 / pdf_tools 4 / word2pdf 2 / plot_curves 预设 CRUD 4 全包，MCP 52 tool 与 sidecar RPC 全表对齐。agent 现在能做完整「文件管家」工作（不只是装配线）。
@@ -193,6 +208,24 @@ P4 大型架构 顺序逐包 commit。
 
 ## 会话历史
 
+### [2026-05-31] 防火涂层「薄型/超薄型（膨胀型）」判定上线
+
+之前只厚型出判定、薄/超薄一律「待判定」。本轮补齐膨胀型判定（GB 50205-2020 §13.4.3）+ 国标 5 处×3 点布点。
+分支 `feat/coating-thin-ultrathin`，照防火涂层 SOP 分 4 层各独立 commit + 1 个顺手修 logo lint blocker，未 push。
+
+- **L1 判定核心 `993b319`**：CoatingStandards 加 ExpansionMeanFactor=0.95 / AbsoluteFloorMm=0.2 + IsExpansion；
+  CoatingMath 膨胀型分支（构件均值 ≥ max(设计×0.95, 设计−0.2)）；CoatingMemberResult 加 MeanLowerLimit/MeanPass；
+  既有「待判定」用例改真实判定 + 边界（恰下限、−200µm 在设计>4mm 更严）。
+- **L2 展开+宽表 `b43befd`**：Expander 分组键(类型,是否5处3点)，国标膨胀型出「测点数据-<类型>-膨胀型」5处×3点
+  （点1/点2/点3），混涂层类型拆两张 sheet；CoatingAnalysisSheet 加本段均值/构件均值/判定下限列，footer 按类型标依据；
+  Reader 通用不改（直接读 5处×3点）。
+- **L3 RPC `70c75d3`**：handler 透传 standard，端到端测国标超薄不合格 + 地标膨胀型截面布局合格。
+- **L4 前端+MCP+文档**：CoatingSubForm 说明文案、MCP coating.ts 描述、vault 涂层厚度检测.md 补膨胀型 calc 伪代码。
+- **顺手修**：`AppLogo.tsx` 模块级 `let seq` render 自增触发 react-hooks/globals 报错（logo commit 引入的 CI blocker）
+  → 换 `useId()`（去冒号防 SVG url 引用问题）。
+- **关键决策（用户拍板）**：不同规范算法不同，厚型 GB 50205「80%+85%」不许并入膨胀型均值法。精度厚型2位/薄超薄3位 mm（现状已满足）。
+- **教训**：Bash 工具是 bash 非 PowerShell，多行中文 commit 用 `git commit -F 文件`（here-string `@'...'@` 会把 `@` 混进 message）。
+
 ### [2026-05-30] 新检测类型「防火涂层厚度」Layer 1-4（GB 50205-2020 厚涂型验收）
 
 装配线第 2 个真实 calc 类型，路线图第四阶段「加工位」首次落地。照 `civ-core-add-detection-type`
@@ -209,9 +242,9 @@ SOP 以锚杆画瓢，4 个 commit 各层独立验收（用户偏好「大需求
   CoatingTemplateWriter（梁柱样例）/ CoatingAnalysisSheet（宽表、面名表头、附原因+判定依据）。+9 xUnit。`d2909e7`
 - **L3 RPC**：CoatingHandlers（generate_template/list_batches/run，无 params_by_batch）+ JsonRpcServer
   注册一行。+4 xUnit 端到端，全套 229 绿。`077d7e5`
-- **L4 前端+MCP**：data_processing calcType 加 coating + CoatingSubForm（无按批次参数）+
-  coatingRunResultSchema；MCP `coating_*` 3 tool + smoke 三跳探针。frontend tsc/eslint/prettier 绿，
-  mcp typecheck+7测+smoke（coating_run 2/2 构件合格）。`e2b8f32`
+- **L4 前端+MCP**：data*processing calcType 加 coating + CoatingSubForm（无按批次参数）+
+  coatingRunResultSchema；MCP `coating*\*` 3 tool + smoke 三跳探针。frontend tsc/eslint/prettier 绿，
+mcp typecheck+7测+smoke（coating_run 2/2 构件合格）。`e2b8f32`
 - **不含 Layer 5**（报告填充/Word）—— 留待下一阶段（需防火涂层 Word 模板）。
 
 **同日·输入层重构（v1 长表 → 构件清单驱动）**：用户实测长表录入太痛（8m梁27行全填），拍板返工。

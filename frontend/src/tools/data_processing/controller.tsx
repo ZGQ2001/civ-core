@@ -113,6 +113,7 @@ interface Actions {
   setCoatingStandard: (s: CoatingStandard) => void;
   setCoatingBatchIdColumn: (s: string) => void;
   generateCoatingTemplate: (outputPath: string) => Promise<string | null>;
+  expandCoatingTemplate: () => Promise<string | null>;
 }
 
 /** 模板生成结果（按钮下方反馈用）。 */
@@ -127,6 +128,7 @@ type Ctx = State &
     defaultOutput: string;
     anchorTemplateStatus: TemplateStatus;
     coatingTemplateStatus: TemplateStatus;
+    coatingExpandStatus: TemplateStatus;
   };
 
 const DataProcessingContext = createContext<Ctx | null>(null);
@@ -191,6 +193,8 @@ export function DataProcessingProvider({
     useState<CoatingStandard>('GB 50205-2020');
   const [coatingBatchIdColumn, setCoatingBatchIdColumn] = useState('批次');
   const [coatingTemplateStatus, setCoatingTemplateStatus] =
+    useState<TemplateStatus>({ kind: 'idle' });
+  const [coatingExpandStatus, setCoatingExpandStatus] =
     useState<TemplateStatus>({ kind: 'idle' });
 
   // 切 Excel → 清掉旧预览 + 清 sheet 选择 + 清结果 + 清批次
@@ -400,6 +404,36 @@ export function DataProcessingProvider({
     [coatingStandard, shell],
   );
 
+  const expandCoatingTemplate = useCallback(async (): Promise<
+    string | null
+  > => {
+    if (!excelPath) return null;
+    setCoatingExpandStatus({ kind: 'running' });
+    shell.appendOutput(logLine(`[防火涂层] 展开测点网格 ← ${excelPath}`));
+    try {
+      const r = await rpc<{
+        ok: boolean;
+        path: string;
+        members: number;
+        total_sections: number;
+      }>('coating.expand_template', {
+        input_xlsx: excelPath,
+        standard: coatingStandard,
+      });
+      const summary = `${r.members} 构件 / ${r.total_sections} 截面 → ${r.path}`;
+      setCoatingExpandStatus({ kind: 'ok', path: summary });
+      shell.appendOutput(logLine(`[防火涂层] 已展开：${summary}`));
+      shell.notifyFilesChanged();
+      return r.path;
+    } catch (e) {
+      const message = String(e);
+      console.error('coating.expand_template 失败:', e);
+      setCoatingExpandStatus({ kind: 'error', message });
+      shell.appendOutput(logLine(`[防火涂层] 展开失败：${message}`));
+      return null;
+    }
+  }, [excelPath, coatingStandard, shell]);
+
   const run = useCallback(async (): Promise<RunRes | null> => {
     if (!excelPath || running) return null;
     setRunning(true);
@@ -468,10 +502,13 @@ export function DataProcessingProvider({
 
         const res = await rpc('coating.run', params, coatingRunResultSchema);
 
+        const pending = res.members_pending ?? 0;
         const display: RunRes = {
           calcType: 'coating',
           output: res.output,
-          summary: `${res.batches} 批 / ${res.members_qualified}/${res.members_total} 构件合格`,
+          summary:
+            `${res.batches} 批 / ${res.members_qualified}/${res.members_total} 构件合格` +
+            (pending > 0 ? `（${pending} 个薄型/超薄型待接入）` : ''),
         };
         setResult(display);
         shell.appendOutput(
@@ -600,6 +637,7 @@ export function DataProcessingProvider({
       coatingStandard,
       coatingBatchIdColumn,
       coatingTemplateStatus,
+      coatingExpandStatus,
       setCalcType,
       setExcelPath,
       setSheet,
@@ -615,6 +653,7 @@ export function DataProcessingProvider({
       setCoatingStandard,
       setCoatingBatchIdColumn,
       generateCoatingTemplate,
+      expandCoatingTemplate,
     }),
     [
       calcType,
@@ -645,6 +684,7 @@ export function DataProcessingProvider({
       coatingStandard,
       coatingBatchIdColumn,
       coatingTemplateStatus,
+      coatingExpandStatus,
       setExcelPath,
       setCalcType,
       run,
@@ -652,6 +692,7 @@ export function DataProcessingProvider({
       setAnchorParamsForAllBatches,
       generateAnchorTemplate,
       generateCoatingTemplate,
+      expandCoatingTemplate,
     ],
   );
 

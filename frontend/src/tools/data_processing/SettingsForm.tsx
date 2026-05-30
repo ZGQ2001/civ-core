@@ -267,11 +267,22 @@ function CoatingSubForm() {
     }
   }, [c, shell]);
 
+  const doExpand = useCallback(async () => {
+    const out = await c.expandCoatingTemplate();
+    if (out) {
+      try {
+        await openPath(out);
+      } catch {
+        /* 已写回原文件，打开失败忽略 */
+      }
+    }
+  }, [c]);
+
   return (
     <>
       <Field
-        label="规范"
-        hint="GB 50205-2020 §13.4.3 厚涂型防火涂料涂层厚度验收"
+        label="标准 / 地标"
+        hint="国标每 3m 一截面、北京地标每 1m（影响展开的截面数）"
       >
         <Select
           value={c.coatingStandard}
@@ -288,7 +299,7 @@ function CoatingSubForm() {
         </Select>
       </Field>
 
-      <Field label="输入数据模板" hint="长表（每行一测点）；含梁/柱样例">
+      <Field label="1. 生成模板" hint="出「类型预设 + 构件清单」，填好构件清单">
         <button
           type="button"
           onClick={genTemplate}
@@ -319,6 +330,42 @@ function CoatingSubForm() {
       </Field>
 
       <Field
+        label="2. 展开测点网格"
+        hint="按构件清单生成「测点数据-梁/柱」表，之后只填数字"
+      >
+        <button
+          type="button"
+          onClick={doExpand}
+          disabled={!c.excelPath || c.coatingExpandStatus.kind === 'running'}
+          title={!c.excelPath ? '先选含「构件清单」的 Excel' : '展开测点网格'}
+          className="border-vscode-border flex w-full items-center justify-center gap-2 rounded-[2px] border bg-[#2d2d2d] px-3 py-1.5 text-xs hover:bg-[#3a3a3a] disabled:opacity-60"
+        >
+          {c.coatingExpandStatus.kind === 'running' ? (
+            <i className="codicon codicon-loading codicon-modifier-spin !text-[12px]" />
+          ) : (
+            <i className="codicon codicon-table !text-[12px]" />
+          )}
+          {c.coatingExpandStatus.kind === 'running'
+            ? '展开中…'
+            : '展开测点网格…'}
+        </button>
+        {c.coatingExpandStatus.kind === 'ok' && (
+          <div className="mt-1 flex items-start gap-1 text-[11px] text-green-400">
+            <i className="codicon codicon-pass mt-0.5 shrink-0 !text-[12px]" />
+            <span className="break-all">
+              已展开：{c.coatingExpandStatus.path}
+            </span>
+          </div>
+        )}
+        {c.coatingExpandStatus.kind === 'error' && (
+          <div className="mt-1 text-[11px] whitespace-pre-wrap text-red-400">
+            <i className="codicon codicon-error mr-1 !text-[12px]" />
+            展开失败：{c.coatingExpandStatus.message}
+          </div>
+        )}
+      </Field>
+
+      <Field
         label="批次列名"
         hint="用于区分批次的列；不分批可留默认（无此列则全部归一批）"
       >
@@ -327,8 +374,9 @@ function CoatingSubForm() {
 
       <div className="border-vscode-border bg-vscode-input/30 rounded-[3px] border px-3 py-2 text-[11px] leading-relaxed">
         <i className="codicon codicon-info text-vscode-focus mr-1 !text-[12px]" />
-        判定（按构件）：≥80% 测点 ≥ 设计厚度，且最薄处 ≥ 设计 × 85%。设计厚度在
-        Excel「设计厚度」列里按构件填，无需在此填参数。
+        流程：生成模板 → 填「构件清单」(每构件一行) → 展开测点网格 →
+        网格里填实测数字 → 顶部「开始计算」。厚型判定：≥80% 测点 ≥ 设计厚度 且
+        最薄处 ≥ 设计 × 85%；薄型/超薄型本轮判定待接入。
       </div>
     </>
   );

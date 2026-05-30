@@ -109,9 +109,10 @@ try {
     console.error(`[smoke] files_list_dir 条目数: ${(parsed.entries ?? []).length}`);
   }
 
-  // ── 新检测类型 coating：装配线三跳（generate_template → run）──────
+  // ── 新检测类型 coating：装配线三跳（generate_template → expand_template）──
   const coatingExpected = [
-    "coating_generate_template", "coating_list_batches", "coating_run",
+    "coating_generate_template", "coating_expand_template",
+    "coating_list_batches", "coating_run",
   ];
   const coatingMissing = coatingExpected.filter((n) => !toolNames.has(n));
   if (coatingMissing.length > 0) {
@@ -120,30 +121,29 @@ try {
     process.exit(1);
   }
   {
+    // generate（含构件清单样例：梁长度8/柱截面数3）→ expand 出测点网格。
+    // 填数字需 xlsx 库，smoke 不做；coating_run 的判定由 dotnet 测试覆盖。
     const tmpl = join(tmpdir(), `coating_smoke_${Date.now()}.xlsx`);
-    const out = join(tmpdir(), `coating_smoke_${Date.now()}_结果.xlsx`);
     const gen = await client.callTool({
       name: "coating_generate_template",
       arguments: { output_xlsx: tmpl },
     });
     console.error(`[smoke] coating_generate_template isError: ${gen.isError === true}`);
-    const run = await client.callTool({
-      name: "coating_run",
-      arguments: { input_xlsx: tmpl, output_xlsx: out },
+    const exp = await client.callTool({
+      name: "coating_expand_template",
+      arguments: { input_xlsx: tmpl },
     });
-    const runText = run.content?.[0]?.text ?? "";
-    if (run.isError) {
-      console.error(`[smoke] coating_run ERROR: ${runText}`);
+    const expText = exp.content?.[0]?.text ?? "";
+    if (exp.isError) {
+      console.error(`[smoke] coating_expand_template ERROR: ${expText}`);
       await client.close().catch(() => undefined);
       process.exit(1);
     }
-    const parsed = JSON.parse(runText);
+    const parsed = JSON.parse(expText);
     console.error(
-      `[smoke] coating_run: ${parsed.members_qualified}/${parsed.members_total} 构件合格（${parsed.batches} 批）`,
+      `[smoke] coating_expand_template: ${parsed.members} 构件 / ${parsed.total_sections} 截面 / sheets=${(parsed.sheets ?? []).join(",")}`,
     );
-    for (const f of [tmpl, out]) {
-      try { rmSync(f); } catch { /* 清理失败忽略 */ }
-    }
+    try { rmSync(tmpl); } catch { /* 清理失败忽略 */ }
   }
 
   // ── Python 预设写路径 roundtrip：copy → list → delete ────────────

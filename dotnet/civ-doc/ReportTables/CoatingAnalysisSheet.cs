@@ -1,10 +1,11 @@
 // 防火涂层「数据分析」sheet 写入：宽表版式（贴合用户现有「防火（钢梁/钢柱）」sheet）。
 //
-//   序号 | 构件位置 | 构件类型 | 涂层类型 | 截面号 | 测点1..K | 平均值 | 合格率 | 最薄处 | 设计厚度 | 判定
+//   序号 | 构件位置 | 构件类型 | 涂层类型 | 截面号 | 测点1..K | 本段均值 | 构件均值 | 设计厚度 | 判定下限 | 合格率 | 最薄处 | 判定
 //
-// 一个构件跨多行（每截面一行），构件级列按构件合并；测点列展开各面实测值。
+// 一个构件跨多行（每截面/处一行），构件级列按构件合并；测点列展开各面/各点实测值，本段均值=每行均值。
 // 厚度按涂层类型显示精度四舍五入（厚型 2 位/游标卡尺、薄型超薄型 3 位/涂层测厚仪）。
-// 判定：厚型 合格/不合格(附原因)；薄型/超薄型「待接入」（本轮不出判定）。末尾标注判定依据（可追溯）。
+// 判定：厚型 合格率+最薄处；膨胀型(薄/超薄) 构件均值 ≥ 设计×0.95。判定下限列随类型给对应下限。
+// 合格率厚型专用（膨胀型显示「—」）。末尾按出现的涂层类型分别标注判定依据（可追溯）。
 
 using ClosedXML.Excel;
 using CivCore.Doc.Calc.Coating;
@@ -30,14 +31,17 @@ public static class CoatingAnalysisSheet
 
         var pointHeaders = ResolvePointHeaders(members, k);
 
-        // 列布局
+        // 列布局：厚型/膨胀型统一一套列。本段均值=每行该截面/处均值；构件均值=全部测点均值；
+        // 判定下限=厚型 设计×0.85（配最薄处）/ 膨胀型 设计×0.95兜底（配构件均值）；合格率厚型专用。
         const int colSerial = 1, colLoc = 2, colType = 3, colCat = 4, colSection = 5;
         int colPointStart = 6;
-        int colMean = colPointStart + k;
-        int colRatio = colMean + 1;
+        int colSecMean = colPointStart + k;
+        int colMean = colSecMean + 1;
+        int colDesign = colMean + 1;
+        int colLimit = colDesign + 1;
+        int colRatio = colLimit + 1;
         int colMin = colRatio + 1;
-        int colDesign = colMin + 1;
-        int colVerdict = colDesign + 1;
+        int colVerdict = colMin + 1;
         int totalCols = colVerdict;
 
         var headers = new string[totalCols];
@@ -47,10 +51,12 @@ public static class CoatingAnalysisSheet
         headers[colCat - 1] = "涂层类型";
         headers[colSection - 1] = "截面号";
         for (int i = 0; i < k; i++) headers[colPointStart - 1 + i] = pointHeaders[i];
-        headers[colMean - 1] = "平均值";
+        headers[colSecMean - 1] = "本段均值";
+        headers[colMean - 1] = "构件均值";
+        headers[colDesign - 1] = "设计厚度";
+        headers[colLimit - 1] = "判定下限";
         headers[colRatio - 1] = "合格率";
         headers[colMin - 1] = "最薄处";
-        headers[colDesign - 1] = "设计厚度";
         headers[colVerdict - 1] = "判定";
         for (int c = 0; c < totalCols; c++)
         {
@@ -66,6 +72,7 @@ public static class CoatingAnalysisSheet
         foreach (var m in members)
         {
             int dec = CoatingStandards.ThicknessDecimals(m.Result.Category);
+            bool isExpansion = CoatingStandards.IsExpansion(m.Result.Category);
             int memberStart = row;
 
             if (m.Sections.Count == 0)
@@ -80,6 +87,8 @@ public static class CoatingAnalysisSheet
                     ws.Cell(row, colSection).Value = sec.SectionNo;
                     for (int i = 0; i < sec.Points.Count && i < k; i++)
                         ws.Cell(row, colPointStart + i).Value = Math.Round(sec.Points[i].Thickness, dec);
+                    if (sec.Points.Count > 0)
+                        ws.Cell(row, colSecMean).Value = Math.Round(sec.Points.Average(p => p.Thickness), dec);
                     row++;
                 }
             }
@@ -90,14 +99,18 @@ public static class CoatingAnalysisSheet
             SetMerged(ws, memberStart, memberEnd, colType, m.Input.MemberType);
             SetMerged(ws, memberStart, memberEnd, colCat, m.Result.Category.ToString());
             SetMerged(ws, memberStart, memberEnd, colMean, Math.Round(m.Result.MeanThickness, dec));
-            SetMerged(ws, memberStart, memberEnd, colMin, Math.Round(m.Result.MinThickness, dec));
             SetMerged(ws, memberStart, memberEnd, colDesign, Math.Round(m.Input.DesignThickness, dec));
+            SetMerged(ws, memberStart, memberEnd, colMin, Math.Round(m.Result.MinThickness, dec));
 
-            // 合格率：厚型才有意义；薄/超薄显示「—」
+            // 判定下限：膨胀型 设计×0.95兜底（构件均值下限）；厚型 设计×0.85（最薄处下限）。
+            double limit = isExpansion ? m.Result.MeanLowerLimit : m.Result.LowerLimit;
+            SetMerged(ws, memberStart, memberEnd, colLimit, Math.Round(limit, dec));
+
+            // 合格率：厚型才有意义；膨胀型显示「—」
             var ratioCell = MergedTopLeft(ws, memberStart, memberEnd, colRatio);
-            ratioCell.Value = m.Result.Category == CoatingCategory.厚型
-                ? $"{m.Result.NQualifiedPoints}/{m.Result.NPoints} ({m.Result.QualifiedRatio * 100:F1}%)"
-                : "—";
+            ratioCell.Value = isExpansion
+                ? "—"
+                : $"{m.Result.NQualifiedPoints}/{m.Result.NPoints} ({m.Result.QualifiedRatio * 100:F1}%)";
 
             var verdictCell = MergedTopLeft(ws, memberStart, memberEnd, colVerdict);
             verdictCell.Value = m.Result.Verdict switch
@@ -127,13 +140,23 @@ public static class CoatingAnalysisSheet
         ws.Column(colLoc).Width = 24;
         ws.Column(colVerdict).Width = 28;
 
-        // 汇总 + 判定依据（可追溯）
+        // 汇总 + 判定依据（按出现的涂层类型分别标注，可追溯）
+        int notQualified = batch.NTotal - batch.NQualified - batch.NPending;
         ws.Cell(lastRow + 2, 1).Value =
-            $"厚型 {batch.NQualified}/{batch.NTotal - batch.NPending} 合格" +
-            (batch.NPending > 0 ? $"；薄型/超薄型 {batch.NPending} 个判定待接入" : "");
+            $"合格 {batch.NQualified}/{batch.NTotal}"
+            + (notQualified > 0 ? $"，不合格 {notQualified}" : "")
+            + (batch.NPending > 0 ? $"，待判定 {batch.NPending}" : "");
         ws.Cell(lastRow + 2, 1).Style.Font.Bold = true;
-        ws.Cell(lastRow + 3, 1).Value =
-            $"判定依据：{standard} 厚涂型涂层厚度 —— ≥{CoatingStandards.RatioThreshold * 100:F0}% 测点 ≥ 设计厚度，且最薄处 ≥ 设计 × {CoatingStandards.MinFactor:F2}";
+
+        int basisRow = lastRow + 3;
+        if (members.Any(m => m.Result.Category == CoatingCategory.厚型))
+            ws.Cell(basisRow++, 1).Value =
+                $"判定依据：{standard} 厚涂型 —— ≥{CoatingStandards.RatioThreshold * 100:F0}% 测点 ≥ 设计厚度，"
+                + $"且最薄处 ≥ 设计 × {CoatingStandards.MinFactor:F2}";
+        if (members.Any(m => CoatingStandards.IsExpansion(m.Result.Category)))
+            ws.Cell(basisRow++, 1).Value =
+                $"判定依据：{standard} 膨胀型(薄/超薄) —— 构件均值 ≥ 设计 × {CoatingStandards.ExpansionMeanFactor:F2}（偏差 −5%），"
+                + $"且 ≥ 设计 − {CoatingStandards.AbsoluteFloorMm * 1000:F0}µm";
     }
 
     private static List<SectionView> GroupSections(CoatingMemberInput member)

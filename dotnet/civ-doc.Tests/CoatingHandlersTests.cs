@@ -35,7 +35,7 @@ public class CoatingHandlersTests
         wb.SaveAs(path);
     }
 
-    /// <summary>把所有「测点数据」sheet 的测点格（截面号/测点号右侧）填上 value。</summary>
+    /// <summary>把所有「测点数据」sheet 的测点格（截面号/处号右侧）填上 value。</summary>
     private static void FillPoints(string path, double value)
     {
         using var wb = new XLWorkbook(path);
@@ -43,12 +43,12 @@ public class CoatingHandlersTests
         {
             int lastCol = ws.Row(1).LastCellUsed()!.Address.ColumnNumber;
             int lastRow = ws.LastRowUsed()!.RowNumber();
-            // 索引列号：厚型/地标「截面号」、国标膨胀型「测点号」
+            // 索引列号：厚型/地标「截面号」、国标膨胀型「处号」（旧「测点号」兼容）
             int sectionCol = 0;
             for (int c = 1; c <= lastCol; c++)
             {
                 var h = ws.Cell(1, c).GetString();
-                if (h == "截面号" || h == "测点号") { sectionCol = c; break; }
+                if (h == "截面号" || h == "处号" || h == "测点号") { sectionCol = c; break; }
             }
             for (int r = 2; r <= lastRow; r++)
                 for (int c = sectionCol + 1; c <= lastCol; c++)

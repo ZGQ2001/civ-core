@@ -101,24 +101,24 @@ public class CoatingTemplateExpanderTests
     }
 
     [Fact]
-    public void Expand_国标膨胀型_出5测点3次膨胀型表()
+    public void Expand_国标膨胀型_出5处3点膨胀型表()
     {
-        // 国标 + 超薄柱（设计2）→ 5 测点×3 次，sheet 名「测点数据-柱-膨胀型」，
-        // 索引列=测点号、测点列=第一次/第二次/第三次
+        // 国标 + 超薄柱（设计2）→ 5 处×3 点，sheet 名「测点数据-柱-膨胀型」，
+        // 索引列=处号、测点列=测点1/测点2/测点3
         string path = MakeInput(new object?[] { "B1", "钢柱1", "柱", null, null, 2.0 });
         try
         {
             var r = CoatingTemplateExpander.Expand(path, path, CoatingStandards.GB_50205_2020);
             Assert.Contains("测点数据-柱-膨胀型", r.Sheets);
-            Assert.Equal(5, r.TotalSections); // 固定 5 测点（忽略长度/截面数）
+            Assert.Equal(5, r.TotalSections); // 固定 5 处（忽略长度/截面数）
 
             var ws = OpenSheet(path, "测点数据-柱-膨胀型");
-            Assert.Equal("测点号", ws.Cell(1, 6).GetString());
-            Assert.Equal("第一次", ws.Cell(1, 7).GetString());
-            Assert.Equal("第三次", ws.Cell(1, 9).GetString());
+            Assert.Equal("处号", ws.Cell(1, 6).GetString());
+            Assert.Equal("测点1", ws.Cell(1, 7).GetString());
+            Assert.Equal("测点3", ws.Cell(1, 9).GetString());
             Assert.Equal("超薄型", ws.Cell(2, 4).GetString());
-            Assert.Equal(5, ws.LastRowUsed()!.RowNumber() - 1); // 5 测点行
-            Assert.Equal(5, ws.Cell(6, 6).GetValue<int>());     // 末行测点号=5
+            Assert.Equal(5, ws.LastRowUsed()!.RowNumber() - 1); // 5 处行
+            Assert.Equal(5, ws.Cell(6, 6).GetValue<int>());     // 末行处号=5
         }
         finally { File.Delete(path); }
     }

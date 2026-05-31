@@ -110,20 +110,20 @@ public class CoatingExcelReaderTests
     }
 
     [Fact]
-    public void ReadRows_5测点3次膨胀型sheet_15点入一构件()
+    public void ReadRows_5处3点膨胀型sheet_15点入一构件()
     {
-        // 国标膨胀型 sheet「测点数据-柱-膨胀型」：5 测点 × 3 次（第一次/二次/三次）= 15 测点。
-        // 索引列叫「测点号」—— 顺带验 reader 认「测点号」（非「截面号」）。
+        // 国标膨胀型 sheet「测点数据-柱-膨胀型」：5 处 × 每处 3 点（测点1/2/3）= 15 测点。
+        // 索引列叫「处号」—— 顺带验 reader 认「处号」（非「截面号」）。
         string path = Save(wb =>
         {
             var ws = wb.Worksheets.Add("测点数据-柱-膨胀型");
-            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "测点号", "第一次", "第二次", "第三次" };
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "处号", "测点1", "测点2", "测点3" };
             for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
             int r = 2;
-            for (int pt = 1; pt <= 5; pt++)
+            for (int loc = 1; loc <= 5; loc++)
             {
                 ws.Cell(r, 1).Value = "B1"; ws.Cell(r, 2).Value = "超薄柱1"; ws.Cell(r, 3).Value = "柱";
-                ws.Cell(r, 4).Value = "超薄型"; ws.Cell(r, 5).Value = 2.0; ws.Cell(r, 6).Value = pt;
+                ws.Cell(r, 4).Value = "超薄型"; ws.Cell(r, 5).Value = 2.0; ws.Cell(r, 6).Value = loc;
                 ws.Cell(r, 7).Value = 1.95; ws.Cell(r, 8).Value = 1.90; ws.Cell(r, 9).Value = 1.92;
                 r++;
             }
@@ -134,9 +134,36 @@ public class CoatingExcelReaderTests
             var m = Assert.Single(batches[0].Members);
             Assert.Equal("超薄柱1", m.Location);
             Assert.Equal(2.0, m.DesignThickness);
-            Assert.Equal(15, m.Points.Length);     // 5 测点 × 3 次
-            Assert.Equal("第一次", m.Points[0].Position);
-            Assert.Equal(5, m.Points[14].SectionNo); // 末点在第 5 测点
+            Assert.Equal(15, m.Points.Length);     // 5 处 × 3 点
+            Assert.Equal("测点1", m.Points[0].Position);
+            Assert.Equal(5, m.Points[14].SectionNo); // 末点在第 5 处
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void ReadRows_旧测点号膨胀型sheet_向后兼容仍可读()
+    {
+        // 旧文件用「测点号」索引列（5测点×3次错误模型留下的标签）。reader 保留兼容，老数据不丢。
+        string path = Save(wb =>
+        {
+            var ws = wb.Worksheets.Add("测点数据-柱-膨胀型");
+            var headers = new[] { "批次", "构件位置", "构件类型", "涂层类型", "设计厚度", "测点号", "第一次", "第二次", "第三次" };
+            for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+            int r = 2;
+            for (int i = 1; i <= 5; i++)
+            {
+                ws.Cell(r, 1).Value = "B1"; ws.Cell(r, 2).Value = "超薄柱1"; ws.Cell(r, 3).Value = "柱";
+                ws.Cell(r, 4).Value = "超薄型"; ws.Cell(r, 5).Value = 2.0; ws.Cell(r, 6).Value = i;
+                ws.Cell(r, 7).Value = 1.95; ws.Cell(r, 8).Value = 1.90; ws.Cell(r, 9).Value = 1.92;
+                r++;
+            }
+        });
+        try
+        {
+            var m = Assert.Single(CoatingExcelReader.ReadRows(path)[0].Members);
+            Assert.Equal(15, m.Points.Length);
+            Assert.Equal(5, m.Points[14].SectionNo);
         }
         finally { File.Delete(path); }
     }

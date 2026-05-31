@@ -6,8 +6,8 @@
 //   设计厚度：清单填了用清单；否则类型预设默认。
 //
 // 布局按 标准 × 涂层类型 分两种：
-//   国标 + 膨胀型(薄/超薄) → 5 测点×3 次（涂层测厚仪，索引列「测点号」1~5，列头 第一次/第二次/第三次），
-//                            sheet 名「测点数据-<类型>-膨胀型」。
+//   国标 + 膨胀型(薄/超薄) → 5 处×3 点（涂层测厚仪，索引列「处号」1~5，列头 测点1/测点2/测点3，
+//                            参照 GB/T 50621 §12 防腐涂层口径），sheet 名「测点数据-<类型>-膨胀型」。
 //   其余（国标厚型 / 地标任意）→ 截面×面（索引列「截面号」，测点列=面名），sheet 名「测点数据-<类型>」。
 // 同类型混涂层类型时拆两张 sheet（列头不同）。测点格留空待用户填数字，整块按构件分色。
 
@@ -22,11 +22,11 @@ public static class CoatingTemplateExpander
 
     private record Resolved(CoatingMemberSpec Spec, string Type, CoatingTypePreset Preset, int Sections, double Design);
 
-    /// <summary>国标膨胀型固定 5 个测点（GB 50205-2020 §13.4.3：薄/超薄涂层测厚仪 5 测点）。</summary>
-    private const int FivePointSections = 5;
-    /// <summary>每个测点用涂层测厚仪测 3 次取平均（非空间 3 点，是重复读数）。</summary>
-    private static readonly string[] FivePointHeaders = { "第一次", "第二次", "第三次" };
-    /// <summary>5 测点×3 次 sheet 名后缀：测点数据-{类型}-膨胀型。</summary>
+    /// <summary>国标膨胀型固定 5 处布点（GB 50205-2020 §13.4.3 + GB/T 50621 §12 防腐：薄/超薄涂层测厚仪 5 处）。</summary>
+    private const int FiveLocationCount = 5;
+    /// <summary>每处空间布 3 个测点（测点1/测点2/测点3，非重复读数）。</summary>
+    private static readonly string[] LocationPointHeaders = { "测点1", "测点2", "测点3" };
+    /// <summary>5 处×3 点 sheet 名后缀：测点数据-{类型}-膨胀型。</summary>
     private const string ExpansionSuffix = "膨胀型";
 
     public static ExpandResult Expand(
@@ -46,8 +46,8 @@ public static class CoatingTemplateExpander
             throw new ArgumentException("「构件清单」表没有数据行（请先填构件位置等）");
 
         // 分组键 = (构件类型, 是否5处×3点)。同类型混涂层类型时拆两张 sheet（列头不同）。
-        var byGroup = new Dictionary<(string Type, bool FivePoint), List<Resolved>>();
-        var groupOrder = new List<(string Type, bool FivePoint)>();
+        var byGroup = new Dictionary<(string Type, bool FiveLocation), List<Resolved>>();
+        var groupOrder = new List<(string Type, bool FiveLocation)>();
         int totalSections = 0;
 
         foreach (var spec in specs)
@@ -58,11 +58,11 @@ public static class CoatingTemplateExpander
                     $"构件「{spec.Location}」类型「{type}」在「类型预设」表里没定义——请在类型预设表加一行（含测点位置）");
             double design = ResolveDesign(spec, preset);
             // 国标 + 膨胀型（薄/超薄）→ 5 处×3 点；否则截面×面（地标膨胀型也走截面×面，截面数同厚型）。
-            bool fivePoint = isNational && CoatingStandards.IsExpansion(CoatingStandards.Classify(design));
-            int sections = fivePoint ? FivePointSections : ResolveSections(spec, spacing);
+            bool fiveLocation = isNational && CoatingStandards.IsExpansion(CoatingStandards.Classify(design));
+            int sections = fiveLocation ? FiveLocationCount : ResolveSections(spec, spacing);
             totalSections += sections;
 
-            var key = (type, fivePoint);
+            var key = (type, fiveLocation);
             if (!byGroup.TryGetValue(key, out var list))
             {
                 list = new List<Resolved>();
@@ -79,13 +79,13 @@ public static class CoatingTemplateExpander
         var written = new List<string>();
         foreach (var key in groupOrder)
         {
-            string baseName = key.FivePoint
+            string baseName = key.FiveLocation
                 ? $"{CoatingColumns.PointDataSheet}-{key.Type}-{ExpansionSuffix}"
                 : $"{CoatingColumns.PointDataSheet}-{key.Type}";
             string sheetName = SafeSheetName(baseName);
             var ws = wb.Worksheets.Add(sheetName);
-            string[] pointHeaders = key.FivePoint ? FivePointHeaders : byGroup[key][0].Preset.PointPositions;
-            WriteGrid(ws, byGroup[key], pointHeaders, key.FivePoint);
+            string[] pointHeaders = key.FiveLocation ? LocationPointHeaders : byGroup[key][0].Preset.PointPositions;
+            WriteGrid(ws, byGroup[key], pointHeaders, key.FiveLocation);
             written.Add(sheetName);
         }
 
@@ -195,10 +195,10 @@ public static class CoatingTemplateExpander
     /// <summary>相邻构件交替的两种行底色（浅蓝 / 白），让一构件 N 行成块、邻构件易区分。</summary>
     private static readonly XLColor BandColor = XLColor.FromHtml("#DDEBF7");
 
-    private static void WriteGrid(IXLWorksheet ws, List<Resolved> members, string[] pointHeaders, bool fivePoint)
+    private static void WriteGrid(IXLWorksheet ws, List<Resolved> members, string[] pointHeaders, bool fiveLocation)
     {
-        // 膨胀型索引列叫「测点号」（5 测点），其余叫「截面号」。
-        string indexHeader = fivePoint ? CoatingColumns.PointNo : CoatingColumns.SectionNo;
+        // 膨胀型索引列叫「处号」（5 处），其余叫「截面号」。
+        string indexHeader = fiveLocation ? CoatingColumns.LocationNo : CoatingColumns.SectionNo;
         var headers = new List<string>
         {
             CoatingColumns.Batch, CoatingColumns.MemberLocation, CoatingColumns.MemberType,

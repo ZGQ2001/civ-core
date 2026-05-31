@@ -4,6 +4,8 @@
 
 using CivCore.Doc.Calc.Coating;
 using CivCore.Doc.ReportTables;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Xunit;
 
@@ -34,7 +36,7 @@ public class CoatingWordTableTests
         });
         var batch = CoatingCalculator.Calc(wb).BatchResults[0];
 
-        var table = CoatingWordTable.BuildExpansion(batch);
+        var table = CoatingWordTable.BuildExpansion(batch.MembersWithResults);
         var rows = table.Elements<TableRow>().ToList();
 
         Assert.Equal(3, rows.Count); // 表头 + 2 构件
@@ -134,5 +136,71 @@ public class CoatingWordTableTests
         Assert.Equal("2", Cell(5, 0));
         Assert.Equal("截面1", Cell(5, 2));
         Assert.Equal("27.25", Cell(5, 7));
+    }
+
+    private static Paragraph TextPara(string t) =>
+        new(new Run(new Text(t) { Space = SpaceProcessingModeValues.Preserve }));
+
+    /// <summary>生成最小薄壳模板：项目信息占位符 + {{表格:防火涂层}} + 结论占位符。</summary>
+    private static void MakeTemplate(string path)
+    {
+        using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
+        var main = doc.AddMainDocumentPart();
+        main.Document = new Document(new Body(
+            TextPara("委托单位：{{委托单位}}"),
+            TextPara("{{表格:防火涂层}}"),
+            TextPara("检测结论：{{检测结论}}")));
+        main.Document.Save();
+    }
+
+    [Fact]
+    public void Generate_膨胀型_填薄壳占位符并在占位符处插表()
+    {
+        var tmp = Path.GetTempPath();
+        var template = Path.Combine(tmp, $"coating_tpl_{Guid.NewGuid():N}.docx");
+        var output = Path.Combine(tmp, $"coating_out_{Guid.NewGuid():N}.docx");
+        try
+        {
+            MakeTemplate(template);
+
+            var wb = new CoatingWorkbookInput(CoatingStandards.GB_50205_2020, new[]
+            {
+                new CoatingBatchInput("全部", new[]
+                {
+                    Member("地上一层A×1轴", 220, new[] { 232, 230, 230, 231, 230 }),
+                    Member("地上一层A×2轴", 220, new[] { 231, 231, 230, 232, 230 }),
+                }),
+            });
+            var batch = CoatingCalculator.Calc(wb).BatchResults[0];
+
+            var res = CoatingDocxReport.Generate(
+                template, output, batch.MembersWithResults, CoatingStandards.GB_50205_2020,
+                new Dictionary<string, string> { ["委托单位"] = "某某检测公司", ["检测结论"] = "合格" });
+
+            Assert.Equal(1, res.TablesInserted); // 膨胀型一张表
+            Assert.True(File.Exists(output));
+
+            using var doc = WordprocessingDocument.Open(output, false);
+            var body = doc.MainDocumentPart!.Document!.Body!;
+            var text = body.InnerText;
+
+            // 薄壳占位符已填
+            Assert.Contains("委托单位：某某检测公司", text);
+            Assert.Contains("检测结论：合格", text);
+            // 表格占位符已被替换、不残留
+            Assert.DoesNotContain("{{表格:防火涂层}}", text);
+            Assert.DoesNotContain("{{委托单位}}", text);
+
+            // 表已插入、含构件数据
+            var tables = body.Descendants<Table>().ToList();
+            Assert.Single(tables);
+            Assert.Contains("地上一层A×1轴", tables[0].InnerText);
+            Assert.Contains("防火涂层（膨胀型）检测结果表", text); // 表标题段
+        }
+        finally
+        {
+            if (File.Exists(template)) File.Delete(template);
+            if (File.Exists(output)) File.Delete(output);
+        }
     }
 }

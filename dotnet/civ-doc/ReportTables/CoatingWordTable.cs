@@ -21,8 +21,32 @@ public static class CoatingWordTable
     private const string FontHalfPt = "21";             // 五号 = 10.5pt → 21 半磅
     private const int ExpansionLocations = 5;           // 膨胀型固定 5 处
 
+    /// <summary>
+    /// 按 标准×涂层类型 把构件分派到对应报告表：国标膨胀型→膨胀型表(5处μm)；
+    /// 其余(厚型 / 地标膨胀型)→截面×面表，按构件类型(梁/柱)各一张。返回 (标题, 表)。
+    /// </summary>
+    public static List<(string Title, Table Table)> BuildAll(
+        IReadOnlyList<(CoatingMemberInput Input, CoatingMemberResult Result)> members, string standard)
+    {
+        var tables = new List<(string, Table)>();
+        bool national = standard == CoatingStandards.GB_50205_2020;
+
+        var expansion = members
+            .Where(m => national && CoatingStandards.IsExpansion(m.Result.Category)).ToList();
+        var sectionFace = members
+            .Where(m => !(national && CoatingStandards.IsExpansion(m.Result.Category))).ToList();
+
+        if (expansion.Count > 0)
+            tables.Add(("防火涂层（膨胀型）检测结果表", BuildExpansion(expansion)));
+        foreach (var grp in sectionFace.GroupBy(m => m.Input.MemberType))
+            tables.Add(($"防火涂层（{grp.Key}）检测结果表", BuildThick(grp.ToList())));
+
+        return tables;
+    }
+
     /// <summary>膨胀型报告表：一构件一行（μm）。返回 OpenXML Table，调用方插入占位符处。</summary>
-    public static Table BuildExpansion(CoatingBatchResult batch)
+    public static Table BuildExpansion(
+        IReadOnlyList<(CoatingMemberInput Input, CoatingMemberResult Result)> members)
     {
         var table = new Table(TableProps());
 
@@ -34,7 +58,7 @@ public static class CoatingWordTable
         table.AppendChild(Row(headers, bold: true));
 
         int serial = 1;
-        foreach (var (input, result) in batch.MembersWithResults)
+        foreach (var (input, result) in members)
         {
             var cells = new List<string> { serial.ToString(), input.Location };
             foreach (var avg in LocationMeansUm(input))

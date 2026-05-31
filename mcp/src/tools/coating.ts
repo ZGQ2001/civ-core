@@ -92,9 +92,38 @@ export const coatingRun: ToolDef = {
   },
 };
 
+export const coatingReport: ToolDef = {
+  rpcMethod: "coating.report",
+  mcpName: "coating_report",
+  description:
+    "防火涂层一键 Word 报告：读「测点数据」+ 计算 + 把数据表填进 docx 薄壳模板 → 出 .docx。" +
+    "模板里在要放表处写一段「{{表格:防火涂层}}」占位符（引擎在该处插入按规范格式建好的表：" +
+    "国标膨胀型→5处μm 表、厚型→截面×面 mm 表，按构件类型分表）；项目信息写 {{委托单位}} 等占位符、" +
+    "由 user_inputs 填（换模板/换甲方零代码）。返回 {output, tables, replaced, unknown_keys, members}。" +
+    "前置：先 coating_expand_template 展开并填好测点数字。",
+  inputSchema: {
+    input_xlsx: z.string().describe("已展开且填好数字的「测点数据」Excel 绝对路径"),
+    word_template_path: z
+      .string()
+      .describe("docx 薄壳模板绝对路径，须含 {{表格:防火涂层}} 占位符 + 项目信息 {{}} 占位符"),
+    output_docx: z
+      .string()
+      .optional()
+      .describe("输出 docx 绝对路径。缺省在 input 同目录写 '<原名>_防火涂层_报告.docx'"),
+    standard: z.string().optional().describe("'GB 50205-2020'（缺省）或 '北京地标'"),
+    sheet: z.string().optional().describe("输入 Excel 的 sheet 名（缺省读所有「测点数据」表）"),
+    batch_id_column: z.string().optional().describe("批次列列名，缺省 '批次'"),
+    user_inputs: z
+      .record(z.string())
+      .optional()
+      .describe("项目信息字段字典（key=占位符名，如 委托单位/检测结论），填薄壳 {{}} 占位符"),
+  },
+};
+
 export const allCoatingTools: readonly ToolDef[] = [
   coatingGenerateTemplate,
   coatingExpandTemplate,
   coatingListBatches,
   coatingRun,
+  coatingReport,
 ];

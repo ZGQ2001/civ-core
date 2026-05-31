@@ -4,7 +4,7 @@
 // 公开两条 API：
 //   - Render(sourcePath, outputPath, resolver, catalog): 拷文件 + 全文档替换
 //   - RenderInto(scope, resolver, catalog, mainPart): 在已打开的 OpenXml 子树上替换
-//     （给 ReportGenerator 在 cloned Table 上做局部替换用）
+//     （给 DocxReportAssembler / AnchorWordTable 在程序建好的 Table 子树上做局部替换用）
 //
 // 设计取舍：
 //   - 段落级合并 Run 文本再替换 —— 解决 Word 把 {{弹性位移量}} 拆成多 Run 的麻烦。
@@ -79,7 +79,7 @@ public static class PlaceholderRenderer
 
     /// <summary>
     /// 在已打开的 OpenXml 子树上替换占位符 —— 不碰文件 IO，可在 cloned Table 这类
-    /// 子树上调用。给 ReportGenerator 做"克隆表 + 局部替换"用。
+    /// 子树上调用。给 AnchorWordTable 做"程序建表 + 局部替换填值嵌图"用。
     /// </summary>
     /// <param name="mainPart">
     /// 含 ImageParts 的 MainDocumentPart。仅当模板含 {{img:xxx}} 时需要；

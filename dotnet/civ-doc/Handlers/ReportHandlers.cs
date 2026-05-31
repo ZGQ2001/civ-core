@@ -5,17 +5,17 @@
 //     -> {output_path, replaced, unknown_keys}
 //   report.run_from_result(result_xlsx, word_template_path, ...) -> {output, ...}
 //     直接读 anchor.run 已经算好的结果 xlsx 出 Word，不再重新计算。
-//     解决用户反馈 #2+#7「报告填充不应再重算 / 应该消费结果文件」。
+//     锚杆表由程序按规范建「逐根 表2.4」插进模板的 {{表格:锚杆}} 占位符（不再用 marker/专用模板）。
 //
 // 解耦：字段目录从 CatalogStore（JSON）读取，不再硬编码 switch。
-// handler 只做 wire 解析 + IFieldResolver 适配；具体替换在 PlaceholderRenderer。
+// handler 只做 wire 解析；建表走 AnchorWordTable、装配走 DocxReportAssembler。
 
 using System.Text.Json;
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.Catalog;
+using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
 using CivCore.Doc.Template;
-using DocumentFormat.OpenXml.Packaging;
 
 namespace CivCore.Doc.Handlers;
 
@@ -94,6 +94,10 @@ public static class ReportHandlers
             && ciEl.ValueKind == JsonValueKind.String ? ciEl.GetString() : null;
         string? reportName = p.TryGetProperty("report_name", out var rnEl)
             && rnEl.ValueKind == JsonValueKind.String ? rnEl.GetString() : null;
+        string sectionNo = p.TryGetProperty("section_no", out var snEl)
+            && snEl.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(snEl.GetString())
+            ? snEl.GetString()!
+            : AnchorWordTable.DefaultSectionNo;
 
         var userInputs = p.TryGetProperty("user_inputs", out var uiEl)
             && uiEl.ValueKind == JsonValueKind.Object
@@ -144,116 +148,9 @@ public static class ReportHandlers
             : "锚杆抗拔报告.docx";
         var wordOut = Path.Combine(wordDir, SafeFileName(wordFileName));
 
-        // 模板探测：三层 [[检测项目]] / 两层 [[批次]] / 单层
-        var useMultiDetectionItem = TemplateHasMarker(wordTemplatePath, "[[检测项目]]");
-        var useMultiBatch = TemplateHasMarker(wordTemplatePath, "[[批次]]");
-        ReportGenerateResult genResult;
-        if (useMultiDetectionItem)
-        {
-            // 三层：把所有批次包成一个 detection item（当前只 anchor 一种 calc）
-            var itemLevel = new Dictionary<string, string>(userInputs);
-            itemLevel["detection_type"] = "锚杆抗拔";
-            itemLevel.TryAdd("inspection_item", "锚杆抗拔力（验收）检测");
-
-            var sections = new List<BatchSection>();
-            int anchorIndex = 0;
-            foreach (var br in result.BatchResults)
-            {
-                var batchLevel = new Dictionary<string, string>(itemLevel);
-                if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
-                {
-                    foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
-                }
-                batchLevel["batch_id"] = br.BatchId;
-
-                var batchRowResolvers = new List<IFieldResolver>();
-                foreach (var rw in br.RowsWithResults)
-                {
-                    anchorIndex++;
-                    batchRowResolvers.Add(new AnchorRowResolver(
-                        rw.Input, rw.Result, br.Params, batchLevel,
-                        anchorIndex: anchorIndex,
-                        curveImageDir: curveImageDir,
-                        batchId: br.BatchId));
-                }
-                sections.Add(new BatchSection(
-                    new DictionaryResolverStr(batchLevel),
-                    batchRowResolvers));
-            }
-            var items = new List<DetectionItemSection>
-            {
-                new(new DictionaryResolverStr(itemLevel), sections),
-            };
-            var globalResolver = new DictionaryResolverStr(userInputs);
-            genResult = ReportGenerator.GenerateMultiDetectionItem(
-                wordTemplatePath, globalResolver, items, wordOut,
-                catalog: AnchorFieldCatalog.All);
-        }
-        else if (useMultiBatch)
-        {
-            var sections = new List<BatchSection>();
-            int anchorIndex = 0;
-            foreach (var br in result.BatchResults)
-            {
-                var batchLevel = new Dictionary<string, string>(userInputs);
-                if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
-                {
-                    foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
-                }
-                batchLevel["batch_id"] = br.BatchId;
-
-                var batchRowResolvers = new List<IFieldResolver>();
-                foreach (var rw in br.RowsWithResults)
-                {
-                    anchorIndex++;
-                    batchRowResolvers.Add(new AnchorRowResolver(
-                        rw.Input, rw.Result, br.Params, batchLevel,
-                        anchorIndex: anchorIndex,
-                        curveImageDir: curveImageDir,
-                        batchId: br.BatchId));
-                }
-                sections.Add(new BatchSection(
-                    new DictionaryResolverStr(batchLevel),
-                    batchRowResolvers));
-            }
-            var globalResolver = new DictionaryResolverStr(userInputs);
-            genResult = ReportGenerator.GenerateMultiBatch(
-                wordTemplatePath, globalResolver, sections, wordOut,
-                catalog: AnchorFieldCatalog.All);
-        }
-        else
-        {
-            // 单批兼容：把 batch_user_inputs 里第一个有值的 grouting_date 灌入项目级
-            var mergedInputs = new Dictionary<string, string>(userInputs);
-            foreach (var bui in batchUserInputs.Values)
-            {
-                if (bui.TryGetValue("grouting_date", out var v)
-                    && !string.IsNullOrWhiteSpace(v)
-                    && !mergedInputs.ContainsKey("grouting_date"))
-                {
-                    mergedInputs["grouting_date"] = v;
-                    break;
-                }
-            }
-            var projectResolver = new DictionaryResolverStr(mergedInputs);
-            var rowResolvers = new List<IFieldResolver>();
-            int anchorIndex = 0;
-            foreach (var br in result.BatchResults)
-            {
-                foreach (var rw in br.RowsWithResults)
-                {
-                    anchorIndex++;
-                    rowResolvers.Add(new AnchorRowResolver(
-                        rw.Input, rw.Result, br.Params, mergedInputs,
-                        anchorIndex: anchorIndex,
-                        curveImageDir: curveImageDir,
-                        batchId: br.BatchId));
-                }
-            }
-            genResult = ReportGenerator.Generate(
-                wordTemplatePath, projectResolver, rowResolvers, wordOut,
-                catalog: AnchorFieldCatalog.All);
-        }
+        // 程序按规范建「逐根 表2.4」插进模板的 {{表格:锚杆}} 占位符 + 填薄壳（不再 marker/专用模板）。
+        var genResult = AnchorWordTable.GenerateReport(
+            wordTemplatePath, wordOut, result, userInputs, batchUserInputs, curveImageDir, sectionNo);
 
         return new Dictionary<string, object?>
         {
@@ -268,26 +165,6 @@ public static class ReportHandlers
     }
 
     // ── 内部 ──
-
-    /// <summary>
-    /// 检测模板里有没有指定 marker 字符串 —— 跟 AnchorHandlers 同口径。
-    /// 解析失败时 fallback 到 false。
-    /// </summary>
-    private static bool TemplateHasMarker(string templatePath, string marker)
-    {
-        try
-        {
-            using var doc = WordprocessingDocument.Open(templatePath, false);
-            var body = doc.MainDocumentPart?.Document?.Body;
-            return body?.InnerText.Contains(marker) ?? false;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"[report.run_from_result] 探测 marker {marker} 失败：{ex.Message}");
-            return false;
-        }
-    }
 
     private static Dictionary<string, string> ParseStringMap(JsonElement el)
     {
@@ -315,14 +192,6 @@ public static class ReportHandlers
     {
         foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
         return s;
-    }
-
-    /// <summary>字符串字典适配为 IFieldResolver。跟 AnchorHandlers.DictionaryResolver 同语义但接 string。</summary>
-    private class DictionaryResolverStr : IFieldResolver
-    {
-        private readonly IReadOnlyDictionary<string, string> _v;
-        public DictionaryResolverStr(IReadOnlyDictionary<string, string> v) => _v = v;
-        public object? GetValue(string key) => _v.TryGetValue(key, out var s) ? s : null;
     }
 
     // ── 旧：ParseValues / DictionaryResolver（render_placeholder 专用，object? 值类型）──

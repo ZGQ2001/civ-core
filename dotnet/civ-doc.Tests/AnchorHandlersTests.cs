@@ -162,14 +162,14 @@ public class AnchorHandlersTests
     // ── 批次维度 user_inputs (grouting_date) 端到端测试 ──────────────────
 
     [Fact]
-    public void Run_新模板含批次marker_多批不同灌浆日期_批次段独立替换()
+    public void Run_多批不同灌浆日期_各批锚杆表出各自日期()
     {
         using var tmp = new TempDocx();
         string input = TempXlsx();
         try
         {
             WriteTwoBatchInput(input);
-            var tpl = MakeNewTemplate(tmp.Dir, "new.docx");
+            var tpl = MakeShellTemplate(tmp.Dir, "shell.docx");
             var outDir = Path.Combine(tmp.Dir, "out");
 
             var json = $@"{{
@@ -195,14 +195,13 @@ public class AnchorHandlersTests
             Assert.Single(wordOuts);
             var text = ReadAllText(wordOuts[0]);
 
-            // 项目级
+            // 薄壳 {{委托单位}}→client_name
             Assert.Contains("ABC集团", text);
-            // 两批的 grouting_date 都要在输出里
+            // 两批的 grouting_date 各自出现在本批锚杆表的「灌浆日期」格
             Assert.Contains("2026-05-01", text);
             Assert.Contains("2026-06-15", text);
-            // 批次 marker 应被清理
-            Assert.DoesNotContain("[[批次]]", text);
-            Assert.DoesNotContain("[[/批次]]", text);
+            // 数据表占位符已被程序建好的表替换
+            Assert.DoesNotContain("{{表格:锚杆}}", text);
         }
         finally
         {
@@ -211,17 +210,16 @@ public class AnchorHandlersTests
     }
 
     [Fact]
-    public void Run_旧模板无批次marker_单批fallback_注入第一批灌浆日期()
+    public void Run_单批_灌浆日期出现在锚杆表()
     {
         using var tmp = new TempDocx();
         string input = TempXlsx();
         try
         {
             AnchorTemplateWriter.Write(input);  // 默认 1 批
-            var tpl = MakeOldTemplate(tmp.Dir, "old.docx");
+            var tpl = MakeShellTemplate(tmp.Dir, "shell.docx");
             var outDir = Path.Combine(tmp.Dir, "out");
 
-            // 关键：user_inputs 没传 grouting_date，仅 batch_user_inputs 传了
             var json = $@"{{
                 ""input_xlsx"": ""{Esc(input)}"",
                 ""standard"": ""GB 50086-2015"",
@@ -242,10 +240,8 @@ public class AnchorHandlersTests
             var text = ReadAllText(wordOuts[0]);
 
             Assert.Contains("ABC集团", text);
-            // fallback 把 batch_user_inputs.批次1.grouting_date 注入项目级
             Assert.Contains("2026-05-01", text);
-            // 旧模板没批次 marker，确实没产生 [[批次]] 残留
-            Assert.DoesNotContain("[[批次]]", text);
+            Assert.DoesNotContain("{{表格:锚杆}}", text);
         }
         finally
         {
@@ -290,7 +286,7 @@ public class AnchorHandlersTests
             Assert.Equal("2026-06-15", dates["批次2"]);
 
             // 2) report.run_from_result：关键 —— 不传 batch_user_inputs，日期从结果 xlsx 回退。
-            var tpl = MakeNewTemplate(tmp.Dir, "new.docx");
+            var tpl = MakeShellTemplate(tmp.Dir, "shell.docx");
             var rfrJson = $@"{{
                 ""result_xlsx"": ""{Esc(resultXlsx)}"",
                 ""standard"": ""GB 50086-2015"",
@@ -334,7 +330,7 @@ public class AnchorHandlersTests
             }}";
             AnchorHandlers.Run(ParseJson(runJson));
 
-            var tpl = MakeNewTemplate(tmp.Dir, "new.docx");
+            var tpl = MakeShellTemplate(tmp.Dir, "shell.docx");
             // GUI 传 批次1 一个不同日期 → 应覆盖持久化的 2026-05-01（GUI/预设优先）
             var rfrJson = $@"{{
                 ""result_xlsx"": ""{Esc(resultXlsx)}"",
@@ -373,8 +369,8 @@ public class AnchorHandlersTests
         wb.Save();
     }
 
-    /// <summary>新模板：含 [[批次]]...[[/批次]] 段，段内嵌 {{灌浆日期}} + 行重复。</summary>
-    private static string MakeNewTemplate(string dir, string fileName)
+    /// <summary>薄壳模板：项目信息 {{委托单位}} + 锚杆数据表占位符 {{表格:锚杆}}。</summary>
+    private static string MakeShellTemplate(string dir, string fileName)
     {
         var path = Path.Combine(dir, fileName);
         using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
@@ -382,27 +378,7 @@ public class AnchorHandlersTests
         mp.Document = new Document(new Body());
         var body = mp.Document.Body!;
         body.AppendChild(Para("委托单位：{{委托单位}}"));
-        body.AppendChild(Para("[[批次]]"));
-        body.AppendChild(Para("批次：{{batch_id}}，灌浆日期：{{灌浆日期}}"));
-        body.AppendChild(Para("[[每根锚杆]]"));
-        body.AppendChild(Para("锚杆 {{锚杆序号}}：{{锚杆编号}}"));
-        body.AppendChild(Para("[[/每根锚杆]]"));
-        body.AppendChild(Para("[[/批次]]"));
-        return path;
-    }
-
-    /// <summary>旧模板：只有 [[每根锚杆]] 行重复，灌浆日期写在项目级位置。</summary>
-    private static string MakeOldTemplate(string dir, string fileName)
-    {
-        var path = Path.Combine(dir, fileName);
-        using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
-        var mp = doc.AddMainDocumentPart();
-        mp.Document = new Document(new Body());
-        var body = mp.Document.Body!;
-        body.AppendChild(Para("委托单位：{{委托单位}}，灌浆日期：{{灌浆日期}}"));
-        body.AppendChild(Para("[[每根锚杆]]"));
-        body.AppendChild(Para("锚杆 {{锚杆序号}}：{{锚杆编号}}"));
-        body.AppendChild(Para("[[/每根锚杆]]"));
+        body.AppendChild(Para("{{表格:锚杆}}"));
         return path;
     }
 

@@ -13,11 +13,9 @@
 
 using System.Text.Json;
 using ClosedXML.Excel;
-using DocumentFormat.OpenXml.Packaging;
 using CivCore.Doc.Calc.Anchor;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
-using CivCore.Doc.Template;
 using static CivCore.Doc.Server.AtomicFile;
 
 namespace CivCore.Doc.Handlers;
@@ -153,6 +151,11 @@ public static class AnchorHandlers
         // 报告名称（可选）：影响 Word 输出文件名；留空走默认「锚杆抗拔报告.docx」
         string? reportName = p.TryGetProperty("report_name", out var rnEl)
             && rnEl.ValueKind == JsonValueKind.String ? rnEl.GetString() : null;
+        // 报告里锚杆结果表的节号（可选）：单根→「表{节号}」/多根→「表{节号}-1…」，缺省 2.4
+        string sectionNo = p.TryGetProperty("section_no", out var snEl)
+            && snEl.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(snEl.GetString())
+            ? snEl.GetString()!
+            : AnchorWordTable.DefaultSectionNo;
         // 项目级用户输入字段（可选）：{ client_name, project_name, test_date, ... }
         var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
             ? ParseUserInputs(uiEl)
@@ -242,14 +245,8 @@ public static class AnchorHandlers
             SaveWorkbook(wb, outPath);
         }
 
-        // 可选 Word 报告：根据模板有没有 [[批次]]...[[/批次]] 段决定走单批 / 多批路径。
-        //
-        //   旧模板（只有 [[每根锚杆]]）        → ReportGenerator.Generate
-        //   新模板（带 [[批次]]...[[/批次]]）  → ReportGenerator.GenerateMultiBatch
-        //
-        // 单批路径的兼容性补丁：用户旧模板里的 {{灌浆日期}} 仍能出值——
-        // 取 batch_user_inputs 里第一个有值的 grouting_date 注入项目级 user_inputs。
-        // 多批路径里每批 BatchResolver 用本批 grouting_date，跨批日期独立。
+        // 可选 Word 报告：程序按规范建「逐根 表2.4」插进模板的 {{表格:锚杆}} 占位符 + 填薄壳。
+        // 各批 grouting_date 已并入 batchUserInputs（含「批次信息」sheet 回退），表内按批出值。
         var wordOutputs = new List<string>();
         var wordUnknownKeys = new List<string>();
         var wordMissingImages = new List<string>();
@@ -266,121 +263,9 @@ public static class AnchorHandlers
                     : $"{reportName}.docx")
                 : "锚杆抗拔报告.docx";
             var wordOut = Path.Combine(wordDir, SafeFileName(wordFileName));
-            // 模板探测：三层 [[检测项目]]>[[批次]]>[[每根锚杆]] / 两层 [[批次]]>[[每根锚杆]] / 单层
-            var useMultiDetectionItem = TemplateHasMarker(wordTemplatePath, "[[检测项目]]");
-            var useMultiBatch = TemplateHasBatchMarker(wordTemplatePath);
 
-            ReportGenerateResult genResult;
-            if (useMultiDetectionItem)
-            {
-                // 三层：当前装配线只 anchor 一种 calc，把所有批次包成单个 detection item
-                // 项目级字段注入 detection_type 给 {{检测项目}} 占位符用。
-                var itemLevel = new Dictionary<string, string>(userInputs);
-                itemLevel["detection_type"] = "锚杆抗拔";
-                itemLevel.TryAdd("inspection_item", "锚杆抗拔力（验收）检测");
-
-                var sections = new List<BatchSection>();
-                int anchorIndex = 0;
-                foreach (var br in result.BatchResults)
-                {
-                    var batchLevel = new Dictionary<string, string>(itemLevel);
-                    if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
-                    {
-                        foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
-                    }
-                    batchLevel["batch_id"] = br.BatchId;
-
-                    var batchRowResolvers = new List<IFieldResolver>();
-                    foreach (var rw in br.RowsWithResults)
-                    {
-                        anchorIndex++;
-                        batchRowResolvers.Add(new AnchorRowResolver(
-                            rw.Input, rw.Result, br.Params, batchLevel,
-                            anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir,
-                            batchId: br.BatchId));
-                    }
-                    sections.Add(new BatchSection(
-                        new DictionaryResolver(batchLevel),
-                        batchRowResolvers));
-                }
-                var items = new List<DetectionItemSection>
-                {
-                    new(new DictionaryResolver(itemLevel), sections),
-                };
-                var globalResolver = new DictionaryResolver(userInputs);
-                genResult = ReportGenerator.GenerateMultiDetectionItem(
-                    wordTemplatePath, globalResolver, items, wordOut,
-                    catalog: AnchorFieldCatalog.All);
-            }
-            else if (useMultiBatch)
-            {
-                // 多批：每批一个 BatchSection（BatchResolver 注入项目级 + 本批批次级字段）
-                var sections = new List<BatchSection>();
-                int anchorIndex = 0;
-                foreach (var br in result.BatchResults)
-                {
-                    // 本批 batch 级字段 = 项目级 ∪ 本批 batch_user_inputs ∪ {batch_id}
-                    var batchLevel = new Dictionary<string, string>(userInputs);
-                    if (batchUserInputs.TryGetValue(br.BatchId, out var bui))
-                    {
-                        foreach (var kv in bui) batchLevel[kv.Key] = kv.Value;
-                    }
-                    batchLevel["batch_id"] = br.BatchId;
-
-                    var batchRowResolvers = new List<IFieldResolver>();
-                    foreach (var rw in br.RowsWithResults)
-                    {
-                        anchorIndex++;
-                        batchRowResolvers.Add(new AnchorRowResolver(
-                            rw.Input, rw.Result, br.Params, batchLevel,
-                            anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir,
-                            batchId: br.BatchId));
-                    }
-
-                    sections.Add(new BatchSection(
-                        new DictionaryResolver(batchLevel),
-                        batchRowResolvers));
-                }
-                var globalResolver = new DictionaryResolver(userInputs);
-                genResult = ReportGenerator.GenerateMultiBatch(
-                    wordTemplatePath, globalResolver, sections, wordOut,
-                    catalog: AnchorFieldCatalog.All);
-            }
-            else
-            {
-                // 单批兼容：把 batch_user_inputs 里第一个有值的 grouting_date 灌入项目级
-                var mergedInputs = new Dictionary<string, string>(userInputs);
-                foreach (var bui in batchUserInputs.Values)
-                {
-                    if (bui.TryGetValue("grouting_date", out var v)
-                        && !string.IsNullOrWhiteSpace(v)
-                        && !mergedInputs.ContainsKey("grouting_date"))
-                    {
-                        mergedInputs["grouting_date"] = v;
-                        break;
-                    }
-                }
-                var projectResolver = new DictionaryResolver(mergedInputs);
-                var rowResolvers = new List<IFieldResolver>();
-                int anchorIndex = 0;
-                foreach (var br in result.BatchResults)
-                {
-                    foreach (var rw in br.RowsWithResults)
-                    {
-                        anchorIndex++;
-                        rowResolvers.Add(new AnchorRowResolver(
-                            rw.Input, rw.Result, br.Params, mergedInputs,
-                            anchorIndex: anchorIndex,
-                            curveImageDir: curveImageDir,
-                            batchId: br.BatchId));
-                    }
-                }
-                genResult = ReportGenerator.Generate(
-                    wordTemplatePath, projectResolver, rowResolvers, wordOut,
-                    catalog: AnchorFieldCatalog.All);
-            }
+            var genResult = AnchorWordTable.GenerateReport(
+                wordTemplatePath, wordOut, result, userInputs, batchUserInputs, curveImageDir, sectionNo);
 
             wordOutputs.Add(wordOut);
             wordUnknownKeys.AddRange(genResult.UnknownKeys);
@@ -433,29 +318,6 @@ public static class AnchorHandlers
         return d;
     }
 
-    /// <summary>
-    /// 检测模板里有没有指定 marker 字符串（用来决定走哪条 ReportGenerator 路径）。
-    /// 解析失败时 fallback 到 false——真要坏，ReportGenerator 会给出明确错误。
-    /// </summary>
-    private static bool TemplateHasMarker(string templatePath, string marker)
-    {
-        try
-        {
-            using var doc = WordprocessingDocument.Open(templatePath, false);
-            var body = doc.MainDocumentPart?.Document?.Body;
-            return body?.InnerText.Contains(marker) ?? false;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"[anchor.run] 探测 marker {marker} 失败，按未命中处理：{ex.Message}");
-            return false;
-        }
-    }
-
-    private static bool TemplateHasBatchMarker(string templatePath)
-        => TemplateHasMarker(templatePath, "[[批次]]");
-
     private static string SafeFileName(string s)
     {
         foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
@@ -480,13 +342,6 @@ public static class AnchorHandlers
             result[prop.Name] = AnchorParams.Create(p, lf, la, a, e);
         }
         return result;
-    }
-
-    private class DictionaryResolver : IFieldResolver
-    {
-        private readonly IReadOnlyDictionary<string, string> _v;
-        public DictionaryResolver(IReadOnlyDictionary<string, string> v) => _v = v;
-        public object? GetValue(string key) => _v.TryGetValue(key, out var s) ? s : null;
     }
 
     private static string SafeSheetName(string name)

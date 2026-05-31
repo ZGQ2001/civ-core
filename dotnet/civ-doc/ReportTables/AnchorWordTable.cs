@@ -44,6 +44,33 @@ public static class AnchorWordTable
     };
 
     /// <summary>
+    /// 单类型便捷出报告（report.run_from_result / anchor.run 共用）：把结果建成逐根 表2.4
+    /// 插进模板的 {{表格:锚杆}} 占位符、填薄壳。多检测类型组装走 DocxReportAssembler.Generate。
+    /// </summary>
+    public static AssembleResult GenerateReport(
+        string templatePath,
+        string outputPath,
+        AnchorWorkbookResult result,
+        IReadOnlyDictionary<string, string> userInputs,
+        IReadOnlyDictionary<string, Dictionary<string, string>> batchUserInputs,
+        string? curveImageDir,
+        string sectionNo)
+    {
+        var detectionLabel = DetectionLabel(userInputs);
+        var section = new ReportSection(
+            TablePlaceholder,
+            mp => BuildSection(result, userInputs, batchUserInputs, curveImageDir, sectionNo, detectionLabel, mp));
+        return DocxReportAssembler.Generate(
+            templatePath, outputPath, new[] { section }, userInputs, AnchorFieldCatalog.All);
+    }
+
+    /// <summary>表标题里的检测项目名：user_inputs 的 inspection_item / 检测项目，缺省锚杆抗拔（验收）。</summary>
+    public static string DetectionLabel(IReadOnlyDictionary<string, string> userInputs)
+        => userInputs.TryGetValue("inspection_item", out var a) && !string.IsNullOrWhiteSpace(a) ? a
+         : userInputs.TryGetValue("检测项目", out var b) && !string.IsNullOrWhiteSpace(b) ? b
+         : "锚杆抗拔力（验收）检测";
+
+    /// <summary>
     /// 把整份结果建成「逐根一张表2.4」section：每根一个 AnchorRowResolver 填值嵌图，
     /// 标题按总根数决定单表 / 多表编号。三处共用（report.assemble / run_from_result / anchor.run）。
     /// </summary>

@@ -1,0 +1,560 @@
+\documentclass[11pt, a4paper, UTF8]{ctexart}
+
+% ==================== 宏包 ==================== ==================== ==================== ==================== ====================
+
+% ==================== 页面布局与基础样式 ====================
+\usepackage{geometry}     % 页面边距与排版布局控制（精准设定封面、主表及正文的上下左右边距）
+\usepackage{fontspec}     % 字体配置核心宏包（用于关联中英文系统字体，以及加载外部钢筋特殊字体）
+\usepackage{enumitem}     % 列表样式自定义（精细控制“注意事项”等编号列表的缩进、悬挂及行间距）
+\usepackage{fancyhdr}     % 页眉页脚样式定制（用于生成报告专用的加粗页眉底线、双行文字及自定义页脚）
+\usepackage{setspace}     % 行间距控制宏包（用于严格执行报告正文 1.5 倍行距等特定的排版规范）
+
+% ==================== 表格与数据排版 ====================
+\usepackage{tabularray}   % 现代高效表格（整个架构的核心，用于处理复杂嵌套主表与单根结果表，防错位能力极强）
+\usepackage{longtable}    % 传统跨页长表格（为多数据量锚杆检测结果汇总表的跨页断行提供底层或传统后备支持）
+\usepackage{caption}      % 图表标题格式化（控制“表2.4”等标题的字号、两汉字宽度空格以及居中对齐）
+
+% ==================== 图形、颜色与特殊符号 ====================
+\usepackage{graphicx}     % 外部图片插入宏包（用于在正文或附图中引入现场检测照片、电子签章等）
+\usepackage{tikz}         % 强大的矢量绘图工具（用于免图源原生绘制 P-S 荷载-位移曲线，以及高精度像素级页脚虚线）
+\usepackage{xcolor}       % 文本与图形颜色管理（用于 TikZ 曲线着色、特殊状态文本高亮或表格线变色）
+\usepackage{fontawesome5} % 矢量图标库（提供各种修饰性、功能性小图标，如复选框、警告标识等）
+
+% ==================== 文本增强与公式 ====================
+\usepackage{amsmath}      % 数学公式核心宏包（提供 \text、\mathrm 及复杂符号支持，解决编译报错的核心）
+\usepackage{ulem}         % 下划线增强宏包（检测报告中下划线填空、签字留白处的必备排版工具）
+\usepackage{lastpage}     % 自动获取文档总页数（配合 fancyhdr 动态渲染页眉中“共 X 页”的最后一页字段）
+
+% ==================== ==================== ==================== ==================== ==================== ==================== 
+
+% 页面边距
+\geometry{top=42mm, bottom=28mm, left=25mm, right=25mm, headheight=100pt}
+
+% 字体
+\setCJKmainfont{SimSun}[AutoFakeBold=true]
+\setCJKsansfont{SimHei}[AutoFakeBold=true]
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+% ==================== 钢筋符号字体 ====================
+
+\newfontfamily\rebarfont[Path=../fonts/, Extension=.ttf]{SJQY1}
+\newcommand{\rebarA}{\hspace{0em}{\rebarfont A}\hspace{0em}}    % 一级钢 (HPB300)
+\newcommand{\rebarB}{\hspace{0em}{\rebarfont B}\hspace{0em}}    % 二级钢 (HRB335)
+\newcommand{\rebarC}{\hspace{0em}{\rebarfont C}\hspace{0em}}    % 三级钢 (HRB400)
+\newcommand{\rebarD}{\hspace{0em}{\rebarfont D}\hspace{0em}}    % 四级钢 (HRB500)
+
+\newcommand{\SJS}{北京市建设工程质量第三检测所有限责任公司} % 公司名称（全称）
+% ==================== 【报告变量编辑区】====================
+
+% —— 报告基本信息 ——
+\newcommand{\ReportYear}{2026} % 封面年份
+\newcommand{\ReportMonth}{01} % 封面月份
+\newcommand{\ReportDay}{02} % 封面日期
+\newcommand{\ReportNo}{0973} % 报告编号
+\newcommand{\ReportOversee}{建} % 监管单位 [建] 表示建委 [交] 表示交通委
+\newcommand{\ReportModel}{G} % 报告类型 G代表检测 I代表鉴定
+
+% —— 项目信息 ——
+\newcommand{\ProjectName}{门头沟区永定河沿线环境整治提升（项目）（一标段）}
+\newcommand{\ClientName}{北京市门头沟区市政市容服务中心}
+\newcommand{\InspType}{一般委托}
+\newcommand{\InspLocation}{北京市门头沟区}
+\newcommand{\InspItem}{锚杆抗拔力试验}
+\newcommand{\ConstructUnit}{北京市市政二建设工程有限责任公司}
+\newcommand{\DesignUnit}{中外建华诚工程技术集团有限公司}
+\newcommand{\SupervUnit}{北京新森智业工程咨询有限公司}
+\newcommand{\SampleBasis}{委托方指定}
+\newcommand{\MethodBasis}{《岩土锚杆与喷射混凝土支护工程技术规范》（GB 50086-2015）}
+\newcommand{\JudgeBasis}{《岩土锚杆与喷射混凝土支护工程技术规范》（GB 50086-2015）}
+
+% 检测仪器
+\newcommand{\InstrumentList}{%
+    ZP-30T+M230314 \quad 锚杆拉力计\\
+    （0$\sim$50）mm+11050653 \quad 百分表 
+}
+
+\newcommand{\InspStartDate}{2025年06月20日}
+\newcommand{\InspEndDate}{2025年12月30日}
+\newcommand{\InspEnv}{/}
+\newcommand{\InspPersonnel}{李瑾、李红月、卓越}
+
+% 检测结论
+\newcommand{\Conclusion}{%
+    \hspace*{2\ccwd}本次对\ProjectName{}的209根锚杆进行了锚杆抗拔力检测，
+    试验结果为合格。检测结果详见表2.4-1$\sim$表2.4-209。
+    }
+
+% 签章占位
+\newcommand{\Remarks}{/}
+
+% —— 正文描述 ——
+\newcommand{\ProjectOverview}{ %工程概况
+
+本项目为门头沟区永定河沿线环境整治提升项目（二期）（一标段），
+主要针对九龙路南侧一号地块及相关区块（如区块四、区块七等）进行山体护坡治理，
+护坡结构主要采用混凝土格构梁。
+
+根据工程及设计资料，该项目边坡的岩土性状主要为山石杂土，
+设计采用的锚杆材料为\rebarC32（HRB400）钢筋，钻孔直径要求为90mm，钻孔倾角为60°。
+锚杆设计钻孔深度基准为8.5m，
+其中岩层较浅区域采用8m锚杆（有效段由0.5m自由段和7.5m锚固段组成），
+杂填土区域采用12m锚杆。
+锚孔注浆材料强度等级为M7.5，
+要求采用灰砂比例为1:0.5（重量比）的水泥砂浆，水灰比需控制在0.4~0.5之间。
+
+受\ClientName{}委托，\SJS{}对\ProjectName{}进行了\InspItem{}检测。
+设计要求锚杆的轴向抗拉力应≥150kN。本次检测的锚杆设计参数见表1.1。
+
+}
+
+\newcommand{\MethodDesc}{ % 检测方法
+
+    依据\MethodBasis{}要求，对锚杆施加抗拔力进行检测。
+    当符合下列要求时，应判定验收合格：
+
+    （1）最大试验荷载作用下，在规定的持荷时间内锚杆的位移增量应小于1.0mm，
+    不能满足时，则增加持荷时间至60min时，锚杆累计位移增量应小于2.0mm；
+
+    （2）压力型锚杆或压力分散型锚杆的单元锚杆在最大试验荷载作用下所测得的弹性位移
+    应大于锚杆自由杆体长度理论弹性伸长值的90\%，
+    且应小于锚杆自由杆体长度理论弹性伸长值的110\%；
+
+    （3）拉力型锚杆或拉力分散型锚杆的单元锚杆在最大试验荷载作用下，
+    所测得的弹性位移应大于锚杆自由杆体长度理论弹性伸长值的90\%，
+    且应小于自由杆体长度与1/3锚固段之和的理论弹性伸长值。%
+
+}
+
+\newcommand{\SamplingBasis}{
+
+    依据《岩土锚杆与喷射混凝土支护工程技术规范》（GB 50086-2015）第12.1.19条规定
+    及委托方指定数量,
+    共对209根锚杆进行了单循环验收试验。
+
+}
+
+% 定义首列固定宽度分散对齐命令
+\newcommand{\spread}[1]{\makebox[2.8cm][s]{#1}}
+
+% ==================== 样式配置 ====================
+\ctexset{
+    section = {
+        format     = \zihao{-3}\songti\bfseries\centering, 
+        number     = \raisebox{-0.15ex}{\arabic{section}},
+        name       = {,},
+        aftername  = \hspace{0.5\ccwd}, 
+        beforeskip = 2\baselineskip,  
+        afterskip  = 1\baselineskip,  
+    },
+    subsection = {
+        format     = \zihao{4}\heiti\raggedright, 
+        number     = \raisebox{-0.15ex}{\arabic{section}.\arabic{subsection}},
+        name       = {,},
+        aftername  = \hspace{0.5\ccwd}, 
+        beforeskip = 1\baselineskip,  
+        afterskip  = 1\baselineskip,  
+    },
+    subsubsection = {
+        format     = \zihao{-4}\songti\bfseries\raggedright, 
+        number     = \raisebox{-0.15ex}{\arabic{section}.\arabic{subsection}.\arabic{subsubsection}},
+        name       = {,},
+        aftername  = \hspace{0.5\ccwd}, 
+        beforeskip = 1\baselineskip,  
+        afterskip  = 0.5\baselineskip, 
+    }
+}
+
+% —— 正文段落与字体全局设置 ——
+\renewcommand{\normalsize}{\zihao{-4}} % 全局默认字体大小设为小四
+\setlength{\parindent}{2\ccwd}         % 首行缩进严格设定为2个汉字字符
+\setlength{\parskip}{0pt}              % 段间距设为0
+\setstretch{1.5}                       % 行间距设定为1.5倍（需引入 setspace 宏包）
+
+% —— 图表标题格式设置 ——
+\DeclareCaptionFont{songti}{\songti}
+
+% 定义一个自定义的标签分隔符（两个汉字字符宽度）
+\DeclareCaptionLabelSeparator{twospaces}{\hspace*{2\ccwd}}
+
+\captionsetup{
+    font={songti, small},        % 现在 caption 认识 songti 了，对应五号字
+    labelsep=twospaces,          % 编号与标题之间空2格
+    justification=centering,     % 对中放置
+    singlelinecheck=false,
+    figurename=图,               % 强制叫“图”
+    tablename=表                 % 强制叫“表”
+}
+
+
+% ==================== 文档开始 ============================================================================================================================================================================================================================
+\begin{document}
+
+% 针对封面和注意事项页独立的页边距
+% 上2.5cm、下2.5cm、左3.0cm、右2.0cm
+\newgeometry{top=25mm, bottom=25mm, left=30mm, right=20mm}
+
+% ==================== 第一页：封面 ====================
+\begin{titlepage}
+    \pagestyle{empty}
+    
+    % —— 顶部绝对定位 ——
+    % 字顶端距页面上边缘60mm（已考虑初号字自身高度偏移）
+    \vspace*{20mm}
+
+    \begin{center}
+        {\heiti\zihao{0} 检\hspace{0.5\ccwd}测\hspace{0.5\ccwd}报\hspace{0.5\ccwd}告}
+    \end{center}
+
+    % 核心修改：大幅缩减大标题与报告编号之间的垂直间距，消除松散感
+    \vspace{0mm}
+
+    \begin{center}
+        {\songti\zihao{3} 京\ReportOversee{}质检 J\raisebox{-0.5ex}{\zihao{5}\rmfamily 3}—\ReportModel{} 字 \ReportYear{} 第（\ReportNo{}）号}
+    \end{center}
+
+    % 报告编号与中部表格之间的间距，保持与原件一致的视觉留白
+    \vspace{40mm} 
+
+    \begin{center}
+        \begin{tabular}{@{} l @{\hspace{0.2em}} l @{}}
+            {\heiti\zihao{3} 工\hspace{0.5\ccwd}程\hspace{0.5\ccwd}名\hspace{0.5\ccwd}称：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \ProjectName \par
+                    \vspace{1mm} 
+                    \hrule height 1.5pt
+                } \\[2mm]
+            {\heiti\zihao{3} 委\hspace{0.5\ccwd}托\hspace{0.5\ccwd}单\hspace{0.5\ccwd}位：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \ClientName \par
+                    \vspace{2mm}
+                    \hrule height 1.5pt
+                } \\[1mm]
+            {\heiti\zihao{3} 检\hspace{0.5\ccwd}测\hspace{0.5\ccwd}类\hspace{0.5\ccwd}别：} &
+                \parbox[b]{11.5cm}{
+                    \centering\kaishu\zihao{3} \InspType \par
+                    \vspace{2mm}
+                    \hrule height 1.5pt
+                } \\
+        \end{tabular}
+    \end{center}
+
+    \vfill
+    
+    % —— 底部落款与日期绝对定位 ——
+    \begin{center}
+        {\heiti\zihao{3} \SJS{}} \\[15mm] % 缩减公司名与日期的垂直间距，对应Word中的紧凑行距
+        {\heiti\zihao{3} \ReportYear{} 年 \ReportMonth{} 月 \ReportDay{} 日}
+    \end{center}
+    
+    % 字体下端距页面下边缘42mm
+    \vspace*{20mm}
+\end{titlepage}
+
+\clearpage
+% ==================== 第二页：注意事项 ====================
+
+\pagestyle{empty}
+
+\begin{center}
+    \vspace*{0mm}
+    {\heiti\zihao{2}\bfseries 注\quad 意\quad 事\quad 项}
+    \vspace{15mm}
+\end{center}
+
+\begin{enumerate}[label=\arabic*., itemsep=1.8ex, leftmargin=2.0em]
+    \zihao{-3}
+    \item 本报告无“\SJS{}”检测专用章无效。
+    \item 复制本报告无重新加盖“\SJS{}”检测专用章无效。
+    \item 报告无主检人、审核人、批准人签字无效。
+    \item 本报告涂改增删无效。
+    \item 委托检验仅对来样负责。
+    \item 未经本所书面批准，不得将本报告作为广告宣传使用。
+    \item 若对本报告有异议，应于本报告发出之日起 15 日内向检测单位提出，逾期不受理。
+\end{enumerate}
+
+\vfill
+
+\begin{flushleft}
+    \zihao{-3}
+    检测单位：\SJS{} \\
+    地\qquad 址：北京市西城区百万庄大街3号 \\
+    邮\qquad 编：100037 \\
+    电\qquad 话：010-88385491\qquad 010-88378878（管理室）\\
+    传\qquad 真：010-88378878
+\end{flushleft}
+
+% 将页边距恢复为全局设置（顶42mm，底30mm，左25mm，右25mm），保证后续正文及表格的排版不受封面影响
+\restoregeometry
+
+\clearpage
+
+% ==================== 页眉页脚 ====================
+\pagenumbering{arabic}
+\pagestyle{fancy}
+\fancyhf{} % 清空默认页眉页脚
+
+% —— 页眉布局 ——
+\fancyhead[C]{%
+    \begin{center}
+        \vspace*{8.5ex} % 整体适度下沉，避免顶出页边缘
+        \songti\zihao{-3} \SJS{}\\[0.5ex]
+        工程质量检测报告
+    \end{center}
+    \vspace{-1ex} % 微调页眉内容与正文之间的垂直间距，保持与原件一致的紧凑感
+    {\songti\zihao{-3}%
+    % makebox 强制占满整行，内部使用 \hfill 把左右两端死死推到页边距边界
+    \makebox[\textwidth][s]{%
+        京\ReportOversee{}质检 J$_3$—\ReportModel{}字\ReportYear{}第（\ReportNo{}）号%
+        \hfill
+        第 \thepage\ 页\enspace 共 \pageref{LastPage}\ 页%
+    }}%
+    \vspace{0ex}% 横线与文字的微小间隙
+}
+
+\fancyfoot[C]{\songti\zihao{-3} \SJS{}}
+
+\renewcommand{\headrulewidth}{2.5pt} % 页眉底线粗细
+
+% —— 核心修改：自定义超高密度、极细点状虚线页脚线 ——
+\renewcommand{\footrule}{
+    \vspace{-3mm} % 向上微调，拉开虚线与下方公司名称的垂直间距   
+    \hbox to \headwidth{\cleaders\hbox to 0.08em{\hss\rule[0pt]{0.5pt}{0.5pt}\hss}\hfill}%
+    \vspace{0mm} % 调整虚线本身占据的物理高度
+}
+
+% ==================== 第三页：工程质量检测报告主表 ====================
+\vspace*{-8mm} %表格到页眉底部线的距离
+
+\noindent
+{\zihao{-4} 
+\begin{tblr}{
+    width   = \textwidth,
+    colspec = {Q[c,m,wd=2.0cm] X[c,m] Q[c,m,wd=2.0cm] X[c,m] Q[c,m,wd=2.2cm] X[c,m]},
+    hspan   = minimal, 
+    hlines     = {0.5pt, solid},
+    hline{1,Z} = {0.5pt, solid},
+    vlines     = {0.5pt, solid},
+    vline{1,Z} = {0pt},  % 最左(1)和最右(Z)的外围垂直线
+    rows       = {ht=1.2cm}, 
+    row{10}    = {ht=1.2cm}, 
+    row{13}    = {ht=2.8cm}, % 结论框
+    row{14}    = {ht=1.5cm},
+    row{15}    = {ht=1.5cm},
+}
+
+工程名称 & \SetCell[c=5]{l} \ProjectName{}     & & & & \\
+检测地点 & \SetCell[c=5]{l} \InspLocation{}    & & & & \\
+检测项目 & \SetCell[c=5]{l} \InspItem{}        & & & & \\
+施工单位 & \SetCell[c=5]{l} \ConstructUnit{}   & & & & \\
+设计单位 & \SetCell[c=5]{l} \DesignUnit{}      & & & & \\
+监理单位 & \SetCell[c=5]{l} \SupervUnit{}      & & & & \\
+抽样依据 & \SetCell[c=5]{l} \SampleBasis{}     & & & & \\
+方法依据 & \SetCell[c=5]{l} \MethodBasis{}     & & & & \\
+判定依据 & \SetCell[c=5]{l} \JudgeBasis{}      & & & & \\
+检测仪器 & \SetCell[c=5]{l} \InstrumentList{}  & & & & \\
+检测时间 & \SetCell[c=3]{l} \InspStartDate{}$\sim$\InspEndDate{} & & & 检测环境 & \InspEnv{} \\
+检测人员 & \SetCell[c=5]{l} \InspPersonnel{}   & & & & \\
+检测结论 & \SetCell[c=5]{l} \Conclusion{}      & & & & \\
+批准人   & &  审核人 & &  主检人 &    \\
+备注     & \SetCell[c=5]{l} \Remarks{}        & & & & \\
+
+\end{tblr}} % 表格结束
+
+\clearpage
+
+% ==================== 第四页起：正文 ====================
+
+\section{概况}
+
+\subsection{工程概况}
+
+\ProjectOverview{}
+
+
+\subsection{检测及判定依据}
+
+\MethodBasis{}
+
+\subsection{检测人员}
+
+\InspPersonnel{}
+
+（本页以下空白）
+
+\clearpage
+
+\subsection{检测仪器}
+
+\begin{center}
+
+
+
+{\zihao{5}
+\vspace{0.5ex}
+\noindent 表~1.4\quad 检测仪器
+
+\vspace{0.5ex}
+
+\begin{tblr}{
+    width      = \textwidth,
+    columns    = {co=1, c, m}, 
+    hlines     = {0.5pt, solid},
+    hline{1,Z} = {0.5pt, solid},
+    vlines     = {0.5pt, solid},
+    vline{1,Z} = {0pt},  
+}
+
+检测仪器名称   & 锚杆拉力计              &  \SetCell[c=2]{c}百分表                                           \\
+检测仪器编号   & ZP-30T+M230314          & \SetCell[c=2]{c}（0$\sim$50）mm+11050653                         \\
+检定证书编号   & JZ01250114200026                 & ZYJC-JC-JZ-C-2024-14253                  & JZ202508CD0017        \\
+仪器使用有效期 & 2025.01.14$\sim$2026.01.13    & 2024.08.30$\sim$2025.08.29     & 2025.08.07$\sim$2026.08.06  \\
+检测精度       & 1\%F.S                  & \SetCell[c=2]{c}0.01mm                                           \\
+\end{tblr}}
+
+\end{center}
+
+%\subsection{检测环境}
+
+%\InspEnv{}
+
+
+% ==================== 第2章：检测项目 ====================
+\section{\InspItem}
+
+\subsection{检测方法}
+
+\MethodDesc{}
+
+（本页以下空白）
+
+\subsection{抽样依据}
+
+\SamplingBasis{}
+
+\subsection{判定依据}
+
+\hspace*{2\ccwd}依据\JudgeBasis{}及\MethodBasis{}进行判定。
+
+\subsection{检测结果}
+
+检测结果详见表~2.4-1$\sim$表~2.4-209。
+
+（本页以下空白）
+
+\clearpage
+
+% ==================== 2.4 单根锚杆抗拔力试验结果表 ====================
+\begin{center}
+{\zihao{5} 表 2.4-1 \quad MS-07-03-05 锚杆抗拔力试验结果表}
+\end{center}
+
+\vspace{-1.5ex}
+\noindent
+\zihao{5} 
+\begin{tblr}{
+    width = \textwidth,
+    colspec = {Q[c,m,wd=1.4cm,font=\heiti] X[c,m]},
+    hlines = {0.5pt, solid},
+    vlines = {0.5pt, solid}, 
+    vline{1,Z} = {0pt},
+    colsep = 0pt,
+    rowsep = 0pt,
+}
+% ——————————————————————————————————————————————————————————————————————
+% 板块一：委托方提供的参数
+% ——————————————————————————————————————————————————————————————————————
+{委托\\方提\\供的\\锚杆\\参数} & 
+    \begin{tblr}{
+        width = \linewidth,
+        colspec = {X[c,m] X[c,m] X[c,m] X[c,m] X[c,m]},
+        hlines = {0.5pt, solid},
+        vlines = {0.5pt, solid},
+        hline{1,Z} = {0pt}, 
+        vline{1,Z} = {0pt},
+        rows = {ht=0.8cm},  
+        colsep = 2pt,
+    }
+    锚杆编号 & 杆体材料规格 & 杆体弹模(GPa) & 自由段长度(m) & 锚固段长度(m) \\
+    MS-07-03-05 & $4\times7\mathrm{s}\Phi15.2$钢绞线 & $1.95\times10^5$ MPa & 10.0m & 7.5m \\
+    轴向拉力设计值(kN) & 锁定荷载(kN) & 钻孔直径(mm) & 钻孔倾角 & 岩土性状 \\
+    655.0 & 370 & 200 & 15° & 砂卵石 \\
+    注浆材料强度等级 & 注浆材料配合比 & 注浆方式 & 灌浆压力(MPa) & 灌浆日期 \\
+    M20 & 水灰比 0.45$\sim$0.5 & 二次注浆 & 2.5$\sim$3 & 2014.6.28 \\
+    \end{tblr} \\
+
+% ——————————————————————————————————————————————————————————————————————
+% 板块二：荷载-位移曲线图外
+% ——————————————————————————————————————————————————————————————————————
+{荷载\\$\sim$\\位移\\曲线\\图} & 
+    \begin{minipage}{\linewidth}
+        \vspace{2mm} % 适度增加上下留白，提高品相
+        \centering
+        % 核心修改：移除 TikZ 绘图和 LaTeX 标题，整体替换为外部图片。
+        % width 设为 0.9\linewidth 可以留出适度呼吸空间。
+        \includegraphics[width=0.9\linewidth]{img/1_荷载位移曲线.png} 
+        \vspace{2mm}
+    \end{minipage} \\
+
+% ——————————————————————————————————————————————————————————————————————
+% 板块三：试验数据
+% ——————————————————————————————————————————————————————————————————————
+{试验\\数据} & 
+    \begin{tblr}{
+        width = \linewidth,
+        colspec = {X[1.2,c,m] *{7}{X[c,m]}},
+        hlines = {0.5pt, solid},
+        vlines = {0.5pt, solid},
+        hline{1,Z} = {0pt},
+        vline{1,Z} = {0pt},
+        rows = {ht=0.58cm}, 
+        colsep = 2pt,
+    }
+    \SetCell[r=2]{c,m} {荷载\\(kN)} & 0.1Nt & 0.5Nt & 0.75Nt & 1.0Nt & 1.2Nt & 0.1Nt & 锁定荷载 \\
+     & 65.5  & 327.5 & 419.3  & 655.0 & 786.0 & 65.5  & 370.0 \\
+    {位移\\(mm)} & 0.00  & 22.00 & 31.12  & 52.34 & 67.28 & 14.24 & 35.78 \\
+    \end{tblr} \\
+
+% ——————————————————————————————————————————————————————————————————————
+% 板块四：试验结果及判定
+% ——————————————————————————————————————————————————————————————————————
+{试验\\结果\\及判\\定} & 
+    \begin{tblr}{
+        width = \linewidth,
+        colspec = {X[1.8,c,m] X[1.2,c,m] X[1.5,c,m] X[1.5,c,m] X[1,c,m]},
+        hlines = {0.5pt, solid},
+        vlines = {0.5pt, solid},
+        hline{1,Z} = {0pt},
+        vline{1,Z} = {0pt},
+        colsep = 2pt,
+    }
+    \SetCell[c=2]{c,m} 测试项目 & & 实测值 & 允许值 & 判定 \\
+    \SetCell[c=2]{c,m} 最大试验荷载下弹性位移量 & & 53.04mm & {上限:3.36\\下限:0.50} & \SetCell[r=3]{c,m} 合格 \\
+    \SetCell[r=2]{c,m} {最后一级荷载\\锚头蠕变量} & 1$\sim$10min & 0.69mm & 1.0mm & \\ 
+     & 6$\sim$60min & / & 2.0mm & \\                
+    \end{tblr} \\
+\end{tblr}
+
+
+
+% ==================== 第3章：附图 ====================
+%\section{附图}         % 无附图可注释掉 
+%{\zihao{5}
+%\begin{center}
+%    \IfFileExists{fig_placeholder.png}{%
+%        \includegraphics[width=0.85\textwidth]{fig_placeholder.png}%
+%    }{%
+%        \fbox{\parbox{0.85\textwidth}{%
+%            \centering\vspace{2.5cm}
+%            【现场检测照片占位符】
+%            \vspace{2.5cm}%
+%        }}%
+%    }
+%    \vspace{1ex} \\
+%    图~3-1\quad 现场检测示意图
+%\end{center}
+%}
+
+\vspace{2.5mm}
+%%\zihao{-4}（以下空白）
+
+\end{document}

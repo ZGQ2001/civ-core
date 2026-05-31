@@ -23,6 +23,8 @@ public static class CoatingColumns
     public const string MemberType = "构件类型";
     public const string DesignThickness = "设计厚度";
     public const string SectionNo = "截面号";
+    /// <summary>国标膨胀型（薄/超薄）的索引列名：5 个测点而非截面，故叫「测点号」。</summary>
+    public const string PointNo = "测点号";
     public const string CoatingCategory = "涂层类型";
 
     // 「类型预设」专属列

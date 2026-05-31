@@ -1,8 +1,8 @@
 // 防火涂层「测点数据」宽表读取（expand 生成、用户填数字的那些表）。
 //
 // 每个构件类型一张 sheet：「测点数据-梁」「测点数据-柱」… 列头按该类型测点面名。
-// 列：批次 / 构件位置 / 构件类型 / 涂层类型(忽略,由设计厚度重算) / 设计厚度 / 截面号 / <测点面名列…>。
-// 截面号右侧各列为测点（非空读入，列头=面名）。按(批次,构件位置)跨 sheet 分组，空白单元格向上继承
+// 列：批次 / 构件位置 / 构件类型 / 涂层类型(忽略,由设计厚度重算) / 设计厚度 / 截面号(国标膨胀型为「测点号」) / <测点列…>。
+// 索引列右侧各列为测点（非空读入，列头=面名 或 第一次/二次/三次）。按(批次,构件位置)跨 sheet 分组，空白单元格向上继承
 // （容忍合并/手工留空）。设计厚度按构件取首个非空。
 
 using ClosedXML.Excel;
@@ -108,7 +108,9 @@ public static class CoatingExcelReader
         int? batchCol = CoatingSheetUtil.TryColumn(map, batchIdColumn);
         int locCol = CoatingSheetUtil.RequireColumn(map, CoatingColumns.MemberLocation, "构件位置列");
         int designCol = CoatingSheetUtil.RequireColumn(map, CoatingColumns.DesignThickness, "设计厚度列");
-        int sectionCol = CoatingSheetUtil.RequireColumn(map, CoatingColumns.SectionNo, "截面号列");
+        // 索引列：厚型/地标=「截面号」，国标膨胀型=「测点号」，两者皆认。
+        int sectionCol = CoatingSheetUtil.RequireAnyColumn(
+            map, new[] { CoatingColumns.SectionNo, CoatingColumns.PointNo }, "截面号/测点号列");
         int? typeCol = CoatingSheetUtil.TryColumn(map, CoatingColumns.MemberType);
 
         int lastCol = ws.Row(1).LastCellUsed()?.Address.ColumnNumber ?? 0;
@@ -120,7 +122,7 @@ public static class CoatingExcelReader
         }
         if (pointCols.Count == 0)
             throw new ArgumentException(
-                $"sheet「{ws.Name}」在「截面号」右侧没有测点列——请重新展开模板");
+                $"sheet「{ws.Name}」在「截面号/测点号」右侧没有测点列——请重新展开模板");
 
         string curBatch = DefaultBatchId, curLoc = "", curType = "";
         double? curDesign = null;
@@ -143,7 +145,7 @@ public static class CoatingExcelReader
             var design = CoatingSheetUtil.ReadOptDouble(ws.Cell(r, designCol), $"sheet「{ws.Name}」行 {r} 设计厚度");
             if (design.HasValue) curDesign = design;
 
-            int sectionNo = CoatingSheetUtil.ReadOptInt(ws.Cell(r, sectionCol), $"行 {r} 截面号") ?? 0;
+            int sectionNo = CoatingSheetUtil.ReadOptInt(ws.Cell(r, sectionCol), $"行 {r} 截面号/测点号") ?? 0;
 
             var rowPoints = new List<(string Name, double Val)>();
             foreach (var (col, name) in pointCols)

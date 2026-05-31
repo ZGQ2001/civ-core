@@ -35,6 +35,14 @@ internal static class CoatingSheetUtil
         return c;
     }
 
+    /// <summary>多个候选列名取首个命中（如索引列「截面号」厚型/地标用、「测点号」国标膨胀型用）。</summary>
+    public static int RequireAnyColumn(Dictionary<string, int> map, string[] names, string description)
+    {
+        foreach (var name in names)
+            if (map.TryGetValue(CoatingColumns.NormalizeHeader(name), out int c)) return c;
+        throw new ArgumentException($"缺少{description}（列名应为「{string.Join("」或「", names)}」）");
+    }
+
     /// <summary>读数字单元格，容错去单位后缀（如 "24mm" → 24）；空返回 null。</summary>
     public static double? ReadOptDouble(IXLCell cell, string what)
     {

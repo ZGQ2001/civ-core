@@ -6,9 +6,10 @@
 //   设计厚度：清单填了用清单；否则类型预设默认。
 //
 // 布局按 标准 × 涂层类型 分两种：
-//   国标 + 膨胀型(薄/超薄) → 5 处×3 点（参照 GB/T 50621 §12 防腐法），sheet 名「测点数据-<类型>-膨胀型」。
-//   其余（国标厚型 / 地标任意）→ 截面×面（测点列=面名），sheet 名「测点数据-<类型>」。
-// 同类型混涂层类型时拆两张 sheet（列头不同）。测点格留空待用户填数字。
+//   国标 + 膨胀型(薄/超薄) → 5 测点×3 次（涂层测厚仪，索引列「测点号」1~5，列头 第一次/第二次/第三次），
+//                            sheet 名「测点数据-<类型>-膨胀型」。
+//   其余（国标厚型 / 地标任意）→ 截面×面（索引列「截面号」，测点列=面名），sheet 名「测点数据-<类型>」。
+// 同类型混涂层类型时拆两张 sheet（列头不同）。测点格留空待用户填数字，整块按构件分色。
 
 using ClosedXML.Excel;
 using CivCore.Doc.Server;
@@ -21,11 +22,11 @@ public static class CoatingTemplateExpander
 
     private record Resolved(CoatingMemberSpec Spec, string Type, CoatingTypePreset Preset, int Sections, double Design);
 
-    /// <summary>国标膨胀型固定 5 处（GB/T 50621 §12.1.3：同一构件 5 处）。</summary>
+    /// <summary>国标膨胀型固定 5 个测点（GB 50205-2020 §13.4.3：薄/超薄涂层测厚仪 5 测点）。</summary>
     private const int FivePointSections = 5;
-    /// <summary>5 处×3 点的 3 个测点列名（每处 3 点相距 50mm，不分构件面）。</summary>
-    private static readonly string[] FivePointHeaders = { "点1", "点2", "点3" };
-    /// <summary>5 处×3 点 sheet 名后缀：测点数据-{类型}-膨胀型。</summary>
+    /// <summary>每个测点用涂层测厚仪测 3 次取平均（非空间 3 点，是重复读数）。</summary>
+    private static readonly string[] FivePointHeaders = { "第一次", "第二次", "第三次" };
+    /// <summary>5 测点×3 次 sheet 名后缀：测点数据-{类型}-膨胀型。</summary>
     private const string ExpansionSuffix = "膨胀型";
 
     public static ExpandResult Expand(
@@ -84,7 +85,7 @@ public static class CoatingTemplateExpander
             string sheetName = SafeSheetName(baseName);
             var ws = wb.Worksheets.Add(sheetName);
             string[] pointHeaders = key.FivePoint ? FivePointHeaders : byGroup[key][0].Preset.PointPositions;
-            WriteGrid(ws, byGroup[key], pointHeaders);
+            WriteGrid(ws, byGroup[key], pointHeaders, key.FivePoint);
             written.Add(sheetName);
         }
 
@@ -191,12 +192,17 @@ public static class CoatingTemplateExpander
 
     // ── 写测点数据网格 ──
 
-    private static void WriteGrid(IXLWorksheet ws, List<Resolved> members, string[] pointHeaders)
+    /// <summary>相邻构件交替的两种行底色（浅蓝 / 白），让一构件 N 行成块、邻构件易区分。</summary>
+    private static readonly XLColor BandColor = XLColor.FromHtml("#DDEBF7");
+
+    private static void WriteGrid(IXLWorksheet ws, List<Resolved> members, string[] pointHeaders, bool fivePoint)
     {
+        // 膨胀型索引列叫「测点号」（5 测点），其余叫「截面号」。
+        string indexHeader = fivePoint ? CoatingColumns.PointNo : CoatingColumns.SectionNo;
         var headers = new List<string>
         {
             CoatingColumns.Batch, CoatingColumns.MemberLocation, CoatingColumns.MemberType,
-            CoatingColumns.CoatingCategory, CoatingColumns.DesignThickness, CoatingColumns.SectionNo,
+            CoatingColumns.CoatingCategory, CoatingColumns.DesignThickness, indexHeader,
         };
         headers.AddRange(pointHeaders);
         for (int c = 0; c < headers.Count; c++)
@@ -209,9 +215,11 @@ public static class CoatingTemplateExpander
         }
 
         int row = 2;
+        int memberIdx = 0;
         foreach (var m in members)
         {
             var category = CoatingStandards.Classify(m.Design).ToString();
+            int memberStart = row;
             for (int s = 1; s <= m.Sections; s++)
             {
                 ws.Cell(row, 1).Value = m.Spec.BatchId;
@@ -223,6 +231,10 @@ public static class CoatingTemplateExpander
                 // 7..(6+faces) 测点格留空待填
                 row++;
             }
+            // 按构件分色：偶数构件整块上浅蓝，奇数构件留白 → 相邻构件一眼分清。
+            if (memberIdx % 2 == 0 && row > memberStart)
+                ws.Range(memberStart, 1, row - 1, headers.Count).Style.Fill.BackgroundColor = BandColor;
+            memberIdx++;
         }
 
         var range = ws.Range(1, 1, row - 1, headers.Count);

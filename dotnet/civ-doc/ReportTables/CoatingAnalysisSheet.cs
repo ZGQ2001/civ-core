@@ -1,6 +1,7 @@
 // 防火涂层「数据分析」sheet 写入：宽表版式（贴合用户现有「防火（钢梁/钢柱）」sheet）。
 //
 //   序号 | 构件位置 | 构件类型 | 涂层类型 | 截面号 | 测点1..K | 本段均值 | 构件均值 | 设计厚度 | 判定下限 | 合格率 | 最薄处 | 判定
+//   （国标全膨胀型时：「截面号」→「测点号」、「本段均值」→「测点均值」，测点列=第一次/二次/三次）
 //
 // 一个构件跨多行（每截面/处一行），构件级列按构件合并；测点列展开各面/各点实测值，本段均值=每行均值。
 // 厚度按涂层类型显示精度四舍五入（厚型 2 位/游标卡尺、薄型超薄型 3 位/涂层测厚仪）。
@@ -31,6 +32,15 @@ public static class CoatingAnalysisSheet
 
         var pointHeaders = ResolvePointHeaders(members, k);
 
+        // 国标 + 本批全膨胀型(薄/超薄)：索引列叫「测点号」、每行均值叫「测点均值」（对齐 5 测点×3 次模板）。
+        // 厚型/地标/混排退回「截面号」「本段均值」（单表头无法两栖）。
+        bool allExpansionNational =
+            standard == CoatingStandards.GB_50205_2020
+            && members.Count > 0
+            && members.All(m => CoatingStandards.IsExpansion(m.Result.Category));
+        string sectionHeader = allExpansionNational ? CoatingColumns.PointNo : CoatingColumns.SectionNo;
+        string rowMeanHeader = allExpansionNational ? "测点均值" : "本段均值";
+
         // 列布局：厚型/膨胀型统一一套列。本段均值=每行该截面/处均值；构件均值=全部测点均值；
         // 判定下限=厚型 设计×0.85（配最薄处）/ 膨胀型 设计×0.95兜底（配构件均值）；合格率厚型专用。
         const int colSerial = 1, colLoc = 2, colType = 3, colCat = 4, colSection = 5;
@@ -49,9 +59,9 @@ public static class CoatingAnalysisSheet
         headers[colLoc - 1] = "构件位置";
         headers[colType - 1] = "构件类型";
         headers[colCat - 1] = "涂层类型";
-        headers[colSection - 1] = "截面号";
+        headers[colSection - 1] = sectionHeader;
         for (int i = 0; i < k; i++) headers[colPointStart - 1 + i] = pointHeaders[i];
-        headers[colSecMean - 1] = "本段均值";
+        headers[colSecMean - 1] = rowMeanHeader;
         headers[colMean - 1] = "构件均值";
         headers[colDesign - 1] = "设计厚度";
         headers[colLimit - 1] = "判定下限";

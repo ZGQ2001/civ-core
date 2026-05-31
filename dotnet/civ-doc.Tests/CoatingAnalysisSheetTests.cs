@@ -83,4 +83,46 @@ public class CoatingAnalysisSheetTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void Write_国标全膨胀型_表头截面号改测点号_本段均值改测点均值()
+    {
+        // 国标 + 全超薄型（5 测点×3 次，列头 第一次/二次/三次）→ 索引列「测点号」、每行均值「测点均值」
+        var times = new[] { "第一次", "第二次", "第三次" };
+        var thk = new double[15];
+        for (int i = 0; i < 15; i++) thk[i] = 1.95;
+        var workbook = new CoatingWorkbookInput(
+            CoatingStandards.GB_50205_2020,
+            new[]
+            {
+                new CoatingBatchInput("B1", new[]
+                {
+                    Member("超薄柱1", "柱", 2, 5, times, thk), // 超薄型 合格（均值1.95 ≥ 下限max(1.9,1.8)=1.9）
+                }),
+            });
+        var result = CoatingCalculator.Calc(workbook);
+
+        string path = Path.Combine(Path.GetTempPath(), $"coating_sheet_{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            using (var wb = new XLWorkbook())
+            {
+                var ws = wb.Worksheets.Add("B1-数据分析");
+                CoatingAnalysisSheet.Write(ws, result.BatchResults[0], CoatingStandards.GB_50205_2020);
+                wb.SaveAs(path);
+            }
+
+            using var read = new XLWorkbook(path);
+            var sheet = read.Worksheet("B1-数据分析");
+
+            // 列(K=3)：序号|位置|类型|涂层类型|测点号|第一次|第二次|第三次|测点均值|构件均值|…
+            Assert.Equal("测点号", sheet.Cell(1, 5).GetString());
+            Assert.Equal("第一次", sheet.Cell(1, 6).GetString());
+            Assert.Equal("第三次", sheet.Cell(1, 8).GetString());
+            Assert.Equal("测点均值", sheet.Cell(1, 9).GetString());
+            Assert.Equal("超薄型", sheet.Cell(2, 4).GetString());
+            Assert.Equal("合格", sheet.Cell(2, 15).GetString());
+        }
+        finally { File.Delete(path); }
+    }
 }

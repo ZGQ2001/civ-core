@@ -11,14 +11,12 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
 using CivCore.Doc.Calc.Coating;
+using static CivCore.Doc.ReportTables.WordTableStyle;
 
 namespace CivCore.Doc.ReportTables;
 
 public static class CoatingWordTable
 {
-    private const string CjkFont = "SimSun";            // 宋体
-    private const string LatinFont = "Times New Roman";
-    private const string FontHalfPt = "21";             // 五号 = 10.5pt → 21 半磅
     private const int ExpansionLocations = 5;           // 膨胀型固定 5 处
 
     /// <summary>
@@ -48,7 +46,7 @@ public static class CoatingWordTable
     public static Table BuildExpansion(
         IReadOnlyList<(CoatingMemberInput Input, CoatingMemberResult Result)> members)
     {
-        var table = new Table(TableProps());
+        var table = new Table(PctTableProps());
 
         var headers = new List<string> { "序号", "构件编号" };
         for (int i = 1; i <= ExpansionLocations; i++) headers.Add($"(第{i}处)平均值(μm)");
@@ -89,7 +87,7 @@ public static class CoatingWordTable
         var category = members[0].Result.Category;
         string unit = UnitLabel(category);
 
-        var table = new Table(TableProps());
+        var table = new Table(PctTableProps());
 
         // 表头行 1：序号 | 构件位置 | 测点 |〔实测涂层厚度(unit) 跨 k 列〕| 平均值(unit)
         var h1 = new TableRow();
@@ -175,54 +173,4 @@ public static class CoatingWordTable
         CoatingVerdict.不合格 => "不合格",
         _ => "待判定",
     };
-
-    // ── OpenXML 构件 ──
-
-    private static TableProperties TableProps()
-    {
-        var borders = new TableBorders(
-            new TopBorder { Val = BorderValues.Single, Size = 4 },
-            new BottomBorder { Val = BorderValues.Single, Size = 4 },
-            new LeftBorder { Val = BorderValues.Single, Size = 4 },
-            new RightBorder { Val = BorderValues.Single, Size = 4 },
-            new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
-            new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 });
-
-        return new TableProperties(
-            new TableWidth { Type = TableWidthUnitValues.Pct, Width = "5000" },
-            borders,
-            new TableLayout { Type = TableLayoutValues.Autofit });
-    }
-
-    private static TableRow Row(IEnumerable<string> texts, bool bold)
-    {
-        var row = new TableRow();
-        foreach (var t in texts) row.AppendChild(Cell(t, bold));
-        return row;
-    }
-
-    /// <summary>统一单元格：宋体+Times 五号居中；可选加粗 / 横跨 gridSpan 列 / 纵向合并 vMerge。</summary>
-    private static TableCell Cell(
-        string text, bool bold = false, int gridSpan = 1, MergedCellValues? vMerge = null)
-    {
-        // RunProperties 按 OOXML schema 顺序：rFonts → b → sz → szCs
-        var runProps = new RunProperties();
-        runProps.AppendChild(new RunFonts { Ascii = LatinFont, HighAnsi = LatinFont, EastAsia = CjkFont });
-        if (bold) runProps.AppendChild(new Bold());
-        runProps.AppendChild(new FontSize { Val = FontHalfPt });
-        runProps.AppendChild(new FontSizeComplexScript { Val = FontHalfPt });
-
-        var run = new Run(runProps, new Text(text) { Space = SpaceProcessingModeValues.Preserve });
-        var para = new Paragraph(
-            new ParagraphProperties(new Justification { Val = JustificationValues.Center }),
-            run);
-
-        // TableCellProperties 按 schema 顺序：gridSpan → vMerge → vAlign
-        var cellProps = new TableCellProperties();
-        if (gridSpan > 1) cellProps.AppendChild(new GridSpan { Val = gridSpan });
-        if (vMerge is { } vm) cellProps.AppendChild(new VerticalMerge { Val = vm });
-        cellProps.AppendChild(new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center });
-
-        return new TableCell(cellProps, para);
-    }
 }

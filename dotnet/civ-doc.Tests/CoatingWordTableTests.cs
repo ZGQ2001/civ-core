@@ -65,4 +65,74 @@ public class CoatingWordTableTests
         Assert.Equal("地上一层A×2轴", Cell(2, 1));
         Assert.Equal("合格", Cell(2, 9));
     }
+
+    /// <summary>造厚型构件：sections[截面][面] 实测值（mm），设计值 mm（≥7→厚型），faces 面名。</summary>
+    private static CoatingMemberInput ThickMember(
+        string loc, double designMm, string[] faces, double[][] sections)
+    {
+        var pts = new List<CoatingPoint>();
+        for (int s = 0; s < sections.Length; s++)
+            for (int f = 0; f < faces.Length; f++)
+                pts.Add(CoatingPoint.Create(s + 1, faces[f], sections[s][f]));
+        return CoatingMemberInput.Create(loc, "柱", designMm, pts.ToArray());
+    }
+
+    [Fact]
+    public void BuildThick_厚型钢柱真实数据_表头面名数值均值正确()
+    {
+        var faces = new[] { "东侧面", "西侧面", "南侧面", "北侧面" };
+        var wb = new CoatingWorkbookInput(CoatingStandards.GB_50205_2020, new[]
+        {
+            new CoatingBatchInput("全部", new[]
+            {
+                ThickMember("地上一层1/4×4/A轴钢柱", 25, faces, new[]
+                {
+                    new double[] { 21, 25, 30, 24 },
+                    new double[] { 26, 31, 28, 27 },
+                    new double[] { 28, 24, 25, 26 },
+                }), // 均值 26.25
+                ThickMember("地上一层1/28×G轴钢柱", 25, faces, new[]
+                {
+                    new double[] { 28, 27, 21, 31 },
+                    new double[] { 34, 25, 26, 26 },
+                }), // 均值 27.25
+            }),
+        });
+        var batch = CoatingCalculator.Calc(wb).BatchResults[0];
+
+        var table = CoatingWordTable.BuildThick(batch.MembersWithResults);
+        var rows = table.Elements<TableRow>().ToList();
+
+        // 2 行表头 + (3 + 2) 数据行
+        Assert.Equal(7, rows.Count);
+
+        string Cell(int r, int c) => rows[r].Elements<TableCell>().ElementAt(c).InnerText;
+
+        // 表头行 1：序号|构件位置|测点|实测涂层厚度(mm)[跨4列]|平均值(mm)
+        Assert.Equal("序号", Cell(0, 0));
+        Assert.Equal("测点", Cell(0, 2));
+        Assert.Equal("实测涂层厚度(mm)", Cell(0, 3));
+        Assert.Equal("平均值(mm)", Cell(0, 4));
+        // 表头行 2：面名（前 3 列 + 平均值列是 vMerge 续）
+        Assert.Equal("东侧面", Cell(1, 3));
+        Assert.Equal("北侧面", Cell(1, 6));
+
+        // 构件 1 截面 1 行：序号/位置/截面/4 面值/均值
+        Assert.Equal("1", Cell(2, 0));
+        Assert.Equal("地上一层1/4×4/A轴钢柱", Cell(2, 1));
+        Assert.Equal("截面1", Cell(2, 2));
+        Assert.Equal("21", Cell(2, 3));
+        Assert.Equal("24", Cell(2, 6));
+        Assert.Equal("26.25", Cell(2, 7)); // 构件均值（vMerge 起始格）
+
+        // 构件 1 截面 2/3：截面递增，合并列为空
+        Assert.Equal("截面2", Cell(3, 2));
+        Assert.Equal("", Cell(3, 0));      // 序号续（空）
+        Assert.Equal("截面3", Cell(4, 2));
+
+        // 构件 2
+        Assert.Equal("2", Cell(5, 0));
+        Assert.Equal("截面1", Cell(5, 2));
+        Assert.Equal("27.25", Cell(5, 7));
+    }
 }

@@ -48,6 +48,87 @@ public static class CoatingWordTable
         return table;
     }
 
+    /// <summary>
+    /// 厚型（及地标膨胀型）报告表：截面×面版式。一构件跨 N 截面行，
+    /// 序号/构件位置/平均值 跨该构件所有行 vMerge 合并；2 行表头（实测涂层厚度 hMerge 跨各面 + 面名）。
+    /// 单位随涂层类型：厚型 mm（游标卡尺）/ 薄·超薄 μm（测厚仪）。本表无设计/判定列（照母版）。
+    /// 要求传入构件同一面布局（梁 3 面 / 柱 4 面），混排请由调用方按构件类型分表。
+    /// </summary>
+    public static Table BuildThick(
+        IReadOnlyList<(CoatingMemberInput Input, CoatingMemberResult Result)> members)
+    {
+        if (members.Count == 0)
+            throw new ArgumentException("厚型报告表没有构件");
+
+        var faces = FaceNames(members[0].Input);
+        int k = faces.Count;
+        var category = members[0].Result.Category;
+        string unit = UnitLabel(category);
+
+        var table = new Table(TableProps());
+
+        // 表头行 1：序号 | 构件位置 | 测点 |〔实测涂层厚度(unit) 跨 k 列〕| 平均值(unit)
+        var h1 = new TableRow();
+        h1.AppendChild(Cell("序号", bold: true, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell("构件位置", bold: true, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell("测点", bold: true, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell($"实测涂层厚度({unit})", bold: true, gridSpan: k));
+        h1.AppendChild(Cell($"平均值({unit})", bold: true, vMerge: MergedCellValues.Restart));
+        table.AppendChild(h1);
+
+        // 表头行 2：前三列与平均值列 vMerge 续；中间是各面名
+        var h2 = new TableRow();
+        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
+        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
+        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
+        foreach (var f in faces) h2.AppendChild(Cell(f, bold: true));
+        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
+        table.AppendChild(h2);
+
+        int serial = 1;
+        foreach (var (input, result) in members)
+        {
+            var sections = input.Points
+                .GroupBy(p => p.SectionNo).OrderBy(g => g.Key).ToList();
+
+            for (int si = 0; si < sections.Count; si++)
+            {
+                bool first = si == 0;
+                var vm = first ? MergedCellValues.Restart : MergedCellValues.Continue;
+                var row = new TableRow();
+
+                row.AppendChild(Cell(first ? serial.ToString() : "", vMerge: vm));
+                row.AppendChild(Cell(first ? input.Location : "", vMerge: vm));
+                row.AppendChild(Cell($"截面{sections[si].Key}"));
+
+                var pts = sections[si].ToList();
+                for (int fi = 0; fi < k; fi++)
+                    row.AppendChild(Cell(fi < pts.Count ? Val(pts[fi].Thickness, category) : ""));
+
+                row.AppendChild(Cell(first ? Val(result.MeanThickness, category) : "", vMerge: vm));
+                table.AppendChild(row);
+            }
+            serial++;
+        }
+        return table;
+    }
+
+    /// <summary>首截面各测点的面名（保留重复，如梁「梁侧面/梁侧面/梁底面」）。</summary>
+    private static List<string> FaceNames(CoatingMemberInput input)
+        => input.Points
+            .GroupBy(p => p.SectionNo).OrderBy(g => g.Key).First()
+            .Select(p => p.Position).ToList();
+
+    /// <summary>显示单位：厚型 mm（游标卡尺）/ 薄·超薄 μm（测厚仪）。</summary>
+    private static string UnitLabel(CoatingCategory c)
+        => c == CoatingCategory.厚型 ? "mm" : "μm";
+
+    /// <summary>按涂层类型格式化厚度：厚型 mm（2 位）/ 膨胀型 μm（整数）。</summary>
+    private static string Val(double mm, CoatingCategory c)
+        => c == CoatingCategory.厚型
+            ? Math.Round(mm, 2).ToString("0.##")
+            : Math.Round(mm * 1000).ToString("0");
+
     /// <summary>每处（SectionNo 升序）3 测点均值（mm）；不足 5 处补 null。</summary>
     private static double?[] LocationMeansUm(CoatingMemberInput input)
     {
@@ -96,21 +177,28 @@ public static class CoatingWordTable
         return row;
     }
 
-    private static TableCell Cell(string text, bool bold)
+    /// <summary>统一单元格：宋体+Times 五号居中；可选加粗 / 横跨 gridSpan 列 / 纵向合并 vMerge。</summary>
+    private static TableCell Cell(
+        string text, bool bold = false, int gridSpan = 1, MergedCellValues? vMerge = null)
     {
-        var runProps = new RunProperties(
-            new RunFonts { Ascii = LatinFont, HighAnsi = LatinFont, EastAsia = CjkFont },
-            new FontSize { Val = FontHalfPt },
-            new FontSizeComplexScript { Val = FontHalfPt });
+        // RunProperties 按 OOXML schema 顺序：rFonts → b → sz → szCs
+        var runProps = new RunProperties();
+        runProps.AppendChild(new RunFonts { Ascii = LatinFont, HighAnsi = LatinFont, EastAsia = CjkFont });
         if (bold) runProps.AppendChild(new Bold());
+        runProps.AppendChild(new FontSize { Val = FontHalfPt });
+        runProps.AppendChild(new FontSizeComplexScript { Val = FontHalfPt });
 
         var run = new Run(runProps, new Text(text) { Space = SpaceProcessingModeValues.Preserve });
         var para = new Paragraph(
             new ParagraphProperties(new Justification { Val = JustificationValues.Center }),
             run);
-        return new TableCell(
-            new TableCellProperties(
-                new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center }),
-            para);
+
+        // TableCellProperties 按 schema 顺序：gridSpan → vMerge → vAlign
+        var cellProps = new TableCellProperties();
+        if (gridSpan > 1) cellProps.AppendChild(new GridSpan { Val = gridSpan });
+        if (vMerge is { } vm) cellProps.AppendChild(new VerticalMerge { Val = vm });
+        cellProps.AppendChild(new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center });
+
+        return new TableCell(cellProps, para);
     }
 }

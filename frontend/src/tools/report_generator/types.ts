@@ -34,11 +34,21 @@ export type BatchDimKey = (typeof BATCH_DIM_KEYS)[number];
 /** 当前装配线锚定的 catalog id —— P4 会改成可选择的检测项目下拉。 */
 export const DEFAULT_CATALOG_ID = 'anchor';
 
-/** 报告生成结果（前端渲染用）。 */
+/** 防火涂层规范（多类型组装时给防火涂层段用）。 */
+export const COATING_STANDARDS = ['GB 50205-2020', '北京地标'] as const;
+export type CoatingStandard = (typeof COATING_STANDARDS)[number];
+
+/** 报告生成结果（前端渲染用）。锚杆单类型路径与多类型组装路径共用。 */
 export interface ReportRunRes {
   output: string;
-  rowsRendered: number;
+  /** 一句话结果摘要（锚杆单类型：N 根锚杆；多类型组装：N 张表 / 已填类型）。 */
+  summary: string;
   unknownKeys: string[];
   /** {{img:xxx}} 图片占位符解析失败的列表（缺路径 / 文件不存在）—— 前端警告用。 */
   missingImages: string[];
+  /** 锚杆单类型路径：渲染根数；多类型组装路径为 undefined。 */
+  rowsRendered?: number;
+  /** 多类型组装路径：插入表总数 + 已填检测类型；锚杆单类型为 undefined。 */
+  tables?: number;
+  sections?: string[];
 }

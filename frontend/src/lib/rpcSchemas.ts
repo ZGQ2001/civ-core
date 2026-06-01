@@ -25,6 +25,16 @@ export const anchorRunResultSchema = z.object({
   word_missing_images: z.array(z.string()).optional(),
 });
 
+/** report.assemble 返回（多检测类型一键组装 Word）。 */
+export const reportAssembleResultSchema = z.object({
+  output: z.string(),
+  tables: z.number(),
+  replaced: z.number(),
+  unknown_keys: z.array(z.string()),
+  missing_images: z.array(z.string()),
+  sections: z.array(z.string()),
+});
+
 /** coating.run 返回（厚涂型防火涂层厚度验收）。member 单位的计数，无 Word 路径。 */
 export const coatingRunResultSchema = z.object({
   batches: z.number(),

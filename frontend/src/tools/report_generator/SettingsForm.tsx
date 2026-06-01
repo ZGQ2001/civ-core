@@ -23,6 +23,7 @@ import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
 import { Field, INPUT_CLS, Picker, ResetBtn, Select } from '../_shared/forms';
 import { useReportGenerator } from './controller';
 import { PresetBar } from './PresetBar';
+import { COATING_STANDARDS, type CoatingStandard } from './types';
 
 interface CatalogSummary {
   id: string;
@@ -72,6 +73,8 @@ export function ReportDataSection() {
   return (
     <SectionShell>
       <ImportFromDataProcessingBtn />
+
+      <MultiTypeSection />
 
       <Field
         label="检测项目"
@@ -250,7 +253,7 @@ export function ReportTemplateSection() {
     <SectionShell>
       <Field
         label="Word 模板"
-        hint="带 {{占位符}} 的 .docx。按锚杆克隆：用 [[每根锚杆]] / [[/每根锚杆]] 包住；按批次输出（灌浆日期等批次级字段）：外层再包 [[批次]] / [[/批次]]。不会做？打开 ActivityBar 的「模板助手」可按层级列字段并自动验证你的模板。"
+        hint="带 {{占位符}} 的薄壳 .docx：要放锚杆逐根结果表处写一段 {{表格:锚杆}}（程序按规范建表插入，含曲线图）；多类型组装再写 {{表格:防火涂层}}。项目信息写 {{委托单位}} 等 {{}} 占位符。不会做？打开 ActivityBar 的「模板助手」。"
       >
         <Picker
           value={c.wordTemplatePath}
@@ -408,6 +411,96 @@ function HistoryToggleAndInputs() {
 }
 
 /**
+ * 多检测类型组装开关 —— 勾「同时出防火涂层表」即进入 report.assemble 模式：
+ * 一份模板同时含 {{表格:锚杆}} + {{表格:防火涂层}}，锚杆段读「结果 Excel」（不重算）、
+ * 防火涂层段读「测点数据 Excel」，两段表填进同一份 Word。没勾 = 仅锚杆单类型。
+ */
+function MultiTypeSection() {
+  const c = useReportGenerator();
+
+  const pickCoatingExcel = useCallback(async () => {
+    const sel = await openDialog({
+      title: '选择防火涂层「测点数据」Excel',
+      multiple: false,
+      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
+    });
+    if (typeof sel === 'string') c.setCoatingInputPath(sel);
+  }, [c]);
+
+  return (
+    <div className="border-vscode-border space-y-3 rounded-[3px] border bg-[#252525] p-2.5">
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={c.coatingEnabled}
+          onChange={(e) => c.setCoatingEnabled(e.target.checked)}
+          className="accent-vscode-focus"
+        />
+        <span className="text-vscode-text text-[12px] font-medium">
+          同时出防火涂层表（多类型组装）
+        </span>
+      </label>
+      <div className="text-vscode-text-faint text-[10px] leading-relaxed">
+        勾选后走 report.assemble：模板须同时含{' '}
+        <code className="rounded bg-black/30 px-1">{'{{表格:锚杆}}'}</code> +{' '}
+        <code className="rounded bg-black/30 px-1">{'{{表格:防火涂层}}'}</code>
+        。此模式下上面「输入 Excel」请选锚杆的
+        <b className="text-vscode-text-dim">结果 Excel</b>（不重算），下面再选防火涂层测点 Excel。
+      </div>
+
+      {c.coatingEnabled && (
+        <>
+          <Field
+            label="防火涂层「测点数据」Excel"
+            hint="coating 装配线展开并填好数字的测点数据 xlsx（coating_expand_template 出的）"
+          >
+            <Picker
+              value={c.coatingInputPath}
+              onPick={pickCoatingExcel}
+              placeholder="（必选）"
+              muted={!c.coatingInputPath}
+              extra={
+                c.coatingInputPath ? (
+                  <ResetBtn onClick={() => c.setCoatingInputPath('')} />
+                ) : undefined
+              }
+            />
+          </Field>
+          <Field label="防火涂层规范" hint="决定布点 / 单位 / 判定口径">
+            <Select
+              value={c.coatingStandard}
+              onChange={(e) =>
+                c.setCoatingStandard(e.target.value as CoatingStandard)
+              }
+              className="w-full"
+            >
+              {COATING_STANDARDS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </>
+      )}
+
+      <Field
+        label="锚杆结果表节号"
+        hint="公司标准：单根锚杆→「表{节号}」，多根→「表{节号}-1 / -2 …」。缺省 2.4"
+      >
+        <input
+          type="text"
+          value={c.sectionNo}
+          onChange={(e) => c.setSectionNo(e.target.value)}
+          placeholder="2.4"
+          className={`${INPUT_CLS} w-24`}
+        />
+      </Field>
+    </div>
+  );
+}
+
+/**
  * 顶部「从数据处理一键导入」按钮 ——
  * 上游有可用 state 时高亮、可点；没有时灰禁、显示原因。
  */
@@ -450,8 +543,7 @@ function ImportFromDataProcessingBtn() {
  * 跟 AnchorParamsSection 共用状态机（excelReady / loading / error / 空批次 / 有批次）。
  * 不复用 BatchParamsCard：这里只有一个字段（grouting_date），折叠卡片反而臃肿。
  *
- * 模板要写 [[批次]]...[[/批次]] 才会按批次输出；旧模板（只有 [[每根锚杆]]）后端会
- * 走单批路径，此处填的日期会用其中一批的值（或忽略，由 AnchorHandlers.Run 决定）。
+ * 各批灌浆日期会自动出现在该批锚杆的 表2.4「灌浆日期」格（程序建表按批填值，无需 marker）。
  */
 function GroutingDateByBatchSection() {
   const c = useReportGenerator();
@@ -505,19 +597,9 @@ function GroutingDateByBatchSection() {
   return (
     <Field
       label={`灌浆日期（按批次，共 ${c.anchorBatchIds.length} 批）`}
-      hint="不同批次灌浆日期可能不同；模板里写 [[批次]]...[[/批次]] 后端才按批输出"
+      hint="不同批次灌浆日期可能不同；各批日期会自动填进该批锚杆表的「灌浆日期」格"
     >
       <div className="space-y-2">
-        {/* 醒目提示：批次段是按批输出的必要条件 */}
-        <div className="border-l-2 border-l-yellow-500 bg-[#2d2620] px-2 py-1.5 text-[10px] leading-relaxed text-yellow-300/90">
-          <i className="codicon codicon-info mr-1 !text-[11px]" />
-          模板里必须含{' '}
-          <code className="rounded bg-black/30 px-1 text-yellow-200">
-            [[批次]]...[[/批次]]
-          </code>{' '}
-          段，才能按批次输出不同灌浆日期；否则只取第一批的值灌入项目级。
-        </div>
-
         <div className="text-vscode-text-faint flex items-center justify-between text-[10px]">
           <span>
             已填 {filled} / {c.anchorBatchIds.length}

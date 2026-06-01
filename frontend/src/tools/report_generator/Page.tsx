@@ -191,7 +191,8 @@ function StatusArea({
         在右侧「调参」面板填好输入
       </div>
       <div className="text-vscode-text-faint mt-1 max-w-md text-xs leading-relaxed">
-        依次填「数据」「模板」「项目字段」三个 tab，就绪后点上方「生成 Word
+        先在「数据」tab 选报告类型（锚杆 / 防火涂层 /
+        多类型），再依次填模板、项目字段， 就绪后点上方「生成 Word
         报告」。生成结果与报错都会显示在这里。
       </div>
     </div>
@@ -235,16 +236,31 @@ function TemplateCheckCard() {
   if (!tc) return null;
 
   // 数据表占位符（{{表格:xxx}}）不是 catalog 字段，会落在 unrecognized；这里单独识别，
-  // 既不当成「未识别错误」，又能提示用户有没有写对应占位符。
+  // 既不当成「未识别错误」，又能按报告类型提示用户该写哪个占位符。
   const isTablePh = (ph: string) =>
     ph.includes('表格:锚杆') || ph.includes('表格:防火涂层');
-  const hasAnchorTable = tc.unrecognized.some((u) => u.placeholder.includes('表格:锚杆'));
+  const hasAnchorTable = tc.unrecognized.some((u) =>
+    u.placeholder.includes('表格:锚杆'),
+  );
   const hasCoatingTable = tc.unrecognized.some((u) =>
     u.placeholder.includes('表格:防火涂层'),
   );
-  const fieldUnrecognized = tc.unrecognized.filter((u) => !isTablePh(u.placeholder));
+  const fieldUnrecognized = tc.unrecognized.filter(
+    (u) => !isTablePh(u.placeholder),
+  );
+
+  // 当前报告类型需要哪些数据表占位符（缺了生成会报错）
+  const needAnchor = c.reportType === 'anchor' || c.reportType === 'multi';
+  const needCoating = c.reportType === 'coating' || c.reportType === 'multi';
+  const missingRequired: string[] = [];
+  if (needAnchor && !hasAnchorTable)
+    missingRequired.push(ANCHOR_TABLE_PLACEHOLDER);
+  if (needCoating && !hasCoatingTable)
+    missingRequired.push(COATING_TABLE_PLACEHOLDER);
   const allClear =
-    hasAnchorTable && tc.hints.length === 0 && fieldUnrecognized.length === 0;
+    missingRequired.length === 0 &&
+    tc.hints.length === 0 &&
+    fieldUnrecognized.length === 0;
 
   return (
     <div className="space-y-3 text-xs">
@@ -268,50 +284,36 @@ function TemplateCheckCard() {
         </span>
       </div>
 
-      {/* 数据表占位符提醒 —— 锚杆表必需，多类型再加防火涂层 */}
+      {/* 数据表占位符提醒 —— 按报告类型标注「需要 / 不需要」+ 是否已写 */}
       <div className="border-vscode-border space-y-1.5 rounded border bg-[#252525] p-2.5">
         <div className="text-vscode-text-dim leading-relaxed">
           数据表占位符（程序在此处按规范建表插入）：
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1',
-              hasAnchorTable ? 'text-green-400' : 'text-yellow-300',
-            )}
-          >
-            <i
-              className={cn(
-                'codicon !text-[12px]',
-                hasAnchorTable ? 'codicon-check' : 'codicon-warning',
-              )}
-            />
-            锚杆
-          </span>
-          <CopyChip text={ANCHOR_TABLE_PLACEHOLDER} small />
+          <TablePhChip
+            label="锚杆"
+            placeholder={ANCHOR_TABLE_PLACEHOLDER}
+            need={needAnchor}
+            present={hasAnchorTable}
+          />
           <span className="text-vscode-text-faint">·</span>
-          <span
-            className={cn(
-              'inline-flex items-center gap-1',
-              hasCoatingTable ? 'text-green-400' : 'text-vscode-text-faint',
-            )}
-          >
-            <i
-              className={cn(
-                'codicon !text-[12px]',
-                hasCoatingTable ? 'codicon-check' : 'codicon-circle-outline',
-              )}
-            />
-            防火涂层（多类型才需）
-          </span>
-          <CopyChip text={COATING_TABLE_PLACEHOLDER} small />
+          <TablePhChip
+            label="防火涂层"
+            placeholder={COATING_TABLE_PLACEHOLDER}
+            need={needCoating}
+            present={hasCoatingTable}
+          />
         </div>
-        {!hasAnchorTable && (
+        {missingRequired.length > 0 && (
           <div className="text-[11px] text-yellow-300/90">
-            模板未检测到 <code className="rounded bg-black/30 px-1">
-              {ANCHOR_TABLE_PLACEHOLDER}
-            </code>
-            ——生成时会报「缺占位符」。点上方 chip 复制后粘到 Word 要放表的位置，独占一段。
+            模板缺少本报告类型需要的占位符：
+            {missingRequired.map((ph) => (
+              <code key={ph} className="mx-0.5 rounded bg-black/30 px-1">
+                {ph}
+              </code>
+            ))}
+            ——生成时会报「缺占位符」。点上方对应 chip 复制后粘到 Word
+            要放表的位置，独占一段。
           </div>
         )}
       </div>
@@ -380,6 +382,46 @@ function TemplateCheckCard() {
         完整字段对照 / 编辑见 ActivityBar「模板助手」。
       </div>
     </div>
+  );
+}
+
+/**
+ * 数据表占位符状态 chip —— 按「本报告类型是否需要 + 模板里是否已写」着色：
+ *   需要 + 已写 → 绿勾；需要 + 没写 → 黄警告；不需要 → 暗（标「不需要」）。
+ * 附一键复制占位符文本。
+ */
+function TablePhChip({
+  label,
+  placeholder,
+  need,
+  present,
+}: {
+  label: string;
+  placeholder: string;
+  need: boolean;
+  present: boolean;
+}) {
+  const color = !need
+    ? 'text-vscode-text-faint'
+    : present
+      ? 'text-green-400'
+      : 'text-yellow-300';
+  const icon = !need
+    ? 'codicon-circle-outline'
+    : present
+      ? 'codicon-check'
+      : 'codicon-warning';
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={cn('inline-flex items-center gap-1', color)}>
+        <i className={cn('codicon !text-[12px]', icon)} />
+        {label}
+        {!need && (
+          <span className="text-vscode-text-faint text-[10px]">（不需要）</span>
+        )}
+      </span>
+      <CopyChip text={placeholder} small />
+    </span>
   );
 }
 

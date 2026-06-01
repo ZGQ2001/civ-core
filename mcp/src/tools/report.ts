@@ -41,7 +41,8 @@ export const reportRunFromResult: ToolDef = {
     "用户重复输入工程参数（P/Lf/La/A/E 等从结果 xlsx 的隐藏 metadata sheet 自动读）。" +
     "\n\n输入 result_xlsx 必须由 anchor_run 产出（含 `_批次参数` 隐藏 sheet）。" +
     "旧版本生成的结果 xlsx 不带 metadata，会返清晰错误提示重新跑装配线。" +
-    "\n\n模板探测同 anchor_run：单层 / [[批次]] / [[检测项目]]>[[批次]]>[[每根锚杆]] 三种嵌套自动分发。" +
+    "\n\n模板用薄壳 + 占位符：要放表处写一段 `{{表格:锚杆}}`（程序按规范建逐根 表2.4 + 嵌曲线图插在该处）；" +
+    "项目信息写 {{委托单位}} 等 {{}} 占位符（已不再用 [[每根锚杆]]/[[批次]] marker、不再需要「锚杆专用模板」）。" +
     "\n\n返回 {batches, anchors_total, anchors_qualified, output, word_outputs," +
     "word_unknown_keys, word_missing_images}—— 字段与 anchor_run 对齐方便 agent 一致处理。",
   inputSchema: {
@@ -50,7 +51,7 @@ export const reportRunFromResult: ToolDef = {
       .describe("anchor_run 已产出的结果 xlsx 绝对路径（含每批数据分析 sheet + _批次参数 sheet）"),
     word_template_path: z
       .string()
-      .describe("Word 模板绝对路径，带 {{占位符}} 和 [[每根锚杆]] / [[批次]] marker"),
+      .describe("Word 薄壳模板绝对路径，含 {{表格:锚杆}} 数据表占位符 + 项目信息 {{}} 占位符"),
     standard: z
       .string()
       .optional()
@@ -67,6 +68,10 @@ export const reportRunFromResult: ToolDef = {
       .string()
       .optional()
       .describe("报告文件名；自动补 .docx 后缀；留空 = 默认「锚杆抗拔报告.docx」"),
+    section_no: z
+      .string()
+      .optional()
+      .describe("锚杆结果表节号；单根→「表{节号}」/多根→「表{节号}-1…」，缺省 2.4"),
     user_inputs: z
       .record(z.string(), z.string())
       .optional()
@@ -78,7 +83,52 @@ export const reportRunFromResult: ToolDef = {
   },
 };
 
+export const reportAssemble: ToolDef = {
+  rpcMethod: "report.assemble",
+  mcpName: "report_assemble",
+  description:
+    "多检测类型一键组装 Word 报告：一份薄壳模板里写多个数据表占位符（锚杆 {{表格:锚杆}}、" +
+    "防火涂层 {{表格:防火涂层}}），按 sections 提供的数据各建表插入；模板里写了但本次没提供数据的" +
+    "占位符自动清掉；其余 {{}} 项目字段按 user_inputs 填。" +
+    "\n\n每个 section 一个检测类型：anchor 段读 anchor_run 的结果 xlsx（逐根 表2.4 + 曲线图）；" +
+    "coating 段读防火涂层「测点数据」xlsx（coating_expand_template 展开并填好数字的）。" +
+    "\n\n返回 {output, tables, replaced, unknown_keys, missing_images, sections}（sections=已填的类型列表）。",
+  inputSchema: {
+    word_template_path: z
+      .string()
+      .describe("docx 薄壳模板绝对路径，含 {{表格:锚杆}}/{{表格:防火涂层}} 数据表占位符 + 项目信息 {{}} 占位符"),
+    output_docx: z.string().describe("输出 docx 绝对路径"),
+    user_inputs: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("项目信息字段字典，填薄壳 {{}}（锚杆字段名走 catalog 别名，如 委托单位→client_name）"),
+    sections: z
+      .array(
+        z.object({
+          type: z.enum(["anchor", "coating"]).describe("检测类型：anchor / coating"),
+          // anchor 段
+          result_xlsx: z.string().optional().describe("[anchor] anchor_run 结果 xlsx 绝对路径"),
+          curve_image_dir: z.string().optional().describe("[anchor] 曲线图目录；缺省不嵌图"),
+          batch_user_inputs: z
+            .record(z.string(), z.record(z.string(), z.string()))
+            .optional()
+            .describe("[anchor] 批次级字段 {batchId:{key:value}}，如各批 grouting_date"),
+          section_no: z.string().optional().describe("[anchor] 结果表节号，缺省 2.4"),
+          detection_label: z.string().optional().describe("[anchor] 表标题里的检测项目名"),
+          // coating 段
+          input_xlsx: z.string().optional().describe("[coating] 已展开填好数字的「测点数据」xlsx 绝对路径"),
+          sheet: z.string().optional().describe("[coating] 测点数据 sheet 名（缺省读所有「测点数据」表）"),
+          batch_id_column: z.string().optional().describe("[coating] 批次列列名，缺省 '批次'"),
+          // 共用
+          standard: z.string().optional().describe("规范代号（anchor 缺省 GB 50086-2015 / coating 缺省 GB 50205-2020）"),
+        }),
+      )
+      .describe("各检测类型的数据源；占位符按 type 决定（anchor→{{表格:锚杆}}、coating→{{表格:防火涂层}}）"),
+  },
+};
+
 export const allReportTools: readonly ToolDef[] = [
   reportRenderPlaceholder,
   reportRunFromResult,
+  reportAssemble,
 ];

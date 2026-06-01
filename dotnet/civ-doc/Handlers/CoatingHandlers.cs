@@ -31,6 +31,7 @@ public static class CoatingHandlers
         d.Register("coating.expand_template", ExpandTemplate);
         d.Register("coating.list_batches", ListBatches);
         d.Register("coating.run", Run);
+        d.Register("coating.report", Report);
     }
 
     /// <summary>生成空白模板（类型预设 + 构件清单）。</summary>
@@ -134,7 +135,62 @@ public static class CoatingHandlers
         };
     }
 
+    /// <summary>读「测点数据」+ 计算 + 把数据表填进 docx 薄壳模板（{{表格:防火涂层}} 占位符）→ 一键出 Word。</summary>
+    public static object Report(JsonElement? @params)
+    {
+        var p = RequireObject(@params);
+        var inputXlsx = p.GetProperty("input_xlsx").GetString()
+            ?? throw new ArgumentException("未指定输入 Excel 文件");
+        var wordTemplate = p.TryGetProperty("word_template_path", out var wt)
+            && wt.ValueKind == JsonValueKind.String ? wt.GetString() : null;
+        if (string.IsNullOrWhiteSpace(wordTemplate))
+            throw new ArgumentException("未指定 word_template_path（带 {{表格:防火涂层}} 占位符的 docx 薄壳模板）");
+        string standard = OptString(p, "standard") ?? CoatingStandards.GB_50205_2020;
+        string? sheet = OptString(p, "sheet");
+        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.Batch;
+        string? outputDocx = OptString(p, "output_docx");
+        var userInputs = ParseUserInputs(p);
+
+        FileGuard.CheckExcelSize(inputXlsx);
+        CoatingStandards.Validate(standard);
+        if (!File.Exists(wordTemplate))
+            throw new ArgumentException($"Word 模板不存在：{wordTemplate}");
+
+        var batchMembers = CoatingExcelReader.ReadRows(inputXlsx, sheet, batchCol);
+        var batches = batchMembers
+            .Select(b => new CoatingBatchInput(b.BatchId, b.Members.ToArray()))
+            .ToArray();
+        var result = CoatingCalculator.Calc(new CoatingWorkbookInput(standard, batches));
+        var members = result.BatchResults.SelectMany(br => br.MembersWithResults).ToList();
+
+        var src = new FileInfo(inputXlsx);
+        string outPath = outputDocx
+            ?? Path.Combine(src.DirectoryName ?? "",
+                $"{Path.GetFileNameWithoutExtension(src.Name)}_{CalcTypeSuffix}_报告.docx");
+
+        var r = CoatingDocxReport.Generate(wordTemplate, outPath, members, standard, userInputs);
+
+        return new Dictionary<string, object?>
+        {
+            ["output"] = outPath,
+            ["tables"] = r.TablesInserted,
+            ["replaced"] = r.Replaced,
+            ["unknown_keys"] = r.UnknownKeys.ToList(),
+            ["members"] = members.Count,
+        };
+    }
+
     // ── helpers ──
+
+    private static Dictionary<string, string> ParseUserInputs(JsonElement p)
+    {
+        var d = new Dictionary<string, string>();
+        if (p.TryGetProperty("user_inputs", out var el) && el.ValueKind == JsonValueKind.Object)
+            foreach (var prop in el.EnumerateObject())
+                if (prop.Value.ValueKind == JsonValueKind.String)
+                    d[prop.Name] = prop.Value.GetString() ?? "";
+        return d;
+    }
 
     private static JsonElement RequireObject(JsonElement? @params)
     {

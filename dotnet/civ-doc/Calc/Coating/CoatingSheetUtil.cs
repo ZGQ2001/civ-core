@@ -35,7 +35,7 @@ internal static class CoatingSheetUtil
         return c;
     }
 
-    /// <summary>多个候选列名取首个命中（如索引列「截面号」厚型/地标用、「测点号」国标膨胀型用）。</summary>
+    /// <summary>多个候选列名取首个命中（如索引列「截面号」厚型/地标用、「处号」国标膨胀型用）。</summary>
     public static int RequireAnyColumn(Dictionary<string, int> map, string[] names, string description)
     {
         foreach (var name in names)

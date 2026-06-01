@@ -4,8 +4,10 @@
  * 回归工具页范式：输入回到右侧面板（和其它工具一致），但字段远多于别的工具，
  * 故按层级拆成 3 个调参 tab，App.tsx 把它们注入 rightTabs，AI 助手常驻最后。
  *
- *   ReportDataSection     数据：一键导入 + 检测项目 + 报告名 + 数据来源 + 输入 Excel
- *                              + 规范 + 批次列 + 按批次工程参数 + 灌浆日期
+ *   ReportDataSection     数据：报告类型选择（第一步）→ 跟着显示对应输入
+ *                              · 锚杆：一键导入 + 数据来源 + 输入 Excel + 规范 + 批次 + 按批工程参数 + 灌浆日期
+ *                              · 防火涂层：测点 Excel + 规范
+ *                              · 多类型：锚杆结果 Excel + 防火涂层测点 Excel（锚杆参数已随结果持久化）
  *   ReportTemplateSection 模板：Word 模板 + 输出目录 + 曲线图目录
  *   ReportFieldsSection   项目字段：报告预设栏 + 历史值开关 + 项目元信息（CatalogDrivenInputs）
  */
@@ -23,6 +25,12 @@ import { CatalogDrivenInputs } from '../_shared/CatalogDrivenInputs';
 import { Field, INPUT_CLS, Picker, ResetBtn, Select } from '../_shared/forms';
 import { useReportGenerator } from './controller';
 import { PresetBar } from './PresetBar';
+import {
+  COATING_STANDARDS,
+  REPORT_TYPES,
+  type CoatingStandard,
+  type ReportType,
+} from './types';
 
 interface CatalogSummary {
   id: string;
@@ -69,13 +77,29 @@ export function ReportDataSection() {
     if (typeof sel === 'string') c.setExcelPath(sel);
   }, [c]);
 
+  const pickCoatingExcel = useCallback(async () => {
+    const sel = await openDialog({
+      title: '选择防火涂层「测点数据」Excel',
+      multiple: false,
+      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
+    });
+    if (typeof sel === 'string') c.setCoatingInputPath(sel);
+  }, [c]);
+
+  const showAnchor = c.reportType === 'anchor' || c.reportType === 'multi';
+  const showCoating = c.reportType === 'coating' || c.reportType === 'multi';
+  const isMulti = c.reportType === 'multi';
+
   return (
     <SectionShell>
-      <ImportFromDataProcessingBtn />
+      <ReportTypeField value={c.reportType} onChange={c.setReportType} />
+
+      {/* 一键导入数据处理：只在涉及锚杆时有意义 */}
+      {showAnchor && <ImportFromDataProcessingBtn />}
 
       <Field
         label="检测项目"
-        hint="决定字段定义 / 预设过滤 / 计算分发；从模板助手已有目录里选。当前只有锚杆抗拔真正接通 calc，其余目录改字段渲染但仍走锚杆 RPC（待钻芯/回弹切 C# 后自动分发）。"
+        hint="决定项目字段定义 / 预设过滤；从模板助手已有目录里选。当前只有锚杆抗拔真正接通 calc，其余目录改字段渲染但仍走锚杆 RPC（待钻芯/回弹切 C# 后自动分发）。"
       >
         <Select
           value={c.catalogId}
@@ -95,122 +119,250 @@ export function ReportDataSection() {
 
       <Field
         label="报告名称"
-        hint="影响输出文件名；留空 = 默认「锚杆抗拔报告.docx」。可包含中文。"
+        hint="影响输出文件名；留空按报告类型取默认名。可包含中文。"
       >
         <input
           type="text"
           value={c.reportName}
-          placeholder="（可选 — 例：XX环境整治-锚杆抗拔报告）"
+          placeholder="（可选 — 例：XX环境整治-检测报告）"
           onChange={(e) => c.setReportName(e.target.value)}
           className="bg-vscode-input border-vscode-border text-vscode-text focus:border-vscode-focus w-full rounded-[2px] border px-2 py-1 text-xs focus:outline-none"
         />
       </Field>
 
-      <Field
-        label="数据来源"
-        hint="result 直接读结果 xlsx 出 Word 不重算；raw 走完整链路（数据处理→出 Word）"
-      >
-        <div className="flex items-center gap-3">
-          {(
-            [
-              { v: 'raw', label: '原始数据 Excel', note: '走完整计算链路' },
-              {
-                v: 'result',
-                label: '结果数据 Excel',
-                note: '已算好的结果，直接出 Word（不重算）',
-              },
-            ] as const
-          ).map((opt) => (
-            <label
-              key={opt.v}
-              className="flex cursor-pointer items-center gap-1"
-              title={opt.note}
-            >
-              <input
-                type="radio"
-                name="dataSource"
-                value={opt.v}
-                checked={c.dataSource === opt.v}
-                onChange={() => c.setDataSource(opt.v)}
-                className="accent-vscode-focus"
-              />
-              <span className="text-[11px]">{opt.label}</span>
-            </label>
-          ))}
-        </div>
-      </Field>
-
-      <Field
-        label="输入 Excel"
-        hint="按上方「数据来源」决定：raw=原始检测数据；result=数据处理已生成的结果 xlsx"
-      >
-        <Picker
-          value={c.excelPath}
-          onPick={pickExcel}
-          placeholder="（必选）"
-          muted={!c.excelPath}
-          extra={
-            c.excelPath ? (
-              <ResetBtn onClick={() => c.setExcelPath('')} />
-            ) : undefined
-          }
-        />
-      </Field>
-
-      <Field label="规范" hint="未来可扩展其他规范；当前仅支持 GB 50086-2015">
-        <Select
-          value={c.anchorStandard}
-          onChange={(e) =>
-            c.setAnchorStandard(e.target.value as AnchorStandard)
-          }
-          className="w-full"
-        >
-          {ANCHOR_STANDARDS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-      </Field>
-
-      <Field
-        label="批次列名"
-        hint="输入 Excel 里用于区分批次的列名（一般是「批次」）"
-      >
-        <input
-          type="text"
-          value={c.anchorBatchIdColumn}
-          onChange={(e) => c.setAnchorBatchIdColumn(e.target.value)}
-          className={`${INPUT_CLS} w-full`}
-        />
-      </Field>
-
-      {/* 结果数据来源：工程参数已随结果 xlsx 持久化（隐藏 _批次参数 sheet），无需再填。
-          原始数据来源：按批次填参数（会从输入 xlsx 的「批次信息」sheet 预填，可覆盖）。 */}
-      {c.dataSource === 'result' ? (
-        <Field
-          label="锚杆工程参数"
-          hint="结果数据已含各批工程参数（生成时从结果 xlsx 读取）"
-        >
-          <div className="text-vscode-text-faint border-l-2 border-l-[#3a3a3a] py-1 pl-2 text-[11px] leading-relaxed">
-            已随「结果数据 Excel」持久化，无需在此填写。
+      {/* ───────── 锚杆数据（仅锚杆 / 多类型）───────── */}
+      {showAnchor && (
+        <div className="border-vscode-border space-y-4 rounded-[3px] border bg-[#202020] p-2.5">
+          <div className="text-vscode-text-dim text-[11px] font-medium">
+            锚杆抗拔数据
           </div>
-        </Field>
-      ) : (
-        <AnchorParamsSection
-          excelReady={!!c.excelPath}
-          batchIds={c.anchorBatchIds}
-          paramsByBatch={c.anchorParamsByBatch}
-          loading={c.anchorBatchesLoading}
-          error={c.anchorBatchesError}
-          onSetBatch={c.setAnchorParamsForBatch}
-          onSetAll={c.setAnchorParamsForAllBatches}
-          emptyHint="先选输入 Excel，这里会按批次展开参数表（从「批次信息」sheet 预填）"
-        />
+
+          {isMulti ? (
+            <div className="text-vscode-text-faint border-l-2 border-l-[#3a3a3a] py-1 pl-2 text-[11px] leading-relaxed">
+              多类型组装：锚杆请选「数据处理」出的
+              <b className="text-vscode-text-dim">结果 Excel</b>
+              （工程参数 / 灌浆日期已随结果保存，无需在此重填）。
+            </div>
+          ) : (
+            <Field
+              label="数据来源"
+              hint="result 直接读结果 xlsx 出 Word 不重算；raw 走完整链路（数据处理→出 Word）"
+            >
+              <div className="flex items-center gap-3">
+                {(
+                  [
+                    {
+                      v: 'raw',
+                      label: '原始数据 Excel',
+                      note: '走完整计算链路',
+                    },
+                    {
+                      v: 'result',
+                      label: '结果数据 Excel',
+                      note: '已算好的结果，直接出 Word（不重算）',
+                    },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.v}
+                    className="flex cursor-pointer items-center gap-1"
+                    title={opt.note}
+                  >
+                    <input
+                      type="radio"
+                      name="dataSource"
+                      value={opt.v}
+                      checked={c.dataSource === opt.v}
+                      onChange={() => c.setDataSource(opt.v)}
+                      className="accent-vscode-focus"
+                    />
+                    <span className="text-[11px]">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          <Field
+            label={isMulti ? '锚杆结果 Excel' : '输入 Excel'}
+            hint={
+              isMulti
+                ? '数据处理生成的结果 xlsx（不重算）'
+                : '按上方「数据来源」决定：raw=原始检测数据；result=数据处理已生成的结果 xlsx'
+            }
+          >
+            <Picker
+              value={c.excelPath}
+              onPick={pickExcel}
+              placeholder="（必选）"
+              muted={!c.excelPath}
+              extra={
+                c.excelPath ? (
+                  <ResetBtn onClick={() => c.setExcelPath('')} />
+                ) : undefined
+              }
+            />
+          </Field>
+
+          <Field
+            label="规范"
+            hint="未来可扩展其他规范；当前仅支持 GB 50086-2015"
+          >
+            <Select
+              value={c.anchorStandard}
+              onChange={(e) =>
+                c.setAnchorStandard(e.target.value as AnchorStandard)
+              }
+              className="w-full"
+            >
+              {ANCHOR_STANDARDS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field
+            label="锚杆结果表节号"
+            hint="公司标准：单根锚杆→「表{节号}」，多根→「表{节号}-1 / -2 …」。缺省 2.4"
+          >
+            <input
+              type="text"
+              value={c.sectionNo}
+              onChange={(e) => c.setSectionNo(e.target.value)}
+              placeholder="2.4"
+              className={`${INPUT_CLS} w-24`}
+            />
+          </Field>
+
+          {/* 仅锚杆才需要批次列名 / 按批工程参数 / 灌浆日期（多类型读结果 xlsx 已持久化） */}
+          {!isMulti && (
+            <>
+              <Field
+                label="批次列名"
+                hint="输入 Excel 里用于区分批次的列名（一般是「批次」）"
+              >
+                <input
+                  type="text"
+                  value={c.anchorBatchIdColumn}
+                  onChange={(e) => c.setAnchorBatchIdColumn(e.target.value)}
+                  className={`${INPUT_CLS} w-full`}
+                />
+              </Field>
+
+              {/* 结果数据来源：工程参数已随结果 xlsx 持久化（隐藏 _批次参数 sheet），无需再填。
+                  原始数据来源：按批次填参数（会从输入 xlsx 的「批次信息」sheet 预填，可覆盖）。 */}
+              {c.dataSource === 'result' ? (
+                <Field
+                  label="锚杆工程参数"
+                  hint="结果数据已含各批工程参数（生成时从结果 xlsx 读取）"
+                >
+                  <div className="text-vscode-text-faint border-l-2 border-l-[#3a3a3a] py-1 pl-2 text-[11px] leading-relaxed">
+                    已随「结果数据 Excel」持久化，无需在此填写。
+                  </div>
+                </Field>
+              ) : (
+                <AnchorParamsSection
+                  excelReady={!!c.excelPath}
+                  batchIds={c.anchorBatchIds}
+                  paramsByBatch={c.anchorParamsByBatch}
+                  loading={c.anchorBatchesLoading}
+                  error={c.anchorBatchesError}
+                  onSetBatch={c.setAnchorParamsForBatch}
+                  onSetAll={c.setAnchorParamsForAllBatches}
+                  emptyHint="先选输入 Excel，这里会按批次展开参数表（从「批次信息」sheet 预填）"
+                />
+              )}
+
+              <GroutingDateByBatchSection />
+            </>
+          )}
+        </div>
       )}
 
-      <GroutingDateByBatchSection />
+      {/* ───────── 防火涂层数据（防火涂层 / 多类型）───────── */}
+      {showCoating && (
+        <div className="border-vscode-border space-y-4 rounded-[3px] border bg-[#202020] p-2.5">
+          <div className="text-vscode-text-dim text-[11px] font-medium">
+            防火涂层数据
+          </div>
+          <Field
+            label="防火涂层「测点数据」Excel"
+            hint="coating 装配线展开并填好数字的测点数据 xlsx（coating_expand_template 出的）"
+          >
+            <Picker
+              value={c.coatingInputPath}
+              onPick={pickCoatingExcel}
+              placeholder="（必选）"
+              muted={!c.coatingInputPath}
+              extra={
+                c.coatingInputPath ? (
+                  <ResetBtn onClick={() => c.setCoatingInputPath('')} />
+                ) : undefined
+              }
+            />
+          </Field>
+          <Field label="防火涂层规范" hint="决定布点 / 单位 / 判定口径">
+            <Select
+              value={c.coatingStandard}
+              onChange={(e) =>
+                c.setCoatingStandard(e.target.value as CoatingStandard)
+              }
+              className="w-full"
+            >
+              {COATING_STANDARDS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      )}
     </SectionShell>
+  );
+}
+
+/**
+ * 报告类型选择 —— 第一步：决定出哪种报告，下面只显示对应的输入。
+ * 仅锚杆 / 仅防火涂层 / 两者组装到一份报告；以后加检测类型 = REPORT_TYPES 加一项。
+ */
+function ReportTypeField({
+  value,
+  onChange,
+}: {
+  value: ReportType;
+  onChange: (t: ReportType) => void;
+}) {
+  return (
+    <Field
+      label="报告类型"
+      hint="先选出什么报告，下面只显示对应的输入。模板也要对应：仅锚杆需 {{表格:锚杆}}；仅防火涂层需 {{表格:防火涂层}}；多类型两者都要。"
+    >
+      <div className="grid grid-cols-1 gap-1">
+        {REPORT_TYPES.map((rt) => (
+          <label
+            key={rt.id}
+            className={`flex cursor-pointer items-center gap-2 rounded-[2px] border px-2 py-1.5 ${
+              value === rt.id
+                ? 'border-vscode-focus bg-[#252525]'
+                : 'border-vscode-border bg-[#1f1f1f]'
+            }`}
+          >
+            <input
+              type="radio"
+              name="reportType"
+              value={rt.id}
+              checked={value === rt.id}
+              onChange={() => onChange(rt.id)}
+              className="accent-vscode-focus"
+            />
+            <span className="text-vscode-text text-[12px]">{rt.label}</span>
+          </label>
+        ))}
+      </div>
+    </Field>
   );
 }
 
@@ -250,7 +402,7 @@ export function ReportTemplateSection() {
     <SectionShell>
       <Field
         label="Word 模板"
-        hint="带 {{占位符}} 的 .docx。按锚杆克隆：用 [[每根锚杆]] / [[/每根锚杆]] 包住；按批次输出（灌浆日期等批次级字段）：外层再包 [[批次]] / [[/批次]]。不会做？打开 ActivityBar 的「模板助手」可按层级列字段并自动验证你的模板。"
+        hint="带 {{占位符}} 的薄壳 .docx：要放数据表处写一段表格占位符（程序按规范建表插入）——锚杆写 {{表格:锚杆}}、防火涂层写 {{表格:防火涂层}}、多类型两个都写。项目信息写 {{委托单位}} 等 {{}} 占位符。不会做？打开 ActivityBar 的「模板助手」。"
       >
         <Picker
           value={c.wordTemplatePath}
@@ -450,8 +602,7 @@ function ImportFromDataProcessingBtn() {
  * 跟 AnchorParamsSection 共用状态机（excelReady / loading / error / 空批次 / 有批次）。
  * 不复用 BatchParamsCard：这里只有一个字段（grouting_date），折叠卡片反而臃肿。
  *
- * 模板要写 [[批次]]...[[/批次]] 才会按批次输出；旧模板（只有 [[每根锚杆]]）后端会
- * 走单批路径，此处填的日期会用其中一批的值（或忽略，由 AnchorHandlers.Run 决定）。
+ * 各批灌浆日期会自动出现在该批锚杆的 表2.4「灌浆日期」格（程序建表按批填值，无需 marker）。
  */
 function GroutingDateByBatchSection() {
   const c = useReportGenerator();
@@ -505,19 +656,9 @@ function GroutingDateByBatchSection() {
   return (
     <Field
       label={`灌浆日期（按批次，共 ${c.anchorBatchIds.length} 批）`}
-      hint="不同批次灌浆日期可能不同；模板里写 [[批次]]...[[/批次]] 后端才按批输出"
+      hint="不同批次灌浆日期可能不同；各批日期会自动填进该批锚杆表的「灌浆日期」格"
     >
       <div className="space-y-2">
-        {/* 醒目提示：批次段是按批输出的必要条件 */}
-        <div className="border-l-2 border-l-yellow-500 bg-[#2d2620] px-2 py-1.5 text-[10px] leading-relaxed text-yellow-300/90">
-          <i className="codicon codicon-info mr-1 !text-[11px]" />
-          模板里必须含{' '}
-          <code className="rounded bg-black/30 px-1 text-yellow-200">
-            [[批次]]...[[/批次]]
-          </code>{' '}
-          段，才能按批次输出不同灌浆日期；否则只取第一批的值灌入项目级。
-        </div>
-
         <div className="text-vscode-text-faint flex items-center justify-between text-[10px]">
           <span>
             已填 {filled} / {c.anchorBatchIds.length}

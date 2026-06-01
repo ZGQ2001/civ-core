@@ -22,7 +22,10 @@ import {
 } from 'react';
 
 import { rpc } from '../../lib/rpc';
-import { anchorRunResultSchema } from '../../lib/rpcSchemas';
+import {
+  anchorRunResultSchema,
+  reportAssembleResultSchema,
+} from '../../lib/rpcSchemas';
 import { logLine, useShell } from '../../lib/shell';
 import {
   ANCHOR_DEFAULT_BATCH_COL,
@@ -31,11 +34,39 @@ import {
   type AnchorStandard,
 } from '../data_processing/types';
 import type { ValidateResult } from '../template_helper/types';
-import type { ReportRunRes, ReportUserInputs } from './types';
+import {
+  COATING_STANDARDS,
+  type CoatingStandard,
+  type ReportRunRes,
+  type ReportType,
+  type ReportUserInputs,
+} from './types';
 import { DEFAULT_CATALOG_ID } from './types';
 
-/** 报告按锚杆展开必需的重复锚点 —— 与 C# ReportGenerator.DefaultPerRowStartMarker 对齐。 */
-const REQUIRED_PER_ROW_MARKER = '[[每根锚杆]]';
+/** 锚杆数据表占位符 —— 与 C# AnchorWordTable.TablePlaceholder 对齐。 */
+export const ANCHOR_TABLE_PLACEHOLDER = '{{表格:锚杆}}';
+/** 防火涂层数据表占位符 —— 与 C# CoatingDocxReport.TablePlaceholder 对齐。 */
+export const COATING_TABLE_PLACEHOLDER = '{{表格:防火涂层}}';
+
+/** 取路径的所在目录（兼容 Windows \ 与 / 分隔符）。 */
+function dirOf(p: string): string {
+  const i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/'));
+  return i >= 0 ? p.slice(0, i) : '';
+}
+
+/** 拼接目录 + 文件名（按 dir 用的分隔符；dir 为空时只返回文件名）。 */
+function joinPath(dir: string, name: string): string {
+  if (!dir) return name;
+  const sep = dir.includes('\\') ? '\\' : '/';
+  return dir.replace(/[\\/]+$/, '') + sep + name;
+}
+
+/** 报告文件名：补 .docx 后缀；空则用 fallback。 */
+function reportFileName(name: string, fallback: string): string {
+  const n = name.trim();
+  if (!n) return fallback;
+  return n.toLowerCase().endsWith('.docx') ? n : `${n}.docx`;
+}
 
 /// 批次级 user_input map 的 RPC wire 类型：{ [batchId]: { [key]: value } }
 /// 目前唯一批次级 key 是 grouting_date（见 types.ts BATCH_DIM_KEYS），未来加字段在此扩展。
@@ -83,6 +114,16 @@ interface State {
   anchorBatchesError: string | null;
   anchorParamsByBatch: Record<string, AnchorParams>;
 
+  // ── 报告类型 ──
+  // anchor  → 仅锚杆（anchor.run / report.run_from_result）
+  // coating → 仅防火涂层（report.assemble，sections=[涂层]）
+  // multi   → 锚杆 + 防火涂层组装（report.assemble，模板含两个占位符；锚杆读结果 xlsx 不重算）
+  reportType: ReportType;
+  coatingInputPath: string;
+  coatingStandard: CoatingStandard;
+  /** 锚杆结果表节号（单根→「表{节号}」/多根→「表{节号}-1…」）。 */
+  sectionNo: string;
+
   // 本工具自己 own
   wordTemplatePath: string;
   outputDir: string;
@@ -119,6 +160,12 @@ interface Actions {
   setAnchorBatchIdColumn: (s: string) => void;
   setAnchorParamsForBatch: (batchId: string, params: AnchorParams) => void;
   setAnchorParamsForAllBatches: (params: AnchorParams) => void;
+
+  // 报告类型 + 多检测类型组装数据源
+  setReportType: (t: ReportType) => void;
+  setCoatingInputPath: (p: string) => void;
+  setCoatingStandard: (s: CoatingStandard) => void;
+  setSectionNo: (s: string) => void;
 
   // Word
   setWordTemplatePath: (p: string) => void;
@@ -198,6 +245,14 @@ export function ReportGeneratorProvider({
   const [anchorParamsByBatch, setAnchorParamsByBatch] = useState<
     Record<string, AnchorParams>
   >({});
+
+  // ── 报告类型 + 多检测类型组装 state ──
+  const [reportType, setReportType] = useState<ReportType>('anchor');
+  const [coatingInputPath, setCoatingInputPath] = useState('');
+  const [coatingStandard, setCoatingStandard] = useState<CoatingStandard>(
+    COATING_STANDARDS[0],
+  );
+  const [sectionNo, setSectionNo] = useState('2.4');
 
   // ── Word state ──
   const [wordTemplatePath, setWordTemplatePath] = useState('');
@@ -288,6 +343,9 @@ export function ReportGeneratorProvider({
   // 就保留，否则用 sheet 值，再否则默认。result xlsx 无此 sheet → 当空处理。
   const batchReqIdRef = useRef(0);
   useEffect(() => {
+    // 只有「仅锚杆」模式才需要批次清单（驱动按批工程参数 / 灌浆日期 UI）。
+    // 多类型组装锚杆读结果 xlsx（参数 / 日期已持久化）、仅涂层无锚杆——都不需要。
+    if (reportType !== 'anchor') return;
     if (!excelPath) return;
     const myId = ++batchReqIdRef.current;
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -338,7 +396,7 @@ export function ReportGeneratorProvider({
       .finally(() => {
         if (myId === batchReqIdRef.current) setAnchorBatchesLoading(false);
       });
-  }, [excelPath, sheet, anchorBatchIdColumn]);
+  }, [excelPath, sheet, anchorBatchIdColumn, reportType]);
 
   // ── 自动体检模板（选/换 Word 模板 或 切检测项目时跑 template.validate）──
   // 复用模板助手同一 RPC（上下游共用一份校验逻辑），把问题前置到「生成」之前。
@@ -438,11 +496,42 @@ export function ReportGeneratorProvider({
   }, [upstream, dpSnapshot, shell, setExcelPath]);
 
   // ── 就绪态 ──
-  // dataSource=result 时不再要求填批次参数（结果 xlsx 隐藏 metadata 已带工程参数）；
-  // 也不阻塞 anchor.list_batches 失败的情况，因为 result 路径不依赖批次列名。
+  // 模板里写了但本次没提供数据的 {{表格:xxx}} 占位符由后端 DocxReportAssembler 清掉；
+  // 提供了数据但模板缺对应占位符时后端报清晰错误 —— 所以前端不再用 marker 门禁，
+  // 只校验「数据齐 + 选了模板」，其余交后端兜底。
+  //
+  // coating：仅需防火涂层「测点数据」Excel + 模板，不碰锚杆。
+  // multi  ：锚杆段读「结果 Excel」（report.assemble 不重算），另需防火涂层 Excel；
+  //          不要求填批次工程参数（结果 xlsx 已持久化）。
+  // anchor ：dataSource=raw 才要求批次参数齐（result 路径 metadata 已带参数）。
   const readiness: Readiness = useMemo(() => {
-    if (!excelPath) return { ready: false, reason: '请选输入 Excel' };
-    if (dataSource === 'raw') {
+    // 仅防火涂层：只要测点 Excel + 模板（含 {{表格:防火涂层}}），不碰锚杆
+    if (reportType === 'coating') {
+      if (!coatingInputPath.trim())
+        return { ready: false, reason: '请选防火涂层「测点数据」Excel' };
+      if (!wordTemplatePath.trim())
+        return {
+          ready: false,
+          reason:
+            '请选 Word 模板（含 {{表格:防火涂层}} 占位符 + 项目信息 {{}}）',
+        };
+      return { ready: true, reason: null };
+    }
+
+    // 仅锚杆 / 多类型：都要锚杆 Excel
+    if (!excelPath)
+      return {
+        ready: false,
+        reason:
+          reportType === 'multi' ? '请选锚杆结果 Excel' : '请选输入 Excel',
+      };
+
+    if (reportType === 'multi') {
+      // 多类型组装：锚杆读结果 xlsx（不重算、工程参数已持久化），另需防火涂层测点 Excel
+      if (!coatingInputPath.trim())
+        return { ready: false, reason: '请选防火涂层「测点数据」Excel' };
+    } else if (dataSource === 'raw') {
+      // 仅锚杆 + 原始数据：要按批次填齐工程参数
       if (anchorBatchesLoading)
         return { ready: false, reason: '正在加载批次…' };
       if (anchorBatchesError)
@@ -459,34 +548,26 @@ export function ReportGeneratorProvider({
           reason: `还有 ${missing.length}/${anchorBatchIds.length} 批次未填工程参数`,
         };
     }
+
     if (!wordTemplatePath.trim())
       return {
         ready: false,
-        reason: '请选 Word 模板（带 {{占位符}} + [[每根锚杆]] 锚点）',
-      };
-    // 模板体检：已确认模板缺 [[每根锚杆]] 重复锚点 → 报告必然无法按锚杆展开，前置拦截。
-    // （生成始终走 anchor 路径、必需此锚点；体检还在跑 / 失败时 fail-open，交后端兜底报错）
-    if (
-      templateCheck &&
-      !templateCheck.markers.some(
-        (m) => m.type === 'open' && m.text === REQUIRED_PER_ROW_MARKER,
-      )
-    )
-      return {
-        ready: false,
         reason:
-          '模板缺 [[每根锚杆]] 重复锚点 —— 报告无法按锚杆展开（见下方「模板体检」，可一键复制锚点段）',
+          reportType === 'multi'
+            ? '请选 Word 模板（含 {{表格:锚杆}} + {{表格:防火涂层}} 占位符）'
+            : '请选 Word 模板（含 {{表格:锚杆}} 占位符 + 项目信息 {{}}）',
       };
     return { ready: true, reason: null };
   }, [
+    reportType,
     excelPath,
+    coatingInputPath,
     dataSource,
     anchorBatchesLoading,
     anchorBatchesError,
     anchorBatchIds,
     anchorParamsByBatch,
     wordTemplatePath,
-    templateCheck,
   ]);
 
   // ── run ──
@@ -499,27 +580,95 @@ export function ReportGeneratorProvider({
     setRunning(true);
     setRunError(null);
     setLastResult(null);
-    shell.appendOutput(
-      logLine(`[报告] 开始生成: ${excelPath} + ${wordTemplatePath}`),
-    );
+
+    // 清掉空字符串字段
+    const userInputsTrimmed: Record<string, string> = {};
+    for (const [k, v] of Object.entries(userInputs)) {
+      if (v && v.trim()) userInputsTrimmed[k] = v;
+    }
+    // 批次级 user_inputs：只把有填的批次打包发过去（空值跳过，后端按缺省处理）
+    const batchUserInputs: BatchUserInputsWire = {};
+    for (const b of anchorBatchIds) {
+      const v = (groutingDateByBatch[b] ?? '').trim();
+      if (v) batchUserInputs[b] = { grouting_date: v };
+    }
+
     try {
-      // 清掉空字符串字段
-      const userInputsTrimmed: Record<string, string> = {};
-      for (const [k, v] of Object.entries(userInputs)) {
-        if (v && v.trim()) userInputsTrimmed[k] = v;
+      // ── 报告组装：report.assemble（防火涂层 / 多类型）──
+      //   coating → sections=[涂层]；输出目录默认在涂层测点 xlsx 同级
+      //   multi   → sections=[锚杆(结果 xlsx) + 涂层]；输出目录默认在锚杆 xlsx 同级
+      // 仅锚杆走下面的单类型路径（anchor.run / report.run_from_result）。
+      if (reportType === 'coating' || reportType === 'multi') {
+        const isMulti = reportType === 'multi';
+        const baseForDir = isMulti ? excelPath : coatingInputPath;
+        const outDir = outputDir.trim() || dirOf(baseForDir);
+        const outputDocx = joinPath(
+          outDir,
+          reportFileName(
+            reportName,
+            isMulti ? '联合检测报告.docx' : '防火涂层检测报告.docx',
+          ),
+        );
+
+        const sections: Record<string, unknown>[] = [];
+        if (isMulti) {
+          const anchorSection: Record<string, unknown> = {
+            type: 'anchor',
+            result_xlsx: excelPath,
+            standard: anchorStandard,
+            section_no: sectionNo.trim() || '2.4',
+          };
+          if (curveImageDir.trim())
+            anchorSection.curve_image_dir = curveImageDir.trim();
+          if (Object.keys(batchUserInputs).length > 0)
+            anchorSection.batch_user_inputs = batchUserInputs;
+          sections.push(anchorSection);
+        }
+        sections.push({
+          type: 'coating',
+          input_xlsx: coatingInputPath.trim(),
+          standard: coatingStandard,
+        });
+
+        shell.appendOutput(
+          logLine(
+            `[报告] 开始组装（${isMulti ? '锚杆 + 防火涂层' : '防火涂层'}）→ ${outputDocx}`,
+          ),
+        );
+        const res = await rpc(
+          'report.assemble',
+          {
+            word_template_path: wordTemplatePath.trim(),
+            output_docx: outputDocx,
+            user_inputs: userInputsTrimmed,
+            sections,
+          },
+          reportAssembleResultSchema,
+        );
+
+        const display: ReportRunRes = {
+          output: res.output,
+          summary: `${res.tables} 张表（${res.sections.join(' + ')}）`,
+          unknownKeys: res.unknown_keys,
+          missingImages: res.missing_images,
+          tables: res.tables,
+          sections: res.sections,
+        };
+        setLastResult(display);
+        shell.appendOutput(
+          logLine(`[报告] 组装完成: ${res.tables} 张表 → ${res.output}`),
+        );
+        shell.notifyFilesChanged();
+        return display;
       }
 
-      // 批次级 user_inputs：只把有填的批次打包发过去（空值跳过，后端按缺省处理）
-      const batchUserInputs: BatchUserInputsWire = {};
-      for (const b of anchorBatchIds) {
-        const v = (groutingDateByBatch[b] ?? '').trim();
-        if (v) batchUserInputs[b] = { grouting_date: v };
-      }
-
+      // ── 单类型锚杆 ──
       // dataSource 分支：
       //   raw    → 走 anchor.run（完整链路：读原始 → 算 → 写结果 xlsx → 出 Word）
       //   result → 走 report.run_from_result（读结果 xlsx 直接出 Word，不重算 / 不写新 xlsx）
-      // 解决用户反馈 #2+#7「报告填充不应再重算 / 应消费结果文件」。
+      shell.appendOutput(
+        logLine(`[报告] 开始生成: ${excelPath} + ${wordTemplatePath}`),
+      );
       const method =
         dataSource === 'result' ? 'report.run_from_result' : 'anchor.run';
 
@@ -527,6 +676,7 @@ export function ReportGeneratorProvider({
         standard: anchorStandard,
         word_template_path: wordTemplatePath.trim(),
         user_inputs: userInputsTrimmed,
+        section_no: sectionNo.trim() || '2.4',
       };
       if (dataSource === 'result') {
         params.result_xlsx = excelPath;
@@ -550,13 +700,14 @@ export function ReportGeneratorProvider({
       const wordOut = res.word_outputs[0];
       const display: ReportRunRes = {
         output: wordOut,
+        summary: `${res.anchors_total} 根锚杆`,
         rowsRendered: res.anchors_total,
         unknownKeys: res.word_unknown_keys ?? [],
         missingImages: res.word_missing_images ?? [],
       };
       setLastResult(display);
       shell.appendOutput(
-        logLine(`[报告] 完成: ${display.rowsRendered} 根 → ${wordOut}`),
+        logLine(`[报告] 完成: ${res.anchors_total} 根 → ${wordOut}`),
       );
       shell.notifyFilesChanged();
       return display;
@@ -572,6 +723,10 @@ export function ReportGeneratorProvider({
     readiness,
     running,
     excelPath,
+    reportType,
+    coatingInputPath,
+    coatingStandard,
+    sectionNo,
     dataSource,
     sheet,
     anchorStandard,
@@ -618,6 +773,10 @@ export function ReportGeneratorProvider({
       anchorBatchesLoading,
       anchorBatchesError,
       anchorParamsByBatch,
+      reportType,
+      coatingInputPath,
+      coatingStandard,
+      sectionNo,
       wordTemplatePath,
       outputDir,
       curveImageDir,
@@ -640,6 +799,10 @@ export function ReportGeneratorProvider({
       setAnchorBatchIdColumn,
       setAnchorParamsForBatch,
       setAnchorParamsForAllBatches,
+      setReportType,
+      setCoatingInputPath,
+      setCoatingStandard,
+      setSectionNo,
       setWordTemplatePath,
       setOutputDir,
       setCurveImageDir,
@@ -663,6 +826,10 @@ export function ReportGeneratorProvider({
       anchorBatchesLoading,
       anchorBatchesError,
       anchorParamsByBatch,
+      reportType,
+      coatingInputPath,
+      coatingStandard,
+      sectionNo,
       wordTemplatePath,
       outputDir,
       curveImageDir,

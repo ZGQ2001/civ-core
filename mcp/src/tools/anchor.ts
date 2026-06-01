@@ -82,11 +82,10 @@ export const anchorRun: ToolDef = {
   description:
     "运行锚杆抗拔（GB 50086-2015）全流程：读 Excel + 按批次套工程参数 + 算 + 写「<批>-数据分析」sheet。" +
     "返回 {batches, anchors_total, anchors_qualified, output}。" +
-    "\n\n可选 word_template_path 触发 Word 报告。三层模板嵌套：外层 `[[检测项目]]...[[/检测项目]]`" +
-    "（检测项目级，可放 {{检测项目}}）→ 中层 `[[批次]]...[[/批次]]`（批次级，可放 {{批次}} {{灌浆日期}}）→" +
-    "内层 `[[每根锚杆]]...[[/每根锚杆]]`（构件级，会按每根锚杆克隆一次）。后端按命中的最外层 marker " +
-    "决定走单层 / 两层 / 三层路径，向后兼容旧模板。" +
-    "`{{img:曲线图}}` 占位符配合 curve_image_dir 自动按 anchor_id 匹配 PNG 嵌入。" +
+    "\n\n可选 word_template_path 触发 Word 报告（薄壳 + 占位符，不再用 marker/「锚杆专用模板」）：" +
+    "要放表处写一段 `{{表格:锚杆}}`，程序按规范建逐根 表2.4（单根→「表{节号}」/多根→「表{节号}-1…」，" +
+    "节号由 section_no 定、缺省 2.4）插在该处；表内 `{{img:曲线图}}` 配 curve_image_dir 按 anchor_id 嵌图；" +
+    "项目信息写 {{委托单位}} 等 {{}} 占位符、由 user_inputs/batch_user_inputs 填（各批灌浆日期出现在本批锚杆表）。" +
     "\n\n典型流程：先 anchor_list_batches 拿批次清单 → 为每批填 params_by_batch → 调本 tool。",
   inputSchema: {
     input_xlsx: z.string().describe("锚杆数据 Excel 绝对路径"),
@@ -117,8 +116,13 @@ export const anchorRun: ToolDef = {
       .string()
       .optional()
       .describe(
-        "Word 模板 docx 绝对路径。给了就出 Word 报告，留空只出 Excel。",
+        "Word 薄壳模板 docx 绝对路径，含 {{表格:锚杆}} 数据表占位符 + 项目信息 {{}} 占位符。" +
+          "给了就出 Word 报告，留空只出 Excel。",
       ),
+    section_no: z
+      .string()
+      .optional()
+      .describe("锚杆结果表节号；单根→「表{节号}」/多根→「表{节号}-1…」，缺省 2.4"),
     word_output_dir: z
       .string()
       .optional()
@@ -143,7 +147,7 @@ export const anchorRun: ToolDef = {
       .record(z.string(), z.record(z.string(), z.string()))
       .optional()
       .describe(
-        "批次级用户输入（{batchId: {key: value}}）—— 模板含 `[[批次]]...[[/批次]]` 时按批次注入。" +
+        "批次级用户输入（{batchId: {key: value}}）—— 各批的值出现在本批锚杆表（如灌浆日期格）。" +
           "目前唯一支持的字段：grouting_date（灌浆日期）。例：" +
           "{'B1': {grouting_date: '2026-05-01'}, 'B2': {grouting_date: '2026-05-03'}}",
       ),

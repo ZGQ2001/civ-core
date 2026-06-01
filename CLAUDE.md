@@ -12,73 +12,7 @@
 
 ## 架构
 
-```mermaid
-graph TB
-    subgraph Frontend ["前端 (Vite + React 19 + TS + Tailwind v4)"]
-        UI["VSCode 风格布局<br/>TitleBar / SideBar / Editor / StatusBar"]
-        RPC_Client["rpc.ts (JSON-RPC 2.0 客户端)"]
-        UI --> RPC_Client
-    end
-
-    subgraph Agent ["AI Agent（Claude Code / Codex / Cursor）"]
-        A_Client["MCP Client（stdio）"]
-    end
-
-    subgraph Tauri ["Tauri 2 主进程 (Rust)"]
-        IPC_Cmd["rpc_call (tauri::command)"]
-        Router["SidecarRouter<br/>前缀路由分发"]
-        RPC_Client -- "invoke('rpc_call')" --> IPC_Cmd
-        IPC_Cmd --> Router
-    end
-
-    subgraph Mcp ["MCP Server (Node + TS · civ-core-mcp)"]
-        Mcp_Stdio["StdioServerTransport"]
-        Mcp_Tools["25 tools<br/>anchor / leeb / workspace / template<br/>report / report_preset / xlsx / plot_curves / doc"]
-        Mcp_Router["SidecarRouter<br/>同前缀策略，独立实例"]
-        A_Client -- "MCP (stdio)" --> Mcp_Stdio
-        Mcp_Stdio --> Mcp_Tools
-        Mcp_Tools --> Mcp_Router
-    end
-
-    subgraph CSharp ["C# Sidecar (.NET 9 · civ-doc)"]
-        CS_RPC["JsonRpcServer.RunAsync()"]
-        CS_Handlers["Handlers<br/>Doc / Leeb / Anchor / Xlsx<br/>Template / Catalog / Report<br/>ReportPreset / Workspace / Files<br/>PdfTools / Word2Pdf"]
-        CS_Calc["Calc 计算<br/>LeebMath / AnchorCalculator<br/>AnchorResultReader"]
-        CS_CL["ClosedXML / OpenXML<br/>Excel/Word 读写 + docx→PDF（COM）"]
-        CS_SQL["Microsoft.Data.Sqlite<br/>standards.db 管理"]
-        CS_RPC --> CS_Handlers
-        CS_Handlers --> CS_Calc
-        CS_Handlers --> CS_CL
-        CS_Handlers --> CS_SQL
-    end
-
-    subgraph Python ["Python Sidecar (3.12 · civ_core.api)"]
-        Py_RPC["server.serve() / Dispatcher"]
-        Py_Handlers["plot_curves.*<br/>matplotlib 图表引擎"]
-        Py_RPC --> Py_Handlers
-    end
-
-    subgraph Storage ["外部存储"]
-        DB["~/.civ-core/standards.db<br/>规范数据库"]
-        Disk["工作区目录"]
-    end
-
-    Router -- "默认路由（全部）" --> CS_RPC
-    Router -- "白名单路由<br/>plot_curves.*" --> Py_RPC
-    Mcp_Router -- "默认路由（全部）" --> CS_RPC
-    Mcp_Router -- "白名单路由<br/>plot_curves.*" --> Py_RPC
-
-    CS_SQL -- "读写" --> DB
-    CS_CL -- "读写" --> Disk
-
-    style Frontend fill:#1e1e2e,stroke:#cba6f7,color:#cdd6f4
-    style Agent fill:#1e1e2e,stroke:#f5c2e7,color:#cdd6f4
-    style Tauri fill:#11111b,stroke:#89b4fa,color:#cdd6f4
-    style Mcp fill:#11111b,stroke:#fab387,color:#cdd6f4
-    style CSharp fill:#181825,stroke:#a6e3a1,color:#cdd6f4
-    style Python fill:#181825,stroke:#f9e2af,color:#cdd6f4
-    style Storage fill:#313244,stroke:#f5c2e7,color:#cdd6f4
-```
+前端(Vite+React) → Tauri(Rust) 主进程，spawn C# sidecar(默认路由，业务逻辑+Excel/Word/PDF/标准库) 和 Python sidecar(白名单路由，仅plot_curves)。agent 入口走 MCP server(Node)，同协议同路由策略，独立 spawn 两个 sidecar。
 
 **双客户端 / 双 sidecar**：前端走 Tauri，agent 走 MCP server，两条入口各起一组 sidecar 子进程（不共享）。所有 sidecar 同协议、同错误码、同前缀路由策略——业务逻辑只在 sidecar 里，入口层只做转发。Python 仅保留 plot_curves（matplotlib 图表引擎），其余全由 C# 接管（含 standards.db 管理）。
 

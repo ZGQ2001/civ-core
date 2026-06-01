@@ -14,7 +14,11 @@ import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { cn } from '../../lib/cn';
 import { logLine, useShell } from '../../lib/shell';
 import { ErrorBanner, RunBtn, ToolHeader } from '../_shared/forms';
-import { useReportGenerator } from './controller';
+import {
+  ANCHOR_TABLE_PLACEHOLDER,
+  COATING_TABLE_PLACEHOLDER,
+  useReportGenerator,
+} from './controller';
 
 export function ReportGeneratorPage({
   appendOutput,
@@ -27,7 +31,7 @@ export function ReportGeneratorPage({
   const handleRun = useCallback(async () => {
     const res = await c.run();
     if (res) {
-      appendOutput?.(`完成：${res.rowsRendered} 根 → ${res.output}`);
+      appendOutput?.(`完成：${res.summary} → ${res.output}`);
     }
     // 失败由 run() 内部统一 appendOutput；不在 await 后读 c.runError（陈旧闭包值）
   }, [c, appendOutput]);
@@ -131,9 +135,7 @@ function StatusArea({
       <div className="rounded border border-l-2 border-l-green-500 bg-[#252525] p-4 text-xs">
         <div className="flex items-center gap-2 text-green-400">
           <i className="codicon codicon-pass !text-[16px]" />
-          <span className="font-medium">
-            生成成功：{c.lastResult.rowsRendered} 根锚杆
-          </span>
+          <span className="font-medium">生成成功：{c.lastResult.summary}</span>
         </div>
         <div className="text-vscode-text-dim mt-1 break-all">
           {c.lastResult.output}
@@ -189,7 +191,8 @@ function StatusArea({
         在右侧「调参」面板填好输入
       </div>
       <div className="text-vscode-text-faint mt-1 max-w-md text-xs leading-relaxed">
-        依次填「数据」「模板」「项目字段」三个 tab，就绪后点上方「生成 Word
+        先在「数据」tab 选报告类型（锚杆 / 防火涂层 /
+        多类型），再依次填模板、项目字段， 就绪后点上方「生成 Word
         报告」。生成结果与报错都会显示在这里。
       </div>
     </div>
@@ -199,9 +202,8 @@ function StatusArea({
 /**
  * 模板体检卡 —— 选完 Word 模板后（生成前）摆出 template.validate 的结果，
  * 聚焦「这模板能不能出报告」：
- *   - 缺 [[每根锚杆]] 重复锚点 → 红字 + 一键复制锚点段（这是生成必然失败的根因）
- *   - 检测到的锚点 chips（[[每根锚杆]] / [[批次]]）
- *   - 需修正（层级错配）/ 未识别占位符（生成时会留原文）
+ *   - 数据表占位符（{{表格:锚杆}} / {{表格:防火涂层}}）提醒 + 一键复制
+ *   - 需修正（层级错配）/ 未识别占位符（生成时会留原文；表格占位符不计入）
  *   - 去模板助手看完整字段对照的指引
  *
  * 跟模板助手的完整审计分工：这里是下游「就绪检查」，模板助手是上游「字段编辑 + 全量审计」。
@@ -233,14 +235,32 @@ function TemplateCheckCard() {
   const tc = c.templateCheck;
   if (!tc) return null;
 
-  const hasPerRow = tc.markers.some(
-    (m) => m.type === 'open' && m.text === '[[每根锚杆]]',
+  // 数据表占位符（{{表格:xxx}}）不是 catalog 字段，会落在 unrecognized；这里单独识别，
+  // 既不当成「未识别错误」，又能按报告类型提示用户该写哪个占位符。
+  const isTablePh = (ph: string) =>
+    ph.includes('表格:锚杆') || ph.includes('表格:防火涂层');
+  const hasAnchorTable = tc.unrecognized.some((u) =>
+    u.placeholder.includes('表格:锚杆'),
   );
-  const hasBatch = tc.markers.some(
-    (m) => m.type === 'open' && m.text === '[[批次]]',
+  const hasCoatingTable = tc.unrecognized.some((u) =>
+    u.placeholder.includes('表格:防火涂层'),
   );
+  const fieldUnrecognized = tc.unrecognized.filter(
+    (u) => !isTablePh(u.placeholder),
+  );
+
+  // 当前报告类型需要哪些数据表占位符（缺了生成会报错）
+  const needAnchor = c.reportType === 'anchor' || c.reportType === 'multi';
+  const needCoating = c.reportType === 'coating' || c.reportType === 'multi';
+  const missingRequired: string[] = [];
+  if (needAnchor && !hasAnchorTable)
+    missingRequired.push(ANCHOR_TABLE_PLACEHOLDER);
+  if (needCoating && !hasCoatingTable)
+    missingRequired.push(COATING_TABLE_PLACEHOLDER);
   const allClear =
-    hasPerRow && tc.hints.length === 0 && tc.unrecognized.length === 0;
+    missingRequired.length === 0 &&
+    tc.hints.length === 0 &&
+    fieldUnrecognized.length === 0;
 
   return (
     <div className="space-y-3 text-xs">
@@ -264,64 +284,39 @@ function TemplateCheckCard() {
         </span>
       </div>
 
-      {/* 缺 [[每根锚杆]] —— 生成必然失败的根因，最醒目 */}
-      {!hasPerRow && (
-        <div className="rounded border border-l-2 border-l-red-500 bg-[#2a1d1d] p-3">
-          <div className="flex items-center gap-1.5 text-red-300">
-            <i className="codicon codicon-error !text-[13px]" />
-            <span className="font-medium">
-              缺 [[每根锚杆]] 重复锚点 —— 报告无法按锚杆展开
-            </span>
-          </div>
-          <div className="text-vscode-text-dim mt-1.5 leading-relaxed">
-            在要按锚杆重复的内容（表 2.4-… 标题段 + 数据表）
-            <b className="text-vscode-text">上方独占一段</b>写{' '}
-            <code className="rounded bg-black/30 px-1 text-red-200">
-              [[每根锚杆]]
-            </code>
-            ，<b className="text-vscode-text">下方独占一段</b>写{' '}
-            <code className="rounded bg-black/30 px-1 text-red-200">
-              [[/每根锚杆]]
-            </code>
-            。点下方按钮复制后粘到 Word，各占一行。
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <CopyChip text="[[每根锚杆]]" />
-            <CopyChip text="[[/每根锚杆]]" />
-          </div>
+      {/* 数据表占位符提醒 —— 按报告类型标注「需要 / 不需要」+ 是否已写 */}
+      <div className="border-vscode-border space-y-1.5 rounded border bg-[#252525] p-2.5">
+        <div className="text-vscode-text-dim leading-relaxed">
+          数据表占位符（程序在此处按规范建表插入）：
         </div>
-      )}
-
-      {/* 检测到的锚点 chips */}
-      <div className="text-vscode-text-faint flex flex-wrap items-center gap-1.5 text-[11px]">
-        <span>检测到锚点：</span>
-        {tc.markers.length === 0 ? (
-          <span className="italic">无</span>
-        ) : (
-          tc.markers.map((m, i) => (
-            <code
-              key={`${m.text}-${i}`}
-              className="border-vscode-border text-vscode-text-dim rounded border bg-[#252525] px-1"
-            >
-              {m.text}
-            </code>
-          ))
+        <div className="flex flex-wrap items-center gap-2">
+          <TablePhChip
+            label="锚杆"
+            placeholder={ANCHOR_TABLE_PLACEHOLDER}
+            need={needAnchor}
+            present={hasAnchorTable}
+          />
+          <span className="text-vscode-text-faint">·</span>
+          <TablePhChip
+            label="防火涂层"
+            placeholder={COATING_TABLE_PLACEHOLDER}
+            need={needCoating}
+            present={hasCoatingTable}
+          />
+        </div>
+        {missingRequired.length > 0 && (
+          <div className="text-[11px] text-yellow-300/90">
+            模板缺少本报告类型需要的占位符：
+            {missingRequired.map((ph) => (
+              <code key={ph} className="mx-0.5 rounded bg-black/30 px-1">
+                {ph}
+              </code>
+            ))}
+            ——生成时会报「缺占位符」。点上方对应 chip 复制后粘到 Word
+            要放表的位置，独占一段。
+          </div>
         )}
       </div>
-
-      {/* 批次锚点提示：有多批不同灌浆日期时才需要 [[批次]] */}
-      {hasPerRow && !hasBatch && (
-        <div className="text-vscode-text-faint border-l-2 border-l-[#3a3a3a] pl-2 text-[11px] leading-relaxed">
-          模板未含{' '}
-          <code className="rounded bg-black/30 px-1">[[批次]]...[[/批次]]</code>{' '}
-          段：多批次不同灌浆日期时需要它才能按批输出；只有一批 /
-          日期相同可忽略。
-          <span className="ml-1 inline-flex gap-1.5 align-middle">
-            <CopyChip text="[[批次]]" small />
-            <CopyChip text="[[/批次]]" small />
-          </span>
-        </div>
-      )}
 
       {/* 需修正：层级错配等（hints） */}
       {tc.hints.length > 0 && (
@@ -362,15 +357,15 @@ function TemplateCheckCard() {
         </div>
       )}
 
-      {/* 未识别占位符：生成时会留原文 */}
-      {tc.unrecognized.length > 0 && (
+      {/* 未识别占位符：生成时会留原文（数据表 {{表格:xxx}} 已排除，不算错误） */}
+      {fieldUnrecognized.length > 0 && (
         <div className="rounded-[2px] border border-l-2 border-yellow-600/40 border-l-yellow-500 bg-[#2a2620] px-2 py-1.5">
           <div className="text-yellow-200">
             <i className="codicon codicon-question mr-1 !text-[12px]" />
-            {tc.unrecognized.length} 个未识别占位符（生成时保留原文不替换）：
+            {fieldUnrecognized.length} 个未识别占位符（生成时保留原文不替换）：
           </div>
           <div className="text-vscode-text-dim mt-1 flex flex-wrap gap-1.5">
-            {tc.unrecognized.map((u, i) => (
+            {fieldUnrecognized.map((u, i) => (
               <code
                 key={`${u.placeholder}-${i}`}
                 className="rounded bg-black/30 px-1 text-yellow-200"
@@ -387,6 +382,46 @@ function TemplateCheckCard() {
         完整字段对照 / 编辑见 ActivityBar「模板助手」。
       </div>
     </div>
+  );
+}
+
+/**
+ * 数据表占位符状态 chip —— 按「本报告类型是否需要 + 模板里是否已写」着色：
+ *   需要 + 已写 → 绿勾；需要 + 没写 → 黄警告；不需要 → 暗（标「不需要」）。
+ * 附一键复制占位符文本。
+ */
+function TablePhChip({
+  label,
+  placeholder,
+  need,
+  present,
+}: {
+  label: string;
+  placeholder: string;
+  need: boolean;
+  present: boolean;
+}) {
+  const color = !need
+    ? 'text-vscode-text-faint'
+    : present
+      ? 'text-green-400'
+      : 'text-yellow-300';
+  const icon = !need
+    ? 'codicon-circle-outline'
+    : present
+      ? 'codicon-check'
+      : 'codicon-warning';
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={cn('inline-flex items-center gap-1', color)}>
+        <i className={cn('codicon !text-[12px]', icon)} />
+        {label}
+        {!need && (
+          <span className="text-vscode-text-faint text-[10px]">（不需要）</span>
+        )}
+      </span>
+      <CopyChip text={placeholder} small />
+    </span>
   );
 }
 

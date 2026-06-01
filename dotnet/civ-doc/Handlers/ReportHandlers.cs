@@ -12,6 +12,7 @@
 
 using System.Text.Json;
 using CivCore.Doc.Calc.Anchor;
+using CivCore.Doc.Calc.Coating;
 using CivCore.Doc.Catalog;
 using CivCore.Doc.ReportTables;
 using CivCore.Doc.Server;
@@ -25,6 +26,7 @@ public static class ReportHandlers
     {
         d.Register("report.render_placeholder", RenderPlaceholder);
         d.Register("report.run_from_result", RunFromResult);
+        d.Register("report.assemble", Assemble);
     }
 
     public static object RenderPlaceholder(JsonElement? @params)
@@ -164,6 +166,117 @@ public static class ReportHandlers
         };
     }
 
+    /// <summary>
+    /// 多检测类型组装：一份薄壳模板里写多个 {{表格:xxx}}，按 sections 提供的数据各建表插入，
+    /// 没提供数据的占位符清掉，其余 {{}} 按 user_inputs 填。锚杆段读结果 xlsx、防火涂层段读测点 xlsx。
+    /// </summary>
+    public static object Assemble(JsonElement? @params)
+    {
+        if (@params is null || @params.Value.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException("操作参数格式错误，请重试");
+        var p = @params.Value;
+
+        var wordTemplate = RequireString(p, "word_template_path");
+        var outputDocx = RequireString(p, "output_docx");
+        if (!File.Exists(wordTemplate))
+            throw new ArgumentException($"Word 模板不存在：{wordTemplate}");
+
+        var userInputs = p.TryGetProperty("user_inputs", out var uiEl) && uiEl.ValueKind == JsonValueKind.Object
+            ? ParseStringMap(uiEl)
+            : new Dictionary<string, string>();
+
+        if (!p.TryGetProperty("sections", out var secEl) || secEl.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException("缺少 sections 数组（每项 {type:'anchor'|'coating', ...数据源参数}）");
+
+        var sections = new List<ReportSection>();
+        var sectionTypes = new List<string>();
+        foreach (var sec in secEl.EnumerateArray())
+        {
+            if (sec.ValueKind != JsonValueKind.Object)
+                throw new ArgumentException("sections 每项必须是对象");
+            var type = OptString(sec, "type")
+                ?? throw new ArgumentException("section 缺少 type（anchor / coating）");
+            sections.Add(type switch
+            {
+                "anchor" => BuildAnchorSection(sec, userInputs),
+                "coating" => BuildCoatingSection(sec),
+                _ => throw new ArgumentException($"未知 section type：{type}（支持 anchor / coating）"),
+            });
+            sectionTypes.Add(type);
+        }
+
+        var r = DocxReportAssembler.Generate(
+            wordTemplate, outputDocx, sections, userInputs, catalog: AnchorFieldCatalog.All);
+
+        return new Dictionary<string, object?>
+        {
+            ["output"] = outputDocx,
+            ["tables"] = r.TablesInserted,
+            ["replaced"] = r.Replaced,
+            ["unknown_keys"] = r.UnknownKeys.ToList(),
+            ["missing_images"] = r.MissingImages.ToList(),
+            ["sections"] = sectionTypes,
+        };
+    }
+
+    /// <summary>锚杆 section：读结果 xlsx（含持久化灌浆日期回退）→ 逐根 表2.4 建表委托。</summary>
+    private static ReportSection BuildAnchorSection(
+        JsonElement sec, IReadOnlyDictionary<string, string> userInputs)
+    {
+        var resultXlsx = RequireString(sec, "result_xlsx");
+        if (!File.Exists(resultXlsx))
+            throw new ArgumentException($"锚杆结果 xlsx 不存在：{resultXlsx}");
+        string standard = OptString(sec, "standard") ?? AnchorStandards.GB_50086_2015;
+        string? curveImageDir = OptString(sec, "curve_image_dir");
+        string sectionNo = OptNonBlank(sec, "section_no") ?? AnchorWordTable.DefaultSectionNo;
+        var batchUserInputs = sec.TryGetProperty("batch_user_inputs", out var b) && b.ValueKind == JsonValueKind.Object
+            ? ParseStringMapNested(b)
+            : new Dictionary<string, Dictionary<string, string>>();
+
+        var result = AnchorResultReader.Read(resultXlsx, standard, out var persisted);
+        foreach (var (batchId, date) in persisted)
+        {
+            if (string.IsNullOrWhiteSpace(date)) continue;
+            if (!batchUserInputs.TryGetValue(batchId, out var bui))
+            {
+                bui = new Dictionary<string, string>();
+                batchUserInputs[batchId] = bui;
+            }
+            bui.TryAdd("grouting_date", date);
+        }
+
+        var detectionLabel = OptNonBlank(sec, "detection_label") ?? AnchorWordTable.DetectionLabel(userInputs);
+        return new ReportSection(
+            AnchorWordTable.TablePlaceholder,
+            mp => AnchorWordTable.BuildSection(
+                result, userInputs, batchUserInputs, curveImageDir, sectionNo, detectionLabel, mp));
+    }
+
+    /// <summary>防火涂层 section：读测点 xlsx + 计算 → 按规范格式建表委托（标题用描述名，不编号）。</summary>
+    private static ReportSection BuildCoatingSection(JsonElement sec)
+    {
+        var inputXlsx = RequireString(sec, "input_xlsx");
+        if (!File.Exists(inputXlsx))
+            throw new ArgumentException($"防火涂层测点 xlsx 不存在：{inputXlsx}");
+        string standard = OptString(sec, "standard") ?? CoatingStandards.GB_50205_2020;
+        string? sheet = OptString(sec, "sheet");
+        string batchCol = OptString(sec, "batch_id_column") ?? CoatingColumns.Batch;
+
+        FileGuard.CheckExcelSize(inputXlsx);
+        CoatingStandards.Validate(standard);
+
+        var batchMembers = CoatingExcelReader.ReadRows(inputXlsx, sheet, batchCol);
+        var batches = batchMembers
+            .Select(bm => new CoatingBatchInput(bm.BatchId, bm.Members.ToArray()))
+            .ToArray();
+        var result = CoatingCalculator.Calc(new CoatingWorkbookInput(standard, batches));
+        var members = result.BatchResults.SelectMany(br => br.MembersWithResults).ToList();
+
+        return new ReportSection(
+            CoatingDocxReport.TablePlaceholder,
+            _ => SectionBuild.Plain(CoatingWordTable.BuildAll(members, standard)));
+    }
+
     // ── 内部 ──
 
     private static Dictionary<string, string> ParseStringMap(JsonElement el)
@@ -192,6 +305,15 @@ public static class ReportHandlers
     {
         foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
         return s;
+    }
+
+    private static string? OptString(JsonElement p, string name)
+        => p.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String ? el.GetString() : null;
+
+    private static string? OptNonBlank(JsonElement p, string name)
+    {
+        var s = OptString(p, name);
+        return string.IsNullOrWhiteSpace(s) ? null : s;
     }
 
     // ── 旧：ParseValues / DictionaryResolver（render_placeholder 专用，object? 值类型）──

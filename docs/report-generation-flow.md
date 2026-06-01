@@ -10,32 +10,36 @@
 
 | | 表怎么进报告 | 引擎 | RPC | 状态 |
 |---|---|---|---|---|
-| **锚杆** | 模板里 marker 克隆（一锚杆一张表）| `ReportGenerator` | `report.run_from_result` | 成熟·已交付 |
-| **防火涂层** | 程序按规范格式建表、插入 `{{表格:防火涂层}}` 占位符 | `CoatingWordTable` + `CoatingDocxReport` | `coating.report` | 单类型一键已通（本分支）|
+| **锚杆** | 程序建逐根 表2.4（含曲线图）、插入 `{{表格:锚杆}}` 占位符 | `AnchorWordTable` + `DocxReportAssembler` | `report.run_from_result` / `anchor.run`(可选出 Word) | ④ 已迁（本分支）|
+| **防火涂层** | 程序按规范格式建表、插入 `{{表格:防火涂层}}` 占位符 | `CoatingWordTable` + `DocxReportAssembler` | `coating.report` | 单类型一键已通 |
+| **多类型组装** | 一份模板含多个 `{{表格:xxx}}`，按勾选填、没勾的清掉 | `DocxReportAssembler` | `report.assemble` | ④ 已通（本分支）|
 
 两个核心硬约束（用户拍板）：**① 用户换模板零代码 ② 报告页一键出报告**。
 方向：数据核心（计算+字段）后端无关；Word 是当前渲染后端；LaTeX 作未来可选 PDF 后端，不锁死。
+**两条路已收口到同一机制**（程序建表 + `{{表格:xxx}}` 占位符 + `DocxReportAssembler`）。
+marker 引擎 `ReportGenerator` + 三层模板 + 「锚杆专用模板」**已删除**（用户拍板：以后没有专用模板）。
 
 ---
 
-## 一、锚杆出报告（现状，老路：docx 模板 + marker 克隆）
+## 一、锚杆出报告（新机制，与防火涂层同：程序建表 + `{{表格:锚杆}}` 占位符）
 
 ```
 给数据(Excel) → 点计算 → [绘曲线图] → 报告填充 → Word 报告
 ```
 
 1. **数据处理**（前端 `data_processing`，calcType=anchor）→ RPC `anchor.run`
-   - AnchorCalculator 计算 → 写**结果 xlsx**（含 `AnchorAnalysisSheet` + 隐藏元数据 sheet `_批次参数`/`批次信息`，持久化工程参数 + 灌浆日期）。
+   - AnchorCalculator 计算 → 写**结果 xlsx**（含 `AnchorAnalysisSheet` + 隐藏元数据 sheet `_批次参数`/`批次信息`，持久化工程参数 + 灌浆日期）。可选 `word_template_path` 同时出 Word（走下面同一机制）。
 2. **绘曲线图**（前端 `plot_curves`）→ RPC `plot_curves.run`（可选）
-   - 每根锚杆一张荷载-位移曲线 PNG，按 anchor_id 命名。
+   - 每根锚杆一张荷载-位移曲线 PNG/SVG，按 anchor_id 命名。
 3. **报告填充**（前端 `report_generator`）→ RPC `report.run_from_result`
-   - 读结果 xlsx（不重算）→ 填 Word 模板（`锚杆专用模板.docx`）。
-   - 模板：项目信息写 `{{委托单位}}` 等；用成对 marker `[[检测项目]]`/`[[批次]]`/`[[每根锚杆]]` 包「表2.4 单根结果表」，引擎按锚杆**克隆 N 份**；曲线图 `{{img:曲线图}}` 嵌入。
-   - 引擎 `ReportGenerator`（Generate / GenerateMultiBatch / GenerateMultiDetectionItem）；项目信息走 `AnchorFieldCatalog`。
+   - 读结果 xlsx（不重算）→ 填 docx 薄壳模板。
+   - 模板：要放表处写一段 **`{{表格:锚杆}}`**；程序按规范建**逐根「表2.4 单根结果表」**（17 列网格 + 合并）插在该处，表内 `{{img:曲线图}}` 按 anchor_id 嵌图；项目信息写 `{{委托单位}}` 等 `{{}}` 占位符 → 走 `AnchorFieldCatalog`（中文名/别名解析）由 `user_inputs` 填。
+   - 标题编号：单根→`表2.4`、多根→`表2.4-1/2/…`（全局连续，节号由 `section_no` 定、缺省 2.4）。各批灌浆日期出现在本批锚杆表的「灌浆日期」格。
+   - 引擎：`AnchorWordTable.BuildSection`（建表+`PlaceholderRenderer.RenderInto` 填值嵌图）+ `DocxReportAssembler.Generate`（找占位符/插表/填薄壳/页眉页脚）。`anchor.run`/`report.run_from_result` 共用 `AnchorWordTable.GenerateReport`。
 
-关键文件：`Calc/Anchor/*`、`Template/ReportGenerator.cs`、`Template/PlaceholderRenderer.cs`、`Template/ImageInjector.cs`、`Handlers/ReportHandlers.cs`。
+关键文件：`Calc/Anchor/*`、`ReportTables/AnchorWordTable.cs`、`ReportTables/DocxReportAssembler.cs`、`ReportTables/WordTableStyle.cs`、`Template/PlaceholderRenderer.cs`、`Template/ImageInjector.cs`、`Handlers/ReportHandlers.cs` + `Handlers/AnchorHandlers.cs`。
 
-特点：**表是模板里画好的，引擎克隆填值**（一锚杆一张表）。
+特点：**表是程序按规范现建的**（薄壳里只放 `{{表格:锚杆}}` 占位符）；换模板/换甲方只改薄壳，零代码——与防火涂层完全同机制。
 
 ---
 
@@ -61,24 +65,33 @@
 
 ---
 
-## 三、两条路不一致（④ 要收口）
+## 三、两条路已收口（④ 已完成）
 
-锚杆走 `report.run_from_result`（marker 克隆），防火涂层走 `coating.report`（占位符建表）——同一个「出表」动作两套机制。
+原来锚杆走 marker 克隆、防火涂层走占位符建表——两套机制。**④ 已把锚杆迁到同一机制**：
+程序建逐根 表2.4 + 插 `{{表格:锚杆}}` 占位符（删了 marker 引擎 `ReportGenerator` + 三层模板 + 「锚杆专用模板」）。
 
-**④ 多检测类型组装**：把锚杆也改成「`{{表格:锚杆}}` 占位符 + 程序建表」的同一机制，让**一份模板能同时含 `{{表格:锚杆}}` + `{{表格:防火涂层}}`**，勾了哪些类型填哪些、没勾的清掉 → 一份报告多 section。锚杆老的 marker 路保留不动，新机制并行接入。
+**`report.assemble`（多检测类型组装）**：一份薄壳模板可同时含 `{{表格:锚杆}}` + `{{表格:防火涂层}}`；
+入参 `sections:[{type:'anchor', result_xlsx, ...}, {type:'coating', input_xlsx, ...}]`，对每个 section 建对应表插入，
+**模板里写了但本次没提供数据的 `{{表格:xxx}}` 占位符自动清掉**，其余 `{{}}` 按 `user_inputs` 填 → 一份报告多 section。
+引擎 `DocxReportAssembler.Generate(template, output, sections, userInputs, catalog)`；coating 单类型 `coating.report` 也已改走它。
 
-## 四、终态一键流程（⑤ 前端）
+关键文件：`ReportTables/DocxReportAssembler.cs`、`ReportTables/AnchorWordTable.cs`、`ReportTables/WordTableStyle.cs`、`Handlers/ReportHandlers.cs`（`report.assemble`）、`mcp/src/tools/report.ts`（`report_assemble`）。
+
+## 四、终态一键流程（⑤ 前端，未做）
 
 ```
 报告生成页：勾检测类型(锚杆☑ 防火涂层☑ …多选) → 填项目信息(~30 字段) → 点[生成]
-  → 程序：对每个勾选类型 跑计算/读结果 + 建对应表 + 填进同一份模板 → 一份 Word
+  → 调 report.assemble：对每个勾选类型 读结果/测点 xlsx + 建对应表 + 填进同一份模板 → 一份 Word
 ```
+
+后端 `report.assemble` 已就绪；⑤ 只需前端报告页做「多选 + 收集项目信息 + 拼 sections 调用」。
 
 ---
 
 ## 接续指引
 
-- 分支 `feat/coating-report-table`（5 commit，未 push）：① 录入网格 5处×3点 → ② 膨胀型+厚型 Word 表 → ③ 单类型一键 Word 闭环（RPC + MCP）。
-- **下一步 ④**：锚杆接入 `{{表格:锚杆}}` 占位符机制（程序建锚杆 Word 表）+ 多占位符按勾选填。**再 ⑤**：前端报告页多选 + 一键。
-- 验证：`cd dotnet/civ-doc.Tests && dotnet test`（当前 261/1skip）；mcp `cd mcp && npm run typecheck && npm test && node scripts/smoke.mjs`。
-- 出报告需用户提供带 `{{表格:xxx}}` 占位符的 docx 薄壳模板（`coating.report` 的 `word_template_path`）；表内部格式在代码里固定（规范统一），薄壳甲方可改。
+- 分支 `feat/coating-report-table`（未 push）：① 录入网格 5处×3点 → ② 膨胀型+厚型 Word 表 → ③ 单类型一键 Word 闭环 → **④ 锚杆迁 `{{表格:锚杆}}` + 删 marker 引擎 + `report.assemble` 多类型组装**（4 个 commit：A 装配引擎/共用样式 · B 锚杆 表2.4 builder · C 迁两 handler+删 marker · D report.assemble+MCP+文档）。
+- **下一步 ⑤**：前端报告页多选检测类型 + 一键（调 `report.assemble`）。
+- 验证：`cd dotnet/civ-doc.Tests && dotnet test`（当前 249 通过/1 skip）；mcp `cd mcp && npm run typecheck && npm test && node scripts/smoke.mjs`（58 tools，含 `report_assemble`）。
+- 出报告需用户提供带 `{{表格:xxx}}` 占位符的 docx 薄壳模板；表内部格式在代码里固定（规范统一），薄壳甲方可改。**锚杆已无「专用模板」**——和防火涂层一样只需薄壳 + `{{表格:锚杆}}`。
+- 注：`docs/template-placeholders-quickstart.md` 和 `.claude/skills/civ-core-make-template/SKILL.md` 仍含 `[[每根锚杆]]` marker 教学，**已过时待改**（marker 路已删）。

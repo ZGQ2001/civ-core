@@ -129,7 +129,7 @@ StatusBar (22px)
 ## 样式
 
 - Tailwind v4，暗色主题（`bg-[#1e1e1e]` 基底）
-- 图标：@vscode/codicons，只用真实存在的名字（见 `../.ai/RULES.md` 完整列表）
+- 图标：@vscode/codicons，只用包里真实存在的名字（~649 个；`../.ai/RULES.md` 列常用，非穷举，拿不准查 `node_modules/@vscode/codicons/dist/codicon.css`）
 - 禁 emoji（UI/commit/AI 文档）
 - 原生控件深色：`index.css` 已设 `html { color-scheme: dark }`
 

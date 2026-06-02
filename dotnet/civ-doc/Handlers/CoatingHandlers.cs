@@ -118,7 +118,7 @@ public static class CoatingHandlers
         {
             foreach (var br in result.BatchResults)
             {
-                var name = SafeSheetName($"{br.BatchId}-数据分析");
+                var name = Calc.SheetNameUtil.Safe($"{br.BatchId}-数据分析");
                 if (wb.Worksheets.TryGetWorksheet(name, out var old)) old.Delete();
                 CoatingAnalysisSheet.Write(wb.Worksheets.Add(name), br, standard);
             }
@@ -203,13 +203,4 @@ public static class CoatingHandlers
         => p.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String
             ? el.GetString()
             : null;
-
-    private static string SafeSheetName(string name)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in name)
-            sb.Append("/\\?*[]:".Contains(c) ? '_' : c);
-        var safe = sb.ToString();
-        return safe.Length > 31 ? safe.Substring(0, 31) : safe;
-    }
 }

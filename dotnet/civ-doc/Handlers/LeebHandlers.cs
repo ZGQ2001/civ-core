@@ -80,7 +80,7 @@ public static class LeebHandlers
             }
             reportTableData.Add(new Dictionary<string, object?>
             {
-                ["sheet_name"] = SafeSheetName(br.BatchName),
+                ["sheet_name"] = Calc.SheetNameUtil.Safe(br.BatchName),
                 ["components"] = components,
                 ["batch_fb_char_avg"] = br.BatchFbCharAvg,
             });
@@ -217,15 +217,5 @@ public static class LeebHandlers
         }
         if (cell.TryGetValue<bool>(out bool b)) return b;
         return cell.GetString();
-    }
-
-    /// <summary>Excel sheet 名长度上限 31 字符，且不能含 / \ ? * [ ] : —— 跟 Python _safe_sheet_name 等价。</summary>
-    private static string SafeSheetName(string name)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in name)
-            sb.Append("/\\?*[]:".Contains(c) ? '_' : c);
-        var safe = sb.ToString();
-        return safe.Length > 31 ? safe.Substring(0, 31) : safe;
     }
 }

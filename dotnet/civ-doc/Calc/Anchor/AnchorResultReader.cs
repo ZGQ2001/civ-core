@@ -41,7 +41,7 @@ public static class AnchorResultReader
         foreach (var (batchId, anchorParams) in paramsByBatch)
         {
             var sheetName = $"{batchId}-数据分析";
-            // sheet 名可能被 SafeSheetName 截断到 31 字符，按前缀匹配 fallback
+            // sheet 名可能被 SheetNameUtil.Safe 截断到 31 字符，按前缀匹配 fallback
             var ws = wb.Worksheets.FirstOrDefault(s => s.Name == sheetName)
                 ?? wb.Worksheets.FirstOrDefault(s => s.Name.StartsWith($"{TruncForSheetName(batchId)}-"))
                 ?? throw new InvalidOperationException(
@@ -109,7 +109,7 @@ public static class AnchorResultReader
         return rows;
     }
 
-    /// <summary>跟 AnchorHandlers.SafeSheetName 的截断逻辑对齐（31 字符）。</summary>
+    /// <summary>跟 SheetNameUtil.Safe 的截断逻辑对齐（31 字符）。</summary>
     private static string TruncForSheetName(string batchId)
     {
         return batchId.Length > 27 ? batchId.Substring(0, 27) : batchId;

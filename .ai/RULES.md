@@ -273,7 +273,8 @@ token 烧在「每轮重发的固定底座（system prompt + 工具/MCP schema +
 - **问题**：当前 `AnchorRowResolver` / `AnchorFieldCatalog` / `AnchorHandlers` 全部围绕锚杆。换检测类型（钻芯、回弹、回弹+碳化、拉拔…）就要复制一份全链，无法增删自定义字段。
 - **影响范围**：`dotnet/civ-doc/Calc/Anchor/*` · `dotnet/civ-doc/Handlers/AnchorHandlers.cs` · `frontend/src/tools/report_generator/*` · 模板占位符约定
 - **方案要点（待定）**：字段目录走插件式注册；resolver 走通用 dict-based 字段表；handler 用 `report.run(detection_type, ...)` 通用入口；前端"字段定义"可配置
-- **方案文档**：`docs/plans/generic_report_filler.md`（待写）
+- **部分方案已出（2026-06-02）**：`docs/plans/2026-06-02-detection-pipeline-abstraction.md` —— 覆盖「换类型复制全链」的**计算/读写/handler/落表管线层 + 公共 util 去重**；**不含**字段目录/resolver 通用化（那部分字段目录还在变，刻意留给下一行）。
+- **方案文档**：`docs/plans/generic_report_filler.md`（待写，仅剩字段目录/resolver 通用化部分）
 
 ### B2：模板占位符语法简化（非编程用户友好）
 

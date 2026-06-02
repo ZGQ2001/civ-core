@@ -132,9 +132,11 @@
 
 ### 可用 codicons
 
-存在：`symbol-method` `symbol-numeric` `graph-line` `file-pdf` `file-binary` `table` `folder-opened` `add` `close` `pass` `error` `warning` `loading~spin` `chevron-up/down` `hubot` `settings-gear` `discard` `edit` `new-file` `copy` `trash` `eye` `eye-closed` `clear-all` `list-tree` `refresh` `search` `kebab-vertical` `chrome-maximize/minimize/close`
+**判定标准**：名字在 `@vscode/codicons` 包里有对应 `.codicon-X` 字形就能用（v0.0.45 共 ~649 个）。下面只是常用清单，**非穷举**——不在表里 ≠ 不存在（`check` `info` `save` `folder` `run-all` `question` `go-to-file` `expand-all`/`collapse-all` 等都真实存在，别因为没列就当违规）。拿不准查 `frontend/node_modules/@vscode/codicons/dist/codicon.css`。
 
-不存在：`calculator`（用 `symbol-method` 替代）
+常用：`symbol-method` `symbol-numeric` `graph-line` `file-pdf` `file-binary` `table` `folder-opened` `add` `close` `pass` `error` `warning` `loading~spin` `chevron-up/down` `hubot` `settings-gear` `discard` `edit` `new-file` `copy` `trash` `eye` `eye-closed` `clear-all` `list-tree` `refresh` `search` `kebab-vertical` `chrome-maximize/minimize/close`
+
+不存在示例：`calculator`（用 `symbol-method` 替代）
 
 ## 测试命令
 

@@ -1,7 +1,7 @@
 # civ-core（筑核）
 
 土木检测内业报告自动化工具。接收 Excel/CSV/Word，自动完成数据格式化、规范评定、报告填充。
-**Windows 平台为主**（word2pdf 走 COM），内部自用 + 对外提供 MCP server 给 AI agent 调用。
+**Windows 平台为主**（word2pdf 走 COM），内部自用 + 对外提供 MCP server 给 AI agent 调用，内部内置ai，可以调用api。
 当前状态：源码运行，二进制 release 待 T6 打包后才出。详见根目录 `README.md`。
 
 **角色**：本文件是 AI 的宪法级上下文。放不可变的架构规则和边界。≤4000 字。每次会话必读。

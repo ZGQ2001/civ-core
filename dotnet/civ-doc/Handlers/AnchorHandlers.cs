@@ -237,7 +237,7 @@ public static class AnchorHandlers
         {
             foreach (var br in result.BatchResults)
             {
-                var analysisName = SafeSheetName($"{br.BatchId}-数据分析");
+                var analysisName = Calc.SheetNameUtil.Safe($"{br.BatchId}-数据分析");
                 if (wb.Worksheets.TryGetWorksheet(analysisName, out var old1)) old1.Delete();
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
             }
@@ -342,14 +342,5 @@ public static class AnchorHandlers
             result[prop.Name] = AnchorParams.Create(p, lf, la, a, e);
         }
         return result;
-    }
-
-    private static string SafeSheetName(string name)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in name)
-            sb.Append("/\\?*[]:".Contains(c) ? '_' : c);
-        var safe = sb.ToString();
-        return safe.Length > 31 ? safe.Substring(0, 31) : safe;
     }
 }

@@ -82,7 +82,7 @@ public static class CoatingTemplateExpander
             string baseName = key.FiveLocation
                 ? $"{CoatingColumns.PointDataSheet}-{key.Type}-{ExpansionSuffix}"
                 : $"{CoatingColumns.PointDataSheet}-{key.Type}";
-            string sheetName = SafeSheetName(baseName);
+            string sheetName = SheetNameUtil.Safe(baseName);
             var ws = wb.Worksheets.Add(sheetName);
             string[] pointHeaders = key.FiveLocation ? LocationPointHeaders : byGroup[key][0].Preset.PointPositions;
             WriteGrid(ws, byGroup[key], pointHeaders, key.FiveLocation);
@@ -242,13 +242,5 @@ public static class CoatingTemplateExpander
         range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         ws.Column(2).Width = 26;
-    }
-
-    private static string SafeSheetName(string name)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in name) sb.Append("/\\?*[]:".Contains(c) ? '_' : c);
-        var safe = sb.ToString();
-        return safe.Length > 31 ? safe.Substring(0, 31) : safe;
     }
 }

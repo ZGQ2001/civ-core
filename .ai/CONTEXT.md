@@ -21,7 +21,8 @@
 
 - **#6「每个模块都是大框架」（通用 pipeline 抽象 = `docs/plans/2026-06-02-detection-pipeline-abstraction.md`）**：负责人已显式推翻 6-02「暂缓」决定、要做。
   - **Phase 0（去重地基）本会话已完成**：`Calc/HeaderNormalizer.Core`（NormalizeHeader 公共核心）+ `Handlers/HandlerUtil.ParseStringMap`（user_inputs 解析公共核心）（+ 上会话 SafeSheetName→`Calc/SheetNameUtil`）。剩 `RequireColumn` 近似×2 未并（低价值，待并需先 diff）。
-  - **Phase 2（`DetectionDescriptor` + 通用 handler 脚手架 + 显式 `DetectionCatalog`，按文档 §4/§6 迁移顺序 Leeb→Coating→Anchor）待做**——大重构，文档要求**每步 `dotnet test` 绿**当安全网；但本会话末 **MCP/CI 断连 + 本环境装不了 dotnet → 无法验证**，故未盲推（不在不可验证的 base 上堆大重构留烂尾）。下个能跑 dotnet/CI 的会话按文档落地，先拿 Leeb 试水。
+  - **Phase 2 框架接缝已做**：`Detection/DetectionCatalog.cs` —— 三检测类型注册收进显式清单 + 遍历注册，`JsonRpcServer` 加类型零改动、无反射。**CI 全绿验证**。交付了框架「加类型登记只动一处」的安全本质。
+  - **Phase 2 通用 run() 脚手架（IDetectionPipeline 等）—— 按文档 §6「对抗即停」红线叫停，结论写回文档 §11**：读三个 `run()` 实测，真正共性仅 ≈8 行（参数解析+FileGuard+默认路径），read/calc/assemble 三段本质发散（Leeb 返数据无 Word、Anchor 写 xlsx+Word、Coating 独立 report）；套 pipeline 框架是净增复杂度、对抗代码，违反「抽象是手段不是目的」。**那 8 行共性值得抽 `HandlerUtil` 薄函数（Phase 0 性质），但不应套整个框架。** 若将来真加同构的第 4 类型再评估。
 - **#4 企业级前端 / #7 深度解耦**：剩余多为前端改动，本环境装不了依赖无法本地验，建议能 `npm ci` 的环境续做。
 - 输入 reader 的 `continue` 多为结构性跳行（空行/汇总行/辅助 sheet），非静默吞错，按手术刀未动。
 

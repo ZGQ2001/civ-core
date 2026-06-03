@@ -248,3 +248,20 @@ BEFORE（照葫芦画瓢）                      AFTER（Phase 0 + 2 之后）
 - **util copy-paste**：每类重抄一遍 → 0（共享）
 - **新增文件**：≈9 → 计算本体 + 1 个 Pipeline 实现 + 1 行登记
 - **行为变更**：零（全程测试护栏）
+
+---
+
+## 11. 执行结论（2026-06-03，落地中触发 §6「对抗即停」红线）
+
+按 §6 迁移顺序落地，结果如下：
+
+**已做（安全、有价值、行为零变更，CI 验）：**
+- **Phase 0 去重**：`SafeSheetName`→`Calc/SheetNameUtil`、`NormalizeHeader`→`Calc/HeaderNormalizer.Core`（差异参数化）、`ParseUserInputs` 内层循环→`Handlers/HandlerUtil.ParseStringMap`。消掉了用户感受到的「割裂/重复」的大头。
+- **Phase 2 框架接缝**：`Detection/DetectionCatalog.cs` —— 三检测类型注册收进**显式清单 + 遍历注册**，`JsonRpcServer` 加类型零改动。无反射、可 grep。这一步交付了框架最有价值且安全的本质：「加类型的登记只动一处」。
+
+**叫停（§6 红线：抽象在对抗代码，不是简化代码）：**
+- **§4 Phase 2 的「通用 run() 脚手架 + IDetectionPipeline + 能力接口」不做。** 落地前读了三个 `run()` 实测：真正共性只有「解析 input/output 参数 + FileGuard + 默认输出路径」≈8 行；而 read / calc / assemble 三段**本质发散**——Leeb 返 `report_table_data`（不写文件、无 Word），Anchor 写 xlsx + Word（IFieldResolver），Coating 写 xlsx + 独立 `report` 出 Word；calc 签名也不齐（Leeb 需 `StandardsDb`）。
+- 用 `IDetectionPipeline` + `PipelineContext` + 能力接口（`IWordReportable` 等）+ 能力检测去兜这些发散，**机制复杂度净大于它能统一的那 8 行共性** → 通用 run() 脚手架会让代码更绕，违反 CLAUDE.md「200 行缩到 50」「抽象是手段不是目的」「单次调用不做抽象」。§3 非目标也写明「不为臆想的第 4、5 个类型预留扩展点」，而当前无新类型在即（6-02 决定）。
+- **真正共性那 8 行**（默认输出路径 `arg ?? Path.Combine(dir, $"{stem}_{suffix}_{结果/报告}.{ext}")`）值得抽成 `HandlerUtil` 薄函数（Phase 0 性质），但**不需要也不应**为它套一整个 pipeline 框架。
+
+**结论**：框架的价值 = 显式登记表（已交付）+ 公共 util（已交付大头）。再往上的通用 run() 脚手架是「对抗代码」，按文档自己的红线停在此。若将来真要加第 4 个检测类型、且它与现有三者的 read/calc/assemble 同构，再回头评估 Phase 2 脚手架不迟。

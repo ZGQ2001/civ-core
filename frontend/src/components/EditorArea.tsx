@@ -19,7 +19,10 @@ export function EditorArea({ activeToolId, toolLabel, appendOutput }: Props) {
     <div className="bg-vscode-bg flex h-full min-w-0 flex-col">
       {tool ? (
         // 工具级边界：单个工具页渲染崩溃只炸自己、不波及整壳；key=toolId 切走再回即重挂恢复
-        <ErrorBoundary key={activeToolId ?? 'tool'} label={toolLabel ?? undefined}>
+        <ErrorBoundary
+          key={activeToolId ?? 'tool'}
+          label={toolLabel ?? undefined}
+        >
           <tool.Page appendOutput={appendOutput} />
         </ErrorBoundary>
       ) : activeToolId === 'settings' ? (

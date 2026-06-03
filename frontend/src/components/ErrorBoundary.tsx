@@ -30,7 +30,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // 不静默吞：错误进 console（devtools 可查），含组件栈，便于追溯定位。
-    const tag = this.props.label ? `[ErrorBoundary ${this.props.label}]` : '[ErrorBoundary]';
+    const tag = this.props.label
+      ? `[ErrorBoundary ${this.props.label}]`
+      : '[ErrorBoundary]';
     console.error(tag, error, info.componentStack);
     this.setState({ componentStack: info.componentStack ?? null });
   }
@@ -50,13 +52,21 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div className="flex items-center gap-2 text-sm text-red-400">
             <i className="codicon codicon-error !text-[16px]" />
-            <span className="font-medium">{this.props.label ? `${this.props.label} 出错了` : '应用出错了'}</span>
+            <span className="font-medium">
+              {this.props.label ? `${this.props.label} 出错了` : '应用出错了'}
+            </span>
           </div>
-          <div className="mt-2 whitespace-pre-wrap text-red-300">{error.message || String(error)}</div>
+          <div className="mt-2 whitespace-pre-wrap text-red-300">
+            {error.message || String(error)}
+          </div>
           {componentStack && (
             <details className="text-vscode-text-dim mt-2">
-              <summary className="cursor-pointer select-none">组件栈（排查用）</summary>
-              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px]">{componentStack}</pre>
+              <summary className="cursor-pointer select-none">
+                组件栈（排查用）
+              </summary>
+              <pre className="mt-1 max-h-48 overflow-auto text-[11px] whitespace-pre-wrap">
+                {componentStack}
+              </pre>
             </details>
           )}
           <div className="mt-3 flex gap-2">

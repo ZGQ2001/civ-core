@@ -6,6 +6,27 @@
 
 ---
 
+## 当前焦点（2026-06-03）— 整治"割裂"（分支 `claude/laughing-keller-uuZ7S`，PR #21 draft）
+
+> 一次 Claude Code on the web 会话的产出。代码 + 方案都在该分支/PR。本 web 环境网络白名单装不了 dotnet，C# 的下一步需在能跑 `dotnet test` 的机器上接着做。
+
+**已做（已 push 到分支）**
+
+- 删 3 个零引用 Python 死代码模块（`data_cache` / `steel_presets` + 其测试；本地 pytest 226 绿）。
+- C# 合并 4 份逐字相同的 `SafeSheetName` → `Calc/SheetNameUtil.cs`（本机无 dotnet，靠 CI 验）。
+- 纠正 codicons 误报：`.ai/RULES.md` 图标清单标注"非穷举、以 @vscode/codicons 包为准"。
+- 两份方案：`docs/plans/2026-06-02-整治割裂-大白话路线.md`（总路线 + 决策）、`docs/plans/2026-06-02-detection-pipeline-abstraction.md`（后端统一骨架，**已暂缓**）。
+
+**负责人拍板三条（详见大白话路线第六节）**
+
+1. **出报告不重算**：各类型出报告都读"数据处理"已算好的结果。锚杆已是（`AnchorResultReader`），**防火在重算**（缺 `CoatingResultReader`）→ 要补。
+2. **录入向防火看齐**：信息全在数据表里；锚杆去掉多余 UI 参数表单（参数进"批次信息"sheet）。
+3. **短期不加新检测类型** → 暂缓通用 pipeline 大抽象（不为"以后可能用"过度设计）。
+
+**下一步（需 dotnet 环境）**：给防火补 `CoatingResultReader`，让 `report.assemble` / `coating.report` 出报告读结果、不重算，配往返测试（read==compute）。后续：报告类型改多选、检测项目下拉补齐、锚杆录入向防火收敛。
+
+---
+
 ## 当前焦点（2026-05-31）
 
 **防火涂层补齐「薄型/超薄型（膨胀型）」判定（GB 50205-2020 §13.4.3 膨胀型）** —— 之前只厚型出

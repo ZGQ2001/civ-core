@@ -381,7 +381,12 @@ export function ReportGeneratorProvider({
       }),
       rpc<{ batches: BatchInfoEntry[] }>('anchor.read_batch_info', {
         input_xlsx: excelPath,
-      }).catch(() => ({ batches: [] as BatchInfoEntry[] })),
+      }).catch((e) => {
+        // 批次信息 sheet 是可选预填源,读不到属正常(多数输入无此 sheet),不阻断主流程;
+        // 但不静默吞 —— 记 console 便于追溯真异常(解析/权限错误)，区别于「sheet 不存在」。
+        console.warn('[report_generator] anchor.read_batch_info 读取失败,跳过批次预填:', e);
+        return { batches: [] as BatchInfoEntry[] };
+      }),
     ])
       .then(([lb, bi]) => {
         if (myId !== batchReqIdRef.current) return;

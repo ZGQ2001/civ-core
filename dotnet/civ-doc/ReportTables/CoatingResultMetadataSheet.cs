@@ -4,7 +4,7 @@
 //
 // 为什么不反读「<批>-数据分析」人看宽表：那张是展示表（合并单元格 + 动态测点列 +
 // 国标膨胀型可变表头 + 厚度圆整丢精度），当数据交换格式既脆弱又有损。本表是它的机读
-// 兄弟：一测点一行的长表、全精度、列序固定按位置解析、VeryHidden 防误删。
+// 兄弟：一测点一行的长表、全精度、列序固定按位置解析、Hidden 防误删（去黑盒：用户可在 Excel 取消隐藏核对）。
 //
 // 跟 AnchorResultMetadataSheet 同构（机读 / 人看分离）；区别是防火逐测点变长，故用长表
 // （一测点一行），构件级字段每行重复——免去「找首个非空行」的歧义，reader 极简且抗行乱序。
@@ -54,7 +54,7 @@ public static class CoatingResultMetadataSheet
         "合格率达标", "最薄达标", "均值下限", "均值达标", "判定", "不合格原因",
     };
 
-    /// <summary>写入/覆盖机读结果 sheet（写完置 VeryHidden）。一测点一行，构件级字段每行重复。</summary>
+    /// <summary>写入/覆盖机读结果 sheet（写完置 Hidden —— 默认隐藏避免误删，用户可在 Excel 取消隐藏核对）。一测点一行，构件级字段每行重复。</summary>
     public static void Write(XLWorkbook wb, CoatingWorkbookResult result)
     {
         if (wb.Worksheets.TryGetWorksheet(SheetName, out var old)) old.Delete();
@@ -93,7 +93,7 @@ public static class CoatingResultMetadataSheet
                 }
             }
         }
-        ws.Visibility = XLWorksheetVisibility.VeryHidden;
+        ws.Visibility = XLWorksheetVisibility.Hidden;
     }
 
     /// <summary>
@@ -153,9 +153,11 @@ public static class CoatingResultMetadataSheet
                 double thick = ws.Cell(r, ColThick).GetDouble();
                 m.Points.Add(CoatingPoint.Create(sectionNo, pos, thick));
             }
-            catch
+            catch (Exception ex)
             {
-                // 单行解析失败跳过（容错：用户可能手改了空白行）
+                // 单行解析失败跳过（容错：用户可能手改了空白行）；
+                // 不静默——记到 stderr 便于排查
+                Console.Error.WriteLine($"[_结果数据] 第 {r} 行（batch={batchId}, loc={loc}）解析失败，已跳过：{ex.Message}");
             }
         }
 

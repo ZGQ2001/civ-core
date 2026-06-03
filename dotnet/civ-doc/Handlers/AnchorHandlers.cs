@@ -241,6 +241,7 @@ public static class AnchorHandlers
                 if (wb.Worksheets.TryGetWorksheet(analysisName, out var old1)) old1.Delete();
                 AnchorAnalysisSheet.Write(wb.Worksheets.Add(analysisName), br);
             }
+            AnchorJudgmentBasisSheet.Write(wb); // 演算稿：判定公式 + 规范条款（可见，reader 不回读）
             AnchorResultMetadataSheet.Write(wb, paramsByBatch, groutingDateByBatch);
             SaveWorkbook(wb, outPath);
         }

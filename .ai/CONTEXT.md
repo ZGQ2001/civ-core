@@ -19,7 +19,9 @@
 
 **卡点 / 交接**
 
-- **#6「每个模块都是大框架，里面套内容」（通用 pipeline 抽象）**：与本项目 6-02 拍板「短期不加新类型→暂缓大抽象」+ CLAUDE.md「别为以后可能用加功能」**冲突**。要做需负责人显式推翻该决定；且大重构本环境无法本地编译/测，盲改风险高（砸 #1），应在能跑 `dotnet test` 的机器上做。
+- **#6「每个模块都是大框架」（通用 pipeline 抽象 = `docs/plans/2026-06-02-detection-pipeline-abstraction.md`）**：负责人已显式推翻 6-02「暂缓」决定、要做。
+  - **Phase 0（去重地基）本会话已完成**：`Calc/HeaderNormalizer.Core`（NormalizeHeader 公共核心）+ `Handlers/HandlerUtil.ParseStringMap`（user_inputs 解析公共核心）（+ 上会话 SafeSheetName→`Calc/SheetNameUtil`）。剩 `RequireColumn` 近似×2 未并（低价值，待并需先 diff）。
+  - **Phase 2（`DetectionDescriptor` + 通用 handler 脚手架 + 显式 `DetectionCatalog`，按文档 §4/§6 迁移顺序 Leeb→Coating→Anchor）待做**——大重构，文档要求**每步 `dotnet test` 绿**当安全网；但本会话末 **MCP/CI 断连 + 本环境装不了 dotnet → 无法验证**，故未盲推（不在不可验证的 base 上堆大重构留烂尾）。下个能跑 dotnet/CI 的会话按文档落地，先拿 Leeb 试水。
 - **#4 企业级前端 / #7 深度解耦**：剩余多为前端改动，本环境装不了依赖无法本地验，建议能 `npm ci` 的环境续做。
 - 输入 reader 的 `continue` 多为结构性跳行（空行/汇总行/辅助 sheet），非静默吞错，按手术刀未动。
 

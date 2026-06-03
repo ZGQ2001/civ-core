@@ -105,15 +105,19 @@ public static class CoatingTemplateExpander
             $"构件「{spec.Location}」无法从名字识别构件类型——请在「构件清单」填「构件类型」列");
     }
 
+    // 仅 截面×面 路径调用（五处3点走 FiveLocationCount，不经此）——故「最少 2 截面」规则收在这里，
+    // 膨胀型 5 处×3 点天然豁免（除五处3点的情况）。
     private static int ResolveSections(CoatingMemberSpec spec, double spacing)
     {
         if (spec.SectionCount is int sc)
         {
             if (sc <= 0) throw new ArgumentException($"构件「{spec.Location}」截面数必须 > 0");
+            if (sc < CoatingStandards.MinSections)
+                throw new ArgumentException($"构件「{spec.Location}」截面数 {sc} < 规范要求的最少 {CoatingStandards.MinSections} 个截面（薄/超薄膨胀型走 5 处×3 点不受此限）");
             return sc;
         }
         if (spec.LengthM is double len && len > 0)
-            return (int)Math.Ceiling(len / spacing); // ⌈长度/间距⌉
+            return Math.Max(CoatingStandards.MinSections, (int)Math.Ceiling(len / spacing)); // ⌈长度/间距⌉，不少于规范最少截面数
         throw new ArgumentException($"构件「{spec.Location}」需填「长度(m)」或「截面数」");
     }
 

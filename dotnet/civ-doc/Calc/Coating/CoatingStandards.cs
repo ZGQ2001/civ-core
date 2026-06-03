@@ -30,6 +30,10 @@ public static class CoatingStandards
     /// <summary>绝对偏差兜底：构件均值 ≥ 设计厚度 − 0.2mm（−200µm）。与 −5% 同时成立，取较严者。</summary>
     public const double AbsoluteFloorMm = 0.2;
 
+    // ── 布点（采样）规则 ──
+    /// <summary>截面×面布点每构件最少截面数：规范要求 ≥2 个截面表征构件（薄/超薄膨胀型走 5 处×3 点，不受此限）。</summary>
+    public const int MinSections = 2;
+
     // ── 涂层类型分级阈值（按设计厚度 mm，用户拍板）──
     /// <summary>≥7mm 为厚型。</summary>
     public const double ThickMinThickness = 7.0;

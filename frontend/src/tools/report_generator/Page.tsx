@@ -191,8 +191,8 @@ function StatusArea({
         在右侧「调参」面板填好输入
       </div>
       <div className="text-vscode-text-faint mt-1 max-w-md text-xs leading-relaxed">
-        先在「数据」tab 选报告类型（锚杆 / 防火涂层 /
-        多类型），再依次填模板、项目字段， 就绪后点上方「生成 Word
+        先在「数据」tab 勾选检测类型（可多选：锚杆 /
+        防火涂层），再依次填模板、项目字段， 就绪后点上方「生成 Word
         报告」。生成结果与报错都会显示在这里。
       </div>
     </div>
@@ -249,9 +249,9 @@ function TemplateCheckCard() {
     (u) => !isTablePh(u.placeholder),
   );
 
-  // 当前报告类型需要哪些数据表占位符（缺了生成会报错）
-  const needAnchor = c.reportType === 'anchor' || c.reportType === 'multi';
-  const needCoating = c.reportType === 'coating' || c.reportType === 'multi';
+  // 当前勾选的检测类型需要哪些数据表占位符（缺了生成会报错）
+  const needAnchor = c.selectedTypes.includes('anchor');
+  const needCoating = c.selectedTypes.includes('coating');
   const missingRequired: string[] = [];
   if (needAnchor && !hasAnchorTable)
     missingRequired.push(ANCHOR_TABLE_PLACEHOLDER);

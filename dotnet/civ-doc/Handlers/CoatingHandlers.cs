@@ -179,15 +179,10 @@ public static class CoatingHandlers
 
     // ── helpers ──
 
-    private static Dictionary<string, string> ParseUserInputs(JsonElement p)
-    {
-        var d = new Dictionary<string, string>();
-        if (p.TryGetProperty("user_inputs", out var el) && el.ValueKind == JsonValueKind.Object)
-            foreach (var prop in el.EnumerateObject())
-                if (prop.Value.ValueKind == JsonValueKind.String)
-                    d[prop.Name] = prop.Value.GetString() ?? "";
-        return d;
-    }
+    private static Dictionary<string, string> ParseUserInputs(JsonElement p) =>
+        p.TryGetProperty("user_inputs", out var el) && el.ValueKind == JsonValueKind.Object
+            ? HandlerUtil.ParseStringMap(el)
+            : new Dictionary<string, string>();
 
     private static JsonElement RequireObject(JsonElement? @params)
     {

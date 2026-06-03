@@ -296,16 +296,8 @@ public static class AnchorHandlers
         return res;
     }
 
-    private static Dictionary<string, string> ParseUserInputs(JsonElement el)
-    {
-        var d = new Dictionary<string, string>();
-        foreach (var prop in el.EnumerateObject())
-        {
-            if (prop.Value.ValueKind == JsonValueKind.String)
-                d[prop.Name] = prop.Value.GetString() ?? "";
-        }
-        return d;
-    }
+    private static Dictionary<string, string> ParseUserInputs(JsonElement el) =>
+        HandlerUtil.ParseStringMap(el);
 
     /// <summary>解析 batch_user_inputs: { batchId: { key: value } }。容错：跳过非字符串。</summary>
     private static Dictionary<string, Dictionary<string, string>> ParseBatchUserInputs(JsonElement el)

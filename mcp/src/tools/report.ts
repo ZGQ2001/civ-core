@@ -91,7 +91,7 @@ export const reportAssemble: ToolDef = {
     "防火涂层 {{表格:防火涂层}}），按 sections 提供的数据各建表插入；模板里写了但本次没提供数据的" +
     "占位符自动清掉；其余 {{}} 项目字段按 user_inputs 填。" +
     "\n\n每个 section 一个检测类型：anchor 段读 anchor_run 的结果 xlsx（逐根 表2.4 + 曲线图）；" +
-    "coating 段读防火涂层「测点数据」xlsx（coating_expand_template 展开并填好数字的）。" +
+    "coating 段读 coating_run 的结果 xlsx（不重算）。" +
     "\n\n返回 {output, tables, replaced, unknown_keys, missing_images, sections}（sections=已填的类型列表）。",
   inputSchema: {
     word_template_path: z
@@ -106,8 +106,12 @@ export const reportAssemble: ToolDef = {
       .array(
         z.object({
           type: z.enum(["anchor", "coating"]).describe("检测类型：anchor / coating"),
+          // 共用：结果 xlsx（anchor_run / coating_run 产出，出报告读结果不重算）
+          result_xlsx: z
+            .string()
+            .optional()
+            .describe("[anchor/coating] anchor_run / coating_run 的结果 xlsx 绝对路径"),
           // anchor 段
-          result_xlsx: z.string().optional().describe("[anchor] anchor_run 结果 xlsx 绝对路径"),
           curve_image_dir: z.string().optional().describe("[anchor] 曲线图目录；缺省不嵌图"),
           batch_user_inputs: z
             .record(z.string(), z.record(z.string(), z.string()))
@@ -115,10 +119,6 @@ export const reportAssemble: ToolDef = {
             .describe("[anchor] 批次级字段 {batchId:{key:value}}，如各批 grouting_date"),
           section_no: z.string().optional().describe("[anchor] 结果表节号，缺省 2.4"),
           detection_label: z.string().optional().describe("[anchor] 表标题里的检测项目名"),
-          // coating 段
-          input_xlsx: z.string().optional().describe("[coating] 已展开填好数字的「测点数据」xlsx 绝对路径"),
-          sheet: z.string().optional().describe("[coating] 测点数据 sheet 名（缺省读所有「测点数据」表）"),
-          batch_id_column: z.string().optional().describe("[coating] 批次列列名，缺省 '批次'"),
           // 共用
           standard: z.string().optional().describe("规范代号（anchor 缺省 GB 50086-2015 / coating 缺省 GB 50205-2020）"),
         }),

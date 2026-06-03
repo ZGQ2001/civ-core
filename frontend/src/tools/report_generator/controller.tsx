@@ -500,15 +500,15 @@ export function ReportGeneratorProvider({
   // 提供了数据但模板缺对应占位符时后端报清晰错误 —— 所以前端不再用 marker 门禁，
   // 只校验「数据齐 + 选了模板」，其余交后端兜底。
   //
-  // coating：仅需防火涂层「测点数据」Excel + 模板，不碰锚杆。
-  // multi  ：锚杆段读「结果 Excel」（report.assemble 不重算），另需防火涂层 Excel；
+  // coating：仅需防火涂层「结果 Excel」（coating.run 产出）+ 模板，不碰锚杆。
+  // multi  ：锚杆段读「结果 Excel」（report.assemble 不重算），另需防火涂层结果 Excel；
   //          不要求填批次工程参数（结果 xlsx 已持久化）。
   // anchor ：dataSource=raw 才要求批次参数齐（result 路径 metadata 已带参数）。
   const readiness: Readiness = useMemo(() => {
     // 仅防火涂层：只要测点 Excel + 模板（含 {{表格:防火涂层}}），不碰锚杆
     if (reportType === 'coating') {
       if (!coatingInputPath.trim())
-        return { ready: false, reason: '请选防火涂层「测点数据」Excel' };
+        return { ready: false, reason: '请选防火涂层「结果」Excel（数据处理产出）' };
       if (!wordTemplatePath.trim())
         return {
           ready: false,
@@ -527,9 +527,9 @@ export function ReportGeneratorProvider({
       };
 
     if (reportType === 'multi') {
-      // 多类型组装：锚杆读结果 xlsx（不重算、工程参数已持久化），另需防火涂层测点 Excel
+      // 多类型组装：锚杆读结果 xlsx（不重算、工程参数已持久化），另需防火涂层结果 Excel
       if (!coatingInputPath.trim())
-        return { ready: false, reason: '请选防火涂层「测点数据」Excel' };
+        return { ready: false, reason: '请选防火涂层「结果」Excel（数据处理产出）' };
     } else if (dataSource === 'raw') {
       // 仅锚杆 + 原始数据：要按批次填齐工程参数
       if (anchorBatchesLoading)
@@ -595,7 +595,7 @@ export function ReportGeneratorProvider({
 
     try {
       // ── 报告组装：report.assemble（防火涂层 / 多类型）──
-      //   coating → sections=[涂层]；输出目录默认在涂层测点 xlsx 同级
+      //   coating → sections=[涂层]；输出目录默认在涂层结果 xlsx 同级
       //   multi   → sections=[锚杆(结果 xlsx) + 涂层]；输出目录默认在锚杆 xlsx 同级
       // 仅锚杆走下面的单类型路径（anchor.run / report.run_from_result）。
       if (reportType === 'coating' || reportType === 'multi') {
@@ -626,7 +626,7 @@ export function ReportGeneratorProvider({
         }
         sections.push({
           type: 'coating',
-          input_xlsx: coatingInputPath.trim(),
+          result_xlsx: coatingInputPath.trim(),
           standard: coatingStandard,
         });
 

@@ -122,6 +122,8 @@ public static class CoatingHandlers
                 if (wb.Worksheets.TryGetWorksheet(name, out var old)) old.Delete();
                 CoatingAnalysisSheet.Write(wb.Worksheets.Add(name), br, standard);
             }
+            // 机读结果 sheet（隐藏）：让 coating.report / report.assemble 读结果不重算
+            CoatingResultMetadataSheet.Write(wb, result);
             SaveWorkbook(wb, outPath);
         }
 
@@ -135,35 +137,30 @@ public static class CoatingHandlers
         };
     }
 
-    /// <summary>读「测点数据」+ 计算 + 把数据表填进 docx 薄壳模板（{{表格:防火涂层}} 占位符）→ 一键出 Word。</summary>
+    /// <summary>读结果 xlsx（coating.run 产出，机读 sheet）+ 填进 docx 薄壳模板（{{表格:防火涂层}} 占位符）→ 一键出 Word，不重算。</summary>
     public static object Report(JsonElement? @params)
     {
         var p = RequireObject(@params);
-        var inputXlsx = p.GetProperty("input_xlsx").GetString()
-            ?? throw new ArgumentException("未指定输入 Excel 文件");
+        var resultXlsx = p.GetProperty("result_xlsx").GetString()
+            ?? throw new ArgumentException("未指定结果 Excel 文件 result_xlsx（coating.run 产出）");
         var wordTemplate = p.TryGetProperty("word_template_path", out var wt)
             && wt.ValueKind == JsonValueKind.String ? wt.GetString() : null;
         if (string.IsNullOrWhiteSpace(wordTemplate))
             throw new ArgumentException("未指定 word_template_path（带 {{表格:防火涂层}} 占位符的 docx 薄壳模板）");
         string standard = OptString(p, "standard") ?? CoatingStandards.GB_50205_2020;
-        string? sheet = OptString(p, "sheet");
-        string batchCol = OptString(p, "batch_id_column") ?? CoatingColumns.Batch;
         string? outputDocx = OptString(p, "output_docx");
         var userInputs = ParseUserInputs(p);
 
-        FileGuard.CheckExcelSize(inputXlsx);
+        FileGuard.CheckExcelSize(resultXlsx);
         CoatingStandards.Validate(standard);
         if (!File.Exists(wordTemplate))
             throw new ArgumentException($"Word 模板不存在：{wordTemplate}");
 
-        var batchMembers = CoatingExcelReader.ReadRows(inputXlsx, sheet, batchCol);
-        var batches = batchMembers
-            .Select(b => new CoatingBatchInput(b.BatchId, b.Members.ToArray()))
-            .ToArray();
-        var result = CoatingCalculator.Calc(new CoatingWorkbookInput(standard, batches));
+        // 读 coating.run 已算好的结果 xlsx（机读 sheet），不重算 → 出 Word
+        var result = CoatingResultReader.Read(resultXlsx, standard);
         var members = result.BatchResults.SelectMany(br => br.MembersWithResults).ToList();
 
-        var src = new FileInfo(inputXlsx);
+        var src = new FileInfo(resultXlsx);
         string outPath = outputDocx
             ?? Path.Combine(src.DirectoryName ?? "",
                 $"{Path.GetFileNameWithoutExtension(src.Name)}_{CalcTypeSuffix}_报告.docx");

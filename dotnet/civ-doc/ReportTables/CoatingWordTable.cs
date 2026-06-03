@@ -53,7 +53,7 @@ public static class CoatingWordTable
         headers.Add("平均值(μm)");
         headers.Add("设计值(μm)");
         headers.Add("检测结果");
-        table.AppendChild(Row(headers, bold: true));
+        table.AppendChild(Row(headers, bold: false));
 
         int serial = 1;
         foreach (var (input, result) in members)
@@ -91,20 +91,20 @@ public static class CoatingWordTable
 
         // 表头行 1：序号 | 构件位置 | 测点 |〔实测涂层厚度(unit) 跨 k 列〕| 平均值(unit)
         var h1 = new TableRow();
-        h1.AppendChild(Cell("序号", bold: true, vMerge: MergedCellValues.Restart));
-        h1.AppendChild(Cell("构件位置", bold: true, vMerge: MergedCellValues.Restart));
-        h1.AppendChild(Cell("测点", bold: true, vMerge: MergedCellValues.Restart));
-        h1.AppendChild(Cell($"实测涂层厚度({unit})", bold: true, gridSpan: k));
-        h1.AppendChild(Cell($"平均值({unit})", bold: true, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell("序号", bold: false, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell("构件位置", bold: false, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell("测点", bold: false, vMerge: MergedCellValues.Restart));
+        h1.AppendChild(Cell($"实测涂层厚度({unit})", bold: false, gridSpan: k));
+        h1.AppendChild(Cell($"平均值({unit})", bold: false, vMerge: MergedCellValues.Restart));
         table.AppendChild(h1);
 
         // 表头行 2：前三列与平均值列 vMerge 续；中间是各面名
         var h2 = new TableRow();
-        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
-        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
-        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
-        foreach (var f in faces) h2.AppendChild(Cell(f, bold: true));
-        h2.AppendChild(Cell("", bold: true, vMerge: MergedCellValues.Continue));
+        h2.AppendChild(Cell("", bold: false, vMerge: MergedCellValues.Continue));
+        h2.AppendChild(Cell("", bold: false, vMerge: MergedCellValues.Continue));
+        h2.AppendChild(Cell("", bold: false, vMerge: MergedCellValues.Continue));
+        foreach (var f in faces) h2.AppendChild(Cell(f, bold: false));
+        h2.AppendChild(Cell("", bold: false, vMerge: MergedCellValues.Continue));
         table.AppendChild(h2);
 
         int serial = 1;

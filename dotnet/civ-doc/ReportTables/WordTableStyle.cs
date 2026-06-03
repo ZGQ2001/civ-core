@@ -13,8 +13,7 @@ internal static class WordTableStyle
 {
     public const string CjkFont = "SimSun";              // 宋体
     public const string LatinFont = "Times New Roman";
-    public const string FontHalfPt = "21";               // 五号 = 10.5pt → 21 半磅
-    private const string TitleHalfPt = "24";             // 小四 = 12pt（表标题）
+    public const string FontHalfPt = "21";               // 五号 = 10.5pt → 21 半磅（表名/表头/正文统一）
 
     /// <summary>细实线四周 + 内部边框（size 4 = 0.5pt）。</summary>
     public static TableBorders Borders() => new(
@@ -49,14 +48,13 @@ internal static class WordTableStyle
         IReadOnlyList<string> lines, bool bold = false, int gridSpan = 1, MergedCellValues? vMerge = null)
         => CellOf(lines.Select(l => Paragraph(l, bold)), gridSpan, vMerge);
 
-    /// <summary>表标题段：居中、宋体+Times、小四加粗。</summary>
+    /// <summary>表标题段：居中、宋体+Times、五号、不加粗（与表头/正文同字号，甲方要求全表统一）。</summary>
     public static Paragraph TitleParagraph(string text) => new(
         new ParagraphProperties(new Justification { Val = JustificationValues.Center }),
         new Run(
             new RunProperties(
                 Fonts(),
-                new Bold(),
-                new FontSize { Val = TitleHalfPt }),
+                new FontSize { Val = FontHalfPt }),
             new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
 
     // ── 内部 ──

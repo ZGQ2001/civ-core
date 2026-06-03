@@ -6,8 +6,8 @@
  *
  *   ReportDataSection     数据：报告类型选择（第一步）→ 跟着显示对应输入
  *                              · 锚杆：一键导入 + 数据来源 + 输入 Excel + 规范 + 批次 + 按批工程参数 + 灌浆日期
- *                              · 防火涂层：测点 Excel + 规范
- *                              · 多类型：锚杆结果 Excel + 防火涂层测点 Excel（锚杆参数已随结果持久化）
+ *                              · 防火涂层：结果 Excel + 规范
+ *                              · 多类型：锚杆结果 Excel + 防火涂层结果 Excel（参数已随结果持久化）
  *   ReportTemplateSection 模板：Word 模板 + 输出目录 + 曲线图目录
  *   ReportFieldsSection   项目字段：报告预设栏 + 历史值开关 + 项目元信息（CatalogDrivenInputs）
  */
@@ -79,7 +79,7 @@ export function ReportDataSection() {
 
   const pickCoatingExcel = useCallback(async () => {
     const sel = await openDialog({
-      title: '选择防火涂层「测点数据」Excel',
+      title: '选择防火涂层「结果」Excel',
       multiple: false,
       filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
     });
@@ -288,8 +288,8 @@ export function ReportDataSection() {
             防火涂层数据
           </div>
           <Field
-            label="防火涂层「测点数据」Excel"
-            hint="coating 装配线展开并填好数字的测点数据 xlsx（coating_expand_template 出的）"
+            label="防火涂层「结果」Excel"
+            hint="coating_run 产出的结果 xlsx（含机读结果 sheet）；先在「数据处理」跑出结果再来这里"
           >
             <Picker
               value={c.coatingInputPath}

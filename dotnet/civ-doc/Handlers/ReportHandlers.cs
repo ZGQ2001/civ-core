@@ -252,24 +252,18 @@ public static class ReportHandlers
                 result, userInputs, batchUserInputs, curveImageDir, sectionNo, detectionLabel, mp));
     }
 
-    /// <summary>防火涂层 section：读测点 xlsx + 计算 → 按规范格式建表委托（标题用描述名，不编号）。</summary>
+    /// <summary>防火涂层 section：读结果 xlsx（coating.run 产出）→ 按规范格式建表委托（不重算，对齐锚杆 section）。</summary>
     private static ReportSection BuildCoatingSection(JsonElement sec)
     {
-        var inputXlsx = RequireString(sec, "input_xlsx");
-        if (!File.Exists(inputXlsx))
-            throw new ArgumentException($"防火涂层测点 xlsx 不存在：{inputXlsx}");
+        var resultXlsx = RequireString(sec, "result_xlsx");
+        if (!File.Exists(resultXlsx))
+            throw new ArgumentException($"防火涂层结果 xlsx 不存在：{resultXlsx}");
         string standard = OptString(sec, "standard") ?? CoatingStandards.GB_50205_2020;
-        string? sheet = OptString(sec, "sheet");
-        string batchCol = OptString(sec, "batch_id_column") ?? CoatingColumns.Batch;
 
-        FileGuard.CheckExcelSize(inputXlsx);
+        FileGuard.CheckExcelSize(resultXlsx);
         CoatingStandards.Validate(standard);
 
-        var batchMembers = CoatingExcelReader.ReadRows(inputXlsx, sheet, batchCol);
-        var batches = batchMembers
-            .Select(bm => new CoatingBatchInput(bm.BatchId, bm.Members.ToArray()))
-            .ToArray();
-        var result = CoatingCalculator.Calc(new CoatingWorkbookInput(standard, batches));
+        var result = CoatingResultReader.Read(resultXlsx, standard);
         var members = result.BatchResults.SelectMany(br => br.MembersWithResults).ToList();
 
         return new ReportSection(

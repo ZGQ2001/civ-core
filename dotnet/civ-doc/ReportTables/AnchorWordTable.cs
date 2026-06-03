@@ -130,12 +130,12 @@ public static class AnchorWordTable
 
         // R0/R1 委托方参数 1：编号 / 材料规格 / 弹模(GPa) / 自由段(m) / 锚固段(m)
         table.AppendChild(Tr(
-            Cell("委托方提供的锚杆参数", bold: true, vMerge: MergedCellValues.Restart),
-            Cell("锚杆编号", bold: true, gridSpan: 2),
-            Cell("杆体材料规格", bold: true, gridSpan: 5),
-            Cell("杆体弹模(GPa)", bold: true, gridSpan: 3),
-            Cell("自由段长度(m)", bold: true, gridSpan: 2),
-            Cell("锚固段长度(m)", bold: true, gridSpan: 4)));
+            Cell("委托方提供的锚杆参数", bold: false, vMerge: MergedCellValues.Restart),
+            Cell("锚杆编号", bold: false, gridSpan: 2),
+            Cell("杆体材料规格", bold: false, gridSpan: 5),
+            Cell("杆体弹模(GPa)", bold: false, gridSpan: 3),
+            Cell("自由段长度(m)", bold: false, gridSpan: 2),
+            Cell("锚固段长度(m)", bold: false, gridSpan: 4)));
         table.AppendChild(Tr(
             Cell("", vMerge: MergedCellValues.Continue),
             Cell("{{锚杆编号}}", gridSpan: 2),
@@ -147,11 +147,11 @@ public static class AnchorWordTable
         // R2/R3 委托方参数 2：轴向拉力(kN) / 锁定荷载(kN) / 钻孔直径 / 钻孔倾角 / 岩土性状
         table.AppendChild(Tr(
             Cell("", vMerge: MergedCellValues.Continue),
-            Cell("轴向拉力设计值(kN)", bold: true, gridSpan: 2),
-            Cell("锁定荷载(kN)", bold: true, gridSpan: 5),
-            Cell("钻孔直径(mm)", bold: true, gridSpan: 3),
-            Cell("钻孔倾角", bold: true, gridSpan: 2),
-            Cell("岩土性状", bold: true, gridSpan: 4)));
+            Cell("轴向拉力设计值(kN)", bold: false, gridSpan: 2),
+            Cell("锁定荷载(kN)", bold: false, gridSpan: 5),
+            Cell("钻孔直径(mm)", bold: false, gridSpan: 3),
+            Cell("钻孔倾角", bold: false, gridSpan: 2),
+            Cell("岩土性状", bold: false, gridSpan: 4)));
         table.AppendChild(Tr(
             Cell("", vMerge: MergedCellValues.Continue),
             Cell(Num(pKn), gridSpan: 2),
@@ -163,11 +163,11 @@ public static class AnchorWordTable
         // R4/R5 委托方参数 3：注浆强度等级 / 配合比 / 注浆方式 / 灌浆压力 / 灌浆日期
         table.AppendChild(Tr(
             Cell("", vMerge: MergedCellValues.Continue),
-            Cell("注浆材料强度等级", bold: true, gridSpan: 2),
-            Cell("注浆材料配合比", bold: true, gridSpan: 5),
-            Cell("注浆方式", bold: true, gridSpan: 3),
-            Cell("灌浆压力(MPa)", bold: true, gridSpan: 2),
-            Cell("灌浆日期", bold: true, gridSpan: 4)));
+            Cell("注浆材料强度等级", bold: false, gridSpan: 2),
+            Cell("注浆材料配合比", bold: false, gridSpan: 5),
+            Cell("注浆方式", bold: false, gridSpan: 3),
+            Cell("灌浆压力(MPa)", bold: false, gridSpan: 2),
+            Cell("灌浆日期", bold: false, gridSpan: 4)));
         table.AppendChild(Tr(
             Cell("", vMerge: MergedCellValues.Continue),
             Cell("{{注浆材料强度等级}}", gridSpan: 2),
@@ -178,15 +178,15 @@ public static class AnchorWordTable
 
         // R6 曲线图（占满右侧 16 列）
         table.AppendChild(Tr(
-            Cell("荷载~位移曲线图", bold: true),
+            Cell("荷载~位移曲线图", bold: false),
             Cell("{{img:曲线图}}", gridSpan: 16)));
 
         // R7 试验数据表头：试验数据(跨R7-R9) | 荷载(kN)(跨R7-R8) | 10 荷载级
         var r7 = new TableRow();
-        r7.AppendChild(Cell("试验数据", bold: true, vMerge: MergedCellValues.Restart));
-        r7.AppendChild(Cell("荷载(kN)", bold: true, vMerge: MergedCellValues.Restart));
+        r7.AppendChild(Cell("试验数据", bold: false, vMerge: MergedCellValues.Restart));
+        r7.AppendChild(Cell("荷载(kN)", bold: false, vMerge: MergedCellValues.Restart));
         for (int i = 0; i < LoadHdr.Length; i++)
-            r7.AppendChild(Cell(LoadHdr[i], bold: true, gridSpan: LoadSpan[i]));
+            r7.AppendChild(Cell(LoadHdr[i], bold: false, gridSpan: LoadSpan[i]));
         table.AppendChild(r7);
 
         // R8 各级荷载值（kN，按 P 算）+ 锁定荷载 /
@@ -201,7 +201,7 @@ public static class AnchorWordTable
         // R9 各级位移（{{}} 待填）+ 锁定荷载 /
         var r9 = new TableRow();
         r9.AppendChild(Cell("", vMerge: MergedCellValues.Continue));
-        r9.AppendChild(Cell("位移(mm)", bold: true));
+        r9.AppendChild(Cell("位移(mm)", bold: false));
         for (int i = 0; i < DispPh.Length; i++)
             r9.AppendChild(Cell(DispPh[i], gridSpan: LoadSpan[i]));
         r9.AppendChild(Cell("/", gridSpan: LoadSpan[9]));
@@ -209,11 +209,11 @@ public static class AnchorWordTable
 
         // R10 判定表头：试验结果及判定(跨R10-R13) | 测试项目 | 实测值 | 允许值 | 判定
         table.AppendChild(Tr(
-            Cell("试验结果及判定", bold: true, vMerge: MergedCellValues.Restart),
-            Cell("测试项目", bold: true, gridSpan: 5),
-            Cell("实测值", bold: true, gridSpan: 4),
-            Cell("允许值", bold: true, gridSpan: 5),
-            Cell("判定", bold: true, gridSpan: 2)));
+            Cell("试验结果及判定", bold: false, vMerge: MergedCellValues.Restart),
+            Cell("测试项目", bold: false, gridSpan: 5),
+            Cell("实测值", bold: false, gridSpan: 4),
+            Cell("允许值", bold: false, gridSpan: 5),
+            Cell("判定", bold: false, gridSpan: 2)));
 
         // R11 弹性位移量：M | 允许范围（Q<M<R，下限 Q / 上限 R）| 判定
         table.AppendChild(Tr(

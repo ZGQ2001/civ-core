@@ -153,9 +153,8 @@ public static class JsonRpcServer
         var dispatcher = new Dispatcher();
         Handlers.DocHandlers.RegisterAll(dispatcher);
         Handlers.XlsxHandlers.RegisterAll(dispatcher);
-        Handlers.LeebHandlers.RegisterAll(dispatcher);
-        Handlers.AnchorHandlers.RegisterAll(dispatcher);
-        Handlers.CoatingHandlers.RegisterAll(dispatcher);
+        // 检测类型走显式 DetectionCatalog 清单（加类型只动 DetectionCatalog.All；无反射、可 grep）
+        foreach (var m in Detection.DetectionCatalog.All) m.Register(dispatcher);
         Handlers.TemplateHandlers.RegisterAll(dispatcher);
         Handlers.ReportHandlers.RegisterAll(dispatcher);
         Handlers.CatalogHandlers.RegisterAll(dispatcher);

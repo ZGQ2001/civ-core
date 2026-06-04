@@ -534,10 +534,9 @@ function PreviewImage() {
           src={`data:image/png;base64,${c.previewPng}`}
           alt={c.previewTitle}
           className={cn(
-            'max-w-full rounded-[2px] bg-white shadow-lg transition-opacity',
+            'max-h-[75vh] max-w-full rounded-[2px] bg-white shadow-lg transition-opacity',
             c.previewLoading ? 'opacity-50' : 'opacity-100',
           )}
-          style={{ maxHeight: '75vh' }}
         />
       ) : (
         <div className="text-vscode-text-dim flex h-[300px] w-[500px] items-center justify-center">

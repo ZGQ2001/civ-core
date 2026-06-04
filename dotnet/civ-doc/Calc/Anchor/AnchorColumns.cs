@@ -30,14 +30,6 @@ public static class AnchorColumns
         U10, U07, U04, U01,
     };
 
-    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 小写比较用。</summary>
-    public static string NormalizeHeader(string s)
-    {
-        if (s == null) return "";
-        return s.Trim()
-            .Replace('（', '(').Replace('）', ')')
-            .Replace('–', '-').Replace('—', '-')
-            .Replace(" ", "")
-            .ToLowerInvariant();
-    }
+    /// <summary>列名归一化：共用 HeaderNormalizer.Core（trim + 括号/连字符归一 + 去空格 + 小写）。</summary>
+    public static string NormalizeHeader(string s) => HeaderNormalizer.Core(s);
 }

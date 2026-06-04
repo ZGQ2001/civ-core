@@ -141,6 +141,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.CI_PAT }}
+          # PR 事件下默认检出 merge ref(detached HEAD)→git push 失败(exit 128);
+          # 显式检出源分支才能把格式化结果 push 回去。push-to-main 时 head_ref 为空,回退 ref_name。
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: 安装 ruff
         uses: astral-sh/setup-uv@v5

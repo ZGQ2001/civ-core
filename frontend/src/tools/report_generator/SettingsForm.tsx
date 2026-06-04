@@ -27,9 +27,9 @@ import { useReportGenerator } from './controller';
 import { PresetBar } from './PresetBar';
 import {
   COATING_STANDARDS,
-  REPORT_TYPES,
+  DETECTION_TYPES,
   type CoatingStandard,
-  type ReportType,
+  type DetectionType,
 } from './types';
 
 interface CatalogSummary {
@@ -86,13 +86,16 @@ export function ReportDataSection() {
     if (typeof sel === 'string') c.setCoatingInputPath(sel);
   }, [c]);
 
-  const showAnchor = c.reportType === 'anchor' || c.reportType === 'multi';
-  const showCoating = c.reportType === 'coating' || c.reportType === 'multi';
-  const isMulti = c.reportType === 'multi';
+  const showAnchor = c.selectedTypes.includes('anchor');
+  const showCoating = c.selectedTypes.includes('coating');
+  const isMulti = showAnchor && showCoating;
 
   return (
     <SectionShell>
-      <ReportTypeField value={c.reportType} onChange={c.setReportType} />
+      <DetectionTypeField
+        selected={c.selectedTypes}
+        onToggle={c.toggleDetectionType}
+      />
 
       {/* 一键导入数据处理：只在涉及锚杆时有意义 */}
       {showAnchor && <ImportFromDataProcessingBtn />}
@@ -325,37 +328,37 @@ export function ReportDataSection() {
 }
 
 /**
- * 报告类型选择 —— 第一步：决定出哪种报告，下面只显示对应的输入。
- * 仅锚杆 / 仅防火涂层 / 两者组装到一份报告；以后加检测类型 = REPORT_TYPES 加一项。
+ * 检测类型选择 —— 第一步：勾选要出哪些检测（可多选），下面只显示对应的输入。
+ * 勾一个 = 单类型，勾多个 = 组装到一份报告；以后加检测类型 = DETECTION_TYPES 加一项。
  */
-function ReportTypeField({
-  value,
-  onChange,
+function DetectionTypeField({
+  selected,
+  onToggle,
 }: {
-  value: ReportType;
-  onChange: (t: ReportType) => void;
+  selected: DetectionType[];
+  onToggle: (t: DetectionType) => void;
 }) {
   return (
     <Field
-      label="报告类型"
-      hint="先选出什么报告，下面只显示对应的输入。模板也要对应：仅锚杆需 {{表格:锚杆}}；仅防火涂层需 {{表格:防火涂层}}；多类型两者都要。"
+      label="检测类型"
+      hint="可多选；勾选要出哪些检测，下面只显示对应的输入。模板需含对应 {{表格:xxx}} 占位符：锚杆需 {{表格:锚杆}}、防火涂层需 {{表格:防火涂层}}，勾多个则都要。"
     >
       <div className="grid grid-cols-1 gap-1">
-        {REPORT_TYPES.map((rt) => (
+        {DETECTION_TYPES.map((rt) => (
           <label
             key={rt.id}
             className={`flex cursor-pointer items-center gap-2 rounded-[2px] border px-2 py-1.5 ${
-              value === rt.id
+              selected.includes(rt.id)
                 ? 'border-vscode-focus bg-[#252525]'
                 : 'border-vscode-border bg-[#1f1f1f]'
             }`}
           >
             <input
-              type="radio"
-              name="reportType"
+              type="checkbox"
+              name="detectionType"
               value={rt.id}
-              checked={value === rt.id}
-              onChange={() => onChange(rt.id)}
+              checked={selected.includes(rt.id)}
+              onChange={() => onToggle(rt.id)}
               className="accent-vscode-focus"
             />
             <span className="text-vscode-text text-[12px]">{rt.label}</span>

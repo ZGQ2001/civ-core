@@ -6,6 +6,28 @@
 
 ---
 
+## 当前焦点（2026-06-03 续）— 换价值主张(D)去黑盒 + 7 目标推进（分支 `claude/magical-cori-a9T8w`，PR #22 draft）
+
+> Claude Code on the web 会话。负责人定方向 **D**（数据透明可验证为主线，Word 报告降为可选），并下 7 条目标。本 web 环境**装不了 dotnet、前端依赖也没装、网络锁死** → C#/前端均靠 CI 验（dotnet + 前端 (TS) job 已绿）。
+
+**已做（已 push PR #22，CI 验证）**
+
+- **修前端编译断**：`report_generator` 报告类型三选一 radio → 检测类型多选 checkbox（`ReportType`→`DetectionType`/`selectedTypes`，杀 `'multi'` 硬编码）。→ #1 能编译、#3 前后端对应（编译层）。
+- **防火两截面**（#2）：`CoatingTemplateExpander.ResolveSections` 显式截面数<2 报错、按长度算兜底到 `CoatingStandards.MinSections=2`；国标膨胀型 5处×3点走 FiveLocationCount 天然豁免。
+- **去黑盒(D)**：① 机读 sheet `_批次参数`/`_结果数据` VeryHidden→Hidden；② 两处 `catch{}` 静默吞错→`Console.Error` 显形；③ 锚杆补「判定依据」演算稿 sheet（公式+GB条款，拉齐防火已有 footer）。
+- **去重(#5)**：`AnchorColumns`/`CoatingColumns` 各抄的 NormalizeHeader 公共核心抽到 `Calc/HeaderNormalizer.Core`（二者不全等——防火多剥单位括注，保行为组合不盲并）。
+
+**卡点 / 交接**
+
+- **#6「每个模块都是大框架」（通用 pipeline 抽象 = `docs/plans/2026-06-02-detection-pipeline-abstraction.md`）**：负责人已显式推翻 6-02「暂缓」决定、要做。
+  - **Phase 0（去重地基）本会话已完成**：`Calc/HeaderNormalizer.Core`（NormalizeHeader 公共核心）+ `Handlers/HandlerUtil.ParseStringMap`（user_inputs 解析公共核心）（+ 上会话 SafeSheetName→`Calc/SheetNameUtil`）。剩 `RequireColumn` 近似×2 未并（低价值，待并需先 diff）。
+  - **Phase 2 框架接缝已做**：`Detection/DetectionCatalog.cs` —— 三检测类型注册收进显式清单 + 遍历注册，`JsonRpcServer` 加类型零改动、无反射。**CI 全绿验证**。交付了框架「加类型登记只动一处」的安全本质。
+  - **Phase 2 通用 run() 脚手架（IDetectionPipeline 等）—— 按文档 §6「对抗即停」红线叫停，结论写回文档 §11**：读三个 `run()` 实测，真正共性仅 ≈8 行（参数解析+FileGuard+默认路径），read/calc/assemble 三段本质发散（Leeb 返数据无 Word、Anchor 写 xlsx+Word、Coating 独立 report）；套 pipeline 框架是净增复杂度、对抗代码，违反「抽象是手段不是目的」。**那 8 行共性值得抽 `HandlerUtil` 薄函数（Phase 0 性质），但不应套整个框架。** 若将来真加同构的第 4 类型再评估。
+- **#4 企业级前端 / #7 深度解耦**：剩余多为前端改动，本环境装不了依赖无法本地验，建议能 `npm ci` 的环境续做。
+- 输入 reader 的 `continue` 多为结构性跳行（空行/汇总行/辅助 sheet），非静默吞错，按手术刀未动。
+
+---
+
 ## 当前焦点（2026-06-03）— 整治"割裂"（分支 `claude/laughing-keller-uuZ7S`，PR #21 draft）
 
 > 一次 Claude Code on the web 会话的产出。代码 + 方案都在该分支/PR。本 web 环境网络白名单装不了 dotnet，C# 的下一步需在能跑 `dotnet test` 的机器上接着做。

@@ -42,7 +42,7 @@ public class AnchorResultMetadataSheetTests
     }
 
     [Fact]
-    public void Write_隐藏sheet_置VeryHidden()
+    public void Write_隐藏sheet_置Hidden()
     {
         var paramsByBatch = new Dictionary<string, AnchorParams>
         {
@@ -51,7 +51,7 @@ public class AnchorResultMetadataSheetTests
         using var wb = new XLWorkbook();
         AnchorResultMetadataSheet.Write(wb, paramsByBatch);
         var ws = wb.Worksheet(AnchorResultMetadataSheet.SheetName);
-        Assert.Equal(XLWorksheetVisibility.VeryHidden, ws.Visibility);
+        Assert.Equal(XLWorksheetVisibility.Hidden, ws.Visibility);
     }
 
     [Fact]

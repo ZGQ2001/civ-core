@@ -83,8 +83,8 @@ public class CoatingTemplateExpanderTests
         // 梁1 不填设计 → 用类型默认 3.3（薄型）；梁2 填 8 覆盖（厚型）。
         // 用地标（不拆 5 处×3 点），薄/厚同走截面布局留在一张「测点数据-梁」便于验默认/覆盖。
         string path = MakeInput(
-            new object?[] { "B1", "梁1", "梁", null, 1, null },
-            new object?[] { "B1", "梁2", "梁", null, 1, 8.0 });
+            new object?[] { "B1", "梁1", "梁", null, 2, null },
+            new object?[] { "B1", "梁2", "梁", null, 2, 8.0 });
         try
         {
             CoatingTemplateExpander.Expand(path, path, CoatingStandards.BeijingLocal);
@@ -93,9 +93,9 @@ public class CoatingTemplateExpanderTests
             // 梁1（行2）
             Assert.Equal(3.3, ws.Cell(2, 5).GetDouble(), 3);
             Assert.Equal("薄型", ws.Cell(2, 4).GetString());
-            // 梁2（行3）
-            Assert.Equal(8.0, ws.Cell(3, 5).GetDouble(), 3);
-            Assert.Equal("厚型", ws.Cell(3, 4).GetString());
+            // 梁2（行4，梁1 占行 2-3：每构件最少 2 截面）
+            Assert.Equal(8.0, ws.Cell(4, 5).GetDouble(), 3);
+            Assert.Equal("厚型", ws.Cell(4, 4).GetString());
         }
         finally { File.Delete(path); }
     }
@@ -203,6 +203,50 @@ public class CoatingTemplateExpanderTests
             // 2 截面行，测点格空
             Assert.Equal(2, ws.LastRowUsed()!.RowNumber() - 1);
             Assert.True(ws.Cell(2, 7).IsEmpty());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Expand_短构件长度不足2截面_兜底到规范最少2截面()
+    {
+        // 国标间距 3m，2m 梁 ⌈2/3⌉=1，但规范最少 2 截面 → 兜底为 2（厚型走截面×面）
+        string path = MakeInput(new object?[] { "B1", "短梁", "梁", 2.0, null, 24.0 });
+        try
+        {
+            var r = CoatingTemplateExpander.Expand(path, path, CoatingStandards.GB_50205_2020);
+            Assert.Equal(2, r.TotalSections);
+            var ws = OpenSheet(path, "测点数据-梁");
+            Assert.Equal(2, ws.LastRowUsed()!.RowNumber() - 1);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Expand_显式截面数小于2_抛异常()
+    {
+        // 厚型（设计 24）走截面×面，显式填截面数=1 < 规范最少 2 → 报错（去黑盒，不静默改）
+        string path = MakeInput(new object?[] { "B1", "单截面梁", "梁", null, 1, 24.0 });
+        try
+        {
+            var ex = Assert.Throws<ArgumentException>(
+                () => CoatingTemplateExpander.Expand(path, path, CoatingStandards.GB_50205_2020));
+            Assert.Contains("最少", ex.Message);
+            Assert.Contains("截面", ex.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Expand_国标膨胀型_豁免最少2截面_仍5处()
+    {
+        // 国标超薄柱（设计 2）走 5 处×3 点，绕过截面数逻辑 → 截面数=1 也不报、固定 5 处（除五处3点的情况）
+        string path = MakeInput(new object?[] { "B1", "超薄柱X", "柱", null, 1, 2.0 });
+        try
+        {
+            var r = CoatingTemplateExpander.Expand(path, path, CoatingStandards.GB_50205_2020);
+            Assert.Equal(5, r.TotalSections);
+            Assert.Contains("测点数据-柱-膨胀型", r.Sheets);
         }
         finally { File.Delete(path); }
     }

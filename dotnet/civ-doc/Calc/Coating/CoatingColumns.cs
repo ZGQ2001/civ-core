@@ -43,15 +43,6 @@ public static class CoatingColumns
     // 不剥掉就匹配不上裸列名常量。全角括号已先转半角，故只需匹配半角；只剥末尾一组。
     private static readonly Regex TrailingParen = new(@"\([^()]*\)$", RegexOptions.Compiled);
 
-    /// <summary>列名归一化：trim + 全角括号/连字符替换 + 去空格 + 小写 + 剥尾部单位括注。</summary>
-    public static string NormalizeHeader(string s)
-    {
-        if (s == null) return "";
-        var t = s.Trim()
-            .Replace('（', '(').Replace('）', ')')
-            .Replace('–', '-').Replace('—', '-')
-            .Replace(" ", "")
-            .ToLowerInvariant();
-        return TrailingParen.Replace(t, "");
-    }
+    /// <summary>列名归一化：HeaderNormalizer.Core + 剥尾部单位括注（防火列名常带「(mm)」「(m)」等）。</summary>
+    public static string NormalizeHeader(string s) => TrailingParen.Replace(HeaderNormalizer.Core(s), "");
 }

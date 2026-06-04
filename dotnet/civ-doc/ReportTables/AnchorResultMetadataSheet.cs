@@ -4,8 +4,8 @@
 //
 // 设计：
 //   - Sheet 名固定为 SheetName 常量，AnchorResultReader 按此查找
-//   - Sheet 状态设为 VeryHidden，普通用户在 Excel 里看不到（避免误删）；
-//     程序读取不受影响
+//   - Sheet 状态设为 Hidden（去黑盒：用户可在 Excel 右键「取消隐藏」核对机读数据），
+//     默认仍隐藏避免误删，程序读取不受影响
 //   - 列顺序固定（batch_id, P, Lf, La, A, E, 灌浆日期）；解析按位置而非标题，
 //     对中英文标题兼容。灌浆日期列后加，旧结果 xlsx（无第 7 列）读出来为空 —— 向后兼容。
 //
@@ -31,7 +31,7 @@ public static class AnchorResultMetadataSheet
     private const int ColDate = 7;
 
     /// <summary>
-    /// 写入/覆盖 metadata sheet（写完置 VeryHidden）。
+    /// 写入/覆盖 metadata sheet（写完置 Hidden —— 默认隐藏避免误删，用户可在 Excel 取消隐藏核对）。
     /// groutingDateByBatch 为按 batch_id 的灌浆日期（yyyy-MM-dd 字符串，可空 / 缺省）；
     /// 无日期的批次留空，与「批次信息」sheet 一致。
     /// </summary>
@@ -65,7 +65,7 @@ public static class AnchorResultMetadataSheet
                 ws.Cell(row, ColDate).Value = date;
             row++;
         }
-        ws.Visibility = XLWorksheetVisibility.VeryHidden;
+        ws.Visibility = XLWorksheetVisibility.Hidden;
     }
 
     /// <summary>读取 metadata sheet 的工程参数；缺则返空 dict（调用方据此决定要不要 fallback）。</summary>
@@ -88,9 +88,11 @@ public static class AnchorResultMetadataSheet
                 var e = ws.Cell(r, ColE).GetDouble();
                 result[batchId] = AnchorParams.Create(p, lf, la, a, e);
             }
-            catch
+            catch (Exception ex)
             {
-                // 单行解析失败不阻断整体；report.run_from_result 会在 batch 缺参数时报错
+                // 单行解析失败不阻断整体（report.run_from_result 会在 batch 缺参数时报错）；
+                // 不静默——记到 stderr 便于排查（用户可能手改了结果 xlsx）
+                Console.Error.WriteLine($"[_批次参数] 第 {r} 行（batch={batchId}）参数解析失败，已跳过：{ex.Message}");
             }
         }
         return result;

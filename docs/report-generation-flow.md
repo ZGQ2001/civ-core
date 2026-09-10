@@ -97,5 +97,5 @@ marker 引擎 `ReportGenerator` + 三层模板 + 「锚杆专用模板」**已�
 - 分支 `feat/coating-report-table`（未 push）：① 录入网格 5处×3点 → ② 膨胀型+厚型 Word 表 → ③ 单类型一键 Word 闭环 → **④ 锚杆迁 `{{表格:锚杆}}` + 删 marker 引擎 + `report.assemble` 多类型组装**（4 commit：A 装配引擎/共用样式 · B 锚杆 表2.4 builder · C 迁两 handler+删 marker · D report.assemble+MCP+文档）→ **⑤ 前端报告页多类型一键 + 占位符化 + 清 marker 文档**。
 - 验证：`cd dotnet/civ-doc.Tests && dotnet test`（249 通过/1 skip）；mcp `cd mcp && npm run typecheck && npm test && node scripts/smoke.mjs`（58 tools，含 `report_assemble`）；前端 `cd frontend && npx tsc -b --noEmit && npm run lint && npm run build`（全绿）。
 - 出报告需用户提供带 `{{表格:xxx}}` 占位符的 docx 薄壳模板；表内部格式在代码里固定（规范统一），薄壳甲方可改。**锚杆已无「专用模板」**——和防火涂层一样只需薄壳 + `{{表格:锚杆}}`。
-- 文档已同步：`docs/template-placeholders-quickstart.md` + `.claude/skills/civ-core-make-template/SKILL.md` 已改为 `{{表格:xxx}}` 机制（marker 教学已移除）。
+- 文档已同步：`docs/template-placeholders-quickstart.md` + `.ai/skills/civ-core-make-template/SKILL.md` 已改为 `{{表格:xxx}}` 机制（marker 教学已移除）。
 - 待办：前端多类型 UI 的**运行时 UX 需用户 `npm run tauri:dev` 实测**（本轮只过了 tsc/lint/build）；防火涂层表标题编号当前用描述名不带节号（要编号再说）。

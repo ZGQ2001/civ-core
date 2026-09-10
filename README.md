@@ -134,7 +134,10 @@ cd mcp && npm install && npm run build
 
 ```bash
 # C#
-cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test
+uv run --frozen python -c "from civ_core.infra_io.standards_db import init_standards_db; db, conn = init_standards_db(); conn.close()"
+dotnet format style dotnet/civ-doc/civ-doc.csproj --verify-no-changes
+dotnet build dotnet/civ-doc/civ-doc.csproj
+dotnet test dotnet/civ-doc.Tests/civ-doc.Tests.csproj
 
 # 前端
 cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check
@@ -145,6 +148,20 @@ cd mcp && npm run typecheck && npm test
 # Python
 uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q
 ```
+
+### 完整链路样例验收
+
+依赖还原、C# 编译完成后，在仓库根运行：
+
+```bash
+npm --prefix mcp run build
+node mcp/scripts/smoke.mjs
+node mcp/scripts/pipeline-smoke.mjs
+```
+
+最后一条通过 MCP 调用两个 sidecar，生成锚杆样例、计算结果、3 张曲线图、防火涂层结果和一份混合 Word 报告，并核对判定数量、Excel 中间值、5 张报告表、3 张嵌图及字段替换。输出目录会打印在末尾，也可传入一个尚不存在的目录作为参数。验收使用合成数据，不替代真实项目验收或规范审核。
+
+CI 会执行 C#、Python、MCP、Rust 测试和前端检查，并保存 C# 测试记录与完整链路样例产物。
 
 ---
 

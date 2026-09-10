@@ -79,3 +79,4 @@ dotnet/**/obj/
 # 8. IDE / AI 工具 cache（与项目无关的本地状态）
 # ==========================================
 .deepseek/
+/logs/baseline/

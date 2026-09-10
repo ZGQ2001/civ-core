@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { rmSync } from "node:fs";
+import assert from "node:assert/strict";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const serverPath = join(__dirname, "..", "dist", "index.js");
@@ -30,6 +31,13 @@ const transport = new StdioClientTransport({
 
 const client = new Client({ name: "smoke-driver", version: "0.0.1" }, { capabilities: {} });
 
+// MCP 业务失败以 isError 返回，不会 reject；必须让冒烟以非零退出。
+async function callTool(request) {
+  const result = await client.callTool(request);
+  assert.ok(!result.isError, `${request.name}: ${JSON.stringify(result.content)}`);
+  return result;
+}
+
 try {
   await client.connect(transport);
   console.error("[smoke] connected");
@@ -40,15 +48,15 @@ try {
     console.error(`  - ${t.name}: ${t.description?.slice(0, 60) ?? ""}`);
   }
 
-  const pong = await client.callTool({ name: "doc_ping", arguments: {} });
+  const pong = await callTool({ name: "doc_ping", arguments: {} });
   console.error("[smoke] doc_ping isError:", pong.isError === true);
   console.error("[smoke] doc_ping content:", JSON.stringify(pong.content));
 
-  const ver = await client.callTool({ name: "doc_version", arguments: {} });
+  const ver = await callTool({ name: "doc_version", arguments: {} });
   console.error("[smoke] doc_version content:", JSON.stringify(ver.content));
 
   // 验证 Python sidecar 路由也通：plot_curves_list_presets 走 plot_curves.* 白名单 → Python
-  const presets = await client.callTool({
+  const presets = await callTool({
     name: "plot_curves_list_presets",
     arguments: {},
   });
@@ -86,7 +94,7 @@ try {
   console.error(`[smoke] Phase 2 工具齐全（${expectedPhase2.length} 个）`);
 
   // ── C# 读路径（doc 之外）：catalog_list ──────────────────────────
-  const catalogs = await client.callTool({ name: "catalog_list", arguments: {} });
+  const catalogs = await callTool({ name: "catalog_list", arguments: {} });
   const catalogText = catalogs.content?.[0]?.text ?? "";
   if (catalogs.isError) {
     console.error(`[smoke] catalog_list ERROR: ${catalogText}`);
@@ -97,7 +105,7 @@ try {
 
   // ── C# 文件路径：files_list_dir 列 mcp/ 目录 ─────────────────────
   const mcpDir = join(__dirname, "..");
-  const listing = await client.callTool({
+  const listing = await callTool({
     name: "files_list_dir",
     arguments: { path: mcpDir },
   });
@@ -124,12 +132,12 @@ try {
     // generate（含构件清单样例：梁长度8/柱截面数3）→ expand 出测点网格。
     // 填数字需 xlsx 库，smoke 不做；coating_run 的判定由 dotnet 测试覆盖。
     const tmpl = join(tmpdir(), `coating_smoke_${Date.now()}.xlsx`);
-    const gen = await client.callTool({
+    const gen = await callTool({
       name: "coating_generate_template",
       arguments: { output_xlsx: tmpl },
     });
     console.error(`[smoke] coating_generate_template isError: ${gen.isError === true}`);
-    const exp = await client.callTool({
+    const exp = await callTool({
       name: "coating_expand_template",
       arguments: { input_xlsx: tmpl },
     });
@@ -148,31 +156,31 @@ try {
 
   // ── Python 预设写路径 roundtrip：copy → list → delete ────────────
   // 预设名不能以下划线开头（preset_manager 校验），用普通中文临时名。
-  const TMP = "冒烟临时副本";
+  const TMP = `冒烟临时副本-${process.pid}-${Date.now()}`;
   const baseParsed = JSON.parse(presetText || "{}");
   const basePresets = baseParsed.presets ?? [];
   const src = baseParsed.default ?? basePresets[0];
   if (src) {
     // 仅当上次残留时才预删（避免删不存在项产生误导性 ERROR 行）
     if (basePresets.includes(TMP)) {
-      await client.callTool({
+      await callTool({
         name: "plot_curves_delete_preset",
         arguments: { name: TMP },
       });
     }
-    const copy = await client.callTool({
+    const copy = await callTool({
       name: "plot_curves_copy_preset",
       arguments: { source_name: src, new_name: TMP },
     });
     console.error(`[smoke] copy_preset(${src}→${TMP}) isError: ${copy.isError === true}`);
-    const after = await client.callTool({
+    const after = await callTool({
       name: "plot_curves_list_presets",
       arguments: {},
     });
     const afterParsed = JSON.parse(after.content?.[0]?.text ?? "{}");
     const present = (afterParsed.presets ?? []).includes(TMP);
-    console.error(`[smoke] 临时预设已出现: ${present}`);
-    const del = await client.callTool({
+    assert.ok(present, "复制后未找到临时预设");
+    const del = await callTool({
       name: "plot_curves_delete_preset",
       arguments: { name: TMP },
     });

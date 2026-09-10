@@ -9,6 +9,8 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
+    // Rust 源码由 Tauri 监听；Vite 扫描 target 会在 Windows 上遇到占用中的 exe。
+    watch: { ignored: ['**/src-tauri/**'] },
   },
   // Tauri 期望相对路径资源
   base: './',

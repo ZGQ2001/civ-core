@@ -146,7 +146,8 @@ uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run 
 uv run --frozen python scripts/healthcheck.py   # 冒烟检查（每次验收必跑）
 
 # C#
-cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test
+uv run --frozen python -c "from civ_core.infra_io.standards_db import init_standards_db; db, conn = init_standards_db(); conn.close()"
+cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test ../civ-doc.Tests/civ-doc.Tests.csproj
 
 # Rust
 cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib && cargo test --lib
@@ -205,14 +206,14 @@ commit 信息写**为什么**，不写做了什么——diff 已经告诉读者�
 
 **单元完成层的全链命令**：
 
-| 改完这种文件      | 跑                                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------------------- |
-| 前端 `.ts/.tsx`   | `cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check`                         |
-| MCP `mcp/**/*.ts` | `cd mcp && npm run typecheck && npm test`（端到端 smoke 视改动决定要不要跑）                         |
-| Python `.py`      | `uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q` |
-| C# `.cs`          | `cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test`        |
-| Rust `.rs`        | `cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib`     |
-| Markdown `.md`    | `cd frontend && npx prettier --check <相对路径>`（Prettier 也管 markdown 表格对齐）                  |
+| 改完这种文件      | 跑                                                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 前端 `.ts/.tsx`   | `cd frontend && npx tsc -b --noEmit && npm run lint && npm run format:check`                                                        |
+| MCP `mcp/**/*.ts` | `cd mcp && npm run typecheck && npm test`（端到端 smoke 视改动决定要不要跑）                                                        |
+| Python `.py`      | `uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pytest -q`                                |
+| C# `.cs`          | `cd dotnet/civ-doc && dotnet format style --verify-no-changes && dotnet build && dotnet test ../civ-doc.Tests/civ-doc.Tests.csproj` |
+| Rust `.rs`        | `cd frontend/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && cargo check --lib`                                    |
+| Markdown `.md`    | `cd frontend && npx prettier --check <相对路径>`（Prettier 也管 markdown 表格对齐）                                                 |
 
 发现 format/lint 报错立刻用 `--write`/`--fix` 自动修。**别把 format/lint 留到 push 前——它们是 CI 一票否决项。**
 

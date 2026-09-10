@@ -756,7 +756,8 @@ export function ReportGeneratorProvider({
     readiness,
     running,
     excelPath,
-    selectedTypes,
+    hasCoating,
+    isMulti,
     coatingInputPath,
     coatingStandard,
     sectionNo,
@@ -886,6 +887,7 @@ export function ReportGeneratorProvider({
       setGroutingDateForBatch,
       setGroutingDateForAllBatches,
       importFromDataProcessing,
+      toggleDetectionType,
       run,
     ],
   );

@@ -70,9 +70,79 @@ jobs:
         run: dotnet build
         working-directory: dotnet/civ-doc
 
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: 初始化测试规范库
+        run: uv run --frozen python -c "from civ_core.infra_io.standards_db import init_standards_db; db, conn = init_standards_db(); conn.close()"
+
       - name: C# 单元测试
-        run: dotnet test
-        working-directory: dotnet/civ-doc
+        # 里氏计算测试读取 Python seed 的规范库；各 job 使用独立机器。
+        # 不能依赖 Python job 或开发者已启动过 GUI。
+        run: dotnet test dotnet/civ-doc.Tests/civ-doc.Tests.csproj --logger "trx;LogFileName=csharp.trx" --results-directory TestResults
+
+      - name: 保存 C# 测试结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-test-results
+          path: TestResults/*.trx
+
+  mcp:
+    name: MCP / Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: 安装 MCP 依赖
+        run: npm ci
+
+      - name: MCP 类型检查
+        run: npm run typecheck
+
+      - name: MCP 单元测试
+        run: npm test
+
+      - name: MCP 编译
+        run: npm run build
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: 编译 C# sidecar
+        run: dotnet build ../dotnet/civ-doc/civ-doc.csproj
+
+      - name: 还原 Python 依赖
+        run: uv sync --frozen
+        working-directory: .
+
+      - name: MCP 冒烟检查
+        run: node scripts/smoke.mjs
+
+      - name: 样例完整链路验收
+        run: node scripts/pipeline-smoke.mjs ../pipeline-output
+
+      - name: 保存样例验收产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-output
+          path: pipeline-output/
 
   frontend:
     name: 前端 (TS) / Windows
@@ -129,6 +199,10 @@ jobs:
 
       - name: Rust 编译检查
         run: cargo check --lib
+        working-directory: frontend/src-tauri
+
+      - name: Rust 单元测试
+        run: cargo test --lib
         working-directory: frontend/src-tauri
 
   # 把格式化结果 push 回去（仅当非 auto-fix commit 时）

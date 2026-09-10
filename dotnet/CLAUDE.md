@@ -76,10 +76,12 @@ public record LeebHardnessResult
 ## 测试
 
 ```bash
+# 首次运行先在仓库根初始化规范库（里氏测试需要）：
+uv run --frozen python -c "from civ_core.infra_io.standards_db import init_standards_db; db, conn = init_standards_db(); conn.close()"
 cd dotnet/civ-doc
 dotnet build                     # 编译
-dotnet test                      # 跑 xUnit 测试套件
-dotnet test --filter "FullyQualifiedName~LeebCalculator"  # 只跑某类
+dotnet test ../civ-doc.Tests/civ-doc.Tests.csproj  # 跑 xUnit 测试套件
+dotnet test ../civ-doc.Tests/civ-doc.Tests.csproj --filter "FullyQualifiedName~LeebCalculator"  # 只跑某类
 ```
 
 xUnit 项目在 `dotnet/civ-doc.Tests/`，引用 `civ-doc.csproj`。

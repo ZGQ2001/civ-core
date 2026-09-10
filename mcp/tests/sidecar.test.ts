@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
@@ -61,9 +61,8 @@ describe("JsonRpcSidecar", () => {
     const s = spawnEcho();
     try {
       await s.call("echo.exit", {});
-      // 等 'exit' 事件 propagate（child.on('exit')）
-      await new Promise((r) => setTimeout(r, 100));
-      expect(s.isAlive()).toBe(false);
+      // Windows / 繁忙 CI 上 exit 事件不保证在 100ms 内送达；等状态而非固定睡眠。
+      await vi.waitFor(() => expect(s.isAlive()).toBe(false), { timeout: 2000 });
       await expect(s.call("echo.anything", {})).rejects.toBeInstanceOf(
         SidecarFatalError,
       );

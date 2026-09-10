@@ -5,7 +5,8 @@
 当前状态：源码运行，二进制 release 待 T6 打包后才出。详见根目录 `README.md`。
 
 **角色**：本文件是 AI 的宪法级上下文。放不可变的架构规则和边界。≤4000 字。每次会话必读。
-**配套文件**：`.ai/ROADMAP.md`（产品路线图）| `.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `docs/plans/`（技术方案）
+**配套文件**：`.ai/ROADMAP.md`（产品路线图）| `.ai/RULES.md`（编码规范+清单）| `.ai/PROGRESS.md`（里程碑）| `.ai/CONTEXT.md`（当前焦点）| `.ai/skills/`（跨 Agent 通用项目 Skills）| `docs/plans/`（技术方案）
+**Skills 约定**：项目级 Skill 统一放 `.ai/skills/<skill-name>/SKILL.md`，不绑定 Claude/Codex/Cursor 的私有目录。Agent 遇到对应任务时按 skill 的 name/description 选择并读取。
 **子域规则**：`dotnet/CLAUDE.md` | `frontend/CLAUDE.md` | `mcp/CLAUDE.md`（仅在操作对应目录时加载）
 
 ---
